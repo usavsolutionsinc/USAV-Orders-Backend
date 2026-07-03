@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-01T18:55:42Z",
-  "totalRoutes": 737,
+  "generatedAt": "2026-07-02T17:58:44Z",
+  "totalRoutes": 738,
   "summary": {
-    "permissionGated": 632,
+    "permissionGated": 633,
     "authenticatedNoPermission": 36,
     "anonymousIntentional": 67,
     "serviceToService": 2,
@@ -3242,6 +3242,15 @@
       ],
       "gate": "withAuth",
       "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/[id]/reassign/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.upload_photo",
       "exemptReason": null
     },
     {

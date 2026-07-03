@@ -73,10 +73,10 @@ export function PhotoLauncher({ g }: { g: PhotoGalleryController }) {
           </button>
         </HoverTooltip>
         <div className="flex shrink-0 items-stretch self-center overflow-hidden rounded-lg border border-blue-200/90 bg-white/90 shadow-sm">
-          <HoverTooltip label="Download all photos" asChild>
+          <HoverTooltip label={g.downloading ? 'Downloading…' : 'Download all photos'} asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); void g.handleDownloadAll(); }}
-              disabled={g.downloadingAll || photoItems.length === 0 || photoItems.every((p) => p.status === 'error')}
+              disabled={g.downloading || photoItems.length === 0 || photoItems.every((p) => p.status === 'error')}
               className={toolbarIconBtnInner}
               ariaLabel="Download all photos"
               icon={<Download className="h-4 w-4 text-blue-700" />}

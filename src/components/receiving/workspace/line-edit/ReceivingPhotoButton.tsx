@@ -164,11 +164,13 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
               photos={photos}
               orderId={`RCV-${receivingId}`}
               receivingId={receivingId}
+              allowReassign
               launcherLayout="toolbar"
               toolbarShowLabel={false}
               compact
               libraryHref={`/ops/photos?receivingId=${receivingId}`}
               onPhotoDeleted={(photoId) => refresh(photoId)}
+              onPhotoReassigned={(photoId) => refresh(photoId)}
             />
           </div>
         </div>

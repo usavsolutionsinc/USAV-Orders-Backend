@@ -112,8 +112,10 @@ export function PhotoPeekFan({
   const gallery = usePhotoGallery({
     photos: chronoPhotos,
     receivingId,
+    allowReassign: !!receivingId,
     libraryHref: receivingId ? `/ops/photos?receivingId=${receivingId}` : undefined,
     onPhotoDeleted,
+    onPhotoReassigned: onPhotoDeleted,
   });
   const { viewerOpen, openViewer } = gallery;
 

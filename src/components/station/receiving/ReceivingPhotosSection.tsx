@@ -103,7 +103,10 @@ export function ReceivingPhotosSection({
           photos={galleryPhotos}
           orderId={downloadLabel ?? `recv-${receivingId}`}
           launcherTitle={launcherTitle}
+          receivingId={Number(receivingId)}
+          allowReassign
           onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
+          onPhotoReassigned={() => queryClient.invalidateQueries({ queryKey })}
         />
       )}
     </div>

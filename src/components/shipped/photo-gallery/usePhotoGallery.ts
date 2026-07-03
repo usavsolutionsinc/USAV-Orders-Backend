@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { dispatchReceivingPhotoChanged } from '@/utils/events';
-import { downloadPhotoBlob, deletePhoto } from './photo-gallery-api';
+import {
+  downloadPhotoBlob,
+  downloadPhotoById,
+  downloadPhotoZip,
+  deletePhoto,
+} from './photo-gallery-api';
 import { usePhotoItems } from './usePhotoItems';
 import { useImageZoom } from './useImageZoom';
 import type { PhotoGalleryInput } from './photo-gallery-utils';
@@ -29,6 +34,10 @@ export interface PhotoGalleryProps {
   receivingId?: number;
   /** Opens the ops photo library filtered to this entity/receiving scope. */
   libraryHref?: string;
+  /** Show "Move to PO" in the viewer when the user can reassign receiving photos. */
+  allowReassign?: boolean;
+  /** Called after a photo is moved to another PO (parents invalidate cache). */
+  onPhotoReassigned?: (photoId: number) => void;
 }
 
 /**
@@ -49,6 +58,8 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     onPhotoDeleted,
     receivingId,
     libraryHref,
+    allowReassign = false,
+    onPhotoReassigned,
   } = props;
 
   const { photoItems, setPhotoItems, resetFingerprint, loadedCount, errorCount } = usePhotoItems(photos);
@@ -57,19 +68,19 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
-  // Info panel starts collapsed — the "i" toggle reveals it on demand rather
-  // than overlaying photo details by default.
   const [panelOpen, setPanelOpen] = useState(false);
-  const [downloadingAll, setDownloadingAll] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
+  const [reassignError, setReassignError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Lock body scroll while the fullscreen viewer is open.
   useBodyScrollLock(viewerOpen);
 
   const handleNext = useCallback(() => {
@@ -77,6 +88,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     zoom.resetZoom();
     setDeleteArmed(false);
     setDeleteError(null);
+    setReassignError(null);
   }, [photoItems.length, zoom]);
 
   const handlePrevious = useCallback(() => {
@@ -84,6 +96,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     zoom.resetZoom();
     setDeleteArmed(false);
     setDeleteError(null);
+    setReassignError(null);
   }, [photoItems.length, zoom]);
 
   const closeViewer = useCallback(() => {
@@ -91,6 +104,8 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     zoom.resetZoom();
     setDeleteArmed(false);
     setDeleteError(null);
+    setReassignOpen(false);
+    setReassignError(null);
   }, [zoom]);
 
   const openViewer = useCallback((index: number) => {
@@ -99,9 +114,10 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     zoom.resetZoom();
     setDeleteArmed(false);
     setDeleteError(null);
+    setReassignOpen(false);
+    setReassignError(null);
   }, [zoom]);
 
-  // Keyboard navigation.
   useEffect(() => {
     if (!viewerOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -123,32 +139,72 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [viewerOpen, closeViewer, handlePrevious, handleNext, zoom]);
 
+  const downloadFilename = (index: number, photoId: number | null) => {
+    if (orderId && photoId != null) return `${orderId}_photo_${photoId}.jpg`;
+    if (orderId) return `${orderId}_photo_${index + 1}.jpg`;
+    if (photoId != null) return `photo-${photoId}.jpg`;
+    return `photo-${index + 1}.jpg`;
+  };
+
   const downloadPhotoAtIndex = async (index: number) => {
     const photo = photoItems[index];
     if (!photo?.url) return;
-    const filename = orderId ? `${orderId}_photo_${index + 1}.jpg` : `photo-${index + 1}.jpg`;
+    const filename = downloadFilename(index, photo.id);
+    if (typeof photo.id === 'number' && Number.isFinite(photo.id)) {
+      await downloadPhotoById(photo.id, filename);
+      return;
+    }
+    await downloadPhotoBlob(photo.url, filename);
+  };
+
+  const handleDownloadCurrent = async () => {
+    if (downloading) return;
+    setDownloading(true);
     try {
-      await downloadPhotoBlob(photo.url, filename);
+      await downloadPhotoAtIndex(currentIndex);
     } catch (error) {
       console.error('Failed to download image:', error);
+    } finally {
+      setDownloading(false);
     }
   };
 
   const handleDownloadAll = async () => {
-    if (downloadingAll || photoItems.length === 0) return;
-    setDownloadingAll(true);
+    if (downloading || photoItems.length === 0) return;
+    setDownloading(true);
     try {
+      const ids = photoItems
+        .map((p) => p.id)
+        .filter((id): id is number => typeof id === 'number' && Number.isFinite(id) && id > 0);
+
+      if (ids.length >= 2) {
+        downloadPhotoZip(ids, orderId ?? undefined);
+        return;
+      }
+      if (ids.length === 1) {
+        const idx = photoItems.findIndex((p) => p.id === ids[0]);
+        await downloadPhotoAtIndex(idx >= 0 ? idx : 0);
+        return;
+      }
+
       for (let i = 0; i < photoItems.length; i++) {
         await downloadPhotoAtIndex(i);
         await new Promise((r) => setTimeout(r, 280));
       }
+    } catch (error) {
+      console.error('Failed to download images:', error);
     } finally {
-      setDownloadingAll(false);
+      setDownloading(false);
     }
   };
 
   const currentPhoto = photoItems[currentIndex];
   const canDeleteCurrent = typeof currentPhoto?.id === 'number' && Number.isFinite(currentPhoto.id);
+  const canReassignCurrent =
+    allowReassign &&
+    canDeleteCurrent &&
+    (currentPhoto?.meta?.sourceScope === 'unboxing' ||
+      (currentPhoto?.meta?.photoType ?? '').toUpperCase().includes('RECEIV'));
 
   const performDelete = async () => {
     const photo = photoItems[currentIndex];
@@ -194,21 +250,54 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     void performDelete();
   };
 
+  const handleReassignToReceiving = async (targetReceivingId: number) => {
+    const photo = photoItems[currentIndex];
+    const photoId = photo?.id;
+    if (typeof photoId !== 'number' || !Number.isFinite(photoId)) return;
+    if (receivingId != null && targetReceivingId === receivingId) {
+      setReassignError('Photo is already on this PO');
+      return;
+    }
+    setReassigning(true);
+    setReassignError(null);
+    try {
+      const { reassignPhotoToReceiving } = await import('./photo-gallery-api');
+      await reassignPhotoToReceiving(photoId, targetReceivingId);
+      const remaining = photoItems.filter((_, i) => i !== currentIndex);
+      resetFingerprint();
+      setPhotoItems(remaining);
+      setReassignOpen(false);
+      dispatchReceivingPhotoChanged({
+        action: 'delete',
+        photoIds: [photoId],
+        receivingId: receivingId ?? null,
+      });
+      onPhotoReassigned?.(photoId);
+      if (remaining.length === 0) {
+        closeViewer();
+      } else {
+        setCurrentIndex((prev) => Math.min(prev, remaining.length - 1));
+        zoom.resetZoom();
+      }
+    } catch (err) {
+      setReassignError(err instanceof Error ? err.message : 'Move failed');
+    } finally {
+      setReassigning(false);
+    }
+  };
+
   return {
-    // static props
     className, compact, launcherTitle, launcherLayout, toolbarShowLabel, libraryHref,
-    // items
+    allowReassign, receivingId,
     photoItems, loadedCount, errorCount,
-    // viewer
     viewerOpen, currentIndex, mounted, openViewer, closeViewer, handleNext, handlePrevious, setCurrentIndex,
-    // context panel
     panelOpen, togglePanel: () => setPanelOpen((prev) => !prev),
-    // zoom
     ...zoom,
-    // actions
-    downloadingAll, handleDownloadAll,
+    downloading, handleDownloadCurrent, handleDownloadAll,
     canDeleteCurrent, deleteArmed, deletingPhoto, deleteError, handleDeleteClick,
     deletePhotoDirect: performDelete,
+    canReassignCurrent, reassignOpen, setReassignOpen, reassigning, reassignError,
+    handleReassignToReceiving,
   };
 }
 

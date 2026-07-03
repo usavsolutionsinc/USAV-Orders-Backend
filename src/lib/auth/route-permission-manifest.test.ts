@@ -101,6 +101,14 @@ test('regression: photos.share gates share pack creation', () => {
   assert.ok(paths.includes('/api/photos/share-packs/route.ts'), 'photos.share should gate share pack POST');
 });
 
+test('regression: receiving.upload_photo gates photo reassignment', () => {
+  const paths = routesGatedBy('receiving.upload_photo').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/photos/[id]/reassign/route.ts'),
+    'receiving.upload_photo should gate photo reassignment',
+  );
+});
+
 test('regression: photo-label routes are gated (read on view, writes on manage)', () => {
   // Vocabulary list + per-photo label read land on the per-file minimum
   // (photos.view, the GET); the POST/PUT/PATCH/DELETE writes assert photos.manage

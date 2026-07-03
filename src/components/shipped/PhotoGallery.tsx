@@ -14,8 +14,8 @@ export type { PhotoGalleryInput } from './photo-gallery/photo-gallery-utils';
 
 /**
  * Photo gallery: a launcher surface (thumbnail strip / slim toolbar / button)
- * plus a portaled fullscreen viewer with zoom, download-all, copy-links, and
- * a two-step delete. Thin composition layer — state/logic live in
+ * plus a portaled fullscreen viewer with zoom, download, PO reassignment, and a
+ * two-step delete. Thin composition layer — state/logic live in
  * {@link usePhotoGallery} under `./photo-gallery/`.
  */
 export function PhotoGallery(props: PhotoGalleryProps) {

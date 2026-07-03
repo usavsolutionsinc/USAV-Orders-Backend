@@ -5,9 +5,10 @@ import { useMotionTransition } from '@/design-system/foundations/motion-framer-h
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
-  AlertCircle, Trash2, Info, RotateCcw, RefreshCw, ExternalLink,
+  AlertCircle, Trash2, Info, RotateCcw, RefreshCw, ExternalLink, Package,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
+import { MovePhotoToPoPanel } from './MovePhotoToPoPanel';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { photoHeroLayoutId } from './photo-gallery-utils';
@@ -108,12 +109,15 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
 
           <div className="mx-1 h-6 w-px bg-white/20" aria-hidden="true" />
 
-          <HoverTooltip label={g.downloadingAll ? 'Downloading…' : `Download all ${photoItems.length} photos`} asChild>
+          <HoverTooltip
+            label={g.downloading ? 'Downloading…' : `Download photo ${currentIndex + 1}`}
+            asChild
+          >
             <IconButton
-              onClick={(e) => { e.stopPropagation(); void g.handleDownloadAll(); }}
-              disabled={g.downloadingAll || photoItems.every((p) => p.status === 'error')}
+              onClick={(e) => { e.stopPropagation(); void g.handleDownloadCurrent(); }}
+              disabled={g.downloading || photoItems[currentIndex]?.status === 'error'}
               className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
-              ariaLabel={`Download all ${photoItems.length} photos`}
+              ariaLabel={`Download photo ${currentIndex + 1}`}
               icon={<Download className="h-5 w-5 text-white" />}
             />
           </HoverTooltip>
@@ -146,6 +150,18 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               icon={<Info className="h-5 w-5 text-white" />}
             />
           </HoverTooltip>
+
+          {g.canReassignCurrent && (
+            <HoverTooltip label="Move to another PO" asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); g.setReassignOpen(true); }}
+                disabled={g.reassigning}
+                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50"
+                ariaLabel="Move photo to another PO"
+                icon={<Package className="h-5 w-5 text-white" />}
+              />
+            </HoverTooltip>
+          )}
 
           {g.canDeleteCurrent && (
             <HoverTooltip label={g.deleteArmed ? 'Click again to confirm' : 'Delete photo'} asChild>
@@ -180,6 +196,24 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           {g.deleteError}
         </div>
       )}
+
+      {g.reassignError && !g.reassignOpen && (
+        <div
+          className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-amber-600/90 border border-amber-300 text-white text-xs font-bold backdrop-blur-md shadow-lg"
+          role="alert"
+        >
+          {g.reassignError}
+        </div>
+      )}
+
+      <MovePhotoToPoPanel
+        open={g.reassignOpen}
+        currentReceivingId={g.receivingId}
+        busy={g.reassigning}
+        error={g.reassignError}
+        onClose={() => g.setReassignOpen(false)}
+        onSelect={(targetReceivingId) => void g.handleReassignToReceiving(targetReceivingId)}
+      />
 
       {/* Main Photo */}
       <motion.div

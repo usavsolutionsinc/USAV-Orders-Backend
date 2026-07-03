@@ -217,6 +217,7 @@ export const AUDIT_ACTION = {
   STAFF_MESSAGE_SEND:      'staff_message.send',
   // Photo library — minted N temporary signed share links for selected photos
   PHOTO_SHARE_LINK:        'photo.share_link',
+  PHOTO_REASSIGN:          'photo.reassign',
   // Photo library master folders (operator-created, persistent) + assignments
   PHOTO_FOLDER_CREATE:     'photo_folder.create',
   PHOTO_FOLDER_RENAME:     'photo_folder.rename',
