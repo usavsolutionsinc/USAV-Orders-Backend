@@ -395,11 +395,11 @@ export function PoLinesAccordion({
       className={
         embedded
           ? 'min-w-0'
-          : 'min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60'
+          : 'min-w-0 overflow-hidden rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60'
       }
     >
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
           PO items · {rows.length}
         </h3>
         {embedded ? (
@@ -421,7 +421,7 @@ export function PoLinesAccordion({
               className={`relative min-w-0 overflow-hidden rounded-xl border transition-colors ${
                 isActive
                   ? 'border-blue-300 bg-blue-50/60'
-                  : 'border-gray-200 bg-white hover:bg-gray-50'
+                  : 'border-border-soft bg-surface-card hover:bg-surface-hover'
               }`}
             >
               {/* Click area = title + meta. Kept as a <div role="button"> so
@@ -472,13 +472,13 @@ export function PoLinesAccordion({
                           }}
                           animate={{ rotate: activeCollapsed ? -90 : 0 }}
                           transition={chevronTransition}
-                          className="ds-raw-button flex items-center justify-center rounded-md p-0.5 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
+                          className="ds-raw-button flex items-center justify-center rounded-md p-0.5 text-text-faint transition-colors hover:bg-blue-100 hover:text-text-muted"
                         >
                           <ChevronDown className="h-3.5 w-3.5" aria-hidden />
                         </motion.button>
                       ) : (
                         <ChevronDown
-                          className="h-3.5 w-3.5 -rotate-90 text-gray-400 transition-transform"
+                          className="h-3.5 w-3.5 -rotate-90 text-text-faint transition-transform"
                           aria-hidden
                         />
                       )}
@@ -488,7 +488,7 @@ export function PoLinesAccordion({
                       inline edit: the operator shouldn't retype the listing title.
                       ds-allow-title: native tooltip shows full value when truncated */}
                   <p
-                    className="min-w-0 flex-1 truncate text-label font-bold text-gray-900"
+                    className="min-w-0 flex-1 truncate text-label font-bold text-text-default"
                     title={line.item_name ?? undefined}
                   >
                     {line.item_name || line.sku || `Line #${line.id}`}
@@ -517,7 +517,7 @@ export function PoLinesAccordion({
                             className={`h-3.5 w-3.5 ${
                               descShown === line.id
                                 ? 'text-blue-600'
-                                : 'text-gray-400 group-hover:text-gray-600'
+                                : 'text-text-faint group-hover:text-text-muted'
                             }`}
                             aria-hidden
                           />
@@ -545,7 +545,7 @@ export function PoLinesAccordion({
                     )}
                     {(line.sku || '').trim() ? (
                       <>
-                        <span aria-hidden className="text-micro text-gray-400">·</span>
+                        <span aria-hidden className="text-micro text-text-faint">·</span>
                         <SkuScanRefChip
                           value={line.sku as string}
                           display={getLast4(line.sku)}
@@ -554,11 +554,11 @@ export function PoLinesAccordion({
                     ) : null}
                     {line.unit_price != null && Number(line.unit_price) > 0 ? (
                       <>
-                        <span aria-hidden className="text-micro text-gray-400">·</span>
+                        <span aria-hidden className="text-micro text-text-faint">·</span>
                         <UnitPriceChip amount={line.unit_price} />
                       </>
                     ) : null}
-                    <span aria-hidden className="text-micro text-gray-400">·</span>
+                    <span aria-hidden className="text-micro text-text-faint">·</span>
                     <ConditionGradeChip
                       grade={
                         isActive && activeConditionOverride
@@ -568,7 +568,7 @@ export function PoLinesAccordion({
                     />
                     {Array.isArray(line.serials) && line.serials.length > 0 ? (
                       <>
-                        <span aria-hidden className="text-micro text-gray-400">·</span>
+                        <span aria-hidden className="text-micro text-text-faint">·</span>
                         {line.serials.map((s, i) => {
                           const sn = (s.serial_number || '').trim();
                           if (!sn) return null;
@@ -647,7 +647,7 @@ export function PoLinesAccordion({
                   <div className="min-w-0 px-3 pb-2 pt-1">
                     {descShown === line.id ? (
                       <div className="space-y-1">
-                        <p className="text-micro font-bold uppercase tracking-widest text-gray-500">
+                        <p className="text-micro font-bold uppercase tracking-widest text-text-soft">
                           Item description
                         </p>
                         <div className="flex h-10 items-stretch gap-2">
@@ -660,7 +660,7 @@ export function PoLinesAccordion({
                             }}
                             placeholder="Zoho line description"
                             onKeyDown={(e) => { if (e.key === 'Enter') void saveItemDesc(line.id); }}
-                            className="h-10 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-caption normal-case tracking-normal text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            className="h-10 min-w-0 flex-1 rounded-xl border border-border-default bg-surface-card px-3 text-caption normal-case tracking-normal text-text-default focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                           />
                           <HoverTooltip label="Save item description" asChild>
                             <IconButton
@@ -778,11 +778,11 @@ function ScannedBadge({ expected }: { expected: number | null }) {
 export function ProgressBadge({ received, expected }: { received: number; expected: number | null }) {
   const qtyClass = cn(qtyProgress, 'normal-case tracking-normal');
   if (expected == null || expected <= 0) {
-    return <span className={cn(qtyClass, 'text-gray-500')}>{received} received</span>;
+    return <span className={cn(qtyClass, 'text-text-soft')}>{received} received</span>;
   }
   const done = received >= expected;
   return (
-    <span className={cn(qtyClass, done ? 'text-emerald-600/80' : 'text-gray-500')}>
+    <span className={cn(qtyClass, done ? 'text-emerald-600/80' : 'text-text-soft')}>
       {received}/{expected}
     </span>
   );

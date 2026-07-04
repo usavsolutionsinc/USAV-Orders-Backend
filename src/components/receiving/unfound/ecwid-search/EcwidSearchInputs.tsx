@@ -72,7 +72,7 @@ export function EcwidSearchInputs({
             c.manualSubmitting || c.submittingId != null || !c.manualTitle.trim()
           }
           onClick={() => void c.handleManualTitleSubmit()}
-          className="w-full disabled:bg-gray-300 disabled:opacity-100"
+          className="w-full disabled:bg-surface-strong disabled:opacity-100"
         >
           {c.manualSubmitting ? 'Adding…' : 'Add to carton'}
         </Button>
@@ -97,7 +97,7 @@ export function EcwidSearchInputs({
   }
 
   return (
-    <p className="px-3 pt-2 text-micro text-gray-500">
+    <p className="px-3 pt-2 text-micro text-text-soft">
       Pick an order containing a repair-service SKU to link this carton.
     </p>
   );

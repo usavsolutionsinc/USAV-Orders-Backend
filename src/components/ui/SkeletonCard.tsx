@@ -4,12 +4,12 @@
 export function SkeletonCard({ className = '' }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-3xl border border-gray-100 bg-gradient-to-br from-gray-100 to-gray-50 ${className}`}
+      className={`animate-pulse rounded-3xl border border-border-hairline bg-gradient-to-br from-gray-100 to-gray-50 ${className}`}
       aria-hidden="true"
     >
       <div className="p-4">
-        <div className="h-4 w-3/4 rounded-full bg-gray-200" />
-        <div className="mt-2 h-2.5 w-1/2 rounded-full bg-gray-200/70" />
+        <div className="h-4 w-3/4 rounded-full bg-surface-strong" />
+        <div className="mt-2 h-2.5 w-1/2 rounded-full bg-surface-strong/70" />
       </div>
     </div>
   );

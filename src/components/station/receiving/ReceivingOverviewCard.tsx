@@ -31,15 +31,15 @@ function StaffTimestampRow({
 }) {
   const hasAt = Boolean(at && String(at).trim());
   if (!hasAt && !staffName) {
-    return <span className="text-sm font-bold text-gray-400">{emptyFallback}</span>;
+    return <span className="text-sm font-bold text-text-faint">{emptyFallback}</span>;
   }
 
   return (
     <div className="flex items-center justify-between gap-3">
       {staffName ? (
-        <p className="min-w-0 truncate text-sm font-bold text-gray-900">{staffName}</p>
+        <p className="min-w-0 truncate text-sm font-bold text-text-default">{staffName}</p>
       ) : (
-        <span className="text-sm font-bold text-gray-400">—</span>
+        <span className="text-sm font-bold text-text-faint">—</span>
       )}
       <DateTimeValue value={hasAt ? at : null} fallback={emptyFallback} />
     </div>
@@ -59,7 +59,7 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
   const receiveName = resolveStaffLabel(log.received_by_name, log.received_by, getStaffName);
 
   return (
-    <section className="rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50/90 to-white p-4 space-y-5 shadow-sm shadow-gray-100/40">
+    <section className="rounded-2xl border border-border-hairline bg-gradient-to-br from-gray-50/90 to-white p-4 space-y-5 shadow-sm shadow-gray-100/40">
       {/* Photos first — primary operator capture surface */}
       <div className="space-y-3">
         <ReceivingPhotosSection
@@ -70,9 +70,9 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
       </div>
 
       {/* 3-stage operator lifecycle: Scanned → Unboxed → Received. */}
-      <div className="space-y-4 pt-1 border-t border-gray-100">
+      <div className="space-y-4 pt-1 border-t border-border-hairline">
         <div>
-          <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
+          <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-text-soft mb-1.5">
             Scanned
           </p>
           <StaffTimestampRow
@@ -83,7 +83,7 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
         </div>
 
         <div>
-          <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
+          <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-text-soft mb-1.5">
             Unboxed
           </p>
           <StaffTimestampRow
@@ -94,7 +94,7 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
         </div>
 
         <div>
-          <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
+          <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-text-soft mb-1.5">
             Received
           </p>
           <StaffTimestampRow

@@ -48,11 +48,11 @@ export function PopoverShell({
     >
       <div
         role="dialog"
-        className={`${width} overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl`}
+        className={`${width} overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-xl`}
       >
-        <div className="flex h-9 items-center gap-2 border-b border-gray-100 bg-gray-50/70 px-3">
-          <span className="text-gray-400">{icon}</span>
-          <span className="text-eyebrow font-black uppercase tracking-[0.16em] text-gray-500">
+        <div className="flex h-9 items-center gap-2 border-b border-border-hairline bg-surface-canvas/70 px-3">
+          <span className="text-text-faint">{icon}</span>
+          <span className="text-eyebrow font-black uppercase tracking-[0.16em] text-text-soft">
             {title}
           </span>
         </div>
@@ -64,13 +64,13 @@ export function PopoverShell({
 
 function PopoverEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-3 py-6 text-center text-caption font-medium text-gray-400">{children}</p>
+    <p className="px-3 py-6 text-center text-caption font-medium text-text-faint">{children}</p>
   );
 }
 
 function PopoverLoading() {
   return (
-    <p className="px-3 py-6 text-center text-caption font-semibold text-gray-400">Loading…</p>
+    <p className="px-3 py-6 text-center text-caption font-semibold text-text-faint">Loading…</p>
   );
 }
 
@@ -97,10 +97,10 @@ export function InventoryLinkagePopover({
   const stocked = !!(unit.current_location && unit.current_location.trim());
   return (
     <PopoverShell title="Inventory linkage" icon={<Package className="h-3.5 w-3.5" />} anchorRef={anchorRef} onClose={onClose}>
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-border-hairline">
         {/* On-hand */}
         <div className="px-3 py-3">
-          <p className="text-eyebrow font-black uppercase tracking-[0.16em] text-gray-400">
+          <p className="text-eyebrow font-black uppercase tracking-[0.16em] text-text-faint">
             On hand · {unit.sku ?? '—'}
           </p>
           <div className="mt-2 flex gap-2">
@@ -143,11 +143,11 @@ export function InventoryLinkagePopover({
 
 function StatTile({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
   return (
-    <div className="flex flex-1 items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 ring-1 ring-gray-200/60">
-      <span className="text-gray-400">{icon}</span>
+    <div className="flex flex-1 items-center gap-2 rounded-lg bg-surface-canvas px-3 py-2 ring-1 ring-border-soft/60">
+      <span className="text-text-faint">{icon}</span>
       <div className="min-w-0">
-        <p className="text-lg font-bold leading-none text-gray-900 tabular-nums">{value}</p>
-        <p className="mt-0.5 text-micro font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+        <p className="text-lg font-bold leading-none text-text-default tabular-nums">{value}</p>
+        <p className="mt-0.5 text-micro font-semibold uppercase tracking-wider text-text-faint">{label}</p>
       </div>
     </div>
   );
@@ -168,14 +168,14 @@ function Row({
     <div className="flex items-center gap-3 px-3 py-2.5">
       <span
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-          active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'
+          active ? 'bg-blue-600 text-white' : 'bg-surface-sunken text-text-faint'
         }`}
       >
         {icon}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-label font-bold text-gray-900">{title}</p>
-        <p className="truncate text-micro font-medium text-gray-500">{sub}</p>
+        <p className="truncate font-mono text-label font-bold text-text-default">{title}</p>
+        <p className="truncate text-micro font-medium text-text-soft">{sub}</p>
       </div>
     </div>
   );
@@ -209,7 +209,7 @@ export function CompatibilityPopover({
       ) : empty ? (
         <PopoverEmpty>No assembly relationships defined for this SKU yet.</PopoverEmpty>
       ) : (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-border-hairline">
           <EdgeSection label="Belongs to" empty="Not part of any assembly" rows={parentRows} />
           <EdgeSection label="Contains" empty="No component parts" rows={childRows} />
         </div>
@@ -229,11 +229,11 @@ function EdgeSection({
 }) {
   return (
     <div className="py-1">
-      <p className="px-3 pb-1 pt-2 text-eyebrow font-black uppercase tracking-[0.16em] text-gray-400">
+      <p className="px-3 pb-1 pt-2 text-eyebrow font-black uppercase tracking-[0.16em] text-text-faint">
         {label} · {rows.length}
       </p>
       {rows.length === 0 ? (
-        <p className="px-3 py-2 text-micro font-medium text-gray-400">{empty}</p>
+        <p className="px-3 py-2 text-micro font-medium text-text-faint">{empty}</p>
       ) : (
         <ul>
           {rows.map((r) => (
@@ -274,7 +274,7 @@ export function SimilarProductsPopover({
         <PopoverEmpty>No other products in “{data.category}”.</PopoverEmpty>
       ) : (
         <div className="py-1">
-          <p className="px-3 pb-1 pt-2 text-eyebrow font-black uppercase tracking-[0.16em] text-gray-400">
+          <p className="px-3 pb-1 pt-2 text-eyebrow font-black uppercase tracking-[0.16em] text-text-faint">
             Category · {data.category}
           </p>
           <ul>
@@ -311,7 +311,7 @@ function ProductMiniRow({
 }) {
   return (
     <li className="flex items-center gap-2.5 px-3 py-2">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-canvas ring-1 ring-border-soft">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -323,17 +323,17 @@ function ProductMiniRow({
             }}
           />
         ) : (
-          <Package className="h-4 w-4 text-gray-300" />
+          <Package className="h-4 w-4 text-text-faint" />
         )}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="line-clamp-1 text-label font-semibold text-gray-900">{title}</span>
-        <span className="truncate font-mono text-micro text-gray-500">
+        <span className="line-clamp-1 text-label font-semibold text-text-default">{title}</span>
+        <span className="truncate font-mono text-micro text-text-soft">
           {sku} · {stock} on hand
         </span>
       </span>
       {trailing ? (
-        <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-micro font-bold text-gray-600">
+        <span className="shrink-0 rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-micro font-bold text-text-muted">
           {trailing}
         </span>
       ) : null}

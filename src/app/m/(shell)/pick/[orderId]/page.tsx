@@ -62,10 +62,10 @@ function PickerInner() {
   // h-full fills it exactly — single scroll context lives inside <main>,
   // and the ConfirmDock anchors to the viewport bottom as a flex sibling.
   return (
-    <div className="flex h-full flex-col bg-slate-50">
+    <div className="flex h-full flex-col bg-surface-canvas">
       {/* ─── Status strip ──────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur"
+        className="sticky top-0 z-10 border-b border-border-soft bg-surface-card/95 backdrop-blur"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -74,18 +74,18 @@ function PickerInner() {
               onClick={() => router.push('/m/pick')}
               ariaLabel="Back to queue"
               icon={
-                <svg viewBox="0 0 24 24" className="h-5 w-5 text-slate-700" fill="none" stroke="currentColor" strokeWidth={2}>
+                <svg viewBox="0 0 24 24" className="h-5 w-5 text-text-muted" fill="none" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
               }
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 active:bg-slate-200"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-sunken active:bg-surface-strong"
             />
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-bold text-blue-800">
               {order.customerInitials}
             </span>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Order</p>
-              <p className="truncate text-base font-bold text-slate-900">{order.orderLabel}</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-text-soft">Order</p>
+              <p className="truncate text-base font-bold text-text-default">{order.orderLabel}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">

@@ -81,13 +81,13 @@ export function OutOfStockEditorBlock({
           onChange={(e) => onChange(e.target.value)}
           placeholder="Describe missing parts…"
           autoFocus={autoFocus}
-          className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}
+          className={`w-full bg-transparent text-sm font-normal text-text-default outline-none placeholder:text-text-soft ${dmSans.className}`}
         />
       </div>
 
       {/* Save hint — smaller copy, sits below the red rule */}
       {!autoSaveOnChange && saveHint ? (
-        <p className="mt-1 text-eyebrow font-bold tracking-wide text-gray-500">
+        <p className="mt-1 text-eyebrow font-bold tracking-wide text-text-soft">
           {saveHint}
         </p>
       ) : null}

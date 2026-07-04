@@ -113,8 +113,8 @@ function railStatusBadgeTone(dot: string, fallbackWorkflowStatus: string): strin
   if (dot.includes('teal')) return 'bg-teal-100 text-teal-700';
   if (dot.includes('rose')) return 'bg-rose-100 text-rose-700';
   if (dot.includes('purple')) return 'bg-purple-100 text-purple-700';
-  if (dot.includes('slate')) return 'bg-slate-200 text-slate-600';
-  return WORKFLOW_BADGE[fallbackWorkflowStatus] ?? 'bg-gray-100 text-gray-600';
+  if (dot.includes('slate')) return 'bg-surface-strong text-text-muted';
+  return WORKFLOW_BADGE[fallbackWorkflowStatus] ?? 'bg-surface-sunken text-text-muted';
 }
 
 function canAutoSelectReceivingRailFirst(): boolean {
@@ -218,7 +218,7 @@ function ReceivingRowMain({
 }) {
   const title = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
   const techId = row.assigned_tech_id ?? null;
-  const techColor = techId ? stationThemeColors[getStaffThemeById(techId)].text : 'text-gray-400';
+  const techColor = techId ? stationThemeColors[getStaffThemeById(techId)].text : 'text-text-faint';
 
   // Render identical content whether or not the row is selected — selection is
   // a pure ring/background highlight (see SidebarRailShell). Any size/content
@@ -232,7 +232,7 @@ function ReceivingRowMain({
         titleAttr: title,
         titleAccessory: ctx.pkgChip,
         meta: (
-          <span className="block truncate font-semibold uppercase tracking-widest text-gray-500">
+          <span className="block truncate font-semibold uppercase tracking-widest text-text-soft">
             {renderQuantity(row)}
             {techId ? <span className={`ml-1 ${techColor}`}>· {getStaffName(techId)}</span> : null}
           </span>
@@ -273,9 +273,9 @@ function ReceivingPopoverContent({
     condGrade === 'BRAND_NEW' ? 'bg-yellow-50 text-yellow-700 ring-yellow-200'
       : condGrade === 'USED_A' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
         : condGrade === 'USED_B' ? 'bg-blue-50 text-blue-700 ring-blue-200'
-          : condGrade === 'USED_C' ? 'bg-slate-100 text-slate-700 ring-slate-300'
+          : condGrade === 'USED_C' ? 'bg-surface-sunken text-text-muted ring-border-default'
             : condGrade === 'PARTS' ? 'bg-amber-50 text-amber-700 ring-amber-200'
-              : 'bg-gray-100 text-gray-500 ring-gray-200';
+              : 'bg-surface-sunken text-text-soft ring-border-soft';
 
   const workflowLabel = statusLabel;
   const workflowTone = railStatusBadgeTone(
@@ -292,7 +292,7 @@ function ReceivingPopoverContent({
     <div className="space-y-3 p-3.5">
       <div>
         <div className="flex items-start gap-2">
-          <p className="flex-1 text-sm font-black leading-snug text-gray-900">{title}</p>
+          <p className="flex-1 text-sm font-black leading-snug text-text-default">{title}</p>
           {groupSize > 1 ? (
             <span className="shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-indigo-700">PKG · {groupSize}</span>
           ) : null}
@@ -305,7 +305,7 @@ function ReceivingPopoverContent({
               is intentional, not a failed sync. */}
           {row.receiving_source === 'unmatched' ? (
             <HoverTooltip label="No matching Zoho PO — received locally only" asChild>
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-500 ring-1 ring-inset ring-slate-200">No PO</span>
+              <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-text-soft ring-1 ring-inset ring-border-soft">No PO</span>
             </HoverTooltip>
           ) : null}
           {/* Phase 2: a physically-present box whose Zoho PO already reads
@@ -327,7 +327,7 @@ function ReceivingPopoverContent({
           >
             <span
               className={`ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${
-                (row.photo_count ?? 0) > 0 ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200' : 'bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-200'
+                (row.photo_count ?? 0) > 0 ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200' : 'bg-surface-canvas text-text-faint ring-1 ring-inset ring-border-soft'
               }`}
             >
               <Camera className="h-3 w-3" />
@@ -341,17 +341,17 @@ function ReceivingPopoverContent({
 
       <div>
         <div className="flex items-baseline justify-between">
-          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{qtyLabel}</span>
-          <span className={`text-caption font-black tabular-nums ${isComplete ? 'text-emerald-600' : 'text-gray-700'}`}>
-            {qtyCurrent}<span className="text-gray-300 mx-0.5">/</span><span className="text-gray-400">{qtyTotal ?? '?'}</span>
+          <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">{qtyLabel}</span>
+          <span className={`text-caption font-black tabular-nums ${isComplete ? 'text-emerald-600' : 'text-text-muted'}`}>
+            {qtyCurrent}<span className="text-text-faint mx-0.5">/</span><span className="text-text-faint">{qtyTotal ?? '?'}</span>
           </span>
         </div>
-        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-surface-sunken">
           <motion.div initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 0.35, ease: motionBezier.easeOut }} className={`h-full ${isComplete ? 'bg-emerald-500' : 'bg-blue-500'}`} />
         </div>
       </div>
 
-      <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto border-t border-gray-100 pt-3 [&>*]:shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto border-t border-border-hairline pt-3 [&>*]:shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
@@ -363,8 +363,8 @@ function ReceivingPopoverContent({
         <SerialChip value={serialsCsv} width="w-fit shrink-0" />
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-100 pt-2.5">
-        <span className="text-eyebrow font-bold uppercase tracking-widest text-gray-400">
+      <div className="flex items-center justify-between border-t border-border-hairline pt-2.5">
+        <span className="text-eyebrow font-bold uppercase tracking-widest text-text-faint">
           {railRelativeTime(activityAt ?? row.created_at)} ago
           {row.assigned_tech_id ? ` · ${getStaffName(row.assigned_tech_id)}` : ''}
         </span>

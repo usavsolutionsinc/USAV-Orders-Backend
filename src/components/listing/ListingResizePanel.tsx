@@ -148,7 +148,7 @@ export function ListingResizePanel({
   const effectiveHeight = isCollapsed ? 0 : height;
 
   return (
-    <div className="flex-none border-t border-gray-200 bg-white">
+    <div className="flex-none border-t border-border-soft bg-surface-card">
       {/* Splitter — drag region. */}
       <div
         role="separator"
@@ -162,20 +162,20 @@ export function ListingResizePanel({
         onPointerCancel={stopDrag}
         onDoubleClick={handleDoubleClick}
         onKeyDown={handleKeyDown}
-        className={`group/grip relative flex h-2.5 cursor-row-resize items-center justify-center border-b border-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
-          isDragging ? 'bg-blue-100' : 'bg-gray-50 hover:bg-blue-50'
+        className={`group/grip relative flex h-2.5 cursor-row-resize items-center justify-center border-b border-border-hairline transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
+          isDragging ? 'bg-blue-100' : 'bg-surface-canvas hover:bg-blue-50'
         }`}
       >
         <span
           className={`h-[3px] w-10 rounded-full transition-colors ${
-            isDragging ? 'bg-blue-500' : 'bg-gray-300 group-hover/grip:bg-blue-400'
+            isDragging ? 'bg-blue-500' : 'bg-surface-strong group-hover/grip:bg-blue-400'
           }`}
         />
       </div>
 
       {/* Title strip — outside the drag region so buttons stay clickable. */}
-      <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-1.5">
-        <div className="flex min-w-0 items-center gap-1.5 text-micro font-black uppercase tracking-widest text-gray-500">
+      <div className="flex items-center justify-between gap-2 border-b border-border-hairline px-4 py-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 text-micro font-black uppercase tracking-widest text-text-soft">
           <ExternalLink className="h-3 w-3 shrink-0 text-blue-500" />
           <span className="truncate">{title}</span>
         </div>
@@ -196,7 +196,7 @@ export function ListingResizePanel({
             }
             ariaLabel={isCollapsed ? 'Expand listing' : 'Collapse listing'}
             onClick={() => setIsCollapsed((c) => !c)}
-            className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="flex h-5 w-5 items-center justify-center rounded text-text-faint hover:bg-surface-sunken hover:text-text-muted"
           />
         </div>
       </div>
@@ -204,7 +204,7 @@ export function ListingResizePanel({
       {/* Iframe body */}
       <div
         style={{ height: `${effectiveHeight}px` }}
-        className={`overflow-hidden bg-white ${
+        className={`overflow-hidden bg-surface-card ${
           isDragging ? '' : 'transition-[height] duration-200 ease-out'
         }`}
       >
@@ -215,7 +215,7 @@ export function ListingResizePanel({
             </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 py-10 text-center">
-              <p className="text-label font-semibold text-gray-500">
+              <p className="text-label font-semibold text-text-soft">
                 Listing preview is only available in the desktop app. Use{' '}
                 {/* ds-raw-button — inline prose link */}
                 <button

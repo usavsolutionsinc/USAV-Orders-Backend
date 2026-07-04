@@ -64,14 +64,17 @@ const defaultDataWipeDeps: RecordDataWipeDeps = {
   fetchUnit: async (serialUnitId, orgId) => {
     // org-scoped read; `pool` is the BYPASSRLS owner connection so this explicit
     // predicate (not RLS) isolates tenants — mirrors recordTestVerdict.
+    // Phase 3: origin line via the reconstruction view.
     const r = await pool.query<TestedUnit>(
       orgId
-        ? `SELECT id, serial_number, current_status::text AS current_status, sku,
-                  origin_receiving_line_id, organization_id
-             FROM serial_units WHERE id = $1 AND organization_id = $2`
-        : `SELECT id, serial_number, current_status::text AS current_status, sku,
-                  origin_receiving_line_id, organization_id
-             FROM serial_units WHERE id = $1`,
+        ? `SELECT su.id, su.serial_number, su.current_status::text AS current_status, su.sku,
+                  vo.origin_receiving_line_id, su.organization_id
+             FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+            WHERE su.id = $1 AND su.organization_id = $2`
+        : `SELECT su.id, su.serial_number, su.current_status::text AS current_status, su.sku,
+                  vo.origin_receiving_line_id, su.organization_id
+             FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+            WHERE su.id = $1`,
       orgId ? [serialUnitId, orgId] : [serialUnitId],
     );
     return r.rows[0] ?? null;

@@ -63,7 +63,7 @@ export function ShippedDetailsHeader({
 }: ShippedDetailsHeaderProps) {
   return (
     <PaneHeader
-      className="shrink-0 border-b-0 bg-white/90 backdrop-blur-xl"
+      className="shrink-0 border-b-0 bg-surface-card/90 backdrop-blur-xl"
       rowClassName="px-6"
       leftSlot={
         <>

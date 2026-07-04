@@ -4,6 +4,7 @@ import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 import { InvalidFbaCatalogKeyError } from '@/lib/fba/catalog-key-validation';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { AUDIT_ENTITY } from '@/lib/audit-logs';
@@ -292,6 +293,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     });
 
     await invalidateCacheTags(['fba-board', 'fba-shipments']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaShipmentChanged({ action: 'created', shipmentId: Number(shipment.id || 0), source: 'fba.shipments.create', organizationId: ctx.organizationId });
 
     return NextResponse.json(

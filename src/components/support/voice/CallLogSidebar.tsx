@@ -45,7 +45,7 @@ export function CallLogSidebar({ modeToggle = null }: { modeToggle?: ReactNode }
   const inbound = items.filter((c) => c.direction === 'inbound').length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       <div className="shrink-0 px-2 pt-2">
         <SearchBar
           value={query}
@@ -67,9 +67,9 @@ export function CallLogSidebar({ modeToggle = null }: { modeToggle?: ReactNode }
         />
         <div className="space-y-5 pt-2">
         {notConfigured ? (
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4">
-            <p className="text-caption font-semibold text-gray-700">Call log not connected</p>
-            <p className="mt-1 text-micro leading-5 text-gray-500">
+          <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-3 py-4">
+            <p className="text-caption font-semibold text-text-muted">Call log not connected</p>
+            <p className="mt-1 text-micro leading-5 text-text-soft">
               Connect Nextiva in Settings → Integrations to watch inbound, outbound, and missed
               calls here in real time.
             </p>
@@ -90,9 +90,9 @@ export function CallLogSidebar({ modeToggle = null }: { modeToggle?: ReactNode }
               />
             </div>
 
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4">
+            <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-3 py-4">
               <p className={sectionLabel}>Live call stream</p>
-              <p className="mt-1 text-micro leading-5 text-gray-500">
+              <p className="mt-1 text-micro leading-5 text-text-soft">
                 Filter the stream by direction or search a number. A missed call you need to chase
                 opens its voicemail in the Voicemail tab.
               </p>
@@ -117,12 +117,12 @@ function SummaryCell({
   emphasize?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-2.5">
-      <p className="flex items-center gap-1 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+    <div className="rounded-xl border border-border-soft bg-surface-card p-2.5">
+      <p className="flex items-center gap-1 text-eyebrow font-black uppercase tracking-widest text-text-soft">
         {icon}
         {label}
       </p>
-      <p className={cn('mt-0.5 text-xl font-black tabular-nums leading-none', emphasize ? 'text-rose-600' : 'text-gray-900')}>
+      <p className={cn('mt-0.5 text-xl font-black tabular-nums leading-none', emphasize ? 'text-rose-600' : 'text-text-default')}>
         {value}
       </p>
     </div>

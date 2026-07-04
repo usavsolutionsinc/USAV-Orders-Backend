@@ -42,7 +42,7 @@ const feedbackRing: Record<ScanFeedback, string> = {
 };
 
 const feedbackBorder: Record<ScanFeedback, string> = {
-  idle: 'border-gray-200',
+  idle: 'border-border-soft',
   success: 'border-emerald-400',
   error: 'border-red-400',
 };
@@ -112,7 +112,7 @@ export function ScanInputDesktop({
   return (
     <div className={`space-y-1 ${className}`.trim()}>
       {label && (
-        <label className="block text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500">
+        <label className="block text-eyebrow font-black uppercase tracking-[0.2em] text-text-soft">
           {label}
         </label>
       )}
@@ -135,16 +135,16 @@ export function ScanInputDesktop({
           }
           className={`
             flex items-center gap-2
-            border rounded-2xl bg-gray-50 shadow-inner
+            border rounded-2xl bg-surface-canvas shadow-inner
             transition-all duration-150
             ${feedbackBorder[feedback]}
             ${feedbackRing[feedback]}
-            focus-within:border-gray-400 focus-within:bg-white focus-within:shadow-sm
+            focus-within:border-border-emphasis focus-within:bg-surface-card focus-within:shadow-sm
           `.trim()}
         >
           {/* Leading icon */}
           {icon && (
-            <span className="pl-3 flex-shrink-0 text-gray-400">
+            <span className="pl-3 flex-shrink-0 text-text-faint">
               {icon}
             </span>
           )}
@@ -161,8 +161,8 @@ export function ScanInputDesktop({
             spellCheck={false}
             className={`
               flex-1 bg-transparent border-0 outline-none
-              h-10 text-sm font-bold text-gray-900
-              placeholder:text-gray-400 placeholder:font-medium
+              h-10 text-sm font-bold text-text-default
+              placeholder:text-text-faint placeholder:font-medium
               ${icon ? 'pl-1' : 'pl-3.5'} pr-3
             `.trim()}
           />
@@ -176,7 +176,7 @@ export function ScanInputDesktop({
                 exit={{ opacity: 0 }}
                 className="pr-3 flex-shrink-0"
               >
-                <svg className="h-4 w-4 animate-spin text-gray-500" fill="none" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 animate-spin text-text-soft" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
@@ -187,8 +187,8 @@ export function ScanInputDesktop({
           {/* Enter key hint */}
           {!isProcessing && (
             <span className="pr-2.5 flex-shrink-0">
-              <span className="h-6 min-w-6 px-1.5 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                <span className="text-mini font-black text-gray-400">ENTER</span>
+              <span className="h-6 min-w-6 px-1.5 bg-surface-card rounded border border-border-hairline shadow-sm flex items-center justify-center">
+                <span className="text-mini font-black text-text-faint">ENTER</span>
               </span>
             </span>
           )}

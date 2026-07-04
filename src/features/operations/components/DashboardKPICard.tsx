@@ -75,7 +75,7 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
       tabIndex={clickable ? 0 : undefined}
       aria-haspopup={clickable ? 'dialog' : undefined}
       aria-label={clickable ? `Show details for ${title}` : undefined}
-      className={`relative flex h-full flex-col rounded-[28px] bg-white p-5 shadow-[0_4px_24px_rgba(161,140,90,0.06)] sm:p-6 ${
+      className={`relative flex h-full flex-col rounded-[28px] bg-surface-card p-5 shadow-[0_4px_24px_rgba(161,140,90,0.06)] sm:p-6 ${
         clickable
           ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500'
           : ''
@@ -106,7 +106,7 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
         <div className="mt-auto">
           <div className="relative flex h-[72px] items-end justify-between gap-1 px-1">
             <div
-              className="absolute -top-1 rounded-full border border-border-soft bg-white px-2 py-0.5 text-micro font-bold tracking-tighter text-text-default shadow-[0_2px_6px_rgba(0,0,0,0.04)] tabular-nums"
+              className="absolute -top-1 rounded-full border border-border-soft bg-surface-card px-2 py-0.5 text-micro font-bold tracking-tighter text-text-default shadow-[0_2px_6px_rgba(0,0,0,0.04)] tabular-nums"
               style={{
                 left: `calc(${(activeBarIndex / 6) * 100}% - 18px)`,
               }}

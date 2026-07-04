@@ -38,7 +38,7 @@ export function PhotoLabelChips({
         </span>
       ))}
       {overflow > 0 ? (
-        <span className="inline-flex items-center rounded bg-gray-100 px-1 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-gray-500">
+        <span className="inline-flex items-center rounded bg-surface-sunken px-1 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-text-soft">
           +{overflow}
         </span>
       ) : null}

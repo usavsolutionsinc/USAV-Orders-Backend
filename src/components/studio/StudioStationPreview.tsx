@@ -43,30 +43,30 @@ export function StudioStationPreview({
   const nodeLabel = node?.meta?.label ?? node?.type ?? 'Step';
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-50">
+    <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
       {/* Sub-header: back + context */}
-      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
+      <div className="flex items-center gap-3 border-b border-border-soft bg-surface-card px-4 py-2">
         <Button
           variant="ghost"
           size="sm"
           onClick={onBack}
           icon={<icons.ArrowLeft />}
-          className="text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          className="text-text-muted hover:bg-surface-sunken hover:text-text-default"
         >
           Flow
         </Button>
-        <span className="text-slate-300">/</span>
+        <span className="text-text-faint">/</span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-slate-900">
+          <p className="truncate text-sm font-bold text-text-default">
             {station?.label ?? `${nodeLabel} · station`}
           </p>
-          <p className="truncate text-caption text-slate-400">
+          <p className="truncate text-caption text-text-faint">
             {station
               ? `${station.pageKey} · ${station.modeKey} · v${station.version}`
               : `bound to “${nodeLabel}”`}
           </p>
         </div>
-        <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-slate-500">
+        <span className="ml-auto rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-text-soft">
           Read-only
         </span>
       </div>
@@ -79,7 +79,7 @@ export function StudioStationPreview({
             body="Station detail (L2) shows the screen a single step binds to. Pick a step from the flow graph — double-click it at L1, or use the Inspector — to see its blocks, data sources, and actions here."
           />
         ) : loading ? (
-          <p className="p-8 text-center text-sm text-slate-400">Loading the station…</p>
+          <p className="p-8 text-center text-sm text-text-faint">Loading the station…</p>
         ) : !station ? (
           <EmptyState
             icon="Layers"
@@ -102,16 +102,16 @@ export function StudioStationPreview({
           <div className="mx-auto max-w-2xl space-y-4">
             {station.slots.map((slot) => (
               <section key={slot.slot}>
-                <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-slate-400">
+                <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-text-faint">
                   {SLOT_LABELS[slot.slot] ?? slot.slot}
                 </h3>
                 <div className="space-y-2">
                   {slot.blocks.map((b) => (
-                    <div key={b.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <div key={b.id} className="rounded-xl border border-border-soft bg-surface-card p-3 shadow-sm">
                       <div className="flex items-center gap-2">
-                        <Icon name={b.blockIcon} className="h-4 w-4 shrink-0 text-slate-500" />
-                        <span className="text-sm font-bold text-slate-900">{b.blockLabel}</span>
-                        <span className="font-mono text-micro text-slate-400">{b.block}</span>
+                        <Icon name={b.blockIcon} className="h-4 w-4 shrink-0 text-text-soft" />
+                        <span className="text-sm font-bold text-text-default">{b.blockLabel}</span>
+                        <span className="font-mono text-micro text-text-faint">{b.block}</span>
                         {b.doneWhen && (
                           <HoverTooltip label={`A row checks off when “${b.doneWhen}” succeeds`} asChild>
                             <span className="ml-auto rounded bg-emerald-50 px-1.5 py-0.5 text-micro font-semibold text-emerald-700">
@@ -123,13 +123,13 @@ export function StudioStationPreview({
 
                       {/* Data source — where this block's rows flow IN from */}
                       {b.source ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 text-caption">
-                          <span className="font-semibold text-slate-400">source</span>
-                          <span className="font-semibold text-slate-700">{b.source.label}</span>
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-micro font-medium text-slate-500">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border-hairline pt-2 text-caption">
+                          <span className="font-semibold text-text-faint">source</span>
+                          <span className="font-semibold text-text-muted">{b.source.label}</span>
+                          <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-medium text-text-soft">
                             {b.source.integration}
                           </span>
-                          <span className="font-mono text-micro text-slate-400">{b.source.endpoint}</span>
+                          <span className="font-mono text-micro text-text-faint">{b.source.endpoint}</span>
                           {b.source.realtimeChannel && (
                             <HoverTooltip label={`Live updates over ${b.source.realtimeChannel}`} asChild>
                               <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-micro font-semibold text-blue-700">
@@ -139,7 +139,7 @@ export function StudioStationPreview({
                           )}
                         </div>
                       ) : (
-                        <p className="mt-2 border-t border-slate-100 pt-2 text-caption text-slate-400">
+                        <p className="mt-2 border-t border-border-hairline pt-2 text-caption text-text-faint">
                           no data source bound
                         </p>
                       )}
@@ -150,9 +150,9 @@ export function StudioStationPreview({
                           {Object.entries(b.fields).map(([role, field]) => (
                             <span
                               key={role}
-                              className="rounded bg-slate-50 px-1.5 py-0.5 text-micro text-slate-500"
+                              className="rounded bg-surface-canvas px-1.5 py-0.5 text-micro text-text-soft"
                             >
-                              {role} → <span className="font-mono text-slate-600">{field}</span>
+                              {role} → <span className="font-mono text-text-muted">{field}</span>
                             </span>
                           ))}
                         </div>
@@ -161,11 +161,11 @@ export function StudioStationPreview({
                       {/* Actions — what this block can fire OUT */}
                       {b.actions.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span className="text-caption font-semibold text-slate-400">actions</span>
+                          <span className="text-caption font-semibold text-text-faint">actions</span>
                           {b.actions.map((a) => (
                             <span
                               key={a.id}
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-micro font-semibold text-slate-600"
+                              className="inline-flex items-center gap-1 rounded-full border border-border-soft px-2 py-0.5 text-micro font-semibold text-text-muted"
                             >
                               <Icon name={a.icon} className="h-3 w-3" /> {a.label}
                             </span>
@@ -187,9 +187,9 @@ export function StudioStationPreview({
 function EmptyState({ icon, title, body }: { icon: string; title: string; body: string }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-2 p-10 text-center">
-      <Icon name={icon} className="h-7 w-7 text-slate-300" />
-      <p className="text-sm font-semibold text-slate-700">{title}</p>
-      <p className="text-xs leading-relaxed text-slate-500">{body}</p>
+      <Icon name={icon} className="h-7 w-7 text-text-faint" />
+      <p className="text-sm font-semibold text-text-muted">{title}</p>
+      <p className="text-xs leading-relaxed text-text-soft">{body}</p>
     </div>
   );
 }

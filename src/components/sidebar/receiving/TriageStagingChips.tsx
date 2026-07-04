@@ -14,21 +14,21 @@ import type { TriageStagingContext } from './useTriageStagingMap';
 export function TriageStagingChips({ ctx }: { ctx: TriageStagingContext | undefined }) {
   if (!ctx) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5">
+    <div className="flex flex-wrap items-center gap-1.5 border-t border-border-hairline pt-2.5">
       {ctx.complete ? (
-        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-700 ring-1 ring-inset ring-emerald-200">
+        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-emerald-700 ring-1 ring-inset ring-emerald-200">
           <Check className="h-2.5 w-2.5" />
           Staged
         </span>
       ) : null}
       {ctx.locationLabel ? (
-        <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-blue-700 ring-1 ring-inset ring-blue-200">
+        <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-blue-700 ring-1 ring-inset ring-blue-200">
           <MapPin className="h-2.5 w-2.5" />
           {ctx.locationLabel}
         </span>
       ) : null}
       {ctx.lane ? (
-        <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-700 ring-1 ring-inset ring-gray-200">
+        <span className="inline-flex items-center gap-1 rounded bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-text-muted ring-1 ring-inset ring-border-soft">
           {triageLaneLabel(ctx.lane)}
         </span>
       ) : null}

@@ -134,7 +134,7 @@ export function ScanCameraMobile({
     scanning: 'border-blue-400',
     success: 'border-emerald-400',
     error: 'border-red-400',
-    denied: 'border-gray-400',
+    denied: 'border-border-emphasis',
   }[scanStatus];
 
   return (
@@ -263,12 +263,12 @@ export function ScanCameraMobile({
               /* Camera denied / unavailable fallback */
               <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
                 <div className="h-16 w-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
-                  <svg className="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-8 w-8 text-text-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <p className="text-sm font-bold text-white mb-1">Camera unavailable</p>
-                <p className="text-xs text-gray-400 mb-4">
+                <p className="text-xs text-text-faint mb-4">
                   Enable camera access in your browser settings, or enter the code manually below.
                 </p>
                 <button

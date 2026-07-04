@@ -22,7 +22,7 @@ const META: Record<VelocityTier, VelocityTierMeta> = {
   D: { bg: 'bg-rose-500', ring: 'bg-rose-50', label: 'Dead (D)' },
 };
 
-const FALLBACK: VelocityTierMeta = { bg: 'bg-gray-400', ring: 'bg-gray-50', label: 'Unknown' };
+const FALLBACK: VelocityTierMeta = { bg: 'bg-border-emphasis', ring: 'bg-surface-canvas', label: 'Unknown' };
 
 /** Fill/chip/label meta for a velocity tier; safe for unknown values. */
 export function velocityTierMeta(tier: string): VelocityTierMeta {

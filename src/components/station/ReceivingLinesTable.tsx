@@ -116,7 +116,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
 
   return (
     <TableColumnConfigProvider tableId="receiving">
-    <div className="flex h-full min-w-0 overflow-hidden bg-white">
+    <div className="flex h-full min-w-0 overflow-hidden bg-surface-card">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {isIncomingMode ? (
           // Incoming gets its own purpose-built header — title + count +
@@ -144,7 +144,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
             </div>
           ) : Object.keys(filteredGroupedRecords).length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <p className="text-sm font-semibold text-gray-500">{emptyMessage}</p>
+              <p className="text-sm font-semibold text-text-soft">{emptyMessage}</p>
             </div>
           ) : (
             <ReceivingGroupedList

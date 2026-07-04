@@ -45,11 +45,11 @@ export function FolderPickerModal({
 
   return (
     <Layer level="panelPopover" role="dialog" aria-modal="true" className="fixed inset-0 grid place-items-center bg-black/40 p-4" onClick={onCancel}>
-      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200">
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface-card shadow-2xl ring-1 ring-border-soft">
+        <div className="flex items-center justify-between border-b border-border-hairline px-4 py-3">
           <div className="min-w-0">
-            <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-400">Pick folder · {station}</p>
-            <p className="truncate text-sm font-bold text-gray-800">/{dir || 'Root'}</p>
+            <p className="text-micro font-black uppercase tracking-[0.18em] text-text-faint">Pick folder · {station}</p>
+            <p className="truncate text-sm font-bold text-text-default">/{dir || 'Root'}</p>
           </div>
           <Button variant="secondary" size="sm" type="button" onClick={onCancel}>
             Cancel
@@ -57,7 +57,7 @@ export function FolderPickerModal({
         </div>
 
         {dir ? (
-          <div className="border-b border-gray-100 px-3 py-2">
+          <div className="border-b border-border-hairline px-3 py-2">
             <NasBreadcrumb dir={dir} onNavigate={setDir} rootLabel="Root" />
           </div>
         ) : null}
@@ -66,7 +66,7 @@ export function FolderPickerModal({
           {loading ? (
             <div className="space-y-1.5">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-12 animate-pulse rounded-2xl bg-gray-100" />
+                <div key={i} className="h-12 animate-pulse rounded-2xl bg-surface-sunken" />
               ))}
             </div>
           ) : error ? (
@@ -77,7 +77,7 @@ export function FolderPickerModal({
               </Button>
             </div>
           ) : folders.length === 0 ? (
-            <p className="py-10 text-center text-caption font-bold uppercase tracking-widest text-gray-400">No subfolders here.</p>
+            <p className="py-10 text-center text-caption font-bold uppercase tracking-widest text-text-faint">No subfolders here.</p>
           ) : (
             <div className="space-y-1.5">
               <NasSectionLabel>Folders · {folders.length}</NasSectionLabel>
@@ -88,8 +88,8 @@ export function FolderPickerModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-3">
-          <span className="truncate text-micro font-bold uppercase tracking-widest text-gray-400">
+        <div className="flex items-center justify-between gap-3 border-t border-border-hairline px-4 py-3">
+          <span className="truncate text-micro font-bold uppercase tracking-widest text-text-faint">
             {dir ? `Selecting: /${dir}` : 'At root — pick a subfolder or use root'}
           </span>
           <Button variant="primary" size="md" type="button" onClick={() => onPick(dir)} className="shrink-0">

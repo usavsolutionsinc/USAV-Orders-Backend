@@ -15,7 +15,7 @@ import { cn } from '@/utils/_cn';
 // (light/dark) without per-component `dark:` classes. Radius + shadow map onto
 // the design-system scale (`radii`, `shadows`).
 //
-// Do NOT hand-roll `rounded-2xl border border-gray-200 bg-white shadow-sm`
+// Do NOT hand-roll `rounded-2xl border border-border-soft bg-surface-card shadow-sm`
 // again — reach for <Panel> (and <PanelHeader> / <PanelFooter>) instead.
 
 export type PanelPadding = 'none' | 'sm' | 'md' | 'lg';

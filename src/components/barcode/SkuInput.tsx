@@ -37,17 +37,17 @@ export function SkuInput({ sku, uniqueSku, mode, skuInputRef, isActive, density 
     return (
         <div className={`transition-opacity duration-200 ${!isActive ? 'opacity-25 pointer-events-none' : ''}`}>
             <div className={`flex items-center gap-3 ${comfy ? 'px-7 pt-6 pb-3' : 'px-5 pt-5 pb-3'}`}>
-                <span className={`font-black tabular-nums text-gray-500 tracking-widest ${comfy ? 'text-micro' : 'text-eyebrow'}`}>01</span>
-                <span className={`font-black uppercase text-gray-600 ${comfy ? 'text-caption tracking-[0.16em]' : 'text-eyebrow tracking-[0.18em]'}`}>SKU</span>
+                <span className={`font-black tabular-nums text-text-soft tracking-widest ${comfy ? 'text-micro' : 'text-eyebrow'}`}>01</span>
+                <span className={`font-black uppercase text-text-muted ${comfy ? 'text-caption tracking-[0.16em]' : 'text-eyebrow tracking-[0.18em]'}`}>SKU</span>
             </div>
 
-            <div className="flex border-t border-b border-gray-200">
+            <div className="flex border-t border-b border-border-soft">
                 <input
                     ref={skuInputRef}
                     value={sku}
                     onChange={(e) => onChange(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && onNext()}
-                    className={`flex-1 bg-white focus:outline-none font-mono placeholder:text-gray-500 text-gray-900 ${
+                    className={`flex-1 bg-surface-card focus:outline-none font-mono placeholder:text-text-soft text-text-default ${
                         comfy ? 'px-6 py-5 text-base' : 'px-4 py-4 text-sm'
                     }`}
                     placeholder="Scan or type SKU…"
@@ -62,7 +62,7 @@ export function SkuInput({ sku, uniqueSku, mode, skuInputRef, isActive, density 
                         ariaLabel="Paste from clipboard and search"
                         icon={<Clipboard className={comfy ? 'h-5 w-5' : 'h-4 w-4'} />}
                         className={cn(
-                            'bg-white hover:bg-gray-50 hover:text-gray-800 border-l border-gray-200 flex items-center justify-center',
+                            'bg-surface-card hover:bg-surface-hover hover:text-text-default border-l border-border-soft flex items-center justify-center',
                             comfy ? 'px-5' : 'px-4',
                         )}
                     />

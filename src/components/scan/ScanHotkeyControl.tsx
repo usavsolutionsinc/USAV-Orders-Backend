@@ -93,7 +93,7 @@ export function ScanHotkeyControl({ children }: ScanHotkeyControlProps) {
             // Slide-in from the left (translate-x) + fade, so the gear + key chip
             // "arrives" into the slot while the input placeholder shifts right to
             // make room (see group-hover:pl-16 in StationScanBar).
-            'absolute inset-y-0 left-0 inline-flex items-center gap-1 rounded-md pr-0.5 text-gray-500 transition-all duration-150 hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none',
+            'absolute inset-y-0 left-0 inline-flex items-center gap-1 rounded-md pr-0.5 text-text-soft transition-all duration-150 hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none',
             open
               ? 'pointer-events-auto translate-x-0 opacity-100 text-blue-600'
               : 'pointer-events-none -translate-x-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100',
@@ -102,7 +102,7 @@ export function ScanHotkeyControl({ children }: ScanHotkeyControlProps) {
           <span className="inline-flex size-[17px] shrink-0 items-center justify-center">
             <Settings className="block size-[17px]" />
           </span>
-          <kbd className="inline-flex h-[17px] items-center rounded border border-gray-200 bg-white px-1 font-mono text-micro font-bold leading-none text-gray-600">
+          <kbd className="inline-flex h-[17px] items-center rounded border border-border-soft bg-surface-card px-1 font-mono text-micro font-bold leading-none text-text-muted">
             {hotkey}
           </kbd>
         </button>
@@ -119,17 +119,17 @@ export function ScanHotkeyControl({ children }: ScanHotkeyControlProps) {
           initial={{ opacity: 0, y: 6, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-          className="w-60 overflow-hidden rounded-2xl border border-white/40 bg-white/95 p-3 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.22)] ring-1 ring-black/[0.08] backdrop-blur-xl"
+          className="w-60 overflow-hidden rounded-2xl border border-white/40 bg-surface-card/95 p-3 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.22)] ring-1 ring-black/[0.08] backdrop-blur-xl"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-wider text-text-soft">
               Focus-scan hotkey
             </span>
             <IconButton
               icon={<X className="h-3 w-3" />}
               onClick={close}
               ariaLabel="Cancel reassign"
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-gray-100"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-surface-sunken"
             />
           </div>
 
@@ -137,7 +137,7 @@ export function ScanHotkeyControl({ children }: ScanHotkeyControlProps) {
             <kbd className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 font-mono text-xs font-black text-blue-700">
               {hotkey}
             </kbd>
-            <span className="text-xs font-semibold text-gray-600">
+            <span className="text-xs font-semibold text-text-muted">
               Press a function key…
             </span>
           </div>
@@ -145,7 +145,7 @@ export function ScanHotkeyControl({ children }: ScanHotkeyControlProps) {
           <p
             className={cn(
               'mt-1.5 text-caption font-medium',
-              error ? 'text-rose-600' : 'text-gray-400',
+              error ? 'text-rose-600' : 'text-text-faint',
             )}
           >
             {error ?? 'F1–F12 only · Esc to cancel'}

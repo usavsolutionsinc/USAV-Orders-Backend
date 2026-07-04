@@ -5,7 +5,7 @@ import type { ReceivingClaimController } from '../hooks/useReceivingClaimControl
 
 function ProgressChip({ label, dotClass = 'bg-rose-400' }: { label: string; dotClass?: string }) {
   return (
-    <div className="inline-flex h-8 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-semibold text-slate-600">
+    <div className="inline-flex h-8 min-w-0 items-center gap-2 rounded-xl border border-border-soft bg-surface-canvas px-3 text-caption font-semibold text-text-muted">
       <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
       <span className="truncate">{label}</span>
     </div>
@@ -87,7 +87,7 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
   const onBack = isCreate ? c.goBack : c.goLinkBack;
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-4 py-2.5">
+    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border-hairline bg-surface-canvas px-4 py-2.5">
       <div className="flex items-center gap-2">
         <Button type="button" variant="secondary" size="md" onClick={c.onClose} disabled={busy}>
           Cancel

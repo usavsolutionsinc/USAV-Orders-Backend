@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { computeLaborThroughput } from '@/lib/operations/labor-throughput';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 /**
  * GET /api/operations/roi — the first-week ROI proof.
@@ -22,10 +24,18 @@ import { computeLaborThroughput } from '@/lib/operations/labor-throughput';
  */
 export const GET = withAuth(async (_request: NextRequest, ctx) => {
   const orgId = ctx.organizationId;
-  const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
 
   try {
+    // Analytics rollup polled per tab; cache 120s org-scoped (order/tech writes bust).
+    const payload = await getOrSet<Record<string, unknown>>(
+      CACHE_NS.opsDashboard,
+      orgId,
+      'roi',
+      120,
+      [CACHE_TAGS.orders, CACHE_TAGS.techLogs],
+      async () => {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
     const [weekly, cycle, stuck, labor] = await Promise.all([
       // Captured throughput: this-week vs last-week completed_count sums.
       tenantQuery<{ this_week: number | string; last_week: number | string }>(
@@ -95,7 +105,7 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
       labor.laborHours > 0 ||
       avgCycleHoursByStage.length > 0;
 
-    return NextResponse.json({
+    return {
       success: true,
       hasData,
       unitsThisWeek,
@@ -108,7 +118,10 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
       avgCycleHoursByStage,
       unitsStuck,
       generatedAt: now.toISOString(),
-    });
+    };
+      },
+    );
+    return NextResponse.json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to compute ROI';
     console.error('operations/roi GET failed:', error);

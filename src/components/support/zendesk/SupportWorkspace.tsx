@@ -61,7 +61,7 @@ export function SupportWorkspace() {
   // ── Calls — Monitor (read-only stream; no durable selection) ───────────────
   if (mode === 'calls') {
     return (
-      <div className="flex h-full min-h-0 w-full bg-gray-50">
+      <div className="flex h-full min-h-0 w-full bg-surface-canvas">
         <CallLogView />
       </div>
     );
@@ -70,10 +70,10 @@ export function SupportWorkspace() {
   // ── Voicemail — Workbench (pick → detail; crossfade the pane) ──────────────
   if (mode === 'voicemail') {
     return (
-      <div className="flex h-full min-h-0 w-full bg-gray-50">
+      <div className="flex h-full min-h-0 w-full bg-surface-canvas">
         {/* Mobile/tablet (<md): no contextual sidebar, so the picker lives here. */}
         {!vmId ? (
-          <div className="flex h-full w-full flex-col border-r border-gray-200 bg-white md:hidden">
+          <div className="flex h-full w-full flex-col border-r border-border-soft bg-surface-card md:hidden">
             <VoicemailQueue />
           </div>
         ) : null}
@@ -101,7 +101,7 @@ export function SupportWorkspace() {
                 transition={paneTransition}
               >
                 <EmptyState
-                  icon={<Voicemail className="h-6 w-6 text-gray-400" />}
+                  icon={<Voicemail className="h-6 w-6 text-text-faint" />}
                   title="Select a voicemail"
                   description="Choose a follow-up from the list to play it and act on it."
                 />
@@ -115,10 +115,10 @@ export function SupportWorkspace() {
 
   // ── Tickets — Workbench (the existing Zendesk console; default) ────────────
   return (
-    <div className="flex h-full min-h-0 w-full bg-gray-50">
+    <div className="flex h-full min-h-0 w-full bg-surface-canvas">
       {/* Mobile/tablet (<md): no contextual sidebar, so the queue lives here. */}
       {!ticketId ? (
-        <div className="flex h-full w-full flex-col border-r border-gray-200 bg-white md:hidden">
+        <div className="flex h-full w-full flex-col border-r border-border-soft bg-surface-card md:hidden">
           <SupportTicketQueue />
         </div>
       ) : null}

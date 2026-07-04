@@ -122,14 +122,15 @@ function DocumentTypeGroup({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-eyebrow font-black uppercase tracking-wider text-gray-500">{title}</h3>
+        <h3 className="text-eyebrow font-black uppercase tracking-wider text-text-soft">{title}</h3>
         {!readOnly ? (
           <HoverTooltip label="Fetch from the marketplace" focusable={false}>
+            {/* ds-raw-button */}
             <button
               type="button"
               onClick={() => fetchMutation.mutate()}
               disabled={fetchMutation.isPending}
-              className="-my-0.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-gray-400 hover:bg-gray-50 hover:text-blue-600 disabled:opacity-40"
+              className="-my-0.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-text-faint hover:bg-surface-hover hover:text-blue-600 disabled:opacity-40"
             >
               {fetchMutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -151,15 +152,15 @@ function DocumentTypeGroup({
           role="button"
           tabIndex={0}
           className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-colors ${
-            dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+            dragOver ? 'border-blue-400 bg-blue-50' : 'border-border-soft hover:bg-surface-hover'
           }`}
         >
           {uploadMutation.isPending ? (
             <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
           ) : (
-            <FileText className="h-5 w-5 text-gray-400" />
+            <FileText className="h-5 w-5 text-text-faint" />
           )}
-          <span className="text-caption font-semibold text-gray-600">
+          <span className="text-caption font-semibold text-text-muted">
             {uploadMutation.isPending ? 'Uploading to NAS…' : 'Drop PDF / PNG, or click to choose'}
           </span>
           <input
@@ -188,9 +189,9 @@ function DocumentTypeGroup({
 
       <div className="mt-3 space-y-1.5">
         {isLoading ? (
-          <p className="text-caption text-gray-400">Loading…</p>
+          <p className="text-caption text-text-faint">Loading…</p>
         ) : documents.length === 0 ? (
-          <p className="text-caption text-gray-400">
+          <p className="text-caption text-text-faint">
             {readOnly ? `No ${title.toLowerCase()} attached.` : `No ${title.toLowerCase()} attached yet.`}
           </p>
         ) : (
@@ -199,21 +200,21 @@ function DocumentTypeGroup({
             return (
               <div
                 key={doc.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg border border-border-soft px-3 py-2"
               >
                 <a
                   href={`/api/documents/${doc.id}/content`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex min-w-0 items-center gap-2 text-caption font-semibold text-gray-700 hover:text-blue-600"
+                  className="flex min-w-0 items-center gap-2 text-caption font-semibold text-text-muted hover:text-blue-600"
                 >
-                  <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+                  <FileText className="h-4 w-4 shrink-0 text-text-faint" />
                   <span className="truncate">{displayName(doc)}</span>
-                  <ExternalLink className="h-3 w-3 shrink-0 text-gray-300" />
+                  <ExternalLink className="h-3 w-3 shrink-0 text-text-faint" />
                 </a>
                 <div className="flex shrink-0 items-center gap-2">
                   {shipmentLink ? (
-                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-blue-700 ring-1 ring-inset ring-blue-200">
+                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-blue-700 ring-1 ring-inset ring-blue-200">
                       Box
                     </span>
                   ) : null}
@@ -290,7 +291,7 @@ export function OrderDocumentsSection({ orderId, orderRef, readOnly = false }: O
         </Link>
       </div>
       {!readOnly ? (
-        <div className="border-b border-gray-100 pb-4">
+        <div className="border-b border-border-hairline pb-4">
           <BuyLabelSection orderId={orderId} orderRef={orderRef} onChange={onChange} />
         </div>
       ) : null}

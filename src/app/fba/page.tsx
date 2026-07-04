@@ -70,11 +70,11 @@ function FbaPageContent() {
   }, [searchParams, board.pending, setDetailItem]);
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-zinc-200/80 bg-white">
+    <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-surface-canvas">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border-soft/80 bg-surface-card">
         <StationFba embedded>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-card">
               <FbaBoardRegion
                 error={error}
                 onRetry={fetchBoard}
@@ -116,14 +116,14 @@ export default function FbaPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full w-full flex-col bg-stone-50">
-          <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
-            <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+        <div className="flex h-full w-full flex-col bg-surface-canvas">
+          <div className="h-10 bg-surface-card border-b border-border-hairline flex items-center px-4">
+            <div className="h-4 w-32 bg-surface-sunken rounded animate-pulse" />
           </div>
           <div className="flex-1 flex items-center justify-center p-6">
-            <div className="w-full max-w-sm rounded-2xl border border-zinc-200/80 bg-white px-6 py-8 text-center shadow-sm shadow-zinc-200/70">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-zinc-400" />
-              <p className="mt-4 text-caption font-black uppercase tracking-[0.2em] text-zinc-500">
+            <div className="w-full max-w-sm rounded-2xl border border-border-soft/80 bg-surface-card px-6 py-8 text-center shadow-sm shadow-zinc-200/70">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-text-faint" />
+              <p className="mt-4 text-caption font-black uppercase tracking-[0.2em] text-text-soft">
                 Initializing Workspace
               </p>
             </div>

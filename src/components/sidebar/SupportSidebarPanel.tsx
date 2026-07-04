@@ -42,7 +42,7 @@ export function SupportSidebarPanel() {
 
   if (isLoaded && !has('integrations.zendesk')) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-gray-500">
+      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-text-soft">
         Requires the “Manage Zendesk tickets” permission.
       </div>
     );
@@ -53,7 +53,7 @@ export function SupportSidebarPanel() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       {mode === 'voicemail' ? (
         <VoicemailQueue modeToggle={modeToggle} />
       ) : mode === 'calls' ? (

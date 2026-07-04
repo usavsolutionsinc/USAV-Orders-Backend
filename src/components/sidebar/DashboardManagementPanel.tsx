@@ -81,7 +81,7 @@ export function DashboardManagementPanel({
             <IconButton
               ariaLabel="Open new order entry form"
               onClick={handleOpenIntakeForm}
-              className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+              className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-surface-strong"
               icon={<Plus className="h-5 w-5" />}
             />
             </HoverTooltip>

@@ -70,7 +70,7 @@ export function LabelIdentifyButton({
       )}
 
       {status === 'identifying' && (
-        <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+        <div className="inline-flex items-center gap-2 rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-sm text-text-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
           Reading label…
         </div>
@@ -84,8 +84,8 @@ export function LabelIdentifyButton({
       )}
 
       {status === 'results' && (
-        <div className="mt-2 space-y-2 rounded-lg border border-gray-200 bg-white p-2">
-          <div className="px-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+        <div className="mt-2 space-y-2 rounded-lg border border-border-soft bg-surface-card p-2">
+          <div className="px-1 text-xs font-medium uppercase tracking-wide text-text-soft">
             Confirm the product
           </div>
           {candidates.map((c, i) => (
@@ -93,7 +93,7 @@ export function LabelIdentifyButton({
           ))}
           {rawText && (
             <HoverTooltip label="Raw OCR text" asChild>
-              <div className="px-1 pt-1 text-caption text-gray-400">
+              <div className="px-1 pt-1 text-caption text-text-faint">
                 read: “{rawText.slice(0, 80)}”
               </div>
             </HoverTooltip>
@@ -122,18 +122,18 @@ function CandidateRow({
 }) {
   const title = candidate.product_title || candidate.item_name || candidate.model;
   return (
-    <div className="flex items-center gap-3 rounded-md border border-gray-100 bg-gray-50 p-2">
+    <div className="flex items-center gap-3 rounded-md border border-border-hairline bg-surface-canvas p-2">
       {candidate.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={candidate.image_url} alt="" className="h-10 w-10 rounded object-cover" />
       ) : (
-        <div className="flex h-10 w-10 items-center justify-center rounded bg-gray-200 text-gray-400">
+        <div className="flex h-10 w-10 items-center justify-center rounded bg-surface-strong text-text-faint">
           <Camera className="h-4 w-4" />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-gray-800">{title}</div>
-        <div className="truncate text-xs text-gray-500">
+        <div className="truncate text-sm font-medium text-text-default">{title}</div>
+        <div className="truncate text-xs text-text-soft">
           {candidate.sku ? `SKU ${candidate.sku}` : 'no SKU'}
           {candidate.resolved ? '' : ' · not in catalog yet'}
         </div>

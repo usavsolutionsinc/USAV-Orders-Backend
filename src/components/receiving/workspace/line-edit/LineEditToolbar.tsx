@@ -126,8 +126,8 @@ export function LineEditToolbar({
             <IconButton
               onClick={() => dispatchReceivingDetailsOverlay(receivingId)}
               ariaLabel="Open receiving details"
-              icon={<Info className="h-4 w-4 text-slate-500 hover:text-slate-800" />}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-50"
+              icon={<Info className="h-4 w-4 text-text-soft hover:text-text-default" />}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-hover"
             />
           </HoverTooltip>
         ) : null

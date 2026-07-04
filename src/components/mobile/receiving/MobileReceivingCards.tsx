@@ -31,7 +31,7 @@ export function MobileReceivingUnitCard({
 }) {
   const { captureHref, galleryHref } = cb.buildHrefs(row);
   return (
-    <div className={`${CARD_BASE} border border-gray-100 bg-white p-4`}>
+    <div className={`${CARD_BASE} border border-border-hairline bg-surface-card p-4`}>
       <MobileReceivingUnitRow
         row={row}
         fresh={cb.isFresh(row)}
@@ -61,7 +61,7 @@ export function MobilePackageGroup({
   const count = entry.items.length;
 
   return (
-    <div className={`${CARD_BASE} border border-indigo-100 bg-white`}>
+    <div className={`${CARD_BASE} border border-indigo-100 bg-surface-card`}>
       <div className="flex w-full items-center gap-2 bg-indigo-50/70 px-4 py-3">
         <button
           type="button"
@@ -81,7 +81,7 @@ export function MobilePackageGroup({
           {entry.po ? <OrderIdChip value={entry.po} display={getLast4(entry.po)} dense /> : null}
           {entry.trk ? <TrackingChip value={entry.trk} display={getLast4(entry.trk)} dense /> : null}
           {entry.carrier ? (
-            <span className="shrink-0 text-eyebrow font-bold uppercase tracking-widest text-gray-500">
+            <span className="shrink-0 text-eyebrow font-bold uppercase tracking-widest text-text-soft">
               {entry.carrier}
             </span>
           ) : null}
@@ -97,7 +97,7 @@ export function MobilePackageGroup({
         }`}
       >
         <div className="overflow-hidden">
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border-hairline">
             {entry.items.map((row) => {
               const { captureHref, galleryHref } = cb.buildHrefs(row);
               return (

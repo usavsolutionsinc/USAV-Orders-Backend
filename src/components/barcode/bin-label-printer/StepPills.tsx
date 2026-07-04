@@ -30,7 +30,7 @@ export function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level,
   return (
     <div
       ref={scrollRef}
-      className="flex w-full min-w-0 overflow-x-scroll overflow-y-hidden overscroll-x-contain rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 ring-gray-200/60 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+      className="flex w-full min-w-0 overflow-x-scroll overflow-y-hidden overscroll-x-contain rounded-2xl bg-surface-card px-3 py-2 shadow-sm ring-1 ring-border-soft/60 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
       role="navigation"
       aria-label="Bin location steps"
     >
@@ -53,7 +53,7 @@ export function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level,
                   ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                   : isDone
                     ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-surface-sunken text-text-faint cursor-not-allowed'
               }`}
             >
               <span className="text-micro uppercase tracking-wider opacity-80">{label}</span>
@@ -69,7 +69,7 @@ export function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level,
               ) : (
                 pill
               )}
-              {showChevron && <span className="shrink-0 text-micro text-gray-300">›</span>}
+              {showChevron && <span className="shrink-0 text-micro text-text-faint">›</span>}
             </Fragment>
           );
         })}

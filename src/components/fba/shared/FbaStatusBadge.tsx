@@ -35,8 +35,8 @@ const TOKENS: Record<FbaStatus, StatusToken> = {
   PLANNED: {
     label: 'Planned',
     icon: ClipboardList,
-    pill: 'bg-gray-100 text-gray-600 border-gray-200',
-    icon_tone: 'text-gray-500',
+    pill: 'bg-surface-sunken text-text-muted border-border-soft',
+    icon_tone: 'text-text-soft',
   },
   TESTED: {
     label: 'Tested',
@@ -65,16 +65,16 @@ const TOKENS: Record<FbaStatus, StatusToken> = {
   CLOSED: {
     label: 'Closed',
     icon: Lock,
-    pill: 'bg-slate-100 text-slate-600 border-slate-200',
-    icon_tone: 'text-slate-500',
+    pill: 'bg-surface-sunken text-text-muted border-border-soft',
+    icon_tone: 'text-text-soft',
   },
 };
 
 const FALLBACK: StatusToken = {
   label: '—',
   icon: ClipboardList,
-  pill: 'bg-gray-100 text-gray-500 border-gray-200',
-  icon_tone: 'text-gray-400',
+  pill: 'bg-surface-sunken text-text-soft border-border-soft',
+  icon_tone: 'text-text-faint',
 };
 
 export interface FbaStatusBadgeProps {

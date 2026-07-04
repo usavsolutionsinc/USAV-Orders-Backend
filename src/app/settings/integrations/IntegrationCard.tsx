@@ -23,15 +23,15 @@ import { AmazonConnectModal } from './AmazonConnectModal';
 const PILL: Record<ProviderState['status'], { dot: string; text: string; bg: string; label: string }> = {
   connected: { dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', label: 'Connected' },
   error: { dot: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-50', label: 'Needs attention' },
-  not_connected: { dot: 'bg-gray-300', text: 'text-gray-500', bg: 'bg-gray-100', label: 'Not connected' },
+  not_connected: { dot: 'bg-surface-strong', text: 'text-text-soft', bg: 'bg-surface-sunken', label: 'Not connected' },
 };
 
 const ACCOUNT_DOT: Record<AccountSummary['status'], string> = {
   active: 'bg-emerald-500',
   error: 'bg-red-500',
   expiring: 'bg-amber-500',
-  revoked: 'bg-gray-400',
-  unknown: 'bg-gray-300',
+  revoked: 'bg-border-emphasis',
+  unknown: 'bg-surface-strong',
 };
 
 export function IntegrationCard({ def, state, nangoReady, canSync }: { def: ProviderDef; state: ProviderState; nangoReady?: boolean; canSync?: boolean }) {
@@ -261,7 +261,7 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
   const connectLabel = connected ? 'Reconnect' : 'Connect';
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm shadow-gray-900/[0.02]">
+    <div className="flex h-full flex-col rounded-2xl border border-border-soft bg-surface-card p-4 shadow-sm shadow-gray-900/[0.02]">
       {/* Header */}
       <div className="flex items-start gap-3">
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[14px] font-black ${def.badge}`}>
@@ -269,16 +269,16 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-[14px] font-semibold text-gray-900">{def.label}</span>
+            <span className="truncate text-[14px] font-semibold text-text-default">{def.label}</span>
             {def.docsUrl && (
               <HoverTooltip label="Provider docs" asChild>
-                <a href={def.docsUrl} target="_blank" rel="noreferrer" aria-label="Provider docs" className="text-gray-300 hover:text-gray-500">
+                <a href={def.docsUrl} target="_blank" rel="noreferrer" aria-label="Provider docs" className="text-text-faint hover:text-text-soft">
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </HoverTooltip>
             )}
           </div>
-          <p className="mt-0.5 text-label leading-snug text-gray-500">{def.description}</p>
+          <p className="mt-0.5 text-label leading-snug text-text-soft">{def.description}</p>
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full ${pill.bg} px-2 py-1 text-[10.5px] font-medium ${pill.text}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
@@ -288,15 +288,15 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
 
       {/* Accounts */}
       {state.accounts.length > 0 && (
-        <div className="mt-3 space-y-1.5 rounded-xl bg-gray-50/70 p-2">
+        <div className="mt-3 space-y-1.5 rounded-xl bg-surface-canvas/70 p-2">
           {state.accounts.map((acct, i) => (
             <div key={acct.id ?? `${acct.label}-${i}`} className="flex items-center gap-2">
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ACCOUNT_DOT[acct.status]}`} />
-              <span className="min-w-0 flex-1 truncate text-label font-medium text-gray-800">{acct.label}</span>
+              <span className="min-w-0 flex-1 truncate text-label font-medium text-text-default">{acct.label}</span>
               {def.connect === 'ebay' && acct.role === 'buyer' && (
                 <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-indigo-700 ring-1 ring-inset ring-indigo-200">Purchasing</span>
               )}
-              {acct.detail && <span className="shrink-0 text-caption text-gray-400">{acct.detail}</span>}
+              {acct.detail && <span className="shrink-0 text-caption text-text-faint">{acct.detail}</span>}
               {canManage && def.connect === 'amazon' && acct.id != null && (
                 <HoverTooltip label="Disconnect account" asChild>
                   <IconButton
@@ -337,16 +337,16 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
       )}
 
       {state.displayLabel && state.accounts.length === 0 && (
-        <div className="mt-2 text-label text-gray-600">{state.displayLabel}</div>
+        <div className="mt-2 text-label text-text-muted">{state.displayLabel}</div>
       )}
       {state.lastError && (
         <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-caption text-red-700">{state.lastError}</div>
       )}
 
       {/* Actions — pinned to the bottom so buttons align across cards in a row */}
-      <div className="mt-auto flex items-center gap-2 border-t border-gray-100 pt-3">
+      <div className="mt-auto flex items-center gap-2 border-t border-border-hairline pt-3">
         {!canManage ? (
-          <span className="text-[11.5px] text-gray-400">Read-only — requires elevated access</span>
+          <span className="text-[11.5px] text-text-faint">Read-only — requires elevated access</span>
         ) : (
           <>
             {def.connect === 'amazon' && (
@@ -389,7 +389,7 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
             <span className="flex-1" />
 
             {connected && (def.connect === 'vault' || def.connect === 'oauth' || def.connect === 'nango') && (
-              <Button variant="ghost" size="sm" onClick={vaultDisconnect} disabled={busy} className="text-gray-500 hover:text-red-600">
+              <Button variant="ghost" size="sm" onClick={vaultDisconnect} disabled={busy} className="text-text-soft hover:text-red-600">
                 Disconnect
               </Button>
             )}
@@ -405,11 +405,11 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
         <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
           {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
           <button type="button" aria-label="Close" onClick={() => setVaultOpen(false)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
-            <h2 className="text-[16px] font-semibold text-gray-900">{def.label} credentials</h2>
-            <p className="mt-1 text-label text-gray-500">Paste the provider payload JSON. Stored encrypted in the workspace vault.</p>
+          <div className="relative w-full max-w-lg rounded-2xl border border-border-soft bg-surface-card p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-text-default">{def.label} credentials</h2>
+            <p className="mt-1 text-label text-text-soft">Paste the provider payload JSON. Stored encrypted in the workspace vault.</p>
             <textarea
-              className="mt-3 block h-48 w-full rounded-xl border border-gray-200 bg-white p-3 font-mono text-label text-gray-900 shadow-inner focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="mt-3 block h-48 w-full rounded-xl border border-border-soft bg-surface-card p-3 font-mono text-label text-text-default shadow-inner focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
               value={payload}
               onChange={(e) => setPayload(e.target.value)}
               spellCheck={false}

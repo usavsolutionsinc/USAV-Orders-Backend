@@ -19,7 +19,7 @@ export function LinesList({ lines, events }: { lines: Line[]; events: AuditEvent
   }, [events]);
 
   if (lines.length === 0) {
-    return <div className="py-8 text-center text-sm text-slate-400">No lines on this PO.</div>;
+    return <div className="py-8 text-center text-sm text-text-faint">No lines on this PO.</div>;
   }
 
   return (
@@ -38,21 +38,21 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
   const complete = expected > 0 && received >= expected;
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <button onClick={() => setOpen((v) => !v)} className="ds-raw-button flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/60">
+    <article className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+      <button onClick={() => setOpen((v) => !v)} className="ds-raw-button flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-surface-canvas/60">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-caption uppercase tracking-wider text-slate-400">Line #{l.id}</span>
-            {l.sku && <code className="rounded bg-slate-100 px-1.5 py-0.5 text-caption font-mono text-slate-700">{l.sku}</code>}
-            <span className="text-sm font-medium text-slate-900 truncate">{l.item_name ?? '—'}</span>
+            <span className="text-caption uppercase tracking-wider text-text-faint">Line #{l.id}</span>
+            {l.sku && <code className="rounded bg-surface-sunken px-1.5 py-0.5 text-caption font-mono text-text-muted">{l.sku}</code>}
+            <span className="text-sm font-medium text-text-default truncate">{l.item_name ?? '—'}</span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-slate-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-soft">
             <span className={complete ? 'font-medium text-emerald-700' : ''}>{received} / {expected}</span>
             <span>·</span>
             <WorkflowBadge status={l.workflow_status} />
             <QABadge status={l.qa_status} />
             <DispositionBadge code={l.disposition_code} />
-            {l.condition_grade && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-micro font-medium text-slate-700">{l.condition_grade}</span>}
+            {l.condition_grade && <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-micro font-medium text-text-muted">{l.condition_grade}</span>}
             {l.assigned_tech_name && (
               <span className="inline-flex items-center gap-1">
                 <User className="h-3 w-3" />
@@ -61,11 +61,11 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
             )}
           </div>
         </div>
-        <span className={`shrink-0 text-slate-400 transition ${open ? 'rotate-90' : ''}`} aria-hidden>▸</span>
+        <span className={`shrink-0 text-text-faint transition ${open ? 'rotate-90' : ''}`} aria-hidden>▸</span>
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 px-4 py-3">
+        <div className="border-t border-border-hairline px-4 py-3">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
             <KV label="Created" value={fmtTime(l.created_at)} />
             <KV label="Updated" value={fmtTime(l.updated_at)} />
@@ -79,13 +79,13 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
 
           {l.serials.length > 0 && (
             <div className="mt-3">
-              <div className="text-caption uppercase tracking-wider text-slate-400">Serials ({l.serials.length})</div>
-              <ul className="mt-1 divide-y divide-slate-100 rounded-md border border-slate-100 bg-slate-50/40">
+              <div className="text-caption uppercase tracking-wider text-text-faint">Serials ({l.serials.length})</div>
+              <ul className="mt-1 divide-y divide-border-hairline rounded-md border border-border-hairline bg-surface-canvas/40">
                 {l.serials.map((s) => (
                   <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
-                    <code className="font-mono text-slate-800">{s.serial_number}</code>
-                    <div className="flex flex-wrap items-center gap-2 text-slate-500">
-                      {s.current_status && <span className="rounded-full bg-white px-1.5 py-0.5 text-micro ring-1 ring-slate-200">{s.current_status}</span>}
+                    <code className="font-mono text-text-default">{s.serial_number}</code>
+                    <div className="flex flex-wrap items-center gap-2 text-text-soft">
+                      {s.current_status && <span className="rounded-full bg-surface-card px-1.5 py-0.5 text-micro ring-1 ring-border-soft">{s.current_status}</span>}
                       {s.current_location && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-micro text-violet-800 ring-1 ring-violet-100">{s.current_location}</span>}
                       {s.received_at && (
                         <HoverTooltip label={s.received_at} asChild>
@@ -103,10 +103,10 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
           )}
 
           <div className="mt-3">
-            <div className="text-caption uppercase tracking-wider text-slate-400">Events ({events.length})</div>
+            <div className="text-caption uppercase tracking-wider text-text-faint">Events ({events.length})</div>
             <div className="mt-1 space-y-2">
               {events.length === 0 ? (
-                <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">No line-level events recorded yet.</div>
+                <div className="rounded-md bg-surface-canvas px-3 py-2 text-xs text-text-soft">No line-level events recorded yet.</div>
               ) : (
                 events.map((e) => <EventCard key={e.id} event={e} />)
               )}

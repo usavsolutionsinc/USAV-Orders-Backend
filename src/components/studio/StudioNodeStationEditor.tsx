@@ -68,24 +68,24 @@ function SortableBlockRow({
     zIndex: isDragging ? 1 : undefined,
   };
   return (
-    <div ref={setNodeRef} style={style} className="rounded-md bg-white ring-1 ring-slate-200">
-      <div className="flex items-center gap-1.5 border-b border-slate-100 px-2 py-1">
+    <div ref={setNodeRef} style={style} className="rounded-md bg-surface-card ring-1 ring-border-soft">
+      <div className="flex items-center gap-1.5 border-b border-border-hairline px-2 py-1">
         <IconButton
           {...attributes}
           {...listeners}
           ariaLabel="Drag to reorder"
-          className="flex-shrink-0 cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing"
+          className="flex-shrink-0 cursor-grab text-text-faint hover:text-text-soft active:cursor-grabbing"
           icon={<GripVertical className="h-3.5 w-3.5" />}
         />
-        <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-slate-400" />
-        <span className="flex-1 truncate text-mini font-bold text-slate-600">
+        <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-text-faint" />
+        <span className="flex-1 truncate text-mini font-bold text-text-muted">
           {blockDef?.label ?? inst.block}
         </span>
         <HoverTooltip label="Configure source, display & actions" asChild>
           <IconButton
             onClick={() => onConfigure(inst)}
             ariaLabel="Configure source, display & actions"
-            className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded p-0.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
             icon={<Settings className="h-3.5 w-3.5" />}
           />
         </HoverTooltip>
@@ -93,7 +93,7 @@ function SortableBlockRow({
           <IconButton
             onClick={() => onRemove(inst.id)}
             ariaLabel="Remove block"
-            className="rounded p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded p-0.5 text-text-faint hover:bg-rose-50 hover:text-rose-600"
             icon={<X className="h-3.5 w-3.5" />}
           />
         </HoverTooltip>
@@ -166,24 +166,24 @@ export function StudioNodeStationEditor({
   });
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-50">
+    <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
       {/* Sub-header: back + context + edit toggle */}
-      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
+      <div className="flex items-center gap-3 border-b border-border-soft bg-surface-card px-4 py-2">
         <Button
           variant="ghost"
           size="sm"
           onClick={onBack}
-          className="text-slate-600 hover:bg-slate-100"
+          className="text-text-muted hover:bg-surface-sunken"
           icon={<icons.ArrowLeft />}
         >
           Flow
         </Button>
-        <span className="text-slate-300">/</span>
+        <span className="text-text-faint">/</span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-slate-900">
+          <p className="truncate text-sm font-bold text-text-default">
             {station?.label ?? `${nodeLabel} · station`}
           </p>
-          <p className="truncate text-caption text-slate-400">
+          <p className="truncate text-caption text-text-faint">
             {station
               ? `${station.pageKey} · ${station.modeKey} · v${station.version}`
               : `binds to “${nodeLabel}”`}
@@ -214,7 +214,7 @@ export function StudioNodeStationEditor({
             }
           >
             <div className="mb-1.5 flex items-center justify-between px-1">
-              <h3 className="text-micro font-bold uppercase tracking-wider text-slate-400">
+              <h3 className="text-micro font-bold uppercase tracking-wider text-text-faint">
                 Queue{e.editing ? ' · editing' : ''}
               </h3>
               {e.editing ? (
@@ -222,7 +222,7 @@ export function StudioNodeStationEditor({
                   <IconButton
                     onClick={e.exitEdit}
                     ariaLabel="Exit edit mode"
-                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    className="rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
                     icon={<X className="h-3.5 w-3.5" />}
                   />
                 </HoverTooltip>
@@ -230,7 +230,7 @@ export function StudioNodeStationEditor({
             </div>
 
             {e.instances.length === 0 && !e.editing ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500">
+              <div className="rounded-xl border border-dashed border-border-soft bg-surface-card px-4 py-6 text-center text-xs text-text-soft">
                 No blocks in this station yet. Click “{station ? 'Edit station' : 'Bind a station'}” to compose it.
               </div>
             ) : (
@@ -250,7 +250,7 @@ export function StudioNodeStationEditor({
                   </DndContext>
                 ) : (
                   e.instances.map((inst) => (
-                    <div key={inst.id} className="rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                    <div key={inst.id} className="rounded-xl border border-border-soft bg-surface-card p-1 shadow-sm">
                       <BlockRenderer instance={inst} />
                     </div>
                   ))
@@ -261,7 +261,7 @@ export function StudioNodeStationEditor({
                     variant="ghost"
                     size="sm"
                     onClick={e.openPalette}
-                    className="w-full border border-dashed border-slate-300 bg-white text-slate-500 hover:border-blue-400 hover:text-blue-600"
+                    className="w-full border border-dashed border-border-default bg-surface-card text-text-soft hover:border-blue-400 hover:text-blue-600"
                     icon={<Plus />}
                   >
                     Add block
@@ -278,7 +278,7 @@ export function StudioNodeStationEditor({
               {station.slots
                 .filter((s) => s.slot !== EDIT_SLOT)
                 .map((s) => (
-                  <p key={s.slot} className="text-caption text-slate-400">
+                  <p key={s.slot} className="text-caption text-text-faint">
                     {s.slot}: {s.blocks.map((b) => b.blockLabel).join(', ')} (read-only)
                   </p>
                 ))}
@@ -288,7 +288,7 @@ export function StudioNodeStationEditor({
       </div>
 
       {e.editing ? (
-        <div className="flex items-center justify-end gap-2 border-t border-dashed border-blue-200 bg-white px-4 py-2">
+        <div className="flex items-center justify-end gap-2 border-t border-dashed border-blue-200 bg-surface-card px-4 py-2">
           <Button
             variant="secondary"
             size="sm"

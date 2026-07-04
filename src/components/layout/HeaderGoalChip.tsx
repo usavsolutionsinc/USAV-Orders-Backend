@@ -39,16 +39,16 @@ export function HeaderGoalChip() {
         aria-label="Daily goal"
         aria-expanded={g.open}
         title={`${STATION_LABEL[g.active]} goal — ${view.percent}%${g.recurDue ? ' · recurring tasks due' : ''}`}
-        className={cn('flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 transition-colors', g.open ? 'bg-gray-100' : 'hover:bg-gray-100')}
+        className={cn('flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 transition-colors', g.open ? 'bg-surface-sunken' : 'hover:bg-surface-sunken')}
       >
         <GoalRing percent={view.percent} color={tone.ring} />
         <span className="flex flex-col items-start leading-none">
-          <span className="text-caption font-bold tracking-tight text-gray-900">{STATION_LABEL[g.active]}</span>
-          <span className="mt-0.5 text-eyebrow font-semibold tabular-nums text-gray-500">
+          <span className="text-caption font-bold tracking-tight text-text-default">{STATION_LABEL[g.active]}</span>
+          <span className="mt-0.5 text-eyebrow font-semibold tabular-nums text-text-soft">
             {chipCount.value}/{chipCount.total} {chipCount.unit}
           </span>
         </span>
-        <ChevronDown className={cn('h-3 w-3 text-gray-400 transition-transform duration-200', g.open && 'rotate-180')} />
+        <ChevronDown className={cn('h-3 w-3 text-text-faint transition-transform duration-200', g.open && 'rotate-180')} />
       </motion.button>
 
       {/* in-app reminder: recurring tasks have come due for this station */}

@@ -164,17 +164,17 @@ export default function MobileHandlingUnitPage() {
   }, [box]);
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
+    <div className="min-h-screen bg-surface-canvas pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2.5">
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-soft bg-surface-card px-3 py-2.5">
         <IconButton
           onClick={() => router.push('/m/scan')}
           ariaLabel="Back to scan"
-          icon={<ChevronLeft className="h-5 w-5 text-slate-500" />}
-          className="rounded-lg p-1.5 active:bg-slate-100"
+          icon={<ChevronLeft className="h-5 w-5 text-text-soft" />}
+          className="rounded-lg p-1.5 active:bg-surface-sunken"
         />
         <Package className="h-5 w-5 text-teal-600" />
-        <div className="flex-1 truncate text-base font-extrabold tracking-tight text-slate-900">
+        <div className="flex-1 truncate text-base font-extrabold tracking-tight text-text-default">
           {box ? box.code : 'Box'}
         </div>
         {box && (
@@ -186,8 +186,8 @@ export default function MobileHandlingUnitPage() {
           onClick={printLabel}
           disabled={!box}
           ariaLabel="Print box label"
-          icon={<Printer className="h-5 w-5 text-slate-500" />}
-          className="rounded-lg p-1.5 active:bg-slate-100 disabled:opacity-40"
+          icon={<Printer className="h-5 w-5 text-text-soft" />}
+          className="rounded-lg p-1.5 active:bg-surface-sunken disabled:opacity-40"
         />
       </div>
 
@@ -202,7 +202,7 @@ export default function MobileHandlingUnitPage() {
         </div>
       )}
 
-      {isLoading && <div className="p-6 text-center text-sm text-slate-500">Loading box…</div>}
+      {isLoading && <div className="p-6 text-center text-sm text-text-soft">Loading box…</div>}
       {isError && (
         <div className="p-6 text-center text-sm text-rose-600">
           {error instanceof Error ? error.message : 'Failed to load box'}
@@ -212,14 +212,14 @@ export default function MobileHandlingUnitPage() {
       {box && (
         <>
           {/* Rollup + meta */}
-          <div className="mx-3 mt-3 rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mx-3 mt-3 rounded-xl border border-border-soft bg-surface-card p-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-semibold text-slate-700">
+              <div className="text-sm font-semibold text-text-muted">
                 {box.rollup.tested}/{box.rollup.total} tested
               </div>
               <HandlingUnitChip handlingUnitId={box.id} code={box.code} unitCount={box.rollup.total} dense />
             </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken">
               <div
                 className="h-full rounded-full bg-emerald-500 transition-all"
                 style={{
@@ -238,7 +238,7 @@ export default function MobileHandlingUnitPage() {
                 if (e.key === 'Enter') submitAdd();
               }}
               placeholder="Scan unit (U-… / serial) to add"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+              className="flex-1 rounded-lg border border-border-default px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
               autoCapitalize="characters"
               autoCorrect="off"
             />
@@ -255,25 +255,25 @@ export default function MobileHandlingUnitPage() {
           {/* Member units */}
           <div className="mx-3 mt-3 space-y-1.5">
             {box.units.length === 0 && (
-              <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+              <div className="rounded-xl border border-dashed border-border-default p-6 text-center text-sm text-text-faint">
                 Empty box — scan a unit above to add it.
               </div>
             )}
             {box.units.map((u) => (
               <div
                 key={u.id}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                className="flex items-center gap-2 rounded-xl border border-border-soft bg-surface-card px-3 py-2"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-sm font-semibold text-slate-900">
+                    <span className="font-mono text-sm font-semibold text-text-default">
                       …{getLast4(u.serial_number)}
                     </span>
                     <span className={`rounded px-1.5 py-0.5 text-micro font-bold ${unitStatusBadgeTone(u.current_status)}`}>
                       {u.current_status}
                     </span>
                   </div>
-                  <div className="mt-0.5 truncate text-xs text-slate-500">
+                  <div className="mt-0.5 truncate text-xs text-text-soft">
                     {u.sku || '—'}
                     {u.condition_grade ? ` · ${conditionLabel(u.condition_grade, 'compact')}` : ''}
                     {u.current_location ? ` · ${u.current_location}` : ''}
@@ -283,8 +283,8 @@ export default function MobileHandlingUnitPage() {
                   onClick={() => removeUnit(u.id)}
                   disabled={busy === 'remove'}
                   ariaLabel="Remove from box"
-                  icon={<X className="h-4 w-4 text-slate-400" />}
-                  className="rounded-lg p-1.5 active:bg-slate-100 disabled:opacity-40"
+                  icon={<X className="h-4 w-4 text-text-faint" />}
+                  className="rounded-lg p-1.5 active:bg-surface-sunken disabled:opacity-40"
                 />
               </div>
             ))}

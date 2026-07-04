@@ -36,7 +36,7 @@ export function BillingActions({ hasStripeCustomer }: BillingActionsProps) {
 
   if (!hasStripeCustomer) {
     return (
-      <div className="text-label text-gray-500">
+      <div className="text-label text-text-soft">
         No billing customer yet — upgrade a plan to set one up.
       </div>
     );

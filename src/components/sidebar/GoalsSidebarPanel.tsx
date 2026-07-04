@@ -29,7 +29,7 @@ function getGoalProgress(row: GoalRow) {
 
 function getGoalStatus(percent: number, current: number, goal: number) {
   if (percent <= 0 || current <= 0) {
-    return { label: 'Not Started', className: 'text-slate-400' };
+    return { label: 'Not Started', className: 'text-text-faint' };
   }
   if (current > goal || percent > 100) {
     return { label: 'Above Goal', className: 'text-cyan-700' };
@@ -131,10 +131,10 @@ function CurrentGoalEntry({
           onSelect();
         }
       }}
-      className={`cursor-pointer rounded-sm border bg-white px-3 py-2.5 space-y-1.5 transition-all hover:shadow-sm ${
+      className={`cursor-pointer rounded-sm border bg-surface-card px-3 py-2.5 space-y-1.5 transition-all hover:shadow-sm ${
         selected
           ? 'border-blue-300 ring-1 ring-blue-500/30 shadow-sm shadow-blue-200/40'
-          : 'border-slate-100 hover:border-slate-200'
+          : 'border-border-hairline hover:border-border-soft'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -143,8 +143,8 @@ function CurrentGoalEntry({
             {row.name[0]}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-caption font-bold text-slate-900">{row.name}</p>
-            <p className="truncate text-eyebrow font-medium uppercase tracking-[0.12em] text-slate-400">
+            <p className="truncate text-caption font-bold text-text-default">{row.name}</p>
+            <p className="truncate text-eyebrow font-medium uppercase tracking-[0.12em] text-text-faint">
               {row.station}
             </p>
           </div>
@@ -155,7 +155,7 @@ function CurrentGoalEntry({
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-surface-sunken">
           <div
             className={`h-full ${colors.bg}`}
             style={{ width: `${Math.min(100, percent)}%` }}
@@ -171,17 +171,17 @@ function CurrentGoalEntry({
                 e.stopPropagation();
                 setIsEditing(true);
               }}
-              className="ds-raw-button flex items-center gap-0.5 text-micro font-black tabular-nums text-slate-600 transition-colors hover:text-blue-600"
+              className="ds-raw-button flex items-center gap-0.5 text-micro font-black tabular-nums text-text-muted transition-colors hover:text-blue-600"
             >
               <span>{row.today_count}</span>
-              <span className="text-slate-300">/</span>
+              <span className="text-text-faint">/</span>
               <span className="underline decoration-slate-200 underline-offset-2 decoration-2 hover:decoration-blue-400">
                 {row.daily_goal}
               </span>
             </button>
           ) : (
             <div className="flex items-center gap-1">
-              <span className="text-micro font-black tabular-nums text-slate-400">{row.today_count}/</span>
+              <span className="text-micro font-black tabular-nums text-text-faint">{row.today_count}/</span>
               <input
                 ref={inputRef}
                 type="text"
@@ -306,15 +306,15 @@ export function GoalsSidebarPanel() {
 
   return (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       headerAbove={
-        <div className="border-b border-gray-200">
+        <div className="border-b border-border-soft">
           <ViewDropdown
             options={GOAL_VIEW_OPTIONS}
             value={goalView}
             onChange={(nextValue) => updateParams({ goalView: nextValue as GoalViewMode })}
             variant="boxy"
-            buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
+            buttonClassName={`h-full w-full appearance-none bg-surface-card px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-surface-hover`}
             optionClassName={fieldLabel}
           />
         </div>
@@ -331,17 +331,17 @@ export function GoalsSidebarPanel() {
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <p className={sectionLabel}>Current Goals</p>
-            <span className="text-micro font-semibold uppercase tracking-[0.12em] text-gray-400">
+            <span className="text-micro font-semibold uppercase tracking-[0.12em] text-text-faint">
               {filteredRows.length}
             </span>
           </div>
 
           {loading ? (
-            <div className="rounded-sm border border-dashed border-gray-200 px-3 py-4 text-xs text-gray-500">
+            <div className="rounded-sm border border-dashed border-border-soft px-3 py-4 text-xs text-text-soft">
               Loading current goal progress...
             </div>
           ) : filteredRows.length === 0 ? (
-            <div className="rounded-sm border border-dashed border-gray-200 px-3 py-4 text-xs text-gray-500">
+            <div className="rounded-sm border border-dashed border-border-soft px-3 py-4 text-xs text-text-soft">
               No current goal cards match this search or goal range.
             </div>
           ) : (
@@ -359,8 +359,8 @@ export function GoalsSidebarPanel() {
           )}
         </section>
 
-        <section className="overflow-hidden rounded-sm border border-gray-200">
-          <div className="border-b border-gray-200 px-4 py-3">
+        <section className="overflow-hidden rounded-sm border border-border-soft">
+          <div className="border-b border-border-soft px-4 py-3">
             <p className={sectionLabel}>Goal Tools</p>
           </div>
 
@@ -371,13 +371,13 @@ export function GoalsSidebarPanel() {
               emitGoalsRefresh();
               void fetchRows();
             }}
-            className="ds-raw-button flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+            className="ds-raw-button flex w-full items-center justify-between border-b border-border-soft px-4 py-3 text-left transition-colors hover:bg-surface-hover"
           >
             <div>
               <p className={dataValue}>Refresh Goal Data</p>
-              <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Reload counts, goals, and KPI history</p>
+              <p className={`mt-0.5 ${fieldLabel} text-text-soft`}>Reload counts, goals, and KPI history</p>
             </div>
-            <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
+            <span className="inline-flex h-10 w-12 items-center justify-center border-l border-border-soft text-text-muted">
               <RefreshCw className="h-3.5 w-3.5" />
             </span>
           </button>
@@ -386,13 +386,13 @@ export function GoalsSidebarPanel() {
           <button
             type="button"
             onClick={clearFilters}
-            className="ds-raw-button flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
+            className="ds-raw-button flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-surface-hover"
           >
             <div>
               <p className={dataValue}>Clear Filters</p>
-              <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Reset search and goal range filters</p>
+              <p className={`mt-0.5 ${fieldLabel} text-text-soft`}>Reset search and goal range filters</p>
             </div>
-            <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
+            <span className="inline-flex h-10 w-12 items-center justify-center border-l border-border-soft text-text-muted">
               <X className="h-3.5 w-3.5" />
             </span>
           </button>

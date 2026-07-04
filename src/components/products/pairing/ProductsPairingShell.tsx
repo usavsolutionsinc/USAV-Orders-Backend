@@ -81,10 +81,10 @@ export function ProductsPairingShell() {
 
   if (!urlSku) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-50 px-6 text-center">
+      <div className="flex h-full items-center justify-center bg-surface-canvas px-6 text-center">
         <div>
-          <p className="text-sm font-bold text-gray-700">Pick a product to start pairing</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="text-sm font-bold text-text-muted">Pick a product to start pairing</p>
+          <p className="mt-1 text-xs text-text-soft">
             The sidebar lists canonical SKUs with pending suggestions across one or more platforms.
           </p>
         </div>
@@ -94,7 +94,7 @@ export function ProductsPairingShell() {
 
   if (resolving) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-50 text-xs text-gray-400">
+      <div className="flex h-full items-center justify-center bg-surface-canvas text-xs text-text-faint">
         Loading {urlSku}…
       </div>
     );
@@ -102,10 +102,10 @@ export function ProductsPairingShell() {
 
   if (resolveError || skuCatalogId == null) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-50 px-6 text-center">
+      <div className="flex h-full items-center justify-center bg-surface-canvas px-6 text-center">
         <div>
-          <p className="text-sm font-bold text-gray-700">{resolveError || 'Not found'}</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="text-sm font-bold text-text-muted">{resolveError || 'Not found'}</p>
+          <p className="mt-1 text-xs text-text-soft">
             Pick another product from the sidebar.
           </p>
         </div>
@@ -114,7 +114,7 @@ export function ProductsPairingShell() {
   }
 
   return (
-    <div className="h-full bg-gray-50">
+    <div className="h-full bg-surface-canvas">
       <ProductHubPanel key={skuCatalogId} skuCatalogId={skuCatalogId} />
     </div>
   );

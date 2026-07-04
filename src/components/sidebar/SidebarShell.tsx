@@ -52,7 +52,7 @@ export function SidebarShell({
 }: SidebarShellProps) {
   return (
     <aside
-      className={`h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col ${
+      className={`h-full w-full bg-surface-card border-r border-border-default overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col ${
         // In the mobile drawer, inset the top so the header clears the notch /
         // status bar (parity with the old drawer trigger).
         inDrawer ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]' : ''
@@ -95,7 +95,7 @@ export function MobileSidebarOverlay({ onClose, children }: MobileSidebarOverlay
         onClick={onClose}
         ariaLabel="Close sidebar"
         icon={<X className="h-5 w-5" />}
-        className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-gray-900/10 flex items-center justify-center"
+        className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-surface-card border border-border-emphasis text-text-muted shadow-lg shadow-gray-900/10 flex items-center justify-center"
       />
     </div>
   );

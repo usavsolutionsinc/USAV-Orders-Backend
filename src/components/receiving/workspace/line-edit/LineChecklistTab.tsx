@@ -168,7 +168,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-6 text-caption text-gray-400">
+      <div className="flex items-center justify-center gap-2 py-6 text-caption text-text-faint">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading checklist…
       </div>
     );
@@ -185,14 +185,14 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1">
-        <p className="text-micro font-black uppercase tracking-widest text-gray-500">
+        <p className="text-micro font-black uppercase tracking-widest text-text-soft">
           Receiving checklist
         </p>
         <div className="flex items-center gap-2">
           {items.length > 0 ? (
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-micro font-black uppercase tracking-wider tabular-nums ${
-                allDone ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                allDone ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-sunken text-text-soft'
               }`}
             >
               {doneCount}/{items.length}
@@ -214,8 +214,8 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
-          <p className="text-caption text-gray-500">No checklist steps yet.</p>
+        <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center">
+          <p className="text-caption text-text-soft">No checklist steps yet.</p>
           <Button
             variant="primary"
             size="sm"
@@ -238,7 +238,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
               className={`flex items-center gap-2 rounded-xl px-2.5 py-2 ${
                 isDone && !managing
                   ? 'bg-emerald-50/70 ring-1 ring-inset ring-emerald-100'
-                  : 'bg-gray-50'
+                  : 'bg-surface-canvas'
               }`}
             >
               {!managing ? (
@@ -251,17 +251,17 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
                 >
                   <span
                     className={`grid h-5 w-5 shrink-0 place-items-center rounded-md ring-1 ring-inset transition-colors ${
-                      isDone ? 'bg-emerald-500 text-white ring-emerald-500' : 'bg-white text-transparent ring-gray-300'
+                      isDone ? 'bg-emerald-500 text-white ring-emerald-500' : 'bg-surface-card text-transparent ring-border-default'
                     }`}
                   >
                     <Check className="h-3.5 w-3.5" />
                   </span>
-                  <span className="shrink-0 w-4 text-center text-micro font-black text-gray-400 tabular-nums">
+                  <span className="shrink-0 w-4 text-center text-micro font-black text-text-faint tabular-nums">
                     {idx + 1}
                   </span>
                   <span
                     className={`flex-1 min-w-0 text-caption font-bold ${
-                      isDone ? 'text-emerald-800 line-through decoration-emerald-300' : 'text-gray-800'
+                      isDone ? 'text-emerald-800 line-through decoration-emerald-300' : 'text-text-default'
                     }`}
                   >
                     {it.step_label}
@@ -277,7 +277,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
                       if (e.key === 'Enter') void renameStep(it.id, editLabel);
                       if (e.key === 'Escape') setEditingId(null);
                     }}
-                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-caption font-bold text-gray-900"
+                    className="min-w-0 flex-1 rounded-lg border border-border-soft bg-surface-card px-2 py-1 text-caption font-bold text-text-default"
                   />
                   <Button
                     variant="brand"
@@ -290,17 +290,17 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
                   </Button>
                   <IconButton
                     onClick={() => setEditingId(null)}
-                    className="shrink-0 rounded-lg p-1 hover:bg-gray-100"
+                    className="shrink-0 rounded-lg p-1 hover:bg-surface-sunken"
                     ariaLabel="Cancel editing"
                     icon={<X className="h-3.5 w-3.5" />}
                   />
                 </div>
               ) : (
                 <>
-                  <span className="shrink-0 w-4 text-center text-micro font-black text-gray-400 tabular-nums">
+                  <span className="shrink-0 w-4 text-center text-micro font-black text-text-faint tabular-nums">
                     {idx + 1}
                   </span>
-                  <span className="flex-1 min-w-0 truncate text-caption font-bold text-gray-800">
+                  <span className="flex-1 min-w-0 truncate text-caption font-bold text-text-default">
                     {it.step_label}
                   </span>
                   <HoverTooltip label="Rename step" asChild>
@@ -311,7 +311,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
                       }}
                       ariaLabel="Rename step"
                       tone="accent"
-                      className="shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-blue-50"
+                      className="shrink-0 rounded-lg p-1 text-text-faint transition-colors hover:bg-blue-50"
                       icon={<Pencil className="h-3 w-3" />}
                     />
                   </HoverTooltip>
@@ -320,7 +320,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
                       onClick={() => void removeStep(it.id)}
                       disabled={busy}
                       ariaLabel="Delete step"
-                      className="shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                      className="shrink-0 rounded-lg p-1 text-text-faint transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
                       icon={<Trash2 className="h-3 w-3" />}
                     />
                   </HoverTooltip>
@@ -340,7 +340,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
               if (e.key === 'Enter') void addStep(newLabel);
             }}
             placeholder="Add a checklist step…"
-            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
+            className="min-w-0 flex-1 rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5 text-caption font-bold text-text-default placeholder:text-text-faint"
           />
           <Button
             variant="primary"
@@ -357,7 +357,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
       ) : null}
 
       {items.length > 0 ? (
-        <p className="px-1 pt-1 text-micro font-semibold text-gray-400">
+        <p className="px-1 pt-1 text-micro font-semibold text-text-faint">
           Global checklist — per-SKU checklists coming soon.
         </p>
       ) : null}

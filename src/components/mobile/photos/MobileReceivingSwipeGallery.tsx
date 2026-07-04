@@ -132,7 +132,7 @@ export function MobileReceivingSwipeGallery({
             transition={framerTransitionMobile.cameraEnter}
           >
             <motion.div
-              className="h-full w-1/2 rounded-full bg-white/50"
+              className="h-full w-1/2 rounded-full bg-surface-card/50"
               animate={reduce ? {} : { x: ['-100%', '200%'] }}
               transition={
                 reduce

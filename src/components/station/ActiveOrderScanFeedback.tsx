@@ -257,15 +257,15 @@ function FeedbackBody({
         animate={framerPresence.stationCard.animate}
         transition={framerTransition.stationCardMount}
         whileHover={framerGesture.cardHover}
-        className={`rounded-xl bg-white px-3 py-2.5 shadow-sm ring-1 max-sm:mb-0.5 ${ring}`}
+        className={`rounded-xl bg-surface-card px-3 py-2.5 shadow-sm ring-1 max-sm:mb-0.5 ${ring}`}
       >
         {/* Row 1 — identity + status (primary). Undo is separated to footer (Material / HIG). */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <Icon className={`h-3.5 w-3.5 shrink-0 ${tint}`} />
-            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{label}</span>
+            <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">{label}</span>
             <HoverTooltip label={activeOrder.tracking ?? ''} asChild>
-              <span className="truncate text-caption font-black tracking-tight text-gray-900">
+              <span className="truncate text-caption font-black tracking-tight text-text-default">
                 {variant === 'exception' ? (
                   <span className="font-mono tabular-nums">{identifier}</span>
                 ) : (
@@ -287,7 +287,7 @@ function FeedbackBody({
         </div>
 
         <div className="mt-2 flex items-center gap-2">
-          <div className="h-1 flex-1 overflow-hidden rounded-full bg-gray-100">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-sunken">
             <motion.div
               className={`h-full ${bar} rounded-full`}
               initial={false}
@@ -304,11 +304,11 @@ function FeedbackBody({
             initial={{ opacity: 0.6, y: 2 }}
             animate={{ opacity: 1, y: 0 }}
             transition={framerTransition.quantityBump}
-            className="shrink-0 text-micro font-black tabular-nums text-gray-700"
+            className="shrink-0 text-micro font-black tabular-nums text-text-muted"
           >
             {scanned}/{qty}
             {remaining > 0 ? (
-              <span className="ml-1 font-bold text-gray-400">· {remaining} left</span>
+              <span className="ml-1 font-bold text-text-faint">· {remaining} left</span>
             ) : (
               <span className="ml-1 font-bold text-emerald-600">· complete</span>
             )}
@@ -335,7 +335,7 @@ function FeedbackBody({
         </AnimatePresence>
 
         {/* Reversible secondary action — full-width footer, WCAG-minded touch height on small screens */}
-        <div className="mt-2.5 border-t border-gray-100 pt-2.5">
+        <div className="mt-2.5 border-t border-border-hairline pt-2.5">
           <motion.button
             type="button"
             disabled={undoBusy || scanned < 1}

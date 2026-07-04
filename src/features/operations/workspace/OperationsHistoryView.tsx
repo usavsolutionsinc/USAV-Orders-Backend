@@ -72,7 +72,7 @@ export function OperationsHistoryView() {
   }, [entity]);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">
+    <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-surface-canvas text-text-default">
       <main className="flex-1 w-full max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -80,7 +80,7 @@ export function OperationsHistoryView() {
               <History className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-gray-900 leading-none">
+              <h1 className="text-2xl font-black tracking-tight text-text-default leading-none">
                 {focused ? `${dimLabel} record` : 'Operations record'}
               </h1>
               <div className="mt-1 flex items-center gap-1.5">
@@ -93,13 +93,13 @@ export function OperationsHistoryView() {
                       icon={<X />}
                       onClick={() => url.setEntity('')}
                       ariaLabel="Clear record"
-                      className="text-eyebrow font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600"
+                      className="text-eyebrow font-bold uppercase tracking-widest text-text-faint hover:text-text-muted"
                     >
                       Clear
                     </Button>
                   </>
                 ) : (
-                  <p className="text-eyebrow font-bold uppercase tracking-widest text-gray-500">
+                  <p className="text-eyebrow font-bold uppercase tracking-widest text-text-soft">
                     Paste a record number to begin
                   </p>
                 )}
@@ -108,14 +108,14 @@ export function OperationsHistoryView() {
           </div>
         </header>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+        <section className="rounded-2xl border border-border-soft bg-surface-card p-5 sm:p-6">
           {!focused ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-12 text-center">
-              <History className="mx-auto h-7 w-7 text-gray-300" />
-              <p className="mt-3 text-caption font-semibold text-gray-700">
+            <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-12 text-center">
+              <History className="mx-auto h-7 w-7 text-text-faint" />
+              <p className="mt-3 text-caption font-semibold text-text-muted">
                 Paste a record number to see its complete timeline
               </p>
-              <p className="mt-1 text-micro leading-5 text-gray-400">
+              <p className="mt-1 text-micro leading-5 text-text-faint">
                 Search an order, serial, or tracking number in the sidebar — its full journey across
                 every station appears here.
               </p>
@@ -173,7 +173,7 @@ export function OperationsHistoryView() {
                         onClick={() => downloadJourneyCsv(url.entityValue, items)}
                         ariaLabel="Export CSV"
                         icon={<Download className="h-3.5 w-3.5" />}
-                        className="-my-0.5 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        className="-my-0.5 rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
                       />
                     </HoverTooltip>
                     <HoverTooltip label="Print / Save as PDF">
@@ -181,7 +181,7 @@ export function OperationsHistoryView() {
                         onClick={() => printJourney(url.entityValue, items)}
                         ariaLabel="Print or save as PDF"
                         icon={<FileText className="h-3.5 w-3.5" />}
-                        className="-my-0.5 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        className="-my-0.5 rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
                       />
                     </HoverTooltip>
                     <span className="ml-1 tabular-nums">

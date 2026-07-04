@@ -49,5 +49,5 @@ export function splitPoContext(context: string | null): {
 export const CONFIDENCE_DOT: Record<'high' | 'medium' | 'low', string> = {
   high: 'bg-emerald-500',
   medium: 'bg-amber-500',
-  low: 'bg-gray-300',
+  low: 'bg-surface-strong',
 };

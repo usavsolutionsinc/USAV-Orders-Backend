@@ -119,21 +119,21 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border-soft bg-surface-card p-3 shadow-sm">
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter by name, role, or status…"
-          className="w-full max-w-xs rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[13px] focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          className="w-full max-w-xs rounded-xl border border-border-soft bg-surface-card px-3 py-1.5 text-[13px] focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
         />
         <Button variant="brand" onClick={() => setInviteOpen(true)}>
           Invite teammate
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-gray-100 text-[13px]">
-          <thead className="bg-gray-50 text-left text-caption font-medium uppercase tracking-[0.08em] text-gray-500">
+      <div className="overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-sm">
+        <table className="min-w-full divide-y divide-border-hairline text-[13px]">
+          <thead className="bg-surface-canvas text-left text-caption font-medium uppercase tracking-[0.08em] text-text-soft">
             <tr>
               <th className="px-4 py-2">Name</th>
               <th className="px-4 py-2">Role</th>
@@ -144,11 +144,11 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
               <th className="px-4 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border-hairline">
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">No teammates match.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-text-faint">No teammates match.</td></tr>
             ) : filtered.map((s) => (
-              <tr key={s.id} className={s.active ? 'text-gray-900' : 'text-gray-400'}>
+              <tr key={s.id} className={s.active ? 'text-text-default' : 'text-text-faint'}>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2.5">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ background: s.color_hex }} />
@@ -162,21 +162,21 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
                   <HoverTooltip label="Edit roles in Settings → Access" asChild>
                     <a
                       href={`/settings/access?staffId=${s.id}`}
-                      className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-0.5 text-label font-medium text-gray-700 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                      className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-0.5 text-label font-medium text-text-muted hover:border-border-soft hover:bg-surface-hover hover:text-text-default"
                     >
                       {s.role}
-                      <span className="text-gray-400">›</span>
+                      <span className="text-text-faint">›</span>
                     </a>
                   </HoverTooltip>
                 </td>
                 <td className="px-4 py-2">
                   <StatusPill status={s.status} active={s.active} />
                 </td>
-                <td className="px-4 py-2 text-label text-gray-500">{s.has_pin ? 'Set' : '—'}</td>
+                <td className="px-4 py-2 text-label text-text-soft">{s.has_pin ? 'Set' : '—'}</td>
                 <td className="px-4 py-2">
                   <AuthPolicyCell row={s} disabled={busy === s.id} onChange={updateAuthPolicy} />
                 </td>
-                <td className="px-4 py-2 text-label text-gray-500">{fmtLogin(s.last_login_at)}</td>
+                <td className="px-4 py-2 text-label text-text-soft">{fmtLogin(s.last_login_at)}</td>
                 <td className="px-4 py-2 text-right">
                   {s.active && (
                     <Button
@@ -184,7 +184,7 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
                       size="sm"
                       onClick={() => deactivate(s.id, s.name)}
                       disabled={busy === s.id}
-                      className="text-gray-500 hover:text-red-600"
+                      className="text-text-soft hover:text-red-600"
                     >
                       Deactivate
                     </Button>
@@ -214,9 +214,9 @@ function StatusPill({ status, active }: { status: string; active: boolean }) {
   const styles: Record<string, string> = {
     active:       'bg-emerald-50 text-emerald-700',
     invited:      'bg-amber-50 text-amber-700',
-    deactivated:  'bg-gray-100 text-gray-500',
+    deactivated:  'bg-surface-sunken text-text-soft',
   };
-  const css = styles[effective] ?? 'bg-gray-50 text-gray-500';
+  const css = styles[effective] ?? 'bg-surface-canvas text-text-soft';
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium ${css}`}>
       {effective}
@@ -242,20 +242,20 @@ function AuthPolicyCell({
           value={row.auth_method === 'password' ? 'password' : 'pin'}
           disabled={disabled}
           onChange={(e) => onChange(row.id, { authMethod: e.target.value as 'pin' | 'password' })}
-          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-label text-gray-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+          className="rounded-lg border border-border-soft bg-surface-card px-2 py-1 text-label text-text-muted focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft disabled:opacity-50"
         >
           <option value="pin">PIN</option>
           <option value="password">Password</option>
         </select>
       </HoverTooltip>
       <HoverTooltip label="Require password step-up before sensitive screens" asChild>
-        <label className="inline-flex items-center gap-1 text-label text-gray-500">
+        <label className="inline-flex items-center gap-1 text-label text-text-soft">
           <input
             type="checkbox"
             checked={row.requires_sensitive_stepup}
             disabled={disabled}
             onChange={(e) => onChange(row.id, { requiresSensitiveStepUp: e.target.checked })}
-            className="h-3.5 w-3.5 rounded border-gray-300 text-slate-600 focus:ring-slate-200 disabled:opacity-50"
+            className="h-3.5 w-3.5 rounded border-border-default text-text-muted focus:ring-border-soft disabled:opacity-50"
           />
           Wall
         </label>
@@ -304,9 +304,9 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
     <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
       {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
-        <h2 className="text-[16px] font-semibold text-gray-900">Invite a teammate</h2>
-        <p className="mt-1 text-label text-gray-500">
+      <div className="relative w-full max-w-md rounded-2xl border border-border-soft bg-surface-card p-5 shadow-2xl">
+        <h2 className="text-[16px] font-semibold text-text-default">Invite a teammate</h2>
+        <p className="mt-1 text-label text-text-soft">
           They'll get a link to set their PIN. If you provide an email we send the invite automatically.
         </p>
 
@@ -314,11 +314,11 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
           <div className="mt-4 space-y-3">
             <div className="rounded-xl bg-emerald-50 px-3 py-2 text-label text-emerald-700">Invite created.</div>
             <label className="block">
-              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Enrollment link</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-text-soft">Enrollment link</span>
               <input
                 readOnly
                 value={enrollmentUrl}
-                className="block w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-[11.5px] text-gray-700"
+                className="block w-full rounded-xl border border-border-soft bg-surface-canvas px-3 py-2 font-mono text-[11.5px] text-text-muted"
                 onFocus={(e) => e.currentTarget.select()}
               />
             </label>
@@ -331,33 +331,33 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
         ) : (
           <div className="mt-4 space-y-3">
             <label className="block">
-              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Name</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-text-soft">Name</span>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Sam Rivera"
-                className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                className="block w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-[13px] focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
                 autoFocus
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Role</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-text-soft">Role</span>
               <select
                 value={form.role}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-                className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                className="block w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-[13px] focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
               >
                 {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Email (optional)</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-text-soft">Email (optional)</span>
               <input
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 placeholder="sam@acme.com"
                 type="email"
-                className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                className="block w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-[13px] focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
               />
             </label>
             {error && (

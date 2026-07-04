@@ -55,12 +55,12 @@ export default function AiOrderList({ orderIds }: { orderIds: string[] }) {
 
   if (loading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-card">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="flex items-center gap-3 border-b border-gray-100 px-3 py-2.5 last:border-b-0">
-            <div className="h-3 w-16 animate-pulse rounded bg-gray-100" />
-            <div className="h-3 flex-1 animate-pulse rounded bg-gray-100" />
-            <div className="h-4 w-20 animate-pulse rounded bg-gray-100" />
+          <div key={i} className="flex items-center gap-3 border-b border-border-hairline px-3 py-2.5 last:border-b-0">
+            <div className="h-3 w-16 animate-pulse rounded bg-surface-sunken" />
+            <div className="h-3 flex-1 animate-pulse rounded bg-surface-sunken" />
+            <div className="h-4 w-20 animate-pulse rounded bg-surface-sunken" />
           </div>
         ))}
       </div>
@@ -70,8 +70,8 @@ export default function AiOrderList({ orderIds }: { orderIds: string[] }) {
   if (!orders || orders.length === 0) return null;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/60 px-3 py-2">
+    <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-card">
+      <div className="flex items-center justify-between border-b border-border-hairline bg-surface-canvas/60 px-3 py-2">
         <span className={sectionLabel}>{orders.length} order{orders.length !== 1 ? 's' : ''}</span>
         <a
           href="/dashboard?shipped="
@@ -83,16 +83,16 @@ export default function AiOrderList({ orderIds }: { orderIds: string[] }) {
           </svg>
         </a>
       </div>
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-border-hairline">
         {orders.map((o) => (
-          <a key={o.id} href={o.href} className="flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50">
+          <a key={o.id} href={o.href} className="flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-surface-hover">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-caption font-semibold text-blue-700">#{o.orderId.slice(-8)}</span>
-                {o.condition ? <span className="text-micro uppercase tracking-wide text-gray-400">{o.condition}</span> : null}
+                {o.condition ? <span className="text-micro uppercase tracking-wide text-text-faint">{o.condition}</span> : null}
               </div>
-              <p className="mt-0.5 truncate text-label text-gray-800">{o.productTitle || 'Unknown product'}</p>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-gray-500">
+              <p className="mt-0.5 truncate text-label text-text-default">{o.productTitle || 'Unknown product'}</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-text-soft">
                 {o.packerName ? <span>Packed · {o.packerName}</span> : null}
                 {o.testerName ? <span>Tested · {o.testerName}</span> : null}
                 {o.outOfStock ? <span className="font-medium text-rose-600">Missing: {o.outOfStock}</span> : null}

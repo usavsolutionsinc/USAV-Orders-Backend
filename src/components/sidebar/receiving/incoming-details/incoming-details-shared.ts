@@ -188,7 +188,7 @@ export function heroTone(category: string | null | undefined, delivered: boolean
   if (c.includes('out_for_delivery') || c.includes('ofd'))
     return { wrap: 'border-amber-200 bg-amber-50', status: 'text-amber-800', dot: 'bg-amber-500' };
   if (c.includes('pre_transit') || c.includes('label') || c.includes('created') || c.includes('unknown'))
-    return { wrap: 'border-gray-200 bg-gray-50', status: 'text-gray-700', dot: 'bg-gray-400' };
+    return { wrap: 'border-border-soft bg-surface-canvas', status: 'text-text-muted', dot: 'bg-border-emphasis' };
   return { wrap: 'border-blue-200 bg-blue-50', status: 'text-blue-800', dot: 'bg-blue-500' };
 }
 

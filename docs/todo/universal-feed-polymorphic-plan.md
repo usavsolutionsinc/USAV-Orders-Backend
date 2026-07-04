@@ -1,276 +1,630 @@
-# Universal Feed — Polymorphic Linkage Plan (`feed_links`)
+# Universal Surfaces & Polymorphic Linkages — AI-First Plan (feed_memberships + lean companions)
 
-> **Status:** PLAN (2026-07-03). No implementation started.
+> **Status:** PHASES 0–5 COMPLETE (2026-07-03/04). Only the plan's "Later" section (Redis hot paths,
+> anonymized cross-org benchmark aggregation, generative onboarding, Jetson classifiers) remains — out
+> of scope by design. Migrations `2026-07-03j..s` APPLIED to the live DB (411 on record, 0 pending).
+> Build report + honest status: `docs/todo/universal-feed-ai-first-RUN-REPORT.md`.
+> Executable SoT for the kind catalog / trust classes: `src/lib/surfaces/registry.ts` (+ §10 below).
 >
-> **Scope:** a new, generic polymorphic table — `feed_links` — that represents *membership in an active work queue*,
-> decoupled from the source record. It is the mechanism behind "bulk delete in a triage-style sidebar removes the item
-> from the feed, never the underlying record." Designed to serve receiving triage first, and FBA / repairs-warranty /
-> orders queues on the same mechanism without a second migration.
+> **Phase 5 COMPLETE.** nightly signal→insight_links rollup cron (+ migration `2026-07-03s` widening
+> the source CHECK to `org_rollup`); mutation accept/reject stats; BOTH history pages — the `/signals`
+> Monitor timeline (`?mode=timeline`) AND the Workbench master-detail (`?mode=browse`, `?signalId=`);
+> template-first onboarding (`applyTemplateToOrg` + `isDefault` Drizzle fix); and **MCP exposure of the
+> read-tool registry** (`POST /api/mcp`, JSON-RPC 2.0, reuses `listAssistantTools`/`runAssistantTool`).
+> **Phase 4 COMPLETE:** the reversible per-staff rail dismiss (replaces a destructive shared delete) +
+> durable exclusion read-filter; and the **feed_memberships projection** — a stable carton-grain
+> `receiving_triage` projection (`src/lib/receiving/feed-membership-projection.ts` +
+> `/api/cron/feed-membership-projection`, every 10 min) that mirrors the live Unfound/Prioritize queue
+> into `feed_memberships` so `getFeedState` returns real data. Backfilled live (67 rows: 53 active +
+> 14 needs_match). Other feed_keys (receiving_unbox, testing_queue, …) are the same pattern over their
+> own source tables — separate SoT mappings, follow-up.
 >
-> **Relationship to the other two plans:** complementary, not blocking. This table's `entity_id` points at whatever
-> `receiving_lines`/`receiving` mean *today*; if the `receiving_carton`/`receiving_line` spine split in
-> [`polymorphic-tables-database-refactor-plan.md`](./polymorphic-tables-database-refactor-plan.md) happens later, it's a
-> one-time repoint of `feed_links` rows, not a redesign. The reference contract, naming rules, and Appendix A gap
-> analysis in [`schema-wide-polymorphic-refactor-plan.md`](./schema-wide-polymorphic-refactor-plan.md) apply here
-> unchanged.
+> `ANTHROPIC_API_KEY` must still be added to `.env` before the assistant route is live (it 503s
+> cleanly without it). The new nightly cron begins running once deployed (it's in `vercel.json`).
+>
+> **The reframe (v2, locked 2026-07-03 interview #2):** the platform is **AI-first, English-first**.
+> The user never needs to learn the Studio mapping system. Talking to the AI is how the operation is
+> inspected, explained, edited, and extended — the Studio canvas becomes a live *preview the AI drives*
+> (think Google Stitch: describe → the canvas updates), not an editor the user must master. This
+> inverts the v1 plan's Studio-centric interaction model; the table family below is unchanged, but the
+> build order, the interaction architecture, and the Studio page itself are re-specified around AI.
+>
+> **Scope:** lean, additive, tenant-first polymorphic linkage tables (`feed_memberships`,
+> `staff_rail_exclusions`, `entity_signals`, `node_surfaces`, `insight_links`, `agent_mutations` +
+> `agent_mutation_affects`) powering: the AI's read substrate ("why" signals + context tools), a
+> global English assistant on every page, an atomic AI write path, operator rails with per-staff
+> dismiss, domain-linked history pages, and an AI-first Studio refactor.
+>
+> **Relationship to the other two plans:** complementary; same contract as `photo_entity_links`,
+> `part_links`, receiving_line_facts, ops_events, item_workflow_state. Membership/signal rows repoint
+> cleanly if the receiving spine splits later. `.claude/rules/polymorphic-tables.md` applies
+> point-for-point.
+
+---
+
+## -2. AI-First Synthesis (interview #2 — 2026-07-03, supersedes conflicting v1 framing)
+
+All locked via a second iterative interview after the v1 Q&A. Where v1 said "Studio chat is the
+primary interaction surface," **this section wins.**
+
+### Locked decisions
+
+| Decision | Answer |
+|---|---|
+| **First slice** | **AI read substrate first**: `entity_signals` + the kind catalog + a typed org-scoped **read-tool registry** over ops_events / item_workflow_state / signals. The AI cannot explain "why" or propose good edits until it can read the business. Rails and mutations stack on this. |
+| **AI surface** | **Global assistant everywhere** — one app-shell chat dock on every route (not per-page chats, not Studio-only). Studio is an optional visualization the AI deep-links into, never a prerequisite. |
+| **AI context shape** | **Tool registry**, not a monolithic context-gather endpoint and not RAG-as-backbone. Small, typed, org-scoped read tools (`get_signals_by_node`, `get_unit_journey`, `get_feed_state`, `get_top_reasons`, `get_benchmarks`, …) the model composes per question. Additive like the kind registries: new capability = new tool, no migration. RAG over events/signals is a possible layer-2, not the spine. |
+| **AI runtime** | **Claude API + in-repo server agent loop** first (persisting to existing `ai_chat_sessions`/`ai_chat_messages`), org-scoped per request. **MCP exposure of the same tool registry is a later power-user add-on** (external agents drive the same tools). Local Ollama not used for the propose-mutation loop (tool-use exactness matters). |
+| **Studio ↔ AI linkage** | **Skill + tool family, NOT a custom-trained model.** The graph is structured data; a frontier model with typed tools + a canvas-control tool namespace handles it. Custom training bakes today's vocabulary into weights and goes stale as tenants add kinds; a skill reads the live registry at runtime. Fine-tuning (Jetson pipeline) is reserved for later narrow classification (e.g. free-text buyer notes → reason_code), never orchestration/navigation. |
+| **Trust model (day one)** | **View-layer only auto-apply**: exclusions, feed membership state, signal inserts, node_surfaces config apply without review. Anything touching masters (staff creation, graph edges, status transitions) is review-gated. Widen the trusted list per mutation_kind as accepted/rejected stats accumulate. Per-tenant trust config is a later upgrade. |
+| **Signal emitters (day one)** | **All four**: (1) returns/warranty reasons (incl. linkReturnedSerial context), (2) receiving exceptions + triage (unfound, carrier mismatch, pairing failures), (3) tech test-fail reasons (reason_codes already governed — cheapest), (4) buyer notes from order sync — via the **mirror-derivation standard** (§2.3): signals project from the local mirror, never emit inline in a connector; `source_ref` idempotency; eBay first, Amazon behind RDT as fast-follow. |
+| **Rails timing** | **After the AI substrate ships** (strictly sequenced; AI-first over operator-throughput-first). Tables are still authored up front. |
+| **Learning loop (phase 1)** | **Store + aggregate**: persist all chats/mutations/outcomes; nightly job aggregates signals into `insight_links` (top reasons by node, trends); AI reads its own history via tools; accepted/rejected mutation stats inform the trust list. No training infra yet. |
+| **Studio edit contract** | **AI edits a live draft** — every conversational edit applies instantly to a draft version (canvas reacts live, Stitch-style preview). **Publish stays the human gate** (diagnostics + step-up auth). Undo = revert mutation on the draft. |
+| **Manual editing UI fate** | **Demoted to inspector-only.** Canvas + inspector remain for viewing and micro-tweaks (rename, single config field); all structural editing (add/remove/rewire nodes, rules, surfaces) goes through chat. Read on canvas, write in English. |
+| **Conversational scope** | **Everything**: graph structure (nodes/edges/ports/routing/config), staffing + stations (real `staff`/`staff_roles`/`staff_stations` rows), surfaces + rails (feed_keys, node_surfaces), vocabularies + settings (reason_codes, labels, settings-registry entries). |
+| **Page taxonomy** | Ordinary pages = **skill + context injection** (staff/tenant Q&A in place). `/operations` = staff + KPI + **industry-standard comparison** (Monitor). `/studio` = **process-flow display** the AI drives. The assistant is the same one everywhere; only its registered skill/context differs. |
+| **Draft testing** | **AI-narrated simulate + iterate loop**: reuse the existing Simulate panel (pure client dry-run, zero engine writes); AI runs fake/sample units through the edited draft, narrates what changed, flags diagnostics, and the user iterates conversationally ("what else would improve this?") before publish. |
+| **Dock layout** | **Merge into one right dock.** On /studio the assistant dock absorbs StudioInspector: focused-node detail renders beneath the chat (the AI *is* the inspector). One right rail everywhere; no double-aside squeeze. |
+| **Benchmarks** | **Seeded `insight_links` in phase 1** for the used-electronics-reseller vertical (test-fail %, return %, receive→list days) so /operations and the AI can say "you vs typical" from day one. Anonymized cross-org aggregates wait for multiple tenants. |
+| **Onboarding** | **Templates first, AI refines**: new tenant picks a seeded vertical template (reseller-flow); the AI conversation customizes it afterward. Full generative "describe your business → whole graph" onboarding is a later flagship, after the edit loop is proven on USAV. |
+| **Studio refactor timing** | **Rides the write path** (Phase 3): the moment agent_mutations can edit a draft, Studio flips AI-first (dock merged, manual editing demoted, canvas-control tools). Not a separate project. |
+
+### The app-shell assistant (the "AI wrapper around every page")
+
+The wrapper the whole experience hangs on:
+
+1. **`AssistantProvider` in the root layout** hosting a persistent right-side dock (portal, named
+   z-token, ~w-96, collapsible) on every route — chat on top; below it the **AI-edits tray**: the
+   live draft's `agent_mutations` (applied/pending), each with check / test / revert affordances,
+   updating over Ably.
+2. **Context injection is a registry hook, not prop-drilling.** Pages/regions call
+   `useAssistantContext({ page, station, selection, mode })` — same last-registered-wins pattern as
+   `useRegisterScanTarget`. Per-page **skills are prompt fragments registered in the same registry**
+   (staff Q&A skill on station pages, KPI/benchmark skill on /operations, flow-display skill on
+   /studio).
+3. **Navigation is a tool, and URL-as-state is the payoff.** Every surface is already
+   URL-addressable (`/studio?v=&focus=&z=&lens=`, `?skuId=`, `?mode=`), so "take the user to draft
+   testing" = a client-executed `navigate(path, params)` tool doing `router.push`. Add
+   `highlight(ref)`, `focus_node(id)`, `set_lens(lens)` and the AI can walk a user through anything.
+   No new state system — the house URL rules already built the rails.
+4. **Tool split:** server tools (read registry, mutations) execute in the server agent loop; UI
+   tools (navigate/highlight/zoom/lens) stream to the client as tool calls the provider executes and
+   acknowledges (standard client-tool pattern).
+5. **The canonical flow:** user asks in English → AI gathers via read tools → (optionally) proposes
+   → mutation applies to draft server-side → Ably → `navigate('/studio?v=<draft>&focus=…')` → dock
+   shows the edit trail → AI-narrated simulate on fake data → user iterates conversationally →
+   human publishes (step-up + diagnostics gate).
+
+---
+
+## -1. v1 Synthesis (interview #1 — retained; still binding where not superseded above)
+
+**Q1 — AI staff creation:** always **real rows** in `staff` + `staff_roles` + `staff_stations`.
+
+**Q2 — Benchmarks:** both seeded templates **and** (later) anonymized cross-org aggregates, via
+lean `insight_links`.
+
+**Q3 — AI writes:** via `agent_mutations` reviewed/applied **atomically with extra audit**; lean
+`agent_mutation_affects` junction; trusted auto-apply paths (now pinned to view-layer only, see
+§-2); small/simple/exact-meaningful updates.
+
+**Q4 — "Why" data:** structured polymorphic `entity_signals` (queryable "top reasons by node",
+tsvector full-text) + emit to ops_events.
+
+**Q5 — Rail scope & UX:** default = show all (shared `feed_memberships`); per-staff per-station
+**dismiss** (insert into `staff_rail_exclusions`, like "dismiss as done") for personal focus;
+shared awareness + individual throughput; multi-membership supported.
+
+**Q6 — Mutation junction:** lean `agent_mutation_affects` with selective links; jsonb summary on
+the proposal for context.
+
+**Q7 — Caching:** PG-first (indexes + denorm). Comprehensive Redis plan deferred.
+
+**Q8 — Realtime:** Ably on AI applies and sidebar/personal view changes.
+
+**Q9 — Master endgoal:** superseded by §-2 — the assistant is global and English-first; the canvas
+is the preview the AI drives (zoom/pan/highlight are tools), not the interaction home.
+
+**Q10 — History pages:** NOT `feed_memberships`. Domain-based linkage to master tables (e.g.
+receiving history = `receiving`/`receiving_lines` spine + `ops_events` + `entity_signals`),
+date/time filterable, full-text over notes/reasons, both Monitor (timeline) and Workbench
+(list + inspector) on different pages.
+
+**Q11 — Naming:** clear descriptive table names; stable `kind`/`surface_key`/`signal_kind`/
+`linkage_type` strings + a lightweight catalog/registry for AI + code; canonical refs in payloads
+(e.g. `feed_memberships:feed_key:foo:entity:123`).
+
+**Q12 — Future-proofing:** tenant-first; additive lean linkage tables; AI extends kinds/rows/
+configs (registries + facts pattern) with minimal/no core migrations; store `agent_mutations` +
+linked chats for improvement/training.
+
+**Locked invariants:** SoT = `item_workflow_state` + `ops_events` (taps on `applyTransition` +
+domain chokepoints) + guarded master tables — everything here is projection. Ultra-low-latency
+sidebars via denorm + indexes (Redis later). All new tables obey
+`.claude/rules/polymorphic-tables.md`. Realtime + audit on every meaningful change. History is
+domain-linked, never polluted into active rails.
 
 ---
 
 ## 0. TL;DR
 
-Today, three different receiving-triage sidebar views (Prioritize / Unfound / Done) are backed by **three unrelated
-data sources** — a `view=scanned` filter, a separate `v_unfound_queue` view/table, and a boolean `receiving.triage_complete`
-flag — with a fourth column (`receiving.pairing_state`, added 2026-07-01, values `UNFOUND|MATCHED|WAIVED`) sitting in
-the schema **already unused by any of them**. This plan replaces that with one generic table, `feed_links`
-(`organization_id, feed_key, entity_type, entity_id, state, ...display projection`), synced from each domain's existing
-write chokepoints. Bulk-delete in the sidebar becomes a real `DELETE FROM feed_links` — it never touches `receiving`,
-`receiving_lines`, or any other source table. The three receiving views become **filters on one feed's `state` column**;
-a fourth domain-agnostic mechanism (`feed_key`) is what lets FBA, repairs/warranty, and orders reuse the exact same
-table, sidebar rail, and Studio surfacing later without new schema.
+Build the **AI's read substrate first** (`entity_signals` wired from four emitters + a typed
+read-tool registry + kind catalog), then a **global English assistant** on every page (server agent
+loop on the Claude API over that registry, persisted to ai_chat_sessions), then the **AI write
+path** (`agent_mutations` + atomic apply, view-layer auto-apply only) — at which point **Studio
+flips AI-first** (Stitch-style: talk → draft updates live → AI-narrated simulate → human publish;
+manual editing demoted to inspector micro-tweaks; assistant dock absorbs the inspector). Operator
+rails (`feed_memberships` + `staff_rail_exclusions`) cut over **after** the AI substrate. Learning
+= store everything + nightly aggregation into seeded-first `insight_links`. History stays
+domain-linked to master spines. All tables lean, additive, tenant-from-birth, per the polymorphic
+contract.
 
 ---
 
-## 1. Decisions locked in (from the interview)
+## 1. Decisions locked in (merged v1 + v2)
 
 | Question | Decision |
 |---|---|
-| Feed scope | **Universal** — one polymorphic mechanism, designed for receiving + FBA + repairs/warranty + orders from the start, not receiving-only. |
-| Bulk-delete semantics | **Non-destructive unlink.** Deleting a `feed_links` row never deletes/mutates the source record. |
-| Naming | **Generic, domain-decoupled** (`feed_links`, `feed_key`, `entity_type`/`entity_id`) — not `receiving_triage_queue` or similar. No literal obfuscation; the names just aren't coupled to one feature. |
-| Migration posture | **Clean, additive-first cutover is acceptable** — this repo is still effectively pre-production for this surface. No dual-write strangler required. |
-| Unlink scope | **Org-wide.** One shared feed per org, matching how the triage sidebar already works (everyone sees the same lists). No per-user dismissal axis. |
-| Display data | **Denormalize.** `feed_links` carries its own display projection (title/subtitle/tone/priority/occurred_at) rather than joining live per `entity_type` on every read. |
-| Studio integration | **Read-only to start.** Studio's inspector/diagnostics reads `feed_links` counts per node; no feed-writing node type yet. |
-| Entity vocabulary (day one) | Receiving (carton + line), FBA shipments/items, repairs/warranty, orders. |
+| Interaction model | **AI-first, English-first, everywhere.** Global assistant dock; user never learns the mapping system; Studio = live preview the AI drives. |
+| Feed / rail scope & UX | Universal first-class rails; shared defaults in `feed_memberships`; per-staff per-station dismiss in `staff_rail_exclusions` (default show-all); multi-membership. |
+| Dismiss semantics | Non-destructive view unlink only; never touches source records or shared memberships. |
+| Naming & refs | Descriptive table names; stable kind strings + lightweight catalog; canonical refs in data/events/mutations/endpoints. |
+| Build order | Read substrate → assistant → write path (+ AI-first Studio) → rails → learning/aggregation. Tables authored up front in one migration wave. |
+| Display data | Denormalized onto membership/signal rows for sidebar speed. |
+| Studio | **Read-only live canvas + AI-driven editing of a live draft**; publish = human gate (step-up + diagnostics); manual structural editing removed from UI (inspector micro-tweaks only); assistant dock absorbs inspector. |
+| History | Separate from active rails; domain-linked to master tables + events/signals; date/time + full-text; Monitor and Workbench variants on different pages. |
+| AI write path | `agent_mutations` (linked to ai_chat_sessions) + `agent_mutation_affects`; atomic guarded apply; **auto-apply = view-layer kinds only day one**; extra audit + ops_event + Ably on every apply. |
+| "Why" signals | `entity_signals` primary (structured, tsvector, per-node aggregates) + ops_events emission; four emitters wired day one. |
+| Benchmarks | Seeded `insight_links` phase 1 (reseller vertical); anonymized aggregates when multi-tenant. |
+| Single SoT | `item_workflow_state` + `ops_events` + guarded masters; rails/signals/surfaces are projections. |
+| Caching | PG-first; Redis deferred. |
+| Realtime | Ably on AI applies + sidebar/personal view changes + draft/canvas reactions. |
+| AI runtime | Claude API in-repo agent loop; MCP exposure later for power users; skill+tools for Studio (no custom model); Jetson fine-tuning reserved for later narrow classification. |
+| Onboarding | Templates first (reseller-flow seeds), AI refines conversationally; generative onboarding later. |
+| Entity + surface vocabulary (day one) | Receiving carton/line, FBA, repair/warranty, orders + station-aware feed_keys/surfaces; AI + assistant extend per tenant. |
 
 ---
 
-## 2. The table
+## 2. The lean linkage table family (tenant-first, additive)
 
+Unchanged from v1. A small set of **lean, additive polymorphic linkage tables** (not one god table,
+not per-feed_key splits). All obey `.claude/rules/polymorphic-tables.md`: org-led indexes/uniques,
+named CHECK discriminators (or registry-validated kinds), BIGINT ids, tenant-from-birth via
+`enforce_tenant_isolation()`, parent integrity via triggers/FKs, modeled in Drizzle same PR.
+
+### 2.1 `feed_memberships` (shared/global defaults — the active selection working set)
 ```sql
-CREATE TABLE feed_links (
-  id               BIGSERIAL PRIMARY KEY,
-  organization_id  UUID NOT NULL,                    -- enforce_tenant_isolation() installs the loud-fail default
-  feed_key         TEXT NOT NULL,                    -- which queue/sidebar this membership belongs to
-  entity_type      TEXT NOT NULL,                    -- named CHECK, see §5
-  entity_id        BIGINT NOT NULL,                  -- BIGINT default per the reference contract
-  -- lifecycle state WITHIN the feed — vocabulary is feed_key-scoped, governed in code (see §4), not a global CHECK
-  state            TEXT NOT NULL DEFAULT 'ACTIVE',
-  -- denormalized display projection (decision: cache, don't join-live)
-  title            TEXT NOT NULL,
-  subtitle         TEXT,
-  tone             TEXT NOT NULL DEFAULT 'default',  -- reuses the TimelineTone vocabulary — never a new color system
-  priority_tier    SMALLINT,
-  occurred_at      TIMESTAMPTZ NOT NULL,              -- when it became feed-worthy (sort anchor for "active" views)
-  meta             JSONB,                             -- small per-domain extras only (PO#, tracking-last-4); never the whole row
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE feed_memberships (
+  id                     BIGSERIAL PRIMARY KEY,
+  organization_id        UUID NOT NULL,
+  feed_key               TEXT NOT NULL,          -- e.g. 'receiving_triage', 'fba_outbound'
+  entity_type            TEXT NOT NULL,
+  entity_id              BIGINT NOT NULL,
+
+  -- Studio/graph linkage (denorm for efficiency; SoT is item_workflow_state + node_surfaces)
+  workflow_definition_id INTEGER,
+  node_id                TEXT,
+
+  state                  TEXT NOT NULL DEFAULT 'active',
+  priority_tier          SMALLINT,
+  occurred_at            TIMESTAMPTZ NOT NULL,
+  title                  TEXT NOT NULL,
+  subtitle               TEXT,
+  tone                   TEXT NOT NULL DEFAULT 'default',
+  meta                   JSONB,
+
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-DO $$ BEGIN
-  ALTER TABLE feed_links ADD CONSTRAINT feed_links_entity_type_chk
-    CHECK (entity_type IN (
-      'RECEIVING', 'RECEIVING_LINE',
-      'FBA_SHIPMENT', 'FBA_SHIPMENT_ITEM',
-      'REPAIR_SERVICE', 'UNIT_REPAIR', 'WARRANTY_CLAIM',
-      'ORDER'
-    ));
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-CREATE UNIQUE INDEX IF NOT EXISTS ux_feed_links_natural
-  ON feed_links (organization_id, feed_key, entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_feed_links_feed
-  ON feed_links (organization_id, feed_key, state, priority_tier, occurred_at DESC);   -- the actual sidebar query
-CREATE INDEX IF NOT EXISTS idx_feed_links_entity
-  ON feed_links (organization_id, entity_type, entity_id);                            -- reverse lookup for Studio counts
-
--- Parent-delete integrity: a shared dispatch-on-TG_ARGV[0] trigger family, one CREATE TRIGGER per entity_type's
--- real parent table (receiving, receiving_lines, fba_shipments, fba_shipment_items, repair_service, unit_repairs,
--- warranty_claims, orders), mirroring fn_delete_photos_on_parent_delete(). See §5.
-
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'enforce_tenant_isolation') THEN
-    PERFORM enforce_tenant_isolation('feed_links');
-  END IF;
-END $$;
+-- org-led unique + hot indexes; enforce_tenant_isolation('feed_memberships');
+-- delete triggers on master parents
 ```
 
-This matches `.claude/rules/polymorphic-tables.md` point-for-point: `entity_type`/`entity_id` naming, BIGINT id,
-org-led unique + index, named CHECK discriminator, tenant-from-birth. `feed_key` is a **second discriminator axis**,
-the same role `photo_entity_links.link_role` plays — it's what lets one entity independently belong to more than one
-feed later (e.g. a receiving line in `receiving_triage` today, and in a Studio-surfaced `gaps` feed tomorrow) without
-a schema change.
+### 2.2 `staff_rail_exclusions` (per-staff per-station personal dismiss layer)
+```sql
+CREATE TABLE staff_rail_exclusions (
+  id              BIGSERIAL PRIMARY KEY,
+  organization_id UUID NOT NULL,
+  staff_id        INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  station         VARCHAR(20) NOT NULL,
+  feed_key        TEXT NOT NULL,
+  entity_type     TEXT NOT NULL,
+  entity_id       BIGINT NOT NULL,
+  excluded_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- org + staff + station + feed_key + entity unique; enforce + indexes for
+-- fast "base minus my exclusions" per staff/station
+```
 
-**Why `state` is free TEXT governed in code, not a DB CHECK:** the valid state vocabulary differs per `feed_key`
-(receiving's is `NEEDS_MATCH|ACTIVE|DONE`; a future feed might only need `ACTIVE|RESOLVED`). This mirrors
-`receiving_line_facts.fact_kind`, which is exactly the same shape of problem and is already solved the same way — a
-per-key registry validates the value at write time (§4), not a database-level enumeration.
+### 2.3 `entity_signals` (structured "why" — the AI's primary read substrate)
+```sql
+CREATE TABLE entity_signals (
+  id                     BIGSERIAL PRIMARY KEY,
+  organization_id        UUID NOT NULL,
+  entity_type            TEXT NOT NULL,
+  entity_id              BIGINT NOT NULL,
+  signal_kind            TEXT NOT NULL,           -- 'return_reason', 'buyer_note', 'exception_why', 'test_fail_reason', ...
+  reason_code            TEXT,
+  notes                  TEXT,
+  severity               SMALLINT,
+  occurred_at            TIMESTAMPTZ NOT NULL,
+  workflow_definition_id INTEGER,
+  node_id                TEXT,
+  source_ref             TEXT,                    -- external natural key for idempotent derivation
+                                                  -- (platform message/note id, or sha of order-id+note
+                                                  -- text when the platform gives no id); NULL for
+                                                  -- internal chokepoint emitters
+  meta                   JSONB,
+  notes_tsv              tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(notes,'') || ' ' || coalesce(reason_code,''))) STORED,
 
-**Why bulk-delete stays cheap long-term:** `feed_links` is a *working-set* table, not a log — a row exists only while
-something is outstanding. Its size is bounded by "how much is currently active across every domain," not by history.
-That is the opposite growth shape from `ops_events`/`inventory_events` (which are the actual partitioning candidates
-in this schema, not this table). Org-led keys mean a future `PARTITION BY organization_id` is a no-op if it's ever
-needed, but nothing about this table's expected size argues for it now.
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- org-led indexes for per-node aggregates + (org, node_id, signal_kind, reason_code);
+-- GIN on notes_tsv; enforce + CHECK/registry on signal_kind; also emit to ops_events
+-- Idempotency for derived/external signals:
+--   CREATE UNIQUE INDEX ux_entity_signals_source_ref
+--     ON entity_signals (organization_id, signal_kind, source_ref)
+--     WHERE source_ref IS NOT NULL;
+-- Emission is INSERT ... ON CONFLICT DO NOTHING — fresh path, heal sweep, and
+-- backfills are all free no-ops on rows already emitted.
+```
+
+**Day-one emitters (all four, locked):** returns/warranty reasons (incl. `linkReturnedSerial`
+context), receiving exceptions + triage outcomes, tech test-fail reasons (via `recordTestVerdict`
++ governed reason_codes), buyer notes/messages from the eBay/Amazon order sync connectors —
+the last one via the **mirror-derivation standard** below, never inline in a connector.
+
+#### Emitter standard: two classes, one contract
+
+- **Internal chokepoint emitters** (returns/warranty, receiving exceptions, test-fail): call
+  `recordEntitySignal` inside the existing domain chokepoint transaction. `source_ref` NULL;
+  idempotency rides the chokepoint's own guarantees (clientEventId / event-gated).
+- **External-source emitters** (buyer notes, and any future platform-derived signal): **signals
+  are a projection of the local mirror, never a side-effect of the connector.**
+
+  > **Correction (2026-07-03, Phase 0 scouting):** the marketplace-order mirror is the legacy
+  > **`orders`** table (INTEGER PK; eBay sync writes it via `createOrUpdateOrderFromEbayTracking`,
+  > `src/lib/ebay/sync.ts`), **not `sales_orders`** as sketched below — `sales_orders` is the
+  > Zoho-side mirror with a UUID PK and is never touched by the eBay sync. Verified: eBay's
+  > Fulfillment `getOrders` response carries `buyerCheckoutNotes` but the sync currently drops it
+  > and there is no payload jsonb to recover it from, so Phase 1's "verify the fields land"
+  > becomes a minimal mirror extension (an `orders.buyer_note` column persisted by the sync).
+  > `entity_signals.entity_type='ORDER'` therefore anchors `orders.id`. Also note the eBay sync
+  > is exceptions-first (only orders whose tracking matches an open `orders_exceptions` row),
+  > so day-one buyer-note coverage is scoped to those orders until the sync widens.
+
+  1. *Connectors stay dumb* — sync keeps upserting into the mirror (`orders`; see correction
+     above); the only connector-side task is verifying the note/message fields actually land in
+     the mirrored row (read-mostly verification, not new sync logic).
+  2. *Derivation emits from the mirror* via `recordEntitySignal`, on two triggers (the Nextiva
+     webhook-realtime + catch-up-poll split): a **fresh path** — fire-and-forget hook in the sync
+     orchestrator after upsert, `tapWorkflow` semantics (best-effort, never fails a sync) — and a
+     **heal path** — a nightly reconcile sweep under `withCronLock` re-scanning recently-synced
+     mirror rows and emitting anything missed. Signals derive from a local table, so the sweep
+     needs no API calls, the system is self-healing (drift cannot accumulate), and a full
+     backfill is just the sweep over a wider date range.
+  3. *Idempotency* via `source_ref` + the partial unique index above; double-emission between
+     fresh and heal paths is structurally impossible.
+  4. *Tenancy*: derivation writes through `withTenantTransaction` with the org from the sync
+     connection — never inferred from the payload.
+  5. *Rollout*: each external emitter is gated per-tenant via `resolveForOrg`.
+  6. *No interpretation at ingest*: buyer notes land raw as `signal_kind='buyer_note'`; semantic
+     bucketing into `reason_code` is the later Jetson classifier's job, never Phase 1 scope.
+
+**Platform sequencing:** **eBay first.** Amazon buyer notes are PII behind SP-API restricted data
+tokens (RDT) — real approval latency — so Amazon buyer-note ingestion is a fast-follow behind the
+same derivation module, and Phase 1 never stalls on it (the three internal emitters carry zero
+connector risk).
+
+### 2.4 `node_surfaces` (Studio graph ↔ rails/surfaces linkage)
+```sql
+CREATE TABLE node_surfaces (
+  id                     BIGSERIAL PRIMARY KEY,
+  organization_id        UUID NOT NULL,
+  workflow_definition_id INTEGER NOT NULL,
+  node_id                TEXT NOT NULL,
+  feed_key               TEXT NOT NULL,
+  role                   TEXT NOT NULL DEFAULT 'inbox',
+  config                 JSONB NOT NULL DEFAULT '{}'
+);
+```
+
+### 2.5 `insight_links` (seeded + anonymized benchmarks/comparisons)
+```sql
+CREATE TABLE insight_links (
+  id              BIGSERIAL PRIMARY KEY,
+  organization_id UUID,                     -- NULL for global/seeded benchmarks
+  linkage_type    TEXT NOT NULL,            -- 'industry_benchmark', 'power_user_comparison', 'suggestion_seed'
+  subject_kind    TEXT NOT NULL,            -- 'node_type', 'feed_key', 'signal_kind'
+  subject_ref     TEXT,
+  metrics         JSONB,
+  source          TEXT NOT NULL,            -- 'seeded' | 'anonymized_agg'
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+Phase 1: hand-author seeded rows for the used-electronics-reseller vertical (test-fail %, return %,
+receive→list days) so `/operations` and the assistant can answer "you vs typical" day one.
+
+### 2.6 `agent_mutations` + `agent_mutation_affects` (AI proposals, atomic apply, learning)
+```sql
+CREATE TABLE agent_mutations (
+  id                BIGSERIAL PRIMARY KEY,
+  organization_id   UUID NOT NULL,
+  proposed_by_staff_id INTEGER,              -- real staff or null for pure AI
+  ai_chat_session_id TEXT REFERENCES ai_chat_sessions(id),
+  status            TEXT NOT NULL DEFAULT 'proposed',  -- proposed | under_review | approved | applied | rejected | reverted
+  mutation_kind     TEXT NOT NULL,
+  payload           JSONB,
+  review_notes      TEXT,
+  applied_by        INTEGER,
+  applied_at        TIMESTAMPTZ,
+  extra_audit       JSONB,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE agent_mutation_affects (
+  id                 BIGSERIAL PRIMARY KEY,
+  organization_id    UUID NOT NULL,
+  agent_mutation_id  BIGINT NOT NULL REFERENCES agent_mutations(id) ON DELETE CASCADE,
+  target_kind        TEXT NOT NULL,          -- 'staff', 'workflow_node', 'feed_membership', 'entity_signal', 'node_surface', ...
+  target_ref         TEXT NOT NULL,          -- canonical ref or composite key
+  role_in_mutation   TEXT
+);
+```
+
+**Trust list (day one, locked):** auto-apply = view-layer only (`staff_rail_exclusion.*`,
+`feed_membership.state`, `entity_signal.insert`, `node_surface.config`). Review-gated = anything
+touching masters (`staff.create`, `workflow.edge/node`, status transitions). Every apply →
+guarded helpers inside one transaction + `recordAudit` + ops_event + Ably. Draft-scoped graph edits
+apply to the draft without review (the draft is itself the safety layer; publish is the gate).
+
+**Key properties across all tables** (unchanged): second discriminator axes validated in app-layer
+registries (not rigid enums); bounded working sets (history lives in domain spines + ops_events);
+org-led keys enable future `PARTITION BY LIST (organization_id)`; additive evolution = data not
+migrations.
 
 ---
 
-## 3. Feed #1, exactly: `receiving_triage`
+## 3. The AI layer (new — the heart of the v2 plan)
 
-This is the concrete, verified mapping — not a guess. Today, the four triage sidebar views are backed by three
-**structurally unrelated** sources, confirmed by reading the actual fetchers (`src/lib/receiving/rail/feeds.ts`) and
-routes:
+### 3.1 Read-tool registry
+A registry of small, typed, org-scoped, Deps-injectable read tools — the AI's eyes:
 
-| Today's view | Today's actual source | Membership rule |
+- `get_signals_by_node(node_id, kind?, range?)`, `get_top_reasons(scope, range)` — entity_signals aggregates
+- `get_unit_journey(serial|ref)` — item_workflow_state + ops_events + timeline spines
+- `get_feed_state(feed_key, staff?, station?)` — memberships minus exclusions
+- `get_graph(definition_id)` / `get_node_detail(node_id)` — workflow definition + live positions
+- `get_benchmarks(subject_kind, subject_ref)` — insight_links
+- `get_kpis(range)` — org-scoped operations analytics
+- `search_notes(query)` — tsvector full-text over signals
+- `get_mutation_history(...)`, `get_chat_history(...)` — the AI reading its own past
+
+Same discipline as the workflow/facts registries: adding a capability = registering a tool, no
+migration. This registry is later exposed via **MCP** for power users/external agents — same tools,
+second transport.
+
+### 3.2 Server agent loop
+`POST /api/assistant/*` — withAuth-gated, org-scoped; Claude API tool-use loop over the registry;
+persists turns to `ai_chat_sessions`/`ai_chat_messages`; emits `agent_mutations` when the user asks
+for a change; streams UI tool calls (below) to the client.
+
+### 3.3 App-shell assistant + client tools
+`AssistantProvider` in the root layout (see §-2): right dock everywhere (chat + AI-edits tray),
+`useAssistantContext` registry hook for page/station/selection context and per-page skill
+fragments, and a **client-executed UI tool namespace**: `navigate(path, params)` (URL-as-state
+makes every surface reachable), `highlight(ref)`, `focus_node(id)`, `set_lens(lens)`,
+`set_zoom(z)`, `open_overlay(panel)`.
+
+### 3.4 Learning loop (phase 1 shape)
+Store everything (chats, mutations, affects, outcomes). Nightly cron aggregates entity_signals into
+insight_links trends ("top return reasons by node, 30d"). Accepted/rejected mutation stats per
+mutation_kind inform trust-list widening. No fine-tuning yet; when volume justifies it, the Jetson
+pipeline trains narrow classifiers (buyer-note → reason_code), never the orchestration layer.
+
+---
+
+## 4. AI-first Studio refactor (rides Phase 3)
+
+The Studio page is refactored from "editor with an inspector" to **"live process-flow display the
+AI drives"**:
+
+- **Canvas:** read-only live visualization (graph, item positions, surface occupancy via
+  feed_memberships + node_surfaces, signal heat via entity_signals, staff assignments). Lens/zoom
+  rules per `.claude/rules/display/monitor-and-canvas.md` unchanged (repaint overlays, never
+  crossfade the graph).
+- **Editing:** all structural editing via the assistant. AI edits apply to a **live draft**
+  instantly (canvas reacts over Ably). `NodeConfigForm` / `DecisionRulesEditor` / Library
+  drag-and-drop are removed from the primary UX; the merged dock keeps micro-tweaks (rename, one
+  config field) on the focused node.
+- **Dock:** the assistant dock **absorbs StudioInspector** — focused-node detail renders beneath
+  the chat; issues/diagnostics surface as AI-readable context. One right rail; no double aside.
+- **Testing:** **AI-narrated simulate + iterate** — reuse the existing Simulate panel (client-side
+  dry-run, zero engine writes); the AI pushes fake/sample units through the edited draft, narrates
+  the behavioral diff ("failed audio units now route to parts-harvest, not scrap"), flags
+  diagnostics, and the user iterates conversationally ("what else would improve throughput here?").
+- **Publish:** unchanged human gate — `studio.manage` + step-up auth + diagnostics gate. The AI can
+  request publish; it cannot perform it.
+- **Studio skill:** a registered prompt fragment (graph vocabulary, lens semantics, canvas-control
+  tools) — not a custom-trained model (§-2).
+
+---
+
+## 5. Example surface: receiving triage (unchanged semantics, later phase)
+
+- `feed_memberships` (`feed_key='receiving_triage'`) = shared default "all".
+- `staff_rail_exclusions` = per-staff per-station dismiss (non-destructive).
+- Transitions (NEEDS_MATCH ↔ ACTIVE ↔ DONE) = state flips on memberships.
+- `receiving.pairing_state` / `triage_complete` remain SoT; memberships are projection.
+- History = separate domain-linked pages over the receiving spine + ops_events + entity_signals
+  (date/time + full-text), one Monitor variant, one Workbench variant.
+
+---
+
+## 6. Sync, chokepoints, and the apply path
+
+**Shared surfaces** (`feed_memberships`, `entity_signals`, `node_surfaces`): app-level
+write-through from domain chokepoints; registries per surface kind; `syncFeedMembership`,
+`recordEntitySignal` etc. Deps-injectable and DB-free unit-testable.
+
+**Personal layer:** dismiss = insert exclusion; restore = delete exclusion. Very cheap.
+
+**Agent mutations:** AI (or user via AI) creates the proposal row (linked to the chat session) +
+lean affects rows → trusted kinds auto-apply / draft-scoped graph edits apply to draft /
+master-touching kinds await review → atomic transaction through guarded helpers (real staff
+creation, workflow updates, signal inserts, membership/exclusion changes) → ops_event + extra
+audit + Ably → canvas/dock react live.
+
+All writes flow through existing chokepoints (`applyTransition` for status/graph, dedicated
+helpers for staff/surfaces) so `item_workflow_state` + `ops_events` stay the SoT. Parent-delete
+integrity via the established trigger family on master parents.
+
+---
+
+## 7. Rollout — the AI-first phased roadmap (supersedes v1 §7 ordering)
+
+**Phase 0 — Schema wave.** Author the full lean table family in one migration wave
+(`db-migration-author`): CHECKs, org-led indexes, enforce_tenant_isolation, delete triggers,
+Drizzle models same PR. Plus the kind catalog / canonical-ref registry module.
+
+**Phase 1 — AI read substrate.**
+Wire `entity_signals` from all four emitters: the three internal chokepoints (returns/warranty,
+receiving exceptions/triage, tech test-fail) plus buyer notes via the **mirror-derivation
+standard** (§2.3 — connector verification only, derivation module + fresh hook + nightly heal
+sweep, `source_ref` idempotency, eBay first / Amazon behind RDT as fast-follow). Build the typed
+read-tool registry (§3.1) with DB-free unit tests. Seed `insight_links` for the reseller vertical.
+Surface "you vs typical" on /operations.
+
+**Phase 2 — Global English assistant.**
+`AssistantProvider` + dock + `useAssistantContext` + per-page skill fragments. Server agent loop
+(Claude API) over the read tools, persisted to ai_chat_sessions. Client UI tools
+(navigate/highlight). Read/explain only — no writes yet. (Mind the F2 scan-hotkey collision; the
+assistant binds cmd-K-style keys only.)
+
+**Phase 3 — AI write path + AI-first Studio refactor (together).**
+`agent_mutations` apply chokepoint with the view-layer trust list; draft-scoped graph editing;
+Studio refactor lands here: dock absorbs inspector, manual structural editing demoted,
+canvas-control tools, AI-narrated simulate loop, Ably-live draft reactions. Publish gate unchanged.
+
+**Phase 4 — Operator rails cutover.**
+Backfill shared memberships for receiving triage (+ other known queues); cut sidebars over to
+memberships minus exclusions; bulk actions target the exclusion table (reuse SelectionActionBar).
+The rails are now also the first surfaces the AI visibly manipulates for operators.
+
+**Phase 5 — Learning loop + history pages + onboarding.**
+Nightly signal→insight_links aggregation cron; mutation accept/reject stats → trust-list widening.
+The two domain-linked history pages (Monitor timeline + Workbench list/inspector, date/time +
+full-text). Template-first onboarding: seeded reseller-flow template + AI conversational refinement
+for new tenants. MCP exposure of the tool registry for power users.
+
+**Later:** Redis hot paths (comprehensive caching plan), anonymized cross-org benchmark
+aggregation (multi-tenant), generative "describe your business → full graph" onboarding, narrow
+fine-tuned classifiers on the Jetson pipeline.
+
+Verification per phase: preserve existing e2e; add targeted tests for signal emitters +
+aggregates, tool registry (DB-free), agent_mutations apply/revert, per-staff exclusions, realtime
+reactions, simulate narration parity.
+
+---
+
+## 8. Open / product questions (post-interview residue)
+
+- ~~Exact initial `mutation_kind` vocabulary + the canonical-ref grammar (one page spec before Phase 0).~~
+  **RESOLVED 2026-07-03 — see §10 below; executable SoT is `src/lib/surfaces/registry.ts` +
+  `src/lib/surfaces/canonical-ref.ts` (guard-tested).**
+- Concrete seeded `insight_links` rows (metrics shapes for the reseller vertical).
+- How "station" context is carried in feed_key vs. separate column/node for personal-view queries.
+- Assistant dock interaction details on mobile (`/m/*`) — dock vs bottom sheet.
+- History page default filters/date ranges per domain.
+- When (and whether) per-tenant trust configuration graduates into the settings registry.
+
+Everything else — AI-first interaction model, build order, trust list, signal emitters, runtime,
+Studio refactor shape, dock merge, testing loop, onboarding posture, naming, additive strategy —
+is locked per §-2 and §-1.
+
+---
+
+## 9. References & related
+
+- `.claude/rules/polymorphic-tables.md` (the contract — all new tables obey it point-for-point).
+- `.claude/rules/backend-patterns.md`, `.claude/rules/contextual-display.md`, `.claude/rules/display/*`.
+- Existing spines: `ops_events`, `item_workflow_state`, receiving_line_facts,
+  `ai_chat_sessions`/`ai_chat_messages`, `staff` + `staff_roles` + `staff_stations`, workflow
+  nodes/edges/definitions, `reason_codes`.
+- Plans: `schema-wide-polymorphic-refactor-plan.md`, `polymorphic-tables-database-refactor-plan.md`,
+  ops-studio docs, reseller-flow skill.
+- Code reads: receiving rails/feeds, workflow applyTransition + tap, Studio
+  flow-metrics/definitions/Simulate panel, staff admin surfaces, scan-hotkey registry pattern
+  (`src/lib/scan-hotkey/store.ts` — the model for `useAssistantContext`), order-sync connectors
+  (buyer-note ingestion points).
+- Reusable: RecentActivityRailBase + SelectionActionBar, registries (workflow/facts), atomic apply
+  chokepoints, URL-as-state house rules (the navigation-tool payoff).
+
+---
+
+## 10. mutation_kind spec (Phase 0 resolution of §8's first open question — 2026-07-03)
+
+Executable SoT: `src/lib/surfaces/registry.ts` (`MUTATION_KINDS`, guard-tested by
+`src/lib/surfaces/registry.test.ts`, which pins the auto-apply list — widening it is a deliberate,
+reviewed edit to both files). This section is the human-readable contract.
+
+### Trust classes
+
+| Class | Behavior | Safety layer |
 |---|---|---|
-| **Triage** (combined, default) | Union of the two rows below, deduped on `receiving_id`, matched preferred | — |
-| **Prioritize** (`TriageRecentRail`) | `GET /api/receiving-lines?view=scanned&sort=priority`, client `postFilter: notUnmatched` | `receiving_source !== 'unmatched'`, sorted by `RECEIVING_PRIORITY_RANK_SQL` over `receiving.priority_tier` |
-| **Unfound** (`TriageUnfoundList`) | `GET /api/receiving/unfound-queue?kind=unmatched_receiving&checked=false` | reads `v_unfound_queue` view, `kind='unmatched_receiving' AND checked=false` |
-| **Done** (`TriageDoneList`) | `GET /api/receiving/triage/done` | `receiving.triage_complete = true`, ordered by `receiving.triage_completed_at DESC` |
+| `auto` | Applies immediately in `applyAgentMutation`, no review. **View-layer only** (§-2 locked). | Projection tables only — never touches masters; every apply still gets recordAudit + ops_event + Ably. |
+| `draft_scoped` | Applies immediately **to a workflow DRAFT** (`is_active = FALSE` version). | The draft itself: publish stays the human gate (step-up + diagnostics). Revert = `status='reverted'` + inverse edit on the draft. |
+| `review` | Lands as `status='proposed'`; a human approves/applies via the review queue. | Human review; applies through the same guarded helpers. |
 
-Two things worth naming explicitly because they change the design:
+### Day-one kinds
 
-1. **All four operate at carton grain** (`receiving`, not `receiving_lines`) — the combined feed dedups on
-   `receiving_id`, and Prioritize's own priority computation joins to `receiving` for `priority_tier`. So feed #1's
-   rows are `entity_type='RECEIVING'`, not a mix with `RECEIVING_LINE`.
-2. **Unfound → Prioritize is already a real, first-class transition** in the current code (`TriageUnfoundList.tsx`'s
-   own doc comment: *"Rows auto-drop once Zoho syncs the PO or the operator links one manually"*; the combined-feed
-   dedup logic explicitly encodes it). There's also an already-migrated but **currently unused** `receiving.pairing_state`
-   column (`UNFOUND|MATCHED|WAIVED`, `2026-07-01b_receiving_triage_columns.sql`) that none of the three fetchers
-   actually query yet — this plan is the thing that finally gives it a job.
+| mutation_kind | Trust | target_kind | Payload sketch |
+|---|---|---|---|
+| `staff_rail_exclusion.insert` | auto | `staff_rail_exclusion` | `{ staffId, station, feedKey, entityType, entityId }` |
+| `staff_rail_exclusion.delete` | auto | `staff_rail_exclusion` | `{ staffId, station, feedKey, entityType, entityId }` |
+| `feed_membership.set_state` | auto | `feed_membership` | `{ feedKey, entityType, entityId, state }` (state ∈ active\|needs_match\|done) |
+| `entity_signal.insert` | auto | `entity_signal` | `recordEntitySignal` input (registry-validated signal_kind) |
+| `node_surface.set_config` | auto | `node_surface` | `{ nodeSurfaceId, configPatch }` |
+| `workflow_draft.add_node` | draft_scoped | `workflow_node` | `{ definitionId, node: { id?, type, x?, y?, config } }` |
+| `workflow_draft.remove_node` | draft_scoped | `workflow_node` | `{ definitionId, nodeId }` (removes its edges too) |
+| `workflow_draft.update_node_config` | draft_scoped | `workflow_node` | `{ definitionId, nodeId, configPatch }` |
+| `workflow_draft.add_edge` | draft_scoped | `workflow_edge` | `{ definitionId, source, sourcePort, target }` (one port → one target) |
+| `workflow_draft.remove_edge` | draft_scoped | `workflow_edge` | `{ definitionId, edgeId }` |
+| `workflow_draft.set_annotations` | draft_scoped | `workflow_definition` | `{ definitionId, annotations }` |
+| `node_surface.create` | draft_scoped | `node_surface` | `{ definitionId, nodeId, feedKey, role, config }` (draft definitions only) |
+| `node_surface.delete` | draft_scoped | `node_surface` | `{ nodeSurfaceId }` (draft definitions only) |
+| `staff.create` | review | `staff` | `{ name, roleIds, stationKeys, … }` → real `staff` + `staff_roles` + `staff_stations` rows (§-1 Q1) |
+| `staff.assign_station` | review | `staff` | `{ staffId, stationKeys }` |
+| `reason_code.create` | review | `reason_code` | `{ flowContext, code, label, … }` |
+| `setting.update` | review | `setting` | `{ key, value }` (settings-registry key) |
 
-**Target mapping — one feed, three states, filtered client-side by the existing views:**
+Deliberately **not** offered day one: `feed_membership.create/delete` (the sync layer's job — the
+AI flips state, it does not fabricate feed rows), `workflow.publish` (never a mutation kind — the
+AI may *request* publish, only a human performs it), and any `serial_unit.*` status transition
+(status changes stay behind `transition()`/`applyTransition()`; exposing them to the agent is a
+later, separately-reviewed decision).
 
-| `feed_links.state` | Replaces | Set when |
-|---|---|---|
-| `NEEDS_MATCH` | `v_unfound_queue` membership | carton arrives with no PO match, or `pairing_state='UNFOUND'` |
-| `ACTIVE` | `view=scanned` + `notUnmatched` filter | carton matches a PO (`pairing_state` flips to `MATCHED`) |
-| `DONE` | `receiving.triage_complete = true` | `receiving.triage_complete` flips true |
+### Canonical-ref grammar (Q11, now pinned)
 
-- **Triage (combined)** = `feed_key='receiving_triage' AND state IN ('NEEDS_MATCH','ACTIVE')`, sorted by
-  `priority_tier`/`occurred_at` — replaces the client-side union+dedup entirely with one indexed query.
-- **Prioritize** = `... AND state='ACTIVE'`.
-- **Unfound** = `... AND state='NEEDS_MATCH'`.
-- **Done** = `... AND state='DONE'`, sorted by `updated_at DESC` (the state flip timestamp stands in for
-  `triage_completed_at`).
-- A `checked=true` unfound row (reviewed but still unmatched, today silently excluded from the unfound query) maps to
-  an explicit bulk-delete or a fourth state if you want it visible somewhere — **flagged as a real product decision,
-  not resolved here** (see §8).
+`src/lib/surfaces/canonical-ref.ts`. Two forms, `:`-separated lower_snake segments:
 
-**Important: transitions between these states are UPDATEs, not deletes.** The sync helper (§4) flips `state` (and
-recomputes `tone`/`priority_tier`) when `receiving.pairing_state`/`triage_complete` change on the source row. **Only
-an explicit user bulk-delete action removes the `feed_links` row.** This preserves today's actual UX (Done items stay
-visible right after completing, they don't vanish) while still keeping "delete" a true non-destructive unlink, per the
-locked-in decision in §1. `receiving.pairing_state` and `receiving.triage_complete` remain the source of truth on the
-carton; `feed_links` is a synced projection for feed display and filtering, not a replacement for them (at least
-initially — collapsing the source columns into `feed_links` outright is a separate, later decision, not part of this
-plan).
+- **Axis form** `<table>:<axis>:<value>:entity:<id>` — a row scoped by a vocabulary axis, e.g.
+  `feed_memberships:feed_key:receiving_triage:entity:123`.
+- **Entity form** `<table>:entity:<id>` — a direct row ref, e.g. `serial_units:entity:9041`.
+  TEXT-keyed rows use the raw id string (e.g. `workflow_nodes:entity:n-<uuid>`).
 
----
+`agent_mutation_affects.target_ref` always holds one of these; `parseCanonicalRef` never throws.
 
-## 4. Sync mechanism
+### Widening protocol
 
-Each domain's projection logic (what counts as `title`, when `state` changes) is a business decision, not a generic
-SQL shape — receiving's rules aren't FBA's rules. Per the existing thesis ("share chokepoints, not decision logic"),
-this is an **app-level write-through**, not one big trigger:
-
-- `src/lib/feed/registry.ts` — `feed_key → { entityTypes, states: string[], project(source) => { title, subtitle, tone, priorityTier, state, occurredAt, meta } }`. Mirrors `src/lib/workflow/registry.ts` and `src/lib/receiving/facts/registry.ts` exactly.
-- `src/lib/feed/sync.ts` — `syncFeedLink(orgId, feedKey, entityType, entityId)` (looks up the registry's `project()`,
-  upserts the row) and `unlinkFeedEntry(orgId, feedKey, entityType, entityId)` (used by parent-delete triggers and by
-  the bulk-delete route). Deps-injected per `backend-patterns.md`, DB-free unit-testable.
-- Each domain's **existing** write chokepoint calls `syncFeedLink` as an `after()` side-effect — for receiving, that's
-  wherever `pairing_state`/`priority_tier`/`triage_complete` are written today (the retry-pair handler, the Zoho match
-  writer, the triage-complete route). No new writer paths are introduced; the sync call rides along the existing ones.
-- **Parent-delete integrity** (contract point 5): one shared `fn_delete_feed_links_on_parent_delete()` function,
-  dispatched via `TG_ARGV[0]`, with one `CREATE TRIGGER` per real parent table (`receiving`, `receiving_lines`,
-  `fba_shipments`, `fba_shipment_items`, `repair_service`, `unit_repairs`, `warranty_claims`, `orders`) — mirrors
-  `fn_delete_photos_on_parent_delete()`'s six-trigger family. Defense-in-depth for the rare physical-delete case;
-  the common "item is done/gone" case is already handled by the state-flip sync above.
+A kind's trust class widens (review → draft_scoped → auto) only when its accepted/rejected stats
+(from `agent_mutations`) justify it, via a PR that updates `MUTATION_KINDS` **and** the pinned
+list in `registry.test.ts` together. Per-tenant trust config is a later upgrade (§8) — the
+registry is global for now.
 
 ---
 
-## 5. Entity vocabulary
-
-Day-one `entity_type` CHECK values, one feed_key (`receiving_triage`) fully specified, three feed_keys sketched as
-placeholders (their exact state machines need the same fact-finding pass §3 did for receiving before they're built):
-
-| `entity_type` | Real parent table | `feed_key` it's expected to serve |
-|---|---|---|
-| `RECEIVING` | `receiving` | `receiving_triage` (fully specified, §3) |
-| `RECEIVING_LINE` | `receiving_lines` | reserved — not used by `receiving_triage` per the carton-grain finding in §3; available for a future line-grain feed |
-| `FBA_SHIPMENT`, `FBA_SHIPMENT_ITEM` | `fba_shipments`, `fba_shipment_items` | `fba_queue` (placeholder — needs its own §3-style pass before building) |
-| `REPAIR_SERVICE`, `UNIT_REPAIR`, `WARRANTY_CLAIM` | `repair_service`, `unit_repairs`, `warranty_claims` | `repair_queue` (placeholder) |
-| `ORDER` | `orders` | `order_exceptions` (placeholder) |
-
-**Do not build the FBA/repair/order feed_keys' state machines by inference from this table alone** — §3 only came out
-correctly *because* the actual fetchers were read first (the naive guess going in, "state = which entity_type," was
-wrong). Each new `feed_key` needs the same treatment: read the real current queue-membership logic before designing
-its `state` vocabulary and registry entry.
-
----
-
-## 6. Sidebar & Studio integration
-
-- **Sidebar:** `GET /api/feed/[feedKey]?state=...` returns denormalized rows directly — one indexed query, no
-  per-domain fan-out join. A generic `FeedRail` wraps `RecentActivityRailBase` (same "compose, never fork" rule the
-  existing triage rails already follow) and becomes the shared engine for receiving triage today, and the FBA/repair/
-  order queues later — each domain supplies only its row renderer, exactly like the current six receiving rails do.
-  Bulk-delete wires into the **existing** `SelectionActionBar`/`useRailEditMode` mechanism already built for triage
-  (`ReceivingBulkActionBar`, `handleRailBulkDelete`) — that UI does not change; only what its delete call hits changes,
-  from whatever it hits today to `DELETE /api/feed/[feedKey]/links`.
-- **Studio (read-only):** the inspector/gaps lens adds a count tile per node by joining `feed_links` on
-  `entity_type`/`feed_key` — e.g. "14 unresolved items routed through this node." No new node type. This is additive
-  to the existing diagnostics section in `StudioInspector.tsx`, not a new surface.
-
----
-
-## 7. Migration & rollout (clean cutover — pre-production posture confirmed)
-
-1. **Migration:** `feed_links` table + CHECK + indexes + `enforce_tenant_isolation` + the 8-parent delete-trigger
-   family, authored via the `db-migration-author` skill. Model in Drizzle in the same PR.
-2. **Code:** `src/lib/feed/registry.ts` + `sync.ts` (DB-free unit tests, Deps-injected) with the `receiving_triage`
-   entry fully implemented per §3.
-3. **Backfill:** one-time projection of current `receiving` rows into `feed_links` (`NEEDS_MATCH` from
-   `v_unfound_queue`, `ACTIVE` from the scanned+priority query, `DONE` from `triage_complete=true`), dry-run row-count
-   report.
-4. **Wire the sync calls** into receiving's existing pairing/priority/triage-complete writers.
-5. **Cut the sidebar over:** `TriageCombinedList`/`TriageRecentRail`/`TriageUnfoundList`/`TriageDoneList` read
-   `feed_links` filtered by `state` instead of their three separate sources; `handleRailBulkDelete` calls the new
-   unlink route.
-6. **Verify parity** (row-for-row) against the old three-source union before removing the old fetchers — do not
-   delete `v_unfound_queue`/the old `view=scanned` arm/`triage_complete` query until `feed_links` is proven at parity,
-   same discipline as the existing facts-spine dual-write→parity→cutover precedent.
-7. **FBA / repairs / orders** each get their own §3-equivalent research pass, then their own registry entry and rail —
-   not built blind from the placeholder table in §5.
-
-Gates: `npx tsc --noEmit`, `next build`, unit tests, and the receiving e2e specs, same as every other change to this
-surface.
-
----
-
-## 8. Open questions (deliberately not resolved here)
-
-- **The `checked=true` unfound row.** Today it's silently excluded from every view. Does it need a visible home in
-  the new model (a fourth state, e.g. `REVIEWED`), or does it stay invisible-until-matched-or-deleted? Needs a product
-  answer, not an architecture one.
-- **`pairing_state`/`triage_complete` consolidation.** This plan syncs `feed_links.state` FROM those columns; it
-  doesn't replace them. Worth revisiting once `feed_links` is live and proven — possibly `pairing_state` becomes the
-  only source of truth and `triage_complete` folds into it as a fourth enum value.
-- **`meta` jsonb schema validation.** No per-`feed_key` Zod schema on `meta` yet — deferred until a second `feed_key`
-  actually needs structured extras, same YAGNI default the facts registry started with.
-- **FBA / repair / order feed_key state machines** — genuinely unscoped; see §5's warning against inferring them from
-  this table.
-
----
-
-## 9. References
-
-- `.claude/rules/polymorphic-tables.md` — the contract this table follows.
-- `.claude/rules/backend-patterns.md` — chokepoints, `Deps` injection, audit.
-- `.claude/rules/contextual-display.md` + `.claude/rules/display/workbench.md` — the Workbench archetype rules this
-  sidebar work must stay inside (compose the rail, URL-addressable selection, crossfade the right pane only).
-- [`polymorphic-tables-database-refactor-plan.md`](./polymorphic-tables-database-refactor-plan.md) — the receiving
-  spine split this table's `entity_id` will need to repoint to, if/when that lands.
-- [`schema-wide-polymorphic-refactor-plan.md`](./schema-wide-polymorphic-refactor-plan.md) — reference contract,
-  Appendix A gap analysis, whole-schema picture.
-- Current-state code read for §3: `src/lib/receiving/rail/feeds.ts`, `src/components/sidebar/receiving/{TriageSidebarBody,TriageCombinedList,TriageRecentRail,TriageUnfoundList,TriageDoneList}.tsx`, `src/app/api/receiving/unfound-queue/route.ts`, `src/app/api/receiving/triage/done/route.ts`, `2026-07-01b_receiving_triage_columns.sql`.
-- Reusable primitives: `src/components/sidebar/receiving/ReceivingBulkActionBar.tsx` + `useRailEditMode.ts` (bulk-select UI, reused as-is), `src/components/sidebar/receiving/RecentActivityRailBase.tsx` (rail shell, reused as-is), `src/lib/photos/reassign-receiving-photo.ts` (the precedent for "update a link row, never the source record").
+**End of revised plan (v2).** The platform is AI-first and English-first: the read substrate and
+global assistant come before everything; the write path and the Stitch-style Studio land together;
+rails, history, and learning follow. Studio is a live preview the AI drives — never a system the
+user has to learn.

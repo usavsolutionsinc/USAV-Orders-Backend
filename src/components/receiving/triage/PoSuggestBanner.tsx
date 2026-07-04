@@ -19,7 +19,7 @@ export function PoSuggestBanner({ suggestions }: { suggestions: PoSuggestionsCon
 
   if (loading) {
     return (
-      <div className="mb-2 flex items-center gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+      <div className="mb-2 flex items-center gap-2 rounded-lg border border-dashed border-border-soft bg-surface-canvas px-3 py-2 text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         Checking for a tracking match…
       </div>
@@ -37,13 +37,13 @@ export function PoSuggestBanner({ suggestions }: { suggestions: PoSuggestionsCon
       {candidates.map((po) => (
         <div
           key={po.zoho_purchaseorder_id}
-          className="flex items-center gap-2 rounded-lg border border-emerald-200/70 bg-white px-3 py-2"
+          className="flex items-center gap-2 rounded-lg border border-emerald-200/70 bg-surface-card px-3 py-2"
         >
           <div className="min-w-0 flex-1">
-            <p className="truncate text-caption font-bold text-gray-900">
+            <p className="truncate text-caption font-bold text-text-default">
               {po.zoho_purchaseorder_number || `PO ${po.zoho_purchaseorder_id}`}
             </p>
-            <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+            <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
               {po.vendor_name || 'Unknown vendor'}
               {po.reference_number ? ` · ref ${po.reference_number}` : ''}
             </p>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 
 const VALID_STAGES = ['TECH', 'PACK', 'SHIP', 'ADMIN'] as const;
@@ -210,6 +211,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     if (!txResult.ok) return txResult.error;
 
     await invalidateCacheTags(['fba-logs']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaItemChanged({ action: 'scan', shipmentId: 0, source: 'fba.logs.create', organizationId: ctx.organizationId });
 
     return NextResponse.json(

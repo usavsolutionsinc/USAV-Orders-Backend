@@ -107,28 +107,28 @@ export default async function BulkAllocatePage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-canvas">
       <PageHeader backHref="/admin/inventory" title="Bulk allocate" maxWidth="6xl" />
       <div className="mx-auto max-w-6xl space-y-6 p-8">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-text-muted">
           Orders with a SKU and no open allocation. Click <em>Allocate</em> to reserve STOCKED units FIFO.
         </p>
 
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
-            <div className="text-sm text-gray-700">
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-3">
+            <div className="text-sm text-text-muted">
               <span className="font-semibold">{total.toLocaleString()}</span> order{total === 1 ? '' : 's'} awaiting allocation
-              {total > PAGE_SIZE ? <span className="text-gray-500"> · page {page + 1} of {totalPages}</span> : null}
+              {total > PAGE_SIZE ? <span className="text-text-soft"> · page {page + 1} of {totalPages}</span> : null}
             </div>
             {total > PAGE_SIZE ? (
               <nav className="flex items-center gap-2 text-sm">
                 {page > 0 ? (
-                  <Link href={`/admin/inventory/bulk-allocate?page=${page - 1}`} className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50">
+                  <Link href={`/admin/inventory/bulk-allocate?page=${page - 1}`} className="rounded border border-border-default px-3 py-1 hover:bg-surface-hover">
                     ← prev
                   </Link>
                 ) : null}
                 {page + 1 < totalPages ? (
-                  <Link href={`/admin/inventory/bulk-allocate?page=${page + 1}`} className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50">
+                  <Link href={`/admin/inventory/bulk-allocate?page=${page + 1}`} className="rounded border border-border-default px-3 py-1 hover:bg-surface-hover">
                     next →
                   </Link>
                 ) : null}
@@ -137,13 +137,13 @@ export default async function BulkAllocatePage({
           </header>
 
           {rows.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">
+            <p className="px-6 py-8 text-sm text-text-muted">
               Every non-shipped order with a SKU already has an open allocation. Nothing to do.
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <table className="min-w-full divide-y divide-border-hairline text-sm">
+                <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium">Order id</th>
                     <th className="px-4 py-2 text-left font-medium">Ext id</th>
@@ -154,20 +154,20 @@ export default async function BulkAllocatePage({
                     <th className="px-4 py-2 text-right font-medium">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border-hairline">
                   {rows.map((r) => {
                     const qty = Math.max(1, Math.floor(Number(r.quantity_str ?? '1') || 1));
                     const eligible = r.available_stocked >= qty;
                     return (
                       <tr key={r.order_id}>
                         <td className="px-4 py-2 font-mono text-xs">#{r.order_id}</td>
-                        <td className="px-4 py-2 font-mono text-xs text-gray-600">{r.order_id_text ?? '—'}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-text-muted">{r.order_id_text ?? '—'}</td>
                         <td className="px-4 py-2 font-mono text-xs">
                           <Link href={`/admin/inventory/sku/${encodeURIComponent(r.sku)}`} className="text-blue-600 hover:underline">
                             {r.sku}
                           </Link>
                         </td>
-                        <td className="px-4 py-2 text-xs text-gray-600">{r.condition ?? '—'}</td>
+                        <td className="px-4 py-2 text-xs text-text-muted">{r.condition ?? '—'}</td>
                         <td className="px-4 py-2 text-right text-sm">{qty}</td>
                         <td className={`px-4 py-2 text-right text-sm font-semibold ${
                           eligible ? 'text-green-700' : r.available_stocked > 0 ? 'text-amber-700' : 'text-red-700'
@@ -189,7 +189,7 @@ export default async function BulkAllocatePage({
                                 variant="primary"
                                 size="sm"
                                 disabled={!eligible}
-                                className={!eligible ? 'bg-gray-100 text-gray-400 hover:bg-gray-100' : undefined}
+                                className={!eligible ? 'bg-surface-sunken text-text-faint hover:bg-surface-sunken' : undefined}
                               >
                                 {eligible ? 'Allocate' : 'Insufficient'}
                               </Button>
@@ -205,10 +205,10 @@ export default async function BulkAllocatePage({
           )}
         </section>
 
-        <footer className="text-xs text-gray-500">
+        <footer className="text-xs text-text-soft">
           Allocation runs through the same code path as
-          <code className="mx-1 rounded bg-gray-100 px-1 py-0.5">POST /api/orders/[id]/allocate</code>
-          (<code className="rounded bg-gray-100 px-1 py-0.5">src/lib/inventory/allocate.ts</code>) — FIFO by
+          <code className="mx-1 rounded bg-surface-sunken px-1 py-0.5">POST /api/orders/[id]/allocate</code>
+          (<code className="rounded bg-surface-sunken px-1 py-0.5">src/lib/inventory/allocate.ts</code>) — FIFO by
           serial_units.id, locked via <code>FOR UPDATE SKIP LOCKED</code>, idx_oua_open_unit is the final guard
           against double-allocation.
         </footer>

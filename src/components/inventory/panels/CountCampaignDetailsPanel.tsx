@@ -57,7 +57,7 @@ export function CountCampaignDetailsPanel({ campaignId, onClose }: CountCampaign
             onClose={onClose}
         >
             {loading ? (
-                <div className="flex items-center justify-center py-16 text-gray-400">
+                <div className="flex items-center justify-center py-16 text-text-faint">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="ml-2 text-sm">Loading campaign…</span>
                 </div>
@@ -75,11 +75,11 @@ export function CountCampaignDetailsPanel({ campaignId, onClose }: CountCampaign
                         </div>
                         <div>
                             <p className={`${microBadge} text-blue-600`}>{campaign.status.replace(/_/g, ' ')}</p>
-                            <p className="text-sm text-gray-700">{campaign.name}</p>
+                            <p className="text-sm text-text-muted">{campaign.name}</p>
                         </div>
                     </header>
 
-                    <section className="rounded-xl border border-gray-200 bg-white">
+                    <section className="rounded-xl border border-border-soft bg-surface-card">
                         <div className="grid grid-cols-2 gap-4 px-5 py-4 text-sm">
                             <Field label="Zone" value={campaign.zone ?? '—'} />
                             <Field
@@ -96,8 +96,8 @@ export function CountCampaignDetailsPanel({ campaignId, onClose }: CountCampaign
                             />
                         </div>
                         {campaign.progress_pct != null ? (
-                            <div className="border-t border-gray-100 px-5 py-3">
-                                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                            <div className="border-t border-border-hairline px-5 py-3">
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-surface-sunken">
                                     <div
                                         className="h-full bg-blue-500 transition-all"
                                         style={{ width: `${Math.round(campaign.progress_pct * 100)}%` }}
@@ -107,9 +107,9 @@ export function CountCampaignDetailsPanel({ campaignId, onClose }: CountCampaign
                         ) : null}
                     </section>
 
-                    <section className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-5 py-4">
+                    <section className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-5 py-4">
                         <p className={sectionLabel}>Lines</p>
-                        <p className={`${microBadge} mt-1 text-gray-500`}>
+                        <p className={`${microBadge} mt-1 text-text-soft`}>
                             Per-line execution + approve/reject lands in Phase 5 via /api/inventory/counts/[id]/lines.
                         </p>
                     </section>
@@ -122,8 +122,8 @@ export function CountCampaignDetailsPanel({ campaignId, onClose }: CountCampaign
 function Field({ label, value }: { label: string; value: string }) {
     return (
         <div>
-            <dt className={`${microBadge} text-gray-500`}>{label}</dt>
-            <dd className="mt-0.5 text-gray-900">{value}</dd>
+            <dt className={`${microBadge} text-text-soft`}>{label}</dt>
+            <dd className="mt-0.5 text-text-default">{value}</dd>
         </div>
     );
 }

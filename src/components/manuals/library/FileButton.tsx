@@ -38,7 +38,7 @@ export function FileButton({
           ? 'border-indigo-300 bg-indigo-50/60 shadow-sm ring-1 ring-inset ring-indigo-200'
           : isSelected
             ? 'border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50/50 shadow-sm ring-1 ring-inset ring-blue-200'
-            : 'border-gray-200 bg-white shadow-sm hover:-translate-y-px hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-md active:translate-y-0 active:shadow-sm'
+            : 'border-border-soft bg-surface-card shadow-sm hover:-translate-y-px hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-md active:translate-y-0 active:shadow-sm'
       }`}
     >
       {/* Checkbox on the left — only rendered when the row is in the selection
@@ -68,7 +68,7 @@ export function FileButton({
           src={manual.thumbnail_url}
           alt=""
           className={`pointer-events-none relative mt-0.5 h-10 w-8 shrink-0 rounded-md object-cover ring-1 ring-inset ${
-            isSelected ? 'ring-blue-200' : 'ring-zinc-200 group-hover:ring-blue-100'
+            isSelected ? 'ring-blue-200' : 'ring-border-soft group-hover:ring-blue-100'
           }`}
         />
       ) : (
@@ -76,14 +76,14 @@ export function FileButton({
           className={`pointer-events-none relative mt-0.5 flex h-10 w-8 shrink-0 items-center justify-center rounded-md ring-1 ring-inset ${
             isSelected
               ? 'bg-blue-100 text-blue-600 ring-blue-200'
-              : 'bg-gray-50 text-gray-500 ring-gray-200 group-hover:bg-blue-50 group-hover:text-blue-500 group-hover:ring-blue-100'
+              : 'bg-surface-canvas text-text-soft ring-border-soft group-hover:bg-blue-50 group-hover:text-blue-500 group-hover:ring-blue-100'
           }`}
         >
           <FileText className="h-3.5 w-3.5" />
         </div>
       )}
       <div className="pointer-events-none relative min-w-0 flex-1">
-        <p className={`truncate text-label font-black leading-tight ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+        <p className={`truncate text-label font-black leading-tight ${isSelected ? 'text-blue-900' : 'text-text-default'}`}>
           {highlight ? <HighlightedText text={highlight.label} indices={highlight.indices} /> : title}
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -107,7 +107,7 @@ export function FileButton({
             e.stopPropagation();
             onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
           }}
-          className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-lg text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100 focus:opacity-100"
+          className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-lg text-text-faint opacity-0 transition-opacity hover:bg-surface-sunken hover:text-text-muted group-hover:opacity-100 focus:opacity-100"
           aria-label={`Select ${title} for bulk action`}
         >
           <Pencil className="h-3.5 w-3.5" />

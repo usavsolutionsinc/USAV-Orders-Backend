@@ -37,8 +37,8 @@ export function MobileRowCard({
       {...dataProps}
       className={`relative max-w-full overflow-x-hidden transition-all ${
         isExpanded
-          ? `${MOBILE_GUTTER_X} mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]`
-          : `flex w-full max-w-full flex-col border-b border-gray-100 bg-white ${MOBILE_GUTTER} py-3 transition-colors active:bg-blue-50`
+          ? `${MOBILE_GUTTER_X} mb-3 mt-2 rounded-2xl border border-blue-100 bg-surface-card p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]`
+          : `flex w-full max-w-full flex-col border-b border-border-hairline bg-surface-card ${MOBILE_GUTTER} py-3 transition-colors active:bg-blue-50`
       }`}
     >
       {/* Tap target for the row sheet / action. ds-raw-button: full-bleed row tap target, not a Button shape */}

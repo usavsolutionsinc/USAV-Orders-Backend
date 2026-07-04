@@ -70,17 +70,17 @@ export function MediaLibraryPickerFolders({
   if (isLeaf) {
     if (leafVisible.length === 0) {
       return (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center">
-          <p className="text-caption font-semibold text-gray-600">No photos here</p>
-          <p className="mt-1 text-micro text-gray-400">Try another folder or widen the date range.</p>
+        <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-8 text-center">
+          <p className="text-caption font-semibold text-text-muted">No photos here</p>
+          <p className="mt-1 text-micro text-text-faint">Try another folder or widen the date range.</p>
         </div>
       );
     }
     return (
       <div className="space-y-3">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
           {header.title}
-          <span className="ml-2 font-semibold text-gray-400">{leafVisible.length}</span>
+          <span className="ml-2 font-semibold text-text-faint">{leafVisible.length}</span>
         </p>
         <div className={photoGridLeafClass(gridDensity)}>
           {leafVisible.map((p) => {
@@ -94,7 +94,7 @@ export function MediaLibraryPickerFolders({
                 aria-pressed={on}
                 className={cn(
                   'ds-raw-button relative overflow-hidden rounded-lg border-2 transition',
-                  on ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-gray-300',
+                  on ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-border-default',
                 )}
               >
                 <PhotoThumb src={tile.imageUrl} alt={p.caption ?? ''} ratio={tile.ratio} />
@@ -113,18 +113,18 @@ export function MediaLibraryPickerFolders({
 
   if (tiles.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center">
-        <p className="text-caption font-semibold text-gray-600">No folders here</p>
-        <p className="mt-1 text-micro text-gray-400">Widen the date range or pick another media type.</p>
+      <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-8 text-center">
+        <p className="text-caption font-semibold text-text-muted">No folders here</p>
+        <p className="mt-1 text-micro text-text-faint">Widen the date range or pick another media type.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+      <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
         {header.title}
-        <span className="ml-2 font-semibold text-gray-400">{header.count}</span>
+        <span className="ml-2 font-semibold text-text-faint">{header.count}</span>
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {tiles.map((t) => (
@@ -140,11 +140,11 @@ function PickerFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () =
     <button
       type="button"
       onClick={onOpen}
-      className="ds-raw-button group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors hover:border-primary/70 hover:bg-slate-50"
+      className="ds-raw-button group flex flex-col overflow-hidden rounded-lg border border-border bg-surface-card text-left transition-colors hover:border-primary/70 hover:bg-surface-hover"
     >
       <div className="relative h-28 w-full p-1.5">
-        <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-gray-200" aria-hidden="true" />
-        <div className="relative h-full w-full overflow-hidden rounded-md border border-gray-200">
+        <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-surface-strong" aria-hidden="true" />
+        <div className="relative h-full w-full overflow-hidden rounded-md border border-border-soft">
           <FolderTileCover photo={tile.previewPhoto} />
           <span className="absolute right-2 top-2 rounded-full bg-black/70 px-1.5 py-0.5 text-micro font-bold tabular-nums text-white">
             {tile.count}
@@ -153,11 +153,11 @@ function PickerFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () =
       </div>
       <div className="flex flex-col gap-0.5 px-2.5 py-2">
         <div className="flex items-center gap-1.5">
-          <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span className="truncate text-caption font-semibold text-gray-900">{tile.label}</span>
+          <Folder className="h-3.5 w-3.5 shrink-0 text-text-faint" />
+          <span className="truncate text-caption font-semibold text-text-default">{tile.label}</span>
         </div>
         {tile.latestAt ? (
-          <span className="truncate pl-5 text-micro tabular-nums text-gray-400">
+          <span className="truncate pl-5 text-micro tabular-nums text-text-faint">
             {formatDateTimePST(tile.latestAt)}
           </span>
         ) : null}

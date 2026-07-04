@@ -48,7 +48,7 @@ const THEME_ROW: Record<StationTheme, {
   blue:      { hoverBg: 'hover:bg-blue-50',     hoverRing: 'hover:ring-blue-200',    chevron: 'text-blue-600',    avatarRing: 'ring-blue-100',     recentDot: 'bg-blue-400',     nameHover: 'group-hover:text-blue-900' },
   purple:    { hoverBg: 'hover:bg-purple-50',   hoverRing: 'hover:ring-purple-200',  chevron: 'text-purple-600',  avatarRing: 'ring-purple-100',   recentDot: 'bg-purple-400',   nameHover: 'group-hover:text-purple-900' },
   yellow:    { hoverBg: 'hover:bg-amber-50',    hoverRing: 'hover:ring-amber-200',   chevron: 'text-amber-600',   avatarRing: 'ring-amber-100',    recentDot: 'bg-amber-400',    nameHover: 'group-hover:text-amber-900' },
-  black:     { hoverBg: 'hover:bg-slate-100',   hoverRing: 'hover:ring-slate-300',   chevron: 'text-slate-700',   avatarRing: 'ring-slate-200',    recentDot: 'bg-slate-500',    nameHover: 'group-hover:text-slate-900' },
+  black:     { hoverBg: 'hover:bg-surface-sunken',   hoverRing: 'hover:ring-border-default',   chevron: 'text-text-muted',   avatarRing: 'ring-border-soft',    recentDot: 'bg-slate-500',    nameHover: 'group-hover:text-text-default' },
   red:       { hoverBg: 'hover:bg-red-50',      hoverRing: 'hover:ring-red-200',     chevron: 'text-red-600',     avatarRing: 'ring-red-100',      recentDot: 'bg-red-400',      nameHover: 'group-hover:text-red-900' },
   lightblue: { hoverBg: 'hover:bg-sky-50',      hoverRing: 'hover:ring-sky-200',     chevron: 'text-sky-600',     avatarRing: 'ring-sky-100',      recentDot: 'bg-sky-400',      nameHover: 'group-hover:text-sky-900' },
   pink:      { hoverBg: 'hover:bg-pink-50',     hoverRing: 'hover:ring-pink-200',    chevron: 'text-pink-600',    avatarRing: 'ring-pink-100',     recentDot: 'bg-pink-400',     nameHover: 'group-hover:text-pink-900' },
@@ -100,7 +100,7 @@ export function StaffPickerList({ recent = [], recentReady = true, onPick, onMes
   if (loading || !recentReady) return <StaffPickerSkeleton />;
   if (staff.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 px-6 py-10 text-center text-sm text-gray-500">
+      <div className="rounded-xl border border-dashed border-border-default px-6 py-10 text-center text-sm text-text-soft">
         No active staff. Ask an admin to add you.
       </div>
     );
@@ -128,11 +128,11 @@ function Group({ label, children }: { label?: string; children: React.ReactNode 
   return (
     <div>
       {label && (
-        <div className="mb-2 px-1 text-micro font-semibold uppercase tracking-[0.18em] text-gray-400">
+        <div className="mb-2 px-1 text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
           {label}
         </div>
       )}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white/80 backdrop-blur-sm shadow-sm shadow-gray-900/[0.03]">
+      <div className="overflow-hidden rounded-2xl border border-border-soft bg-surface-card/80 backdrop-blur-sm shadow-sm shadow-gray-900/[0.03]">
         {children}
       </div>
     </div>
@@ -157,7 +157,7 @@ function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
         onMessage?.(null);
         onPick(s);
       }}
-      className={`ds-raw-button group flex w-full cursor-pointer items-center gap-3 border-b border-gray-100 px-3.5 py-3 text-left ring-1 ring-transparent transition-all duration-150 last:border-b-0 ${t.hoverBg} ${t.hoverRing}`}
+      className={`ds-raw-button group flex w-full cursor-pointer items-center gap-3 border-b border-border-hairline px-3.5 py-3 text-left ring-1 ring-transparent transition-all duration-150 last:border-b-0 ${t.hoverBg} ${t.hoverRing}`}
       aria-label={needsSetup ? `Set up PIN for ${s.name}, ${s.role}` : `Sign in as ${s.name}, ${s.role}`}
     >
       <div className="relative flex-shrink-0">
@@ -172,8 +172,8 @@ function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <div className={`truncate text-base font-semibold text-gray-900 transition-colors ${t.nameHover}`}>{s.name}</div>
-        <div className="truncate text-caption font-medium uppercase tracking-[0.14em] text-gray-500">
+        <div className={`truncate text-base font-semibold text-text-default transition-colors ${t.nameHover}`}>{s.name}</div>
+        <div className="truncate text-caption font-medium uppercase tracking-[0.14em] text-text-soft">
           {s.role.replace(/_/g, ' ')}
           {needsSetup && (
             <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-eyebrow font-semibold tracking-normal text-blue-700 ring-1 ring-inset ring-blue-100">
@@ -197,11 +197,11 @@ function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
 
 function StaffPickerSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white/80 backdrop-blur-sm shadow-sm shadow-gray-900/[0.03]">
+    <div className="overflow-hidden rounded-2xl border border-border-soft bg-surface-card/80 backdrop-blur-sm shadow-sm shadow-gray-900/[0.03]">
       {Array.from({ length: 8 }).map((_, i) => (
         <div
           key={i}
-          className="flex w-full items-center gap-3 border-b border-gray-100 px-3.5 py-3 last:border-b-0"
+          className="flex w-full items-center gap-3 border-b border-border-hairline px-3.5 py-3 last:border-b-0"
         >
           <SkeletonBase circle width="44px" height="44px" className="flex-shrink-0" />
           <div className="min-w-0 flex-1 space-y-2">

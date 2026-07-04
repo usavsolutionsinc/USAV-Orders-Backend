@@ -211,7 +211,7 @@ export function isUnifiedEngineVerdictConfig(): boolean {
  * join either way. Default OFF — the off branch is the byte-identical legacy
  * query, so this is a no-op until the table is backfilled and the flag flipped.
  * Set PACKER_LOG_ENRICHMENT_READ=true once
- * scripts/backfill-packer-log-enrichment.mjs has run. See
+ * scripts/backfill-packer-log-enrichment.ts has run (npx tsx … --apply). See
  * src/lib/neon/packer-log-enrichment.ts.
  */
 export function isPackerLogEnrichmentRead(): boolean {
@@ -369,5 +369,28 @@ export function isShipmentLinksDualWrite(): boolean {
  */
 export async function isIncomingUniversal(orgId: OrgId): Promise<boolean> {
   return resolveForOrg(orgId, 'incoming_universal', 'INCOMING_UNIVERSAL');
+}
+
+/**
+ * Per-tenant gate for the buyer-note → entity_signals mirror derivation
+ * (plan §2.3 external emitter, eBay first). DB row overrides env
+ * BUYER_NOTE_SIGNALS; default off.
+ */
+export async function isBuyerNoteSignals(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'buyer_note_signals', 'BUYER_NOTE_SIGNALS');
+}
+
+/**
+ * AI-search CommandBar rollout (docs/ai-search-modernization-plan.md, Phase 1).
+ * When ON, the ⌘K CommandBar queries /api/ai/retrieve (hybrid keyword+vector
+ * over entity_search_docs) and merges those hits with the classic
+ * global-search results. Default OFF — when off, CommandBar behavior is
+ * byte-identical to the pre-AI path and no cloud embedding call is made per
+ * keystroke. Enable per org (organization_feature_flags(flag=
+ * 'ai_search_commandbar')) or globally via AI_SEARCH_COMMANDBAR=true.
+ * Rollback = flip the env var off; no deploy needed for per-org rows.
+ */
+export async function isAiSearchCommandbar(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'ai_search_commandbar', 'AI_SEARCH_COMMANDBAR');
 }
 

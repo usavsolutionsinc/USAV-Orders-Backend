@@ -62,7 +62,7 @@ export function MobileIdentify() {
           {/* ds-raw-button: dark-theme segmented camera-mode toggle with custom emerald/white active states */}
           <button
             onClick={() => switchMode('manual')}
-            className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors ${!isLive ? 'bg-white text-black' : 'text-white/70'}`}
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors ${!isLive ? 'bg-surface-card text-black' : 'text-white/70'}`}
           >
             <Camera className="h-3.5 w-3.5" /> Manual
           </button>
@@ -150,7 +150,7 @@ export function MobileIdentify() {
           <button
             onClick={() => void capture()}
             aria-label="Capture"
-            className="h-[72px] w-[72px] rounded-full border-4 border-white/80 bg-white/95 shadow-lg active:scale-95"
+            className="h-[72px] w-[72px] rounded-full border-4 border-white/80 bg-surface-card/95 shadow-lg active:scale-95"
           />
         </div>
       )}
@@ -201,7 +201,7 @@ export function MobileIdentify() {
                 variant="ghost"
                 size="lg"
                 onClick={retake}
-                className="h-auto w-full rounded-xl bg-white py-3.5 text-sm font-semibold text-black active:scale-[0.99]"
+                className="h-auto w-full rounded-xl bg-surface-card py-3.5 text-sm font-semibold text-black active:scale-[0.99]"
               >
                 Next item
               </Button>
@@ -233,7 +233,7 @@ export function MobileIdentify() {
                     variant="ghost"
                     size="lg"
                     onClick={retake}
-                    className="h-auto flex-1 rounded-xl bg-white py-3 text-sm font-semibold text-black"
+                    className="h-auto flex-1 rounded-xl bg-surface-card py-3 text-sm font-semibold text-black"
                   >
                     Retake
                   </Button>

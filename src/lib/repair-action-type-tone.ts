@@ -22,7 +22,7 @@ const TONES: Record<RepairActionType, string> = {
   awaiting_part: 'bg-amber-50 border-amber-200',
 };
 
-const FALLBACK = 'bg-white border-slate-200';
+const FALLBACK = 'bg-surface-card border-border-soft';
 
 /** Background+border classes for a repair-action type; safe for unknowns. */
 export function repairActionTypeToneClass(type: string): string {

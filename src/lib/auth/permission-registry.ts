@@ -144,6 +144,8 @@ export const PERMISSIONS = [
   // ─ Operations & Reports ─
   { id: 'dashboard.view',           category: 'ops', label: 'View dashboard' },
   { id: 'operations.view',          category: 'ops', label: 'View operations' },
+  { id: 'ai.search',                category: 'ops', label: 'AI search retrieval (⌘K hybrid search + Ask AI)' },
+  { id: 'assistant.chat',           category: 'ops', label: 'Use the operations assistant (global AI dock)' },
   { id: 'photos.view',              category: 'ops', label: 'View media library' },
   { id: 'photos.share',             category: 'ops', label: 'Create media share links' },
   { id: 'photos.manage',            category: 'ops', label: 'Manage media library (labels, folders, organize)' },

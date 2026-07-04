@@ -6,7 +6,7 @@ export interface DetailsPanelRowProps extends Omit<PanelRowProps, 'interactive'>
 
 /**
  * Ledger row for sidebars and details panels: uppercase label row, optional accessory + actions, then value body.
- * Default divider matches shipped / FBA panel stacks (`border-gray-100`).
+ * Default divider matches shipped / FBA panel stacks (`border-border-hairline`).
  */
 export function DetailsPanelRow({
   label,
@@ -15,7 +15,7 @@ export function DetailsPanelRow({
   children,
   className = '',
   contentClassName = '',
-  dividerClassName = 'border-b border-gray-100',
+  dividerClassName = 'border-b border-border-hairline',
 }: DetailsPanelRowProps) {
   return (
     <PanelRow

@@ -123,14 +123,14 @@ export default async function ReturnsIntakeAdminPage({
   const recent = await loadRecentReturns();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-canvas">
       <PageHeader backHref="/admin/inventory" title="Returns intake" maxWidth="6xl" />
       <div className="mx-auto max-w-6xl space-y-6 p-8">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-text-muted">
           Receive units back into the warehouse. Each scanned serial gets a
-          <code className="mx-1 rounded bg-gray-100 px-1 py-0.5 text-xs">RETURNED</code>
+          <code className="mx-1 rounded bg-surface-sunken px-1 py-0.5 text-xs">RETURNED</code>
           event, transitions to that state, and produces a
-          <code className="mx-1 rounded bg-gray-100 px-1 py-0.5 text-xs">RETURN_CUSTOMER</code>
+          <code className="mx-1 rounded bg-surface-sunken px-1 py-0.5 text-xs">RETURN_CUSTOMER</code>
           ledger row.
         </p>
 
@@ -155,13 +155,13 @@ export default async function ReturnsIntakeAdminPage({
         ) : null}
 
         {/* Intake form */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-3">
-            <h2 className="text-base font-medium text-gray-900">Record a return</h2>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="border-b border-border-hairline px-6 py-3">
+            <h2 className="text-base font-medium text-text-default">Record a return</h2>
           </header>
           <form action={intakeAction} className="space-y-3 px-6 py-4">
             <div>
-              <label htmlFor="serials" className="block text-xs font-medium text-gray-600">
+              <label htmlFor="serials" className="block text-xs font-medium text-text-muted">
                 Serials / unit ids (one per line, or comma-separated)
               </label>
               <textarea
@@ -169,34 +169,34 @@ export default async function ReturnsIntakeAdminPage({
                 name="serials"
                 rows={4}
                 placeholder={'IPH13-128-BLU-2026-000142\n12345\nhttps://app.example/01/02000000001236/21/IPH13-128-BLU-2026-000142'}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-xs"
+                className="mt-1 block w-full rounded-md border border-border-default px-3 py-2 font-mono text-xs"
               />
-              <p className="mt-1 text-caption text-gray-500">
+              <p className="mt-1 text-caption text-text-soft">
                 Numeric values are treated as <code>serial_units.id</code>. Everything else as a serial number
                 (GS1 Digital Link URLs are auto-extracted).
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label htmlFor="tracking" className="block text-xs font-medium text-gray-600">
+                <label htmlFor="tracking" className="block text-xs font-medium text-text-muted">
                   Return tracking number (optional)
                 </label>
                 <input
                   id="tracking"
                   name="tracking"
                   placeholder="1Z..."
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 font-mono text-xs"
+                  className="mt-1 block w-full rounded-md border border-border-default px-3 py-1.5 font-mono text-xs"
                 />
               </div>
               <div>
-                <label htmlFor="reason" className="block text-xs font-medium text-gray-600">
+                <label htmlFor="reason" className="block text-xs font-medium text-text-muted">
                   Reason (optional)
                 </label>
                 <input
                   id="reason"
                   name="reason"
                   placeholder="customer return"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                  className="mt-1 block w-full rounded-md border border-border-default px-3 py-1.5 text-sm"
                 />
               </div>
             </div>
@@ -209,7 +209,7 @@ export default async function ReturnsIntakeAdminPage({
               >
                 Record intake
               </Button>
-              <p className="text-caption text-gray-500">
+              <p className="text-caption text-text-soft">
                 After intake, run the triage flow to re-enter refurb if applicable.
               </p>
             </div>
@@ -217,17 +217,17 @@ export default async function ReturnsIntakeAdminPage({
         </section>
 
         {/* Recent returns */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
-            <h2 className="text-lg font-medium text-gray-900">Recent returns</h2>
-            <span className="text-xs text-gray-500">last 50</span>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-3">
+            <h2 className="text-lg font-medium text-text-default">Recent returns</h2>
+            <span className="text-xs text-text-soft">last 50</span>
           </header>
           {recent.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">No returns recorded yet.</p>
+            <p className="px-6 py-8 text-sm text-text-muted">No returns recorded yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <table className="min-w-full divide-y divide-border-hairline text-sm">
+                <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium">When</th>
                     <th className="px-4 py-2 text-left font-medium">Unit</th>
@@ -238,12 +238,12 @@ export default async function ReturnsIntakeAdminPage({
                     <th className="px-4 py-2 text-left font-medium">By</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border-hairline">
                   {recent.map((r) => {
                     const orderId = (r.payload as { order_id?: number | null })?.order_id ?? null;
                     return (
                       <tr key={r.id}>
-                        <td className="px-4 py-2 text-xs text-gray-500 whitespace-nowrap">{new Date(r.occurred_at).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-xs text-text-soft whitespace-nowrap">{new Date(r.occurred_at).toLocaleString()}</td>
                         <td className="px-4 py-2 font-mono text-xs">
                           {r.serial_unit_id ? (
                             <Link href={`/admin/inventory/units/${r.serial_unit_id}`} className="text-blue-600 hover:underline">
@@ -258,13 +258,13 @@ export default async function ReturnsIntakeAdminPage({
                             </Link>
                           ) : '—'}
                         </td>
-                        <td className="px-4 py-2 text-xs text-gray-600">{r.prev_status ?? '—'}</td>
-                        <td className="px-4 py-2 font-mono text-caption text-gray-600">{r.scan_token ?? '—'}</td>
-                        <td className="px-4 py-2 text-xs text-gray-700">
+                        <td className="px-4 py-2 text-xs text-text-muted">{r.prev_status ?? '—'}</td>
+                        <td className="px-4 py-2 font-mono text-caption text-text-muted">{r.scan_token ?? '—'}</td>
+                        <td className="px-4 py-2 text-xs text-text-muted">
                           {r.notes ?? '—'}
-                          {orderId ? <span className="ml-1 text-gray-400">· ord#{orderId}</span> : null}
+                          {orderId ? <span className="ml-1 text-text-faint">· ord#{orderId}</span> : null}
                         </td>
-                        <td className="px-4 py-2 text-xs text-gray-600">{r.actor_name ?? 'system'}</td>
+                        <td className="px-4 py-2 text-xs text-text-muted">{r.actor_name ?? 'system'}</td>
                       </tr>
                     );
                   })}
@@ -274,10 +274,10 @@ export default async function ReturnsIntakeAdminPage({
           )}
         </section>
 
-        <footer className="text-xs text-gray-500">
+        <footer className="text-xs text-text-soft">
           Intake runs through{' '}
-          <code className="rounded bg-gray-100 px-1 py-0.5">src/lib/inventory/returns.ts</code>
-          {' '}— same code path as <code className="rounded bg-gray-100 px-1 py-0.5">POST /api/returns/intake</code>.
+          <code className="rounded bg-surface-sunken px-1 py-0.5">src/lib/inventory/returns.ts</code>
+          {' '}— same code path as <code className="rounded bg-surface-sunken px-1 py-0.5">POST /api/returns/intake</code>.
         </footer>
       </div>
     </div>

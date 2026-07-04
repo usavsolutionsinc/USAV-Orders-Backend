@@ -165,7 +165,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
         return (
           <div
             key={account.id}
-            className="flex items-center justify-between border-b border-gray-100 py-2.5"
+            className="flex items-center justify-between border-b border-border-hairline py-2.5"
           >
             <span className={`${fieldLabel} truncate pr-2`}>
               {account.account_name} (expired)
@@ -184,7 +184,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
         );
       })}
 
-      <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
+      <div className="flex items-center justify-between border-b border-border-hairline py-2.5">
         <span className={`${fieldLabel} truncate pr-2`}>Sync eBay orders</span>
         <Button
           variant="primary"
@@ -199,7 +199,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
         </Button>
       </div>
 
-      <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
+      <div className="flex items-center justify-between border-b border-border-hairline py-2.5">
         <span className={`${fieldLabel} truncate pr-2`}>Sync Ecwid orders</span>
         <Button
           variant="primary"
@@ -213,7 +213,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
         </Button>
       </div>
 
-      <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
+      <div className="flex items-center justify-between border-b border-border-hairline py-2.5">
         <span className={`${fieldLabel} truncate pr-2`}>Check Integrity</span>
         <HoverTooltip label="Deduplicate orders by unique (order_id, tracking). Keeps most complete row per group." asChild>
           <Button
@@ -230,7 +230,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
       </div>
 
       {logs.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
+        <div className="mt-3 pt-3 border-t border-border-soft">
           <p className={`${sectionLabel} mb-1.5`}>
             Recent
           </p>

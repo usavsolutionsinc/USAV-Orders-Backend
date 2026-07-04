@@ -81,16 +81,16 @@ export function DateRangePickerPill({
       className={cn(
         'inline-flex items-center gap-2 rounded-full border px-3 py-1 transition-colors',
         hasPicker
-          ? 'cursor-pointer border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
+          ? 'cursor-pointer border-border-soft bg-surface-card hover:border-blue-300 hover:bg-blue-50/40'
           : 'border-transparent',
         className,
       )}
     >
-      <span className="text-caption font-black uppercase tracking-widest text-gray-900">{label}</span>
+      <span className="text-caption font-black uppercase tracking-widest text-text-default">{label}</span>
       {count != null ? (
         <>
-          <span aria-hidden className="text-gray-300">•</span>
-          <span className="text-caption font-bold tabular-nums text-gray-500">{count}</span>
+          <span aria-hidden className="text-text-faint">•</span>
+          <span className="text-caption font-bold tabular-nums text-text-soft">{count}</span>
         </>
       ) : null}
     </span>
@@ -122,10 +122,10 @@ export function DateRangePickerPill({
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-dropdown w-auto rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+          className="z-dropdown w-auto rounded-xl border border-border-soft bg-surface-card shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
           {presets && presets.length ? (
-            <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 p-2">
+            <div className="flex flex-wrap items-center gap-1 border-b border-border-hairline p-2">
               {presets.map((p) => (
                 // ds-raw-button: two-state preset chip (active blue fill), not a DS variant
                 <button
@@ -139,7 +139,7 @@ export function DateRangePickerPill({
                     'rounded-md px-2 py-1 text-eyebrow font-black uppercase tracking-wider transition-colors',
                     p.active
                       ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                      : 'text-text-muted hover:bg-surface-sunken hover:text-text-default',
                   )}
                 >
                   {p.label}
@@ -149,24 +149,24 @@ export function DateRangePickerPill({
           ) : null}
 
           {weekNav ? (
-            <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-2 py-1.5">
+            <div className="flex items-center justify-between gap-2 border-b border-border-hairline px-2 py-1.5">
               {/* ds-raw-button: compact step control, icon-only, inside the popover */}
               <button
                 type="button"
                 onClick={weekNav.onPrev}
                 aria-label="Previous week"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-soft transition-colors hover:bg-surface-sunken hover:text-text-default"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Step week</span>
+              <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Step week</span>
               {/* ds-raw-button: compact step control, icon-only, inside the popover */}
               <button
                 type="button"
                 onClick={weekNav.onNext}
                 disabled={weekNav.weekOffset === 0}
                 aria-label="Next week"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-soft transition-colors hover:bg-surface-sunken hover:text-text-default disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -182,7 +182,7 @@ export function DateRangePickerPill({
                 numberOfMonths={1}
                 defaultMonth={draft?.from ?? parseKey(activeRange?.startStr) ?? new Date()}
               />
-              <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
+              <div className="flex items-center justify-between border-t border-border-hairline px-3 py-2">
                 {/* ds-raw-button: text link footer action (no chrome) */}
                 <button
                   type="button"
@@ -190,7 +190,7 @@ export function DateRangePickerPill({
                     onClear?.();
                     setOpen(false);
                   }}
-                  className="text-eyebrow font-black uppercase tracking-wider text-slate-500 hover:text-slate-900"
+                  className="text-eyebrow font-black uppercase tracking-wider text-text-soft hover:text-text-default"
                 >
                   {onClear ? 'Reset' : 'Cancel'}
                 </button>
@@ -203,14 +203,14 @@ export function DateRangePickerPill({
                     onSelectCustomRange({ startStr: fmtKey(draft.from), endStr: fmtKey(draft.to ?? draft.from) });
                     setOpen(false);
                   }}
-                  className="rounded-md bg-blue-600 px-3 py-1 text-caption font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  className="rounded-md bg-blue-600 px-3 py-1 text-caption font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-surface-strong"
                 >
                   Apply
                 </button>
               </div>
             </>
           ) : onClear ? (
-            <div className="flex items-center justify-end border-t border-gray-100 px-3 py-2">
+            <div className="flex items-center justify-end border-t border-border-hairline px-3 py-2">
               {/* ds-raw-button: text link footer action (no chrome) */}
               <button
                 type="button"
@@ -218,7 +218,7 @@ export function DateRangePickerPill({
                   onClear();
                   setOpen(false);
                 }}
-                className="text-eyebrow font-black uppercase tracking-wider text-slate-500 hover:text-slate-900"
+                className="text-eyebrow font-black uppercase tracking-wider text-text-soft hover:text-text-default"
               >
                 Reset to this week
               </button>
@@ -295,7 +295,7 @@ export default function DateRangeHeader({
       // Inner gray-300 row divider (matches sidebar + day-group bands), not the
       // faint outer border on the translucent sticky shell.
       className="border-b-0"
-      rowClassName="border-b border-gray-300"
+      rowClassName="border-b border-border-default"
       leftSlot={
         <>
           {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}

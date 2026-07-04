@@ -68,7 +68,7 @@ export function ChannelManualAdd({
         size="sm"
         onClick={() => setOpen(true)}
         icon={<Plus className="h-3 w-3" />}
-        className="mt-1.5 h-auto gap-1 px-0 text-eyebrow font-bold uppercase tracking-wider text-gray-400 hover:bg-transparent hover:text-blue-600"
+        className="mt-1.5 h-auto gap-1 px-0 text-eyebrow font-bold uppercase tracking-wider text-text-faint hover:bg-transparent hover:text-blue-600"
       >
         Add {platformStyle(platform).label} identifier
       </Button>
@@ -86,7 +86,7 @@ export function ChannelManualAdd({
           variant="ghost"
           size="sm"
           onClick={close}
-          className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:bg-white"
+          className="text-micro font-bold uppercase tracking-wider text-text-soft hover:bg-surface-card"
         >
           Cancel
         </Button>

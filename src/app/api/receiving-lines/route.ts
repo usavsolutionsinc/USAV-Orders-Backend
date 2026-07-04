@@ -34,12 +34,17 @@ import { UNBOX_OPENED_PREDICATE_SQL } from '@/lib/receiving/unbox-scan-opened';
  * composes into a larger dynamic WHERE string rather than running standalone.
  */
 function currentLineIsMatchSql(alias: string): string {
+  // Phase 3: the frozen-origin fallback is the RECEIVING_LINE provenance edge
+  // (correlated subquery, since this composes into a dynamic WHERE string).
   return `COALESCE(
     (SELECT ie.receiving_line_id FROM inventory_events ie
       WHERE ie.serial_unit_id = ${alias}.id AND ie.receiving_line_id IS NOT NULL
         AND ie.organization_id = ${alias}.organization_id
       ORDER BY ie.occurred_at DESC, ie.id DESC LIMIT 1),
-    ${alias}.origin_receiving_line_id
+    (SELECT p.origin_id FROM serial_unit_provenance p
+      WHERE p.serial_unit_id = ${alias}.id AND p.origin_type = 'RECEIVING_LINE'
+        AND p.origin_id IS NOT NULL AND p.organization_id = ${alias}.organization_id
+      ORDER BY p.occurred_at ASC, p.id ASC LIMIT 1)
   ) = rl.id`;
 }
 
@@ -62,13 +67,17 @@ async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Ma
   // ever updating origin_receiving_line_id). serial_units is org-owned;
   // org-scope so a cross-tenant line id can never surface another tenant's
   // serials.
-  const result = await tenantQuery<SerialUnitRow>(
+  const result = await tenantQuery<SerialUnitRow & { origin_receiving_line_id: number | null }>(
     orgId,
+    // Phase 3: frozen-origin candidate set via provenance; origin value via view.
     `SELECT DISTINCT su.id, su.serial_number, su.current_status, su.sku_catalog_id,
-            su.condition_grade, su.origin_receiving_line_id, su.created_at
+            su.condition_grade, vo.origin_receiving_line_id, su.created_at
        FROM serial_units su
+       JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
       WHERE su.organization_id = $2
-        AND (su.origin_receiving_line_id = ANY($1::int[])
+        AND (su.id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                        WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = ANY($1::int[])
+                          AND p.organization_id = $2)
              OR EXISTS (
                SELECT 1 FROM inventory_events ie
                 WHERE ie.serial_unit_id = su.id
@@ -709,8 +718,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          -- queue. Origin-line existence is the authoritative "this was opened"
          -- signal, so exclude it here.
          AND NOT EXISTS (
-           SELECT 1 FROM serial_units su_unboxed
-            WHERE su_unboxed.origin_receiving_line_id = rl.id
+           SELECT 1 FROM serial_unit_provenance p
+            WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = rl.id
+              AND p.organization_id = rl.organization_id
          )
          -- Unbox-surface scans belong in view=unbox_opened only — never triage.
          AND NOT ${UNBOX_OPENED_PREDICATE_SQL}`,
@@ -1866,7 +1876,11 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
       try {
         const serials = await tenantQuery<{ id: number }>(
           orgId,
-          `SELECT id FROM serial_units WHERE origin_receiving_line_id = $1 AND organization_id = $2`,
+          // Phase 3: filter-by-origin via indexed provenance reverse lookup.
+          `SELECT id FROM serial_units
+            WHERE id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1 AND p.organization_id = $2)
+              AND organization_id = $2`,
           [id, orgId],
         );
         for (const s of serials.rows) {

@@ -189,18 +189,18 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
 
   if (!barcode) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-50 px-6 text-center">
-        <p className="text-sm font-semibold text-gray-500">Missing bin barcode.</p>
+      <div className="flex h-full items-center justify-center bg-surface-canvas px-6 text-center">
+        <p className="text-sm font-semibold text-text-soft">Missing bin barcode.</p>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-50">
+      <div className="flex h-full items-center justify-center bg-surface-canvas">
         <div className="text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm font-semibold text-gray-600">Loading bin…</p>
+          <p className="text-sm font-semibold text-text-muted">Loading bin…</p>
         </div>
       </div>
     );
@@ -208,7 +208,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
 
   if (error || !data?.location) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-gray-50 px-6 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-surface-canvas px-6 text-center">
         <p className="text-sm font-semibold text-rose-600">
           {error instanceof Error ? error.message : `Bin "${barcode}" not found.`}
         </p>
@@ -231,9 +231,9 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
   const totalQty = contents.reduce((sum, r) => sum + (r.qty || 0), 0);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-white">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface-card">
       <PaneHeader
-        className="border-slate-200 bg-white"
+        className="border-border-soft bg-surface-card"
         rowClassName="px-4"
         leftSlot={
           <>
@@ -257,12 +257,12 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
         }
         belowSlot={
           (subtitle || location.barcode) ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-slate-100 px-4 py-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border-hairline px-4 py-1.5">
               {subtitle && (
-                <p className="truncate text-caption font-semibold text-slate-600">{subtitle}</p>
+                <p className="truncate text-caption font-semibold text-text-muted">{subtitle}</p>
               )}
               {location.barcode && (
-                <p className="truncate font-mono text-caption font-bold text-slate-500">{location.barcode}</p>
+                <p className="truncate font-mono text-caption font-bold text-text-soft">{location.barcode}</p>
               )}
             </div>
           ) : undefined
@@ -297,7 +297,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
         )}
 
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
             Contents ({contents.length})
           </p>
           <Button
@@ -310,7 +310,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
           </Button>
         </div>
         {contents.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-500">
+          <div className="rounded-lg border border-dashed border-border-default bg-surface-canvas p-6 text-center text-sm font-semibold text-text-soft">
             Empty bin
           </div>
         ) : (
@@ -322,18 +322,18 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
                   <button
                     type="button"
                     onClick={() => setNumpadRow(row)}
-                    className="ds-raw-button flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm active:bg-slate-50"
+                    className="ds-raw-button flex w-full items-start gap-3 rounded-lg border border-border-soft bg-surface-card px-4 py-3 text-left shadow-sm active:bg-surface-hover"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="font-mono text-sm font-black text-slate-900">
+                      <p className="font-mono text-sm font-black text-text-default">
                         {row.sku}
                       </p>
                       {row.productTitle && (
-                        <p className="mt-1 line-clamp-2 text-caption leading-snug text-slate-500">
+                        <p className="mt-1 line-clamp-2 text-caption leading-snug text-text-soft">
                           {row.productTitle}
                         </p>
                       )}
-                      <p className="mt-1 text-micro font-bold uppercase tracking-widest text-slate-400">
+                      <p className="mt-1 text-micro font-bold uppercase tracking-widest text-text-faint">
                         Counted {formatAgo(row.lastCounted)} ago
                         {row.minQty != null && row.maxQty != null
                           ? ` · ${row.minQty}–${row.maxQty}`
@@ -342,10 +342,10 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-2xl font-black tabular-nums text-slate-900">
+                      <p className="text-2xl font-black tabular-nums text-text-default">
                         {row.qty}
                       </p>
-                      <p className="mt-0.5 text-eyebrow font-bold uppercase tracking-widest text-slate-400">
+                      <p className="mt-0.5 text-eyebrow font-bold uppercase tracking-widest text-text-faint">
                         tap to edit
                       </p>
                     </div>

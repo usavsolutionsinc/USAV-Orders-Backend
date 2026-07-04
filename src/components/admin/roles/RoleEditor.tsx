@@ -26,7 +26,7 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
   const c = useRoleEditor(roleId);
   const { detail, loading, err, busy } = c;
 
-  if (loading) return <div className="p-8 text-center text-sm text-gray-500">Loading role…</div>;
+  if (loading) return <div className="p-8 text-center text-sm text-text-soft">Loading role…</div>;
   if (err && !detail) return <div className="m-6 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>;
   if (!detail) return null;
 

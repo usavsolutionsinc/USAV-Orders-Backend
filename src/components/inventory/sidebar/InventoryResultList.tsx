@@ -58,7 +58,7 @@ export function InventoryResultList({
                         <Button
                             variant="secondary"
                             onClick={onClearQuery}
-                            className="bg-white text-blue-700 ring-blue-200 hover:bg-blue-100"
+                            className="bg-surface-card text-blue-700 ring-blue-200 hover:bg-blue-100"
                         >
                             Clear Search
                         </Button>
@@ -73,7 +73,7 @@ export function InventoryResultList({
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
-                <p className={`${microBadge} text-gray-500`}>
+                <p className={`${microBadge} text-text-soft`}>
                     {label ?? `${rows.length} Result${rows.length !== 1 ? 's' : ''}`}
                 </p>
                 {hasQuery ? (

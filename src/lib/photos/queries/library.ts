@@ -186,9 +186,13 @@ function cartonResolverSql(kind: Exclude<PoFinderKind, 'any'>, v: string): strin
          WHERE sl.owner_type = 'RECEIVING' AND sl.organization_id = $1
            AND stn.tracking_number_normalized ILIKE ${v}`;
     case 'serial':
+      // Phase 3: reach the origin receiving line via serial_unit_provenance.
       return `
         SELECT rl.receiving_id FROM serial_units su
-          JOIN receiving_lines rl ON rl.id = su.origin_receiving_line_id
+          JOIN serial_unit_provenance p
+            ON p.serial_unit_id = su.id AND p.origin_type = 'RECEIVING_LINE'
+           AND p.origin_id IS NOT NULL AND p.organization_id = $1
+          JOIN receiving_lines rl ON rl.id = p.origin_id
          WHERE su.organization_id = $1 AND su.serial_number ILIKE ${v}`;
     case 'order':
       return `

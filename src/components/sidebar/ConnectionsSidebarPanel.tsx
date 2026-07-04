@@ -22,7 +22,7 @@ export function ConnectionsSidebarPanel() {
   const c = useConnectionsPanel();
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-card">
       <input
         ref={c.shipStationFileInputRef}
         type="file"

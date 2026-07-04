@@ -98,7 +98,7 @@ export function LineTestingTabbedCard({
   return (
     <section
       ref={cardTopRef}
-      className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60"
+      className="space-y-3 rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60"
     >
       <HorizontalButtonSlider
         variant="nav"
@@ -118,13 +118,13 @@ export function LineTestingTabbedCard({
           value={notes}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
-          className={`w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-caption text-gray-900 ${NOTES_TEXTAREA_FOCUS}`}
+          className={`w-full resize-none rounded-lg border border-border-soft px-3 py-2 text-caption text-text-default ${NOTES_TEXTAREA_FOCUS}`}
         />
       ) : null}
 
       {tab === 'pairing' ? (
         skuCatalogId != null ? (
-          <div className="flex h-[28rem] min-h-0 flex-col overflow-hidden rounded-lg ring-1 ring-inset ring-gray-100">
+          <div className="flex h-[28rem] min-h-0 flex-col overflow-hidden rounded-lg ring-1 ring-inset ring-border-hairline">
             <ProductHubPanel
               skuCatalogId={skuCatalogId}
               allowManualPair
@@ -132,7 +132,7 @@ export function LineTestingTabbedCard({
             />
           </div>
         ) : (
-          <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
+          <p className="rounded-lg border border-dashed border-border-soft bg-surface-canvas px-4 py-5 text-center text-xs text-text-soft">
             This line has no catalog SKU yet — pair it to Zoho in receiving before
             cross-platform SKU pairing is available.
           </p>
@@ -172,7 +172,7 @@ function TestingSkuTabBody({
   if (loading) {
     if (tab !== 'checklist' && tab !== 'manuals') return null;
     return (
-      <div className="flex items-center gap-2 py-4 text-caption text-gray-400">
+      <div className="flex items-center gap-2 py-4 text-caption text-text-faint">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading testing details…
       </div>
     );

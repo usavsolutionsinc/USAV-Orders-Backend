@@ -25,18 +25,18 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
   const c = useShipmentEditor(props);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       {/* Header */}
-      <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3 py-2">
+      <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-border-soft bg-surface-card px-3 py-2">
         <div className="flex items-center gap-2">
-          <IconButton type="button" onClick={onClose} ariaLabel="Close editor" icon={<X className="h-3.5 w-3.5 text-gray-600" />} className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200" />
+          <IconButton type="button" onClick={onClose} ariaLabel="Close editor" icon={<X className="h-3.5 w-3.5 text-text-muted" />} className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-sunken hover:bg-surface-strong" />
           <div>
-            <h2 className="text-caption font-black uppercase tracking-tight text-gray-900">Edit Shipment</h2>
+            <h2 className="text-caption font-black uppercase tracking-tight text-text-default">Edit Shipment</h2>
             <p className="text-eyebrow font-bold uppercase tracking-widest text-purple-600">{shipment.shipment_ref}</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-mini font-bold tabular-nums text-gray-400">{c.totalAllocated} in boxes · {c.totalUnallocated} loose</p>
+          <p className="text-mini font-bold tabular-nums text-text-faint">{c.totalAllocated} in boxes · {c.totalUnallocated} loose</p>
         </div>
       </div>
 
@@ -69,19 +69,19 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
                       variant="ghost"
                       size="sm"
                       onClick={() => c.moveSelectedTo(droppableIdForBundle(idx))}
-                      className="h-auto gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 hover:bg-gray-50"
+                      className="h-auto gap-1 rounded-md border border-border-soft bg-surface-card px-2 py-1 hover:bg-surface-hover"
                     >
                       {hasTracking ? (
                         <>
                           <MapPin className="h-3 w-3 shrink-0 text-blue-500" />
-                          <span className="border-b-2 border-blue-500 pb-0.5 font-mono text-micro font-black tracking-tight leading-none text-gray-900">
+                          <span className="border-b-2 border-blue-500 pb-0.5 font-mono text-micro font-black tracking-tight leading-none text-text-default">
                             {getLast4(bundle.tracking_number)}
                           </span>
                         </>
                       ) : (
                         <>
-                          <Package className="h-3 w-3 shrink-0 text-gray-500" />
-                          <span className="text-eyebrow font-bold uppercase tracking-wider text-gray-700">
+                          <Package className="h-3 w-3 shrink-0 text-text-soft" />
+                          <span className="text-eyebrow font-bold uppercase tracking-wider text-text-muted">
                             Box {idx + 1}
                           </span>
                         </>
@@ -94,7 +94,7 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
                   variant="ghost"
                   size="sm"
                   onClick={() => c.moveSelectedTo(UNALLOCATED_ID)}
-                  className="h-auto rounded-md border border-amber-200 bg-white px-2 py-1 text-eyebrow font-bold uppercase tracking-wider text-amber-700 hover:bg-amber-100"
+                  className="h-auto rounded-md border border-amber-200 bg-surface-card px-2 py-1 text-eyebrow font-bold uppercase tracking-wider text-amber-700 hover:bg-amber-100"
                 >
                   Unallocated
                 </Button>
@@ -105,15 +105,15 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
       </AnimatePresence>
 
       {/* Scrollable body */}
-      <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto bg-white p-3 scrollbar-hide">
+      <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface-card p-3 scrollbar-hide">
         {/* FBA Shipment ID */}
         <div>
-          <label className="block text-mini font-black uppercase tracking-widest text-gray-700">FBA Shipment ID</label>
+          <label className="block text-mini font-black uppercase tracking-widest text-text-muted">FBA Shipment ID</label>
           <input
             type="text" value={c.amazonShipmentId}
             onChange={(e) => c.setAmazonShipmentId(e.target.value.toUpperCase())}
             placeholder="FBA1234ABCD"
-            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-caption font-bold text-gray-900 outline-none transition-all placeholder:text-gray-300 focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+            className="mt-1 w-full rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5 font-mono text-caption font-bold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
           />
         </div>
 
@@ -122,7 +122,7 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
           <div className="space-y-2">
             <Button type="button" variant="ghost" size="sm" onClick={c.addBundle}
               icon={<Plus className="h-2.5 w-2.5" />}
-              className="h-auto w-full justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-gray-50/50 px-2 py-1.5 text-eyebrow font-bold uppercase tracking-wider text-gray-500 hover:border-purple-300 hover:bg-purple-50/50 hover:text-purple-600"
+              className="h-auto w-full justify-center gap-1 rounded-lg border border-dashed border-border-default bg-surface-canvas/50 px-2 py-1.5 text-eyebrow font-bold uppercase tracking-wider text-text-soft hover:border-purple-300 hover:bg-purple-50/50 hover:text-purple-600"
             >
               UPS Tracking{c.bundles.length > 0 ? ` (${c.bundles.length})` : ''}
             </Button>
@@ -152,9 +152,9 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
           <DragOverlay dropAnimation={null}>
             {c.activeItem ? (
               <div className="rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1.5 shadow-md">
-                <p className="text-micro font-bold text-gray-900">{c.activeItem.display_title || c.activeItem.fnsku}</p>
+                <p className="text-micro font-bold text-text-default">{c.activeItem.display_title || c.activeItem.fnsku}</p>
                 <div className="flex items-center gap-1.5">
-                  <p className="font-mono text-eyebrow text-gray-500">{c.activeItem.fnsku}</p>
+                  <p className="font-mono text-eyebrow text-text-soft">{c.activeItem.fnsku}</p>
                   {c.dragCount > 1 && (
                     <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-mini font-black text-white">
                       +{c.dragCount - 1}
@@ -182,8 +182,8 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
                   <div key={entry.item_id} className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-1.5">
                     <RotateCcw className="h-3 w-3 shrink-0 text-amber-500" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-eyebrow font-bold text-gray-700">{entry.display_title || entry.fnsku}</p>
-                      <p className="font-mono text-mini text-gray-400">{entry.fnsku} · {entry.expected_qty} qty</p>
+                      <p className="truncate text-eyebrow font-bold text-text-muted">{entry.display_title || entry.fnsku}</p>
+                      <p className="font-mono text-mini text-text-faint">{entry.fnsku} · {entry.expected_qty} qty</p>
                     </div>
                     <Button type="button" variant="ghost" size="sm" onClick={() => c.popUndo(entry.item_id)} className="h-auto shrink-0 rounded-md bg-amber-200/80 px-2 py-0.5 text-mini font-black uppercase tracking-wider text-amber-800 hover:bg-amber-300">Undo</Button>
                     <IconButton type="button" onClick={() => c.dismissUndo(entry.item_id)} ariaLabel="Dismiss" icon={<X className="h-2.5 w-2.5" />} className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-amber-400 hover:text-amber-600" />
@@ -216,7 +216,7 @@ export function FbaShipmentEditorForm(props: FbaShipmentEditorFormProps) {
       />
 
       {/* Footer */}
-      <div className="border-t border-gray-200 bg-white px-3 py-2">
+      <div className="border-t border-border-soft bg-surface-card px-3 py-2">
         {c.saveError && <p className="mb-1.5 text-micro font-semibold text-red-600">{c.saveError}</p>}
         {/* ds-raw-button: themed via c.chrome.primaryButton (per-staff station theme); no fixed DS variant maps to it */}
         <button type="button" onClick={c.save} disabled={c.saving} className={c.chrome.primaryButton}>

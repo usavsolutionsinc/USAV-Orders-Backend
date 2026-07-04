@@ -24,17 +24,17 @@ function ReceivingPageInner() {
   return (
     <>
       {/* Mobile (<768px) — photo-only feed with camera FAB. */}
-      <div className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden">
-        <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
+      <div className="flex h-full w-full flex-col overflow-hidden bg-surface-card md:hidden">
+        <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-border-hairline bg-surface-card px-3 pt-[env(safe-area-inset-top)]">
           <IconButton
             type="button"
             onClick={openDrawer}
             ariaLabel="Open navigation"
             icon={<Menu className="h-6 w-6" />}
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-700 active:bg-gray-100 outline-none"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-text-muted active:bg-surface-sunken outline-none"
           />
           
-          <h1 className="flex-1 text-lg font-black tracking-tight text-gray-900">
+          <h1 className="flex-1 text-lg font-black tracking-tight text-text-default">
             Receiving
           </h1>
 

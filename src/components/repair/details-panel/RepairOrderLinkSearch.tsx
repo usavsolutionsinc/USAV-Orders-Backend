@@ -189,7 +189,7 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
   return (
     <div ref={boxRef} className="relative">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
         <input
           ref={inputRef}
           type="text"
@@ -206,10 +206,10 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
           onKeyDown={onKeyDown}
           placeholder="Search Ecwid order # / customer…"
           disabled={disabled}
-          className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-8 text-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full rounded-lg border border-border-soft py-2 pl-8 pr-8 text-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         />
         {isFetching ? (
-          <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-gray-400" />
+          <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-text-faint" />
         ) : value ? (
           <HoverTooltip label="Cancel" focusable={false}>
             <IconButton
@@ -219,8 +219,8 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
                 setOpen(false);
               }}
               ariaLabel="Cancel order search"
-              icon={<X className="h-3.5 w-3.5 text-gray-400" />}
-              className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded hover:bg-gray-100"
+              icon={<X className="h-3.5 w-3.5 text-text-faint" />}
+              className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded hover:bg-surface-sunken"
             />
           </HoverTooltip>
         ) : null}
@@ -230,14 +230,14 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
         <div
           id="ecwid-order-results"
           role="listbox"
-          className="absolute z-dropdown mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-dropdown mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-border-soft bg-surface-card py-1 shadow-lg"
         >
           {isError ? (
             <p className="px-3 py-2 text-xs text-rose-600">Couldn’t reach Ecwid. Type the order # and press Enter.</p>
           ) : null}
 
           {!isFetching && !isError && orders.length === 0 && debounced.length >= 2 ? (
-            <p className="px-3 py-2 text-xs text-gray-500">No Ecwid orders match “{debounced}”.</p>
+            <p className="px-3 py-2 text-xs text-text-soft">No Ecwid orders match “{debounced}”.</p>
           ) : null}
 
           {orders.map((o, i) => {
@@ -253,20 +253,20 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => commit(o.orderNumber)}
                 className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
-                  active ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  active ? 'bg-blue-50' : 'hover:bg-surface-hover'
                 }`}
               >
                 <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-gray-900">{o.displayNumber}</span>
+                    <span className="font-mono text-sm font-semibold text-text-default">{o.displayNumber}</span>
                     {date ? (
-                      <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+                      <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
                         {date}
                       </span>
                     ) : null}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-gray-500">
+                  <span className="mt-0.5 block truncate text-xs text-text-soft">
                     {[o.customerName, o.firstItemName].filter(Boolean).join(' · ') || o.email || '—'}
                   </span>
                 </span>
@@ -282,13 +282,13 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
               aria-selected={highlight === orders.length}
               onMouseEnter={() => setHighlight(orders.length)}
               onClick={() => commit(term)}
-              className={`flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left transition-colors ${
-                highlight === orders.length ? 'bg-blue-50' : 'hover:bg-gray-50'
+              className={`flex w-full items-center gap-2 border-t border-border-hairline px-3 py-2 text-left transition-colors ${
+                highlight === orders.length ? 'bg-blue-50' : 'hover:bg-surface-hover'
               }`}
             >
-              <Check className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-              <span className="text-xs text-gray-600">
-                Use <span className="font-mono font-semibold text-gray-900">{term.trim()}</span> as entered
+              <Check className="h-3.5 w-3.5 shrink-0 text-text-faint" />
+              <span className="text-xs text-text-muted">
+                Use <span className="font-mono font-semibold text-text-default">{term.trim()}</span> as entered
               </span>
             </button>
           ) : null}

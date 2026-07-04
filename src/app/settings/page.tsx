@@ -43,7 +43,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-gray-50">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface-canvas">
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-6 py-8 sm:px-10">
           {active === 'hardware' && <HardwareSection />}

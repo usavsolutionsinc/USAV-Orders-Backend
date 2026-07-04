@@ -50,7 +50,7 @@ export function MobileRowPhotoActions({
     GALLERY_BTN,
     hasPhotos
       ? 'border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-100'
-      : 'border-gray-200 bg-gray-50 text-gray-400 active:bg-gray-100',
+      : 'border-border-soft bg-surface-canvas text-text-faint active:bg-surface-sunken',
   );
 
   return (

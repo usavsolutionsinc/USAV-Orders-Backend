@@ -36,10 +36,10 @@ export function PickerTaskCard({
         animate={framerPresenceMobile.mobileCard.animate}
         exit={framerPresenceMobile.mobileCard.exit}
         transition={framerTransitionMobile.mobileCardMount}
-        className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+        className="rounded-3xl border border-border-soft bg-surface-card p-5 shadow-sm"
       >
         {/* Bin chip — the thing the worker looks for. */}
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pick from bin</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-text-soft">Pick from bin</p>
         <p className="mt-1 font-mono text-3xl font-extrabold tabular-nums tracking-tight text-blue-700">
           {currentTask.bin ?? '—'}
         </p>
@@ -52,7 +52,7 @@ export function PickerTaskCard({
             platforms={currentTask.platforms}
           />
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-bold tabular-nums text-slate-800">
+            <span className="inline-flex items-center rounded-xl border border-border-soft bg-surface-canvas px-3 py-1 text-sm font-bold tabular-nums text-text-default">
               Qty {currentTask.plannedQty}
             </span>
             {currentTask.conditionGrade && (
@@ -72,7 +72,7 @@ export function PickerTaskCard({
           variant="ghost"
           onClick={onToggleDetails}
           iconRight={<span aria-hidden="true">{detailsExpanded ? '▴' : '▾'}</span>}
-          className="mt-4 h-auto gap-1 px-0 text-xs text-slate-500"
+          className="mt-4 h-auto gap-1 px-0 text-xs text-text-soft"
         >
           {detailsExpanded ? 'Hide details' : 'Show details'}
         </Button>
@@ -85,13 +85,13 @@ export function PickerTaskCard({
               transition={{ duration: 0.18 }}
               className="mt-2 grid grid-cols-2 gap-2 overflow-hidden text-xs"
             >
-              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <dt className="font-semibold uppercase tracking-wider text-slate-500">Serial unit</dt>
-                <dd className="mt-0.5 font-mono font-bold text-slate-900">#{currentTask.serialUnitId}</dd>
+              <div className="rounded-xl bg-surface-canvas px-3 py-2">
+                <dt className="font-semibold uppercase tracking-wider text-text-soft">Serial unit</dt>
+                <dd className="mt-0.5 font-mono font-bold text-text-default">#{currentTask.serialUnitId}</dd>
               </div>
-              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <dt className="font-semibold uppercase tracking-wider text-slate-500">Allocation</dt>
-                <dd className="mt-0.5 font-mono font-bold text-slate-900">#{currentTask.allocationId}</dd>
+              <div className="rounded-xl bg-surface-canvas px-3 py-2">
+                <dt className="font-semibold uppercase tracking-wider text-text-soft">Allocation</dt>
+                <dd className="mt-0.5 font-mono font-bold text-text-default">#{currentTask.allocationId}</dd>
               </div>
             </motion.dl>
           )}
@@ -100,19 +100,19 @@ export function PickerTaskCard({
         {/* Scanner — gated. Hint above tells the picker exactly what to
             aim at; the in-place error appears if a wrong code decodes. */}
         <div className="mt-5">
-          <p className="mb-2 text-xs font-semibold text-slate-500">
+          <p className="mb-2 text-xs font-semibold text-text-soft">
             Scan{' '}
             {currentTask.bin && (
-              <span className="font-mono font-bold text-slate-700">{currentTask.bin}</span>
+              <span className="font-mono font-bold text-text-muted">{currentTask.bin}</span>
             )}
             {currentTask.bin && currentTask.serialNumber && ' or '}
             {currentTask.serialNumber && (
-              <span className="font-mono font-bold text-slate-700">
+              <span className="font-mono font-bold text-text-muted">
                 serial {currentTask.serialNumber}
               </span>
             )}
             {!currentTask.bin && !currentTask.serialNumber && (
-              <span className="font-mono font-bold text-slate-700">{currentTask.sku}</span>
+              <span className="font-mono font-bold text-text-muted">{currentTask.sku}</span>
             )}
           </p>
           <ScanSurface

@@ -34,7 +34,7 @@ export function RepairStatusSection({ repair, c }: { repair: RSRecord; c: Repair
           <Button
             variant="secondary"
             size="lg"
-            icon={<Barcode className="w-4 h-4 text-gray-700" />}
+            icon={<Barcode className="w-4 h-4 text-text-muted" />}
             onClick={() => {
               const fullName = (repair.contact_info || '').split(',')[0]?.trim() || '';
               const firstName = fullName.split(/\s+/)[0] || 'Repair';
@@ -66,7 +66,7 @@ export function RepairStatusSection({ repair, c }: { repair: RSRecord; c: Repair
           <Button
             variant="secondary"
             size="lg"
-            icon={<Printer className="w-4 h-4 text-gray-700" />}
+            icon={<Printer className="w-4 h-4 text-text-muted" />}
             onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
             ariaLabel="Print repair service document"
           >

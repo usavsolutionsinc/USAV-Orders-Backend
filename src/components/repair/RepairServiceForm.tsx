@@ -65,10 +65,10 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
     <div
       className={
         isCompact
-          ? 'w-full bg-white px-4 py-3 font-sans text-gray-900'
+          ? 'w-full bg-surface-card px-4 py-3 font-sans text-text-default'
           : isScreen
-            ? 'mx-auto w-[8.5in] max-w-full bg-white p-6 font-sans text-gray-900'
-            : 'mx-auto min-h-[11in] w-[8.5in] bg-white p-8 font-sans text-gray-900 print:p-6'
+            ? 'mx-auto w-[8.5in] max-w-full bg-surface-card p-6 font-sans text-text-default'
+            : 'mx-auto min-h-[11in] w-[8.5in] bg-surface-card p-8 font-sans text-text-default print:p-6'
       }
     >
 
@@ -85,15 +85,15 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
       {/* Information Table */}
       <div className={`border-l border-t border-black ${sectionGap} ${isCompact ? 'text-xs' : ''}`}>
         <div className="flex border-b border-r border-black">
-          <div className={`shrink-0 border-r border-black bg-gray-50 p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>Product Title:</div>
+          <div className={`shrink-0 border-r border-black bg-surface-canvas p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>Product Title:</div>
           <div className="min-w-0 flex-1 break-words p-2">{productTitle}</div>
         </div>
         <div className="flex border-b border-r border-black">
-          <div className={`shrink-0 border-r border-black bg-gray-50 p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>SN & Issues:</div>
+          <div className={`shrink-0 border-r border-black bg-surface-canvas p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>SN & Issues:</div>
           <div className="min-w-0 flex-1 break-words p-2">{serialNumber}, {issue}</div>
         </div>
         <div className="flex border-b border-r border-black">
-          <div className={`shrink-0 border-r border-black bg-gray-50 p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>Contact Info:</div>
+          <div className={`shrink-0 border-r border-black bg-surface-canvas p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>Contact Info:</div>
           <div className="min-w-0 flex-1 break-words p-2">{contactDisplay}</div>
         </div>
       </div>

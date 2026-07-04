@@ -132,7 +132,7 @@ function MapTabBody() {
             className={`ds-raw-button rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
               showEmpty
                 ? 'border-blue-500 bg-blue-50 text-blue-700'
-                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                : 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover'
             }`}
             aria-pressed={showEmpty}
           >

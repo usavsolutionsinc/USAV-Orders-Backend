@@ -28,14 +28,14 @@ export function QueueTableBanner({
           <div className="flex min-w-0 items-center gap-2 overflow-hidden">
             <span className={`${sectionLabel} shrink-0 text-blue-700`}>{title}</span>
             {subtitle ? (
-              <span className={`${fieldLabel} truncate text-gray-600`}>{subtitle}</span>
+              <span className={`${fieldLabel} truncate text-text-muted`}>{subtitle}</span>
             ) : null}
           </div>
         ) : (
           <div>
             <p className={`${sectionLabel} text-blue-700`}>{title}</p>
             {subtitle ? (
-              <p className={`${fieldLabel} mt-0.5 text-gray-500`}>{subtitle}</p>
+              <p className={`${fieldLabel} mt-0.5 text-text-soft`}>{subtitle}</p>
             ) : null}
           </div>
         )}

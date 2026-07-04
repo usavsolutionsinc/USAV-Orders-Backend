@@ -56,7 +56,7 @@ const TONE_BG_SOLID: Record<FloatingButtonTone, string> = {
   orange: 'bg-orange-600',
   violet: 'bg-violet-700',
   red: 'bg-rose-600',
-  gray: 'bg-gray-900',
+  gray: 'bg-surface-inverse',
 };
 
 const spring = { type: 'spring', stiffness: 520, damping: 36 } as const;
@@ -101,7 +101,7 @@ export function FloatingButton({
 }: FloatingButtonProps) {
   const isDisabled = disabled || loading;
   const solidBg = isDisabled
-    ? 'bg-gray-300'
+    ? 'bg-surface-strong'
     : toneClasses
       ? toneClasses.bg
       : TONE_BG_SOLID[tone];
@@ -158,7 +158,7 @@ export function FloatingButton({
                 <ul
                   role="menu"
                   aria-label={menuLabel ?? 'More actions'}
-                  className="min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
+                  className="min-w-[12rem] rounded-lg border border-border-soft bg-surface-card py-1 shadow-xl ring-1 ring-border-soft/80"
                 >
                   {menu!.map((item) => (
                     <li key={item.label} role="none">
@@ -171,7 +171,7 @@ export function FloatingButton({
                           e.stopPropagation();
                           item.onClick();
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-black uppercase tracking-wider text-text-default transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
                       >
                         {item.icon}
                         {item.label}

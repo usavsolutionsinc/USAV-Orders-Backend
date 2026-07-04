@@ -113,14 +113,14 @@ export function PackChecklist({
 
   return (
     <div
-      className={`mt-3 rounded-2xl border border-gray-200 bg-white overflow-hidden ${className ?? ''}`}
+      className={`mt-3 rounded-2xl border border-border-soft bg-surface-card overflow-hidden ${className ?? ''}`}
     >
       {/* Header — title + live progress */}
-      <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-gray-100 bg-gray-50">
-        <p className="text-micro font-black text-gray-500 uppercase tracking-widest">Pack checklist</p>
+      <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border-hairline bg-surface-canvas">
+        <p className="text-micro font-black text-text-soft uppercase tracking-widest">Pack checklist</p>
         <span
           className={`text-eyebrow font-black tabular-nums ${
-            doneCount === totalItems ? 'text-emerald-600' : 'text-gray-500'
+            doneCount === totalItems ? 'text-emerald-600' : 'text-text-soft'
           }`}
         >
           {doneCount}/{totalItems} verified
@@ -203,7 +203,7 @@ export function PackChecklist({
 function ChecklistGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="px-3 py-2">
-      <p className="text-eyebrow font-black text-gray-400 uppercase tracking-wider mb-1.5">{label}</p>
+      <p className="text-eyebrow font-black text-text-faint uppercase tracking-wider mb-1.5">{label}</p>
       <ul className="space-y-1">{children}</ul>
     </div>
   );
@@ -234,8 +234,8 @@ function ChecklistRow({
           checked
             ? 'border-emerald-200 bg-emerald-50'
             : critical
-              ? 'border-amber-200 bg-white hover:bg-amber-50'
-              : 'border-gray-200 bg-white hover:bg-gray-50'
+              ? 'border-amber-200 bg-surface-card hover:bg-amber-50'
+              : 'border-border-soft bg-surface-card hover:bg-surface-hover'
         }`}
       >
         <span
@@ -244,24 +244,24 @@ function ChecklistRow({
             checked
               ? 'border-emerald-500 bg-emerald-500 text-white'
               : critical
-                ? 'border-amber-400 bg-white'
-                : 'border-gray-300 bg-white'
+                ? 'border-amber-400 bg-surface-card'
+                : 'border-border-default bg-surface-card'
           }`}
         >
           {checked && <Check className="h-3 w-3" />}
         </span>
         <span
           className={`flex-1 text-xs font-bold ${
-            checked ? 'text-emerald-700 line-through' : 'text-gray-800'
+            checked ? 'text-emerald-700 line-through' : 'text-text-default'
           }`}
         >
           {label}
         </span>
         {qty ? (
-          <span className="text-eyebrow font-black tabular-nums text-gray-500">×{qty}</span>
+          <span className="text-eyebrow font-black tabular-nums text-text-soft">×{qty}</span>
         ) : null}
         {tag ? (
-          <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wide text-gray-500">
+          <span className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wide text-text-soft">
             {tag}
           </span>
         ) : null}

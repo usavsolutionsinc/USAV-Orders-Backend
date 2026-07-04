@@ -38,7 +38,7 @@ interface SearchableSelectFieldProps<T = unknown> {
 
 const TONE_TRIGGER: Record<NonNullable<SearchableSelectFieldProps['tone']>, string> = {
   default:
-    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-500 focus:ring-blue-500/20',
+    'border-border-soft hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-500 focus:ring-blue-500/20',
   emerald:
     'border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 focus:border-emerald-500 focus:ring-emerald-500/20',
 };
@@ -108,15 +108,15 @@ export function SearchableSelectField<T = unknown>({
         aria-label={ariaLabel ?? placeholder}
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'inline-flex h-8 w-full items-center gap-2 rounded-lg border bg-white px-2.5 text-left text-micro font-bold transition-colors focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'inline-flex h-8 w-full items-center gap-2 rounded-lg border bg-surface-card px-2.5 text-left text-micro font-bold transition-colors focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50',
           TONE_TRIGGER[tone],
-          selected ? 'text-gray-900' : 'text-gray-400',
+          selected ? 'text-text-default' : 'text-text-faint',
           className,
         )}
       >
         <span className="flex-1 truncate">{selected ? selected.label : placeholder}</span>
         <ChevronDown
-          className={cn('h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform', open && 'rotate-180')}
+          className={cn('h-3.5 w-3.5 shrink-0 text-text-faint transition-transform', open && 'rotate-180')}
         />
       </button>
 
@@ -130,21 +130,21 @@ export function SearchableSelectField<T = unknown>({
         role="listbox"
         aria-label={ariaLabel ?? placeholder}
       >
-        <div className="flex items-center gap-2 border-b border-gray-100 px-2.5 py-2">
-          <Search className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        <div className="flex items-center gap-2 border-b border-border-hairline px-2.5 py-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-text-faint" />
           {/* eslint-disable-next-line jsx-a11y/no-autofocus -- focus the filter when the user opens the dropdown */}
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full bg-transparent text-micro font-bold text-gray-900 outline-none placeholder:text-gray-400"
+            className="w-full bg-transparent text-micro font-bold text-text-default outline-none placeholder:text-text-faint"
           />
         </div>
 
         <div className="max-h-56 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <p className="px-3 py-4 text-center text-eyebrow font-bold uppercase tracking-wider text-gray-400">
+            <p className="px-3 py-4 text-center text-eyebrow font-bold uppercase tracking-wider text-text-faint">
               {emptyMessage}
             </p>
           ) : (
@@ -162,8 +162,8 @@ export function SearchableSelectField<T = unknown>({
                     close();
                   }}
                   className={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-gray-50',
-                    active ? TONE_ACTIVE[tone] : 'text-gray-700',
+                    'flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-surface-hover',
+                    active ? TONE_ACTIVE[tone] : 'text-text-muted',
                   )}
                 >
                   {renderOption ? (
@@ -172,7 +172,7 @@ export function SearchableSelectField<T = unknown>({
                     <>
                       <span className="min-w-0 flex-1 truncate text-micro font-bold">{opt.label}</span>
                       {opt.meta ? (
-                        <span className="shrink-0 text-eyebrow font-bold uppercase tracking-wide text-gray-400">
+                        <span className="shrink-0 text-eyebrow font-bold uppercase tracking-wide text-text-faint">
                           {opt.meta}
                         </span>
                       ) : null}

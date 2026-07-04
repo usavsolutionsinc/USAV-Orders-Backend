@@ -962,6 +962,10 @@ export const orders = pgTable('orders', {
   shipmentId: bigint('shipment_id', { mode: 'number' }),
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
+  /** Marketplace buyer checkout note (eBay buyerCheckoutNotes), mirrored raw
+   *  by the sync; projected into entity_signals by buyer-note-derivation.
+   *  Migration 2026-07-03p. */
+  buyerNote: text('buyer_note'),
   quantity: text('quantity').default('1'),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   status: text('status'),
@@ -1652,6 +1656,10 @@ export const repairService = pgTable('repair_service', {
   price: text('price'),
   issue: text('issue'),
   serialNumber: text('serial_number'),
+  // Optional link to the inventory unit when the repaired device IS inventory
+  // (2026-07-03s). NULL for customer-owned devices — repair_service is the
+  // customer-repair domain, NOT a consolidation onto unit_repairs.
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
   notes: text('notes'),
   statusHistory: jsonb('status_history').default([]),
   status: text('status').default('Pending Repair'),
@@ -2073,6 +2081,22 @@ export const skuPlatformIds = pgTable('sku_platform_ids', {
   accountName: text('account_name'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // 2026-07-04: model reconciled to the live 18 columns (was 8). The pairing +
+  // presentation columns below were added by later migrations. This model is
+  // read-for-types only (the table is accessed via raw SQL in the pairing route
+  // + picking sessions), so this is a documentation-accuracy fix, not a behavior
+  // change. sku_platform_ids is the LIVE per-channel SKU→external-id mapping home
+  // (platform_listings is separate scaffolding — see its comment).
+  displayName: text('display_name'),
+  imageUrl: text('image_url'),
+  organizationId: orgIdCol(),
+  listingTitle: text('listing_title'),
+  listingUrl: text('listing_url'),
+  listingStatus: text('listing_status').default('unknown'),
+  confidence: smallint('confidence'),
+  pairedBy: integer('paired_by'),
+  pairedAt: timestamp('paired_at', { withTimezone: true }),
+  doNotSuggestUntil: timestamp('do_not_suggest_until', { withTimezone: true }),
 });
 
 /**
@@ -2090,6 +2114,12 @@ export const platformListings = pgTable('platform_listings', {
   skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
   platform: text('platform').notNull(),
   accountName: text('account_name'),
+  // Catalog FK (2026-07-03r) — deliberate FORWARD-PREP, not dead code.
+  // platform_listings is intentional scaffolding for a planned listings feature
+  // (currently 0 rows / 0 writers by design); this FK is the normalized channel
+  // link that feature will populate at write time (resolve platform_account_id;
+  // platform/accountName remain the read-through cache). Do NOT drop as "unused".
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
   externalRefId: text('external_ref_id'),
   merchantSku: text('merchant_sku'),
   listedName: text('listed_name'),
@@ -2415,10 +2445,9 @@ export const serialUnits = pgTable('serial_units', {
   currentStatus: serialStatusEnum('current_status').notNull().default('UNKNOWN'),
   currentLocation: text('current_location'),
   conditionGrade: conditionGradeEnum('condition_grade'),
-  originSource: text('origin_source'),
-  originReceivingLineId: integer('origin_receiving_line_id').references(() => receivingLines.id, { onDelete: 'set null' }),
-  originTsnId: integer('origin_tsn_id'),
-  originSkuId: integer('origin_sku_id'),
+  // origin_source / origin_receiving_line_id / origin_tsn_id / origin_sku_id
+  // dropped in Phase 4 (2026-07-03b) — origin provenance moved to
+  // serial_unit_provenance (see serialUnitProvenance below). Do not re-add.
   receivedAt: timestamp('received_at', { withTimezone: true }),
   receivedBy: integer('received_by'),
   notes: text('notes'),
@@ -2436,6 +2465,48 @@ export const serialUnits = pgTable('serial_units', {
   // and the organization_id column (added 2026-05-23) live in SQL migrations,
   // which are the source of truth for this table — not expressed here.
 });
+
+/**
+ * serial_unit_provenance — typed origin spine for serial_units (Phase 1 of the
+ * schema-wide polymorphic refactor; migration 2026-07-01n). Collapses the
+ * denormalized origin_source / origin_receiving_line_id / origin_tsn_id /
+ * origin_sku_id family onto the polymorphic reference contract: an
+ * `origin_type` discriminator (named CHECK) + a BIGINT `origin_id`. `origin_id`
+ * is nullable for text-only origins (MANUAL/LEGACY, or a source with no row id).
+ *
+ * origin_type ∈ RECEIVING_LINE | TECH_SERIAL | SKU_IMPORT | RETURN | FBA |
+ *   MANUAL | LEGACY  (CHECK: serial_unit_provenance_origin_type_chk;
+ *   RETURN/FBA reserved for the FBA-fold + returns work, Tier-1 #7).
+ *
+ * Additive/Phase-1: nothing reads this yet; serial_units.origin_* stay the live
+ * source until a later reader-migration phase. Tenant-from-birth (FORCE RLS via
+ * enforce_tenant_isolation in the birth migration).
+ */
+export const serialUnitProvenance = pgTable('serial_unit_provenance', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  serialUnitId: integer('serial_unit_id').notNull().references(() => serialUnits.id, { onDelete: 'cascade' }),
+  originType: text('origin_type').notNull(),
+  originId: bigint('origin_id', { mode: 'number' }),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalUx: uniqueIndex('ux_serial_unit_provenance_natural').on(
+    table.organizationId, table.serialUnitId, table.originType, table.originId,
+  ),
+  textOnlyUx: uniqueIndex('ux_serial_unit_provenance_text_only')
+    .on(table.organizationId, table.serialUnitId, table.originType)
+    .where(sql`origin_id IS NULL`),
+  unitIdx: index('idx_serial_unit_provenance_unit').on(
+    table.organizationId, table.serialUnitId, table.occurredAt.desc(),
+  ),
+  originIdx: index('idx_serial_unit_provenance_origin').on(
+    table.organizationId, table.originType, table.originId,
+  ),
+}));
+
+export type SerialUnitProvenance = typeof serialUnitProvenance.$inferSelect;
+export type NewSerialUnitProvenance = typeof serialUnitProvenance.$inferInsert;
 
 /**
  * sku_stock_ledger — authoritative signed-delta ledger for SKU quantities.
@@ -3148,6 +3219,123 @@ export const ragDocumentChunks = pgTable('rag_document_chunks', {
   docIdx: index('idx_rag_document_chunks_document_id').on(table.documentId),
 }));
 
+/**
+ * 768-dim variant of pgVector for the AI-search index (EMBEDDING_DIMS in
+ * src/lib/ai/provider.ts). Deliberately separate from the 1536-dim `pgVector`
+ * above so rag_document_chunks is untouched — the two embedding schemes are
+ * independent (RAG = Gemini 1536; entity search = text-embedding-3-small /
+ * nomic-embed-text @ 768).
+ */
+export const pgVector768 = customType<{ data: number[] }>({
+  dataType() {
+    return 'vector(768)';
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (typeof value === 'string') {
+      return value.slice(1, -1).split(',').map(Number);
+    }
+    return value as number[];
+  }
+});
+
+/**
+ * entity_search_docs — the hybrid AI-search index for the P0 CommandBar
+ * entities (migration 2026-07-03d, per .claude/rules/polymorphic-tables.md).
+ * entity_type CHECK (entity_search_docs_entity_type_chk):
+ *   'ORDER' | 'SERIAL_UNIT' | 'RECEIVING' | 'SKU' | 'REPAIR' | 'FBA_SHIPMENT'
+ * Written ONLY by the search-outbox worker (src/lib/search/search-outbox-worker.ts);
+ * freshness flows from parent-table triggers → entity_search_outbox → worker.
+ * embedding is nullable by design: keyword search works before the async embed
+ * lands. Tenant-from-birth (FORCE RLS via enforce_tenant_isolation in the
+ * birth migration). SQL indexes (org-led natural unique, trgm GIN, HNSW
+ * cosine) live in the migration, the schema source of truth.
+ */
+export const entitySearchDocs = pgTable('entity_search_docs', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  searchText: text('search_text').notNull(),
+  embedding: pgVector768('embedding'),
+  embeddedAt: timestamp('embedded_at', { withTimezone: true }),
+  status: text('status'),
+  conditionGrade: text('condition_grade'),
+  sourcePlatform: text('source_platform'),
+  happenedAt: timestamp('happened_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalUx: uniqueIndex('ux_entity_search_docs_natural').on(
+    table.organizationId, table.entityType, table.entityId,
+  ),
+  orgHappenedIdx: index('idx_entity_search_docs_org_happened').on(
+    table.organizationId, table.happenedAt.desc(),
+  ),
+}));
+
+export type EntitySearchDoc = typeof entitySearchDocs.$inferSelect;
+export type NewEntitySearchDoc = typeof entitySearchDocs.$inferInsert;
+
+/**
+ * entity_search_outbox — freshness queue behind entity_search_docs (same
+ * migration). Parent-table triggers (fn_enqueue_entity_search_outbox) insert
+ * one pending row per changed entity, deduped by the partial unique
+ * ux_entity_search_outbox_pending (organization_id, entity_type, entity_id)
+ * WHERE processed_at IS NULL. entity_type CHECK mirrors entity_search_docs.
+ */
+export const entitySearchOutbox = pgTable('entity_search_outbox', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  enqueuedAt: timestamp('enqueued_at', { withTimezone: true }).notNull().defaultNow(),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  /** Set while a drain is processing the row (2026-07-04a) — a claimed row no
+   *  longer matches the pending-dedupe unique, so parent writes during the
+   *  drain enqueue a fresh row instead of being lost. Reset on failure/crash. */
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+});
+
+export type EntitySearchOutboxRow = typeof entitySearchOutbox.$inferSelect;
+
+/**
+ * ai_usage_events — per-org AI usage metering (migration 2026-07-04b): one
+ * row per billable AI call. CHECKs: capability IN ('chat','embed')
+ * (ai_usage_events_capability_chk); context IN
+ * ('query_embed','doc_embed','ask_ai') (ai_usage_events_context_chk).
+ * cost_microcents = estimated PROVIDER cost (1e-8 USD, integer math; NULL =
+ * unknown model rate); the billed price applies the per-org margin at read
+ * time (getAiUsageMarginPercent). stripe_reported_at set by the env-gated
+ * meter reporter (src/lib/billing/ai-meter-reporter.ts). Tenant-from-birth
+ * (FORCE RLS in the birth migration).
+ */
+export const aiUsageEvents = pgTable('ai_usage_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  capability: text('capability').notNull(),
+  provider: text('provider').notNull(),
+  model: text('model').notNull(),
+  context: text('context').notNull(),
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  costMicrocents: bigint('cost_microcents', { mode: 'number' }),
+  stripeReportedAt: timestamp('stripe_reported_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgCreatedIdx: index('idx_ai_usage_events_org_created').on(
+    table.organizationId, table.createdAt.desc(),
+  ),
+}));
+
+export type AiUsageEvent = typeof aiUsageEvents.$inferSelect;
+
 // ─── Workflow graph layer ─────────────────────────────────────
 //
 // Node-based "Operations" engine (see docs/operations-studio/NODE_WORKFLOW_ARCHITECTURE.md and
@@ -3231,6 +3419,10 @@ export const workflowTemplates = pgTable('workflow_templates', {
   // { nodes:[{id,type,x,y,config}], edges:[{id,source,sourcePort,target}] }
   graph: jsonb('graph').notNull().default(sql`'{"nodes":[],"edges":[]}'::jsonb`),
   isSystem: boolean('is_system').notNull().default(true),
+  // The blessed default blueprint a fresh org is seeded with (migration
+  // 2026-06-28m). Added to the model in universal-feed Phase 5 so the template
+  // catalog can mark/order the recommended vertical.
+  isDefault: boolean('is_default').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   slugIdx: uniqueIndex('ux_workflow_templates_slug').on(table.slug),
@@ -3420,6 +3612,12 @@ export const warrantyRepairAttempts = pgTable('warranty_repair_attempts', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   organizationId: orgIdCol(),
   claimId: bigint('claim_id', { mode: 'number' }).notNull().references(() => warrantyClaims.id, { onDelete: 'cascade' }),
+  // Spine links (2026-07-03t) — kept separate from unit_repairs, but anchored to
+  // the serial + inventory_events the same way. serial_unit_id denormalized from
+  // the claim at write time; nullable for non-inventory warranty devices.
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
+  startEventId: bigint('start_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+  doneEventId: bigint('done_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
   attemptNo: integer('attempt_no').notNull().default(1),
   technicianStaffId: integer('technician_staff_id').references(() => staff.id, { onDelete: 'set null' }),
   diagnosis: text('diagnosis'),
@@ -3469,3 +3667,221 @@ export type WarrantyClaimEvent = typeof warrantyClaimEvents.$inferSelect;
 export type WarrantyRepairAttempt = typeof warrantyRepairAttempts.$inferSelect;
 export type WarrantyQuote = typeof warrantyQuotes.$inferSelect;
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Universal feed / AI-first linkage family (Phase 0 of
+// docs/todo/universal-feed-polymorphic-plan.md; migrations 2026-07-03j..o).
+// All second-axis vocabularies (feed_key, signal_kind, linkage_type,
+// mutation_kind, node_surface.role, target_kind) are validated by the app
+// registry in src/lib/surfaces/registry.ts — the runtime SoT the AI reads.
+// entity_type has a DB CHECK: RECEIVING | RECEIVING_LINE | SERIAL_UNIT |
+// ORDER | FBA_SHIPMENT | REPAIR | WARRANTY_CLAIM.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Postgres tsvector (read-only projection of a GENERATED ALWAYS column). */
+export const pgTsVector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
+
+/**
+ * feed_memberships — universal rail/feed working set (plan §2.1). Projection
+ * of the domain masters; rebuildable. One row per (feed_key, entity); display
+ * fields denormalized for rail speed. state CHECK: active | needs_match |
+ * done. tone CHECK mirrors TimelineTone. Parent-delete integrity via
+ * fn_delete_feed_memberships_on_parent_delete() triggers on all 7 parents.
+ */
+export const feedMemberships = pgTable('feed_memberships', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  feedKey: text('feed_key').notNull(),
+  /** CHECK: RECEIVING | RECEIVING_LINE | SERIAL_UNIT | ORDER | FBA_SHIPMENT | REPAIR | WARRANTY_CLAIM */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  /** Denorm of the Studio linkage; SoT is node_surfaces + item_workflow_state. */
+  workflowDefinitionId: integer('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
+  /** No FK by design — workflow_nodes rows are replaced wholesale on draft save. */
+  nodeId: text('node_id'),
+  /** CHECK: active | needs_match | done */
+  state: text('state').notNull().default('active'),
+  /** Tier-0 = priority (mirrors receiving.priority_tier convention). */
+  priorityTier: smallint('priority_tier'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  /** CHECK: default | info | success | warning | danger | muted (TimelineTone). */
+  tone: text('tone').notNull().default('default'),
+  meta: jsonb('meta'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalIdx: uniqueIndex('ux_feed_memberships_natural').on(table.organizationId, table.feedKey, table.entityType, table.entityId),
+  railIdx: index('idx_feed_memberships_org_feed_state_time').on(table.organizationId, table.feedKey, table.state, table.occurredAt.desc(), table.id.desc()),
+  entityIdx: index('idx_feed_memberships_org_entity').on(table.organizationId, table.entityType, table.entityId),
+  nodeIdx: index('idx_feed_memberships_org_node').on(table.organizationId, table.nodeId).where(sql`node_id IS NOT NULL`),
+}));
+
+/**
+ * staff_rail_exclusions — per-staff per-station non-destructive dismiss layer
+ * over feed_memberships (plan §2.2). Restore = delete row. Parent-delete
+ * integrity via fn_delete_staff_rail_exclusions_on_parent_delete() triggers.
+ */
+export const staffRailExclusions = pgTable('staff_rail_exclusions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  station: varchar('station', { length: 20 }).notNull(),
+  feedKey: text('feed_key').notNull(),
+  /** CHECK: same 7-value entity_type set as feed_memberships. */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  excludedAt: timestamp('excluded_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalIdx: uniqueIndex('ux_staff_rail_exclusions_natural').on(table.organizationId, table.staffId, table.station, table.feedKey, table.entityType, table.entityId),
+  entityIdx: index('idx_staff_rail_exclusions_org_entity').on(table.organizationId, table.entityType, table.entityId),
+}));
+
+/**
+ * entity_signals — structured "why" facts, the AI's primary read substrate
+ * (plan §2.3). Append-only; every insert also emits an ops_event via
+ * recordEntitySignal. source_ref = idempotency key for mirror-derived signals
+ * (partial unique (org, signal_kind, source_ref) WHERE source_ref IS NOT NULL);
+ * NULL for internal chokepoint emitters. notes_tsv is DB-GENERATED
+ * (to_tsvector('simple', notes || ' ' || reason_code)) — never write it.
+ * Parent-delete integrity via fn_delete_entity_signals_on_parent_delete().
+ */
+export const entitySignals = pgTable('entity_signals', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  /** CHECK: RECEIVING | RECEIVING_LINE | SERIAL_UNIT | ORDER | FBA_SHIPMENT | REPAIR | WARRANTY_CLAIM */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  /** Registry-validated: return_reason | buyer_note | exception_why | test_fail_reason | triage_outcome | ... */
+  signalKind: text('signal_kind').notNull(),
+  /** Soft ref → reason_codes.code (org + flow_context scoped there). */
+  reasonCode: text('reason_code'),
+  notes: text('notes'),
+  severity: smallint('severity'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  workflowDefinitionId: integer('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
+  nodeId: text('node_id'),
+  sourceRef: text('source_ref'),
+  meta: jsonb('meta'),
+  /** GENERATED ALWAYS ... STORED in the DB — excluded from $inferInsert. */
+  notesTsv: pgTsVector('notes_tsv').generatedAlwaysAs(
+    sql`to_tsvector('simple', coalesce(notes, '') || ' ' || coalesce(reason_code, ''))`,
+  ),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  sourceRefIdx: uniqueIndex('ux_entity_signals_source_ref').on(table.organizationId, table.signalKind, table.sourceRef).where(sql`source_ref IS NOT NULL`),
+  entityTimeIdx: index('idx_entity_signals_org_entity_time').on(table.organizationId, table.entityType, table.entityId, table.occurredAt.desc(), table.id.desc()),
+  nodeKindIdx: index('idx_entity_signals_org_node_kind').on(table.organizationId, table.nodeId, table.signalKind, table.reasonCode),
+  kindTimeIdx: index('idx_entity_signals_org_kind_time').on(table.organizationId, table.signalKind, table.occurredAt.desc(), table.id.desc()),
+  notesTsvIdx: index('idx_entity_signals_notes_tsv').using('gin', table.notesTsv),
+}));
+
+/**
+ * node_surfaces — Studio graph node ↔ feed/surface declaration (plan §2.4).
+ * node_id integrity is definition-scoped by design (graph saves replace
+ * workflow_nodes wholesale); orphaned surfaces are an app-level lint.
+ */
+export const nodeSurfaces = pgTable('node_surfaces', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  workflowDefinitionId: integer('workflow_definition_id').notNull().references(() => workflowDefinitions.id, { onDelete: 'cascade' }),
+  /** No FK by design — see migration 2026-07-03m header. */
+  nodeId: text('node_id').notNull(),
+  feedKey: text('feed_key').notNull(),
+  /** Registry-validated: inbox | outbox | display | ... */
+  role: text('role').notNull().default('inbox'),
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalIdx: uniqueIndex('ux_node_surfaces_natural').on(table.organizationId, table.workflowDefinitionId, table.nodeId, table.feedKey),
+  feedIdx: index('idx_node_surfaces_org_feed').on(table.organizationId, table.feedKey),
+}));
+
+/**
+ * insight_links — seeded + anonymized benchmark rows (plan §2.5).
+ * DELIBERATE TENANCY EXCEPTION: organization_id is NULLABLE (NULL = global
+ * seeded row readable by every org) with hand-written RLS — see migration
+ * 2026-07-03n header. Do NOT use orgIdCol() here.
+ */
+export const insightLinks = pgTable('insight_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  /** NULL = global/seeded benchmark row. GUC default auto-stamps tenant-path writes. */
+  organizationId: uuid('organization_id').default(sql`NULLIF(current_setting('app.current_org', true), '')::uuid`),
+  /** Registry-validated: industry_benchmark | power_user_comparison | suggestion_seed */
+  linkageType: text('linkage_type').notNull(),
+  /** Registry-validated: node_type | feed_key | signal_kind */
+  subjectKind: text('subject_kind').notNull(),
+  subjectRef: text('subject_ref'),
+  metrics: jsonb('metrics'),
+  /** CHECK: seeded | anonymized_agg */
+  source: text('source').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  globalSubjectIdx: uniqueIndex('ux_insight_links_global_subject').on(table.linkageType, table.subjectKind, table.subjectRef).where(sql`organization_id IS NULL AND subject_ref IS NOT NULL`),
+  orgSubjectIdx: uniqueIndex('ux_insight_links_org_subject').on(table.organizationId, table.linkageType, table.subjectKind, table.subjectRef).where(sql`organization_id IS NOT NULL AND subject_ref IS NOT NULL`),
+  subjectIdx: index('idx_insight_links_subject').on(table.subjectKind, table.subjectRef, table.linkageType),
+}));
+
+/**
+ * agent_mutations — AI proposal / apply / learning trail (plan §2.6).
+ * status CHECK: proposed | under_review | approved | applied | rejected |
+ * reverted. mutation_kind validated by src/lib/surfaces/registry.ts (the §8
+ * trust-class spec). Every apply runs through applyAgentMutation.
+ */
+export const agentMutations = pgTable('agent_mutations', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  proposedByStaffId: integer('proposed_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  aiChatSessionId: text('ai_chat_session_id').references(() => aiChatSessions.id, { onDelete: 'set null' }),
+  /** CHECK: proposed | under_review | approved | applied | rejected | reverted */
+  status: text('status').notNull().default('proposed'),
+  mutationKind: text('mutation_kind').notNull(),
+  payload: jsonb('payload'),
+  reviewNotes: text('review_notes'),
+  appliedBy: integer('applied_by').references(() => staff.id, { onDelete: 'set null' }),
+  appliedAt: timestamp('applied_at', { withTimezone: true }),
+  extraAudit: jsonb('extra_audit'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  statusTimeIdx: index('idx_agent_mutations_org_status_time').on(table.organizationId, table.status, table.createdAt.desc(), table.id.desc()),
+  sessionIdx: index('idx_agent_mutations_org_session').on(table.organizationId, table.aiChatSessionId).where(sql`ai_chat_session_id IS NOT NULL`),
+  kindStatusIdx: index('idx_agent_mutations_org_kind_status').on(table.organizationId, table.mutationKind, table.status),
+}));
+
+/**
+ * agent_mutation_affects — lean mutation → target junction by canonical ref
+ * (plan §2.6). Immutable audit/learning trail; refs may dangle after target
+ * deletion by design. target_kind registry-validated.
+ */
+export const agentMutationAffects = pgTable('agent_mutation_affects', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  agentMutationId: bigint('agent_mutation_id', { mode: 'number' }).notNull().references(() => agentMutations.id, { onDelete: 'cascade' }),
+  /** Registry-validated: staff | workflow_node | workflow_edge | feed_membership | entity_signal | node_surface | ... */
+  targetKind: text('target_kind').notNull(),
+  /** Canonical ref: '<table>:<axis>:<value>:entity:<id>' (src/lib/surfaces/canonical-ref.ts). */
+  targetRef: text('target_ref').notNull(),
+  roleInMutation: text('role_in_mutation'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  mutationIdx: index('idx_agent_mutation_affects_org_mutation').on(table.organizationId, table.agentMutationId),
+  targetIdx: index('idx_agent_mutation_affects_org_target').on(table.organizationId, table.targetKind, table.targetRef),
+}));
+
+export type FeedMembership = typeof feedMemberships.$inferSelect;
+export type NewFeedMembership = typeof feedMemberships.$inferInsert;
+export type StaffRailExclusion = typeof staffRailExclusions.$inferSelect;
+export type EntitySignal = typeof entitySignals.$inferSelect;
+export type NewEntitySignal = typeof entitySignals.$inferInsert;
+export type NodeSurface = typeof nodeSurfaces.$inferSelect;
+export type InsightLink = typeof insightLinks.$inferSelect;
+export type AgentMutation = typeof agentMutations.$inferSelect;
+export type NewAgentMutation = typeof agentMutations.$inferInsert;
+export type AgentMutationAffect = typeof agentMutationAffects.$inferSelect;

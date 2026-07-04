@@ -151,7 +151,7 @@ export function UploadManualModal({
         className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
           file
             ? 'border-emerald-200 bg-emerald-50/50'
-            : 'border-zinc-200 bg-zinc-50 hover:border-blue-300 hover:bg-blue-50/30'
+            : 'border-border-soft bg-surface-canvas hover:border-blue-300 hover:bg-blue-50/30'
         }`}
         onDragOver={(e) => { e.preventDefault(); }}
         onDrop={(e) => {
@@ -168,8 +168,8 @@ export function UploadManualModal({
           </>
         ) : (
           <>
-            <p className="text-caption font-black text-zinc-700">Drop a PDF or Word doc here, or click to pick</p>
-            <p className="text-micro font-semibold text-zinc-500">Word files (.doc/.docx) are converted to PDF automatically · Max 50MB</p>
+            <p className="text-caption font-black text-text-muted">Drop a PDF or Word doc here, or click to pick</p>
+            <p className="text-micro font-semibold text-text-soft">Word files (.doc/.docx) are converted to PDF automatically · Max 50MB</p>
           </>
         )}
         <input

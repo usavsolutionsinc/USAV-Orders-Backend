@@ -76,7 +76,7 @@ const SEED_PLATFORMS: Array<[slug: string, label: string, tone: string, sort: nu
   ['walmart', 'Walmart', 'text-amber-700', 50],
   ['goodwill', 'Goodwill', 'text-sky-600', 60],
   ['ecwid', 'ECWID-RS', 'text-blue-600', 70],
-  ['other', 'Other', 'text-slate-500', 99],
+  ['other', 'Other', 'text-text-soft', 99],
 ];
 const SEED_TYPES: Array<[slug: string, label: string, kind: string, isReturn: boolean, sort: number]> = [
   ['po', 'PO', 'both', false, 10],

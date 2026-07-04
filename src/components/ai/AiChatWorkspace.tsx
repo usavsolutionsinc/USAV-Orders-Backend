@@ -33,7 +33,7 @@ export default function AiChatWorkspace() {
 
   if (isLoaded && !has('dashboard.view')) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-gray-500">
+      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-text-soft">
         Requires the “View dashboard” permission.
       </div>
     );

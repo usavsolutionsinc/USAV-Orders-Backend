@@ -96,8 +96,8 @@ export default function SignUpPage() {
     <Shell>
       <div className="w-full max-w-md">
         <div className="text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Create your workspace</h1>
-          <p className="mt-1.5 text-sm text-gray-500">14-day free trial. No credit card.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-text-default">Create your workspace</h1>
+          <p className="mt-1.5 text-sm text-text-soft">14-day free trial. No credit card.</p>
         </div>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-3">
@@ -153,15 +153,15 @@ export default function SignUpPage() {
             type="submit"
             variant="brand"
             disabled={!valid || submitting}
-            className="mt-2 h-auto w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-gray-900/[0.06] hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:opacity-100"
+            className="mt-2 h-auto w-full rounded-2xl bg-surface-inverse px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-gray-900/[0.06] hover:bg-surface-inverse-hover disabled:cursor-not-allowed disabled:bg-surface-strong disabled:opacity-100"
           >
             {submitting ? 'Creating…' : 'Create workspace'}
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-label text-gray-500">
+        <p className="mt-6 text-center text-label text-text-soft">
           Already have an account?{' '}
-          <a href="/signin" className="font-medium text-slate-900 hover:underline">Sign in</a>
+          <a href="/signin" className="font-medium text-text-default hover:underline">Sign in</a>
         </p>
       </div>
     </Shell>
@@ -182,9 +182,9 @@ interface FieldProps {
 function Field({ label, value, onChange, placeholder, type = 'text', inputMode, autoComplete, autoFocus }: FieldProps) {
   return (
     <label className="block">
-      <span className="mb-1 block text-caption font-medium uppercase tracking-[0.12em] text-gray-500">{label}</span>
+      <span className="mb-1 block text-caption font-medium uppercase tracking-[0.12em] text-text-soft">{label}</span>
       <input
-        className="block w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-sm shadow-gray-900/[0.02] transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+        className="block w-full rounded-xl border border-border-soft bg-surface-card px-3.5 py-2.5 text-sm text-text-default shadow-sm shadow-gray-900/[0.02] transition-colors focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

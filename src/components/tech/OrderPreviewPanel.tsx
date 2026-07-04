@@ -59,7 +59,7 @@ function getConditionBadgeClasses(condition: string | null | undefined): string 
   if (!c) return null;
   if (c.includes('new')) return 'bg-yellow-100 text-yellow-800';
   if (c.includes('part')) return 'bg-amber-200 text-amber-900';
-  return 'bg-slate-100 text-slate-700';
+  return 'bg-surface-sunken text-text-muted';
 }
 
 /**
@@ -68,7 +68,7 @@ function getConditionBadgeClasses(condition: string | null | undefined): string 
  */
 function getQtyBadgeClasses(quantity: number): string {
   if (quantity >= 2) return 'bg-amber-100 text-amber-700';
-  return 'bg-gray-100 text-gray-600';
+  return 'bg-surface-sunken text-text-muted';
 }
 
 /**
@@ -120,8 +120,8 @@ export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
       {/* ── Title — the visual anchor. The #id / channel meta row has been
             removed since that information is already shown by the selected
             sidebar card; repeating it here only added vertical noise. ── */}
-      <header className="border-b border-gray-200 pb-3">
-        <h2 className="text-xl font-bold leading-tight tracking-tight text-gray-900">
+      <header className="border-b border-border-soft pb-3">
+        <h2 className="text-xl font-bold leading-tight tracking-tight text-text-default">
           {title || 'Untitled order'}
         </h2>
       </header>
@@ -130,12 +130,12 @@ export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
             horizontal band. Cells share the row width evenly via flex-1
             (left-aligned) and never shrink below their content; horizontal
             scroll kicks in as a graceful fallback if the panel goes narrow. ── */}
-      <div className="flex divide-x divide-gray-200 overflow-x-auto overflow-y-hidden rounded-lg border border-gray-200 bg-gray-50/60">
+      <div className="flex divide-x divide-border-soft overflow-x-auto overflow-y-hidden rounded-lg border border-border-soft bg-surface-canvas/60">
         <StatCell icon={Flag} iconLabel="Status">
           <StatusPill tone={status.tone}>{status.label}</StatusPill>
         </StatCell>
         <StatCell icon={Calendar} iconLabel="Ship by">
-          <span className="text-sm font-bold text-gray-900">{displayDate}</span>
+          <span className="text-sm font-bold text-text-default">{displayDate}</span>
         </StatCell>
         <StatCell icon={Clock} iconLabel="Urgency">
           <span className={`text-sm font-bold ${daysLateTone}`}>
@@ -148,7 +148,7 @@ export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
           {trackingNumber ? (
             <span className="inline-flex items-center gap-0.5">
               <HoverTooltip label={trackingNumber} asChild>
-                <span className="font-mono text-sm font-bold text-gray-900">
+                <span className="font-mono text-sm font-bold text-text-default">
                   {getLast4(trackingNumber)}
                 </span>
               </HoverTooltip>
@@ -166,7 +166,7 @@ export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
               />
             </span>
           ) : (
-            <span className="text-sm font-bold text-gray-400">—</span>
+            <span className="text-sm font-bold text-text-faint">—</span>
           )}
         </StatCell>
         {/* Condition + Qty mirror the sidebar's bottom-right pair: condition
@@ -180,7 +180,7 @@ export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
               {order.condition}
             </span>
           ) : (
-            <span className="text-sm font-bold text-gray-500">—</span>
+            <span className="text-sm font-bold text-text-soft">—</span>
           )}
         </StatCell>
         <StatCell icon={Layers} iconLabel="Qty">
@@ -232,7 +232,7 @@ function StatCell({ icon: Icon, iconLabel, children }: StatCellProps) {
   return (
     <div className="flex flex-1 min-w-fit items-center justify-start gap-1.5 px-2.5 py-2">
       <Icon
-        className="h-3.5 w-3.5 flex-shrink-0 text-gray-400"
+        className="h-3.5 w-3.5 flex-shrink-0 text-text-faint"
         aria-label={iconLabel}
       />
       <HoverTooltip label={iconLabel} asChild>
@@ -255,7 +255,7 @@ function StatusPill({ tone, children }: StatusPillProps) {
     orange: 'bg-orange-100 text-orange-700',
     red: 'bg-red-100 text-red-700',
     amber: 'bg-amber-100 text-amber-700',
-    gray: 'bg-gray-100 text-gray-700',
+    gray: 'bg-surface-sunken text-text-muted',
   };
   return (
     <span
@@ -307,7 +307,7 @@ function ExternalButton({
       }}
       disabled={disabled}
       tone="accent"
-      className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-blue-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+      className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-blue-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-faint"
       ariaLabel={ariaLabel}
       icon={<ExternalLink className="h-3 w-3" />}
     />

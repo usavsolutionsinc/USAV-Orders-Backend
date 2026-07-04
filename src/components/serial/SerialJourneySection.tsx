@@ -65,7 +65,7 @@ function HeaderAction({
         icon={children}
         onClick={onClick}
         ariaLabel={label}
-        className="-my-0.5 inline-flex items-center rounded p-1 hover:bg-gray-100"
+        className="-my-0.5 inline-flex items-center rounded p-1 hover:bg-surface-sunken"
       />
     </HoverTooltip>
   );
@@ -103,9 +103,9 @@ export function SerialJourneySection({
   // failed journey fetch renders a quiet inline error, never throws upward.
   if (serial.length > 0 && query.isError) {
     return (
-      <section className={className ?? 'mx-8 mt-2 border-t border-gray-100 pt-4 pb-8'}>
+      <section className={className ?? 'mx-8 mt-2 border-t border-border-hairline pt-4 pb-8'}>
         <header className="mb-3">
-          <h3 className="text-eyebrow font-bold uppercase tracking-[0.14em] text-gray-400">{title}</h3>
+          <h3 className="text-eyebrow font-bold uppercase tracking-[0.14em] text-text-faint">{title}</h3>
         </header>
         <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-6 text-center text-caption font-semibold text-rose-600">
           Could not load this serial&rsquo;s journey.
@@ -139,7 +139,7 @@ export function SerialJourneySection({
           <Link
             href={buildSerialJourneyHref(serial)}
             aria-label="Open full journey"
-            className="-my-0.5 inline-flex items-center rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            className="-my-0.5 inline-flex items-center rounded p-1 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
           >
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
@@ -149,12 +149,12 @@ export function SerialJourneySection({
         <HoverTooltip label="Ship/return round trips for this serial">
           <span className="flex items-center gap-1">
             {shippedCount > 0 ? (
-              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-700 ring-1 ring-inset ring-emerald-200">
+              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-emerald-700 ring-1 ring-inset ring-emerald-200">
                 {shippedCount} shipped
               </span>
             ) : null}
             {returnedCount > 0 ? (
-              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-700 ring-1 ring-inset ring-amber-200">
+              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-amber-700 ring-1 ring-inset ring-amber-200">
                 {returnedCount} returned
               </span>
             ) : null}

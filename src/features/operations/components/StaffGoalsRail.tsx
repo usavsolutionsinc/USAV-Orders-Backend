@@ -61,7 +61,7 @@ function StaffGoalCard({ row, index }: {
       viewport={{ once: true }}
       transition={{ delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -2 }}
-      className="bg-white rounded-[20px] border border-border-soft p-4 flex items-center gap-3
+      className="bg-surface-card rounded-[20px] border border-border-soft p-4 flex items-center gap-3
                  shadow-[0_2px_12px_rgba(161,140,90,0.04)]
                  hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)]
                  transition-shadow min-w-[260px] sm:min-w-0"
@@ -119,11 +119,11 @@ export function StaffGoalsRail({ staffProgress, isLoading }: StaffGoalsRailProps
       {isLoading && rows.length === 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-[100px] bg-white/60 rounded-[20px] border border-border-soft animate-pulse" />
+            <div key={i} className="h-[100px] bg-surface-card/60 rounded-[20px] border border-border-soft animate-pulse" />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-white border border-dashed border-border-soft rounded-[20px] p-8 text-center">
+        <div className="bg-surface-card border border-dashed border-border-soft rounded-[20px] p-8 text-center">
           <p className="text-[13px] font-semibold text-text-muted">No staff goals set yet.</p>
           <p className="text-caption text-text-muted mt-1">Set daily goals from the staff settings to track progress here.</p>
         </div>

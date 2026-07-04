@@ -60,7 +60,7 @@ const DEFAULT_FORM_STATE: ReasonCodeFormState = {
 };
 
 const inputClass =
-  'h-10 w-full border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-gray-400';
+  'h-10 w-full border border-border-soft bg-surface-card px-3 text-sm font-semibold text-text-default outline-none transition-colors focus:border-border-emphasis';
 
 export function ReasonCodesManagementTab() {
   const queryClient = useQueryClient();
@@ -227,7 +227,7 @@ export function ReasonCodesManagementTab() {
     <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#ffffff_0%,#f5f7fa_100%)]">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-4`}>
-          <p className={`${sectionLabel} truncate text-gray-900`}>Reason Codes</p>
+          <p className={`${sectionLabel} truncate text-text-default`}>Reason Codes</p>
           <div className={`${sectionLabel} flex flex-wrap items-center gap-4`}>
             <span>Total {rows.length}</span>
             <input
@@ -235,7 +235,7 @@ export function ReasonCodesManagementTab() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter code / label / category"
-              className="h-8 w-64 border border-gray-200 bg-white px-3 text-xs font-medium text-gray-900 outline-none focus:border-gray-400"
+              className="h-8 w-64 border border-border-soft bg-surface-card px-3 text-xs font-medium text-text-default outline-none focus:border-border-emphasis"
             />
             <Button variant="secondary" size="sm" icon={<Plus />} onClick={openAdd}>
               Add Code
@@ -245,10 +245,10 @@ export function ReasonCodesManagementTab() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-gray-200 bg-white">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-border-soft bg-surface-card">
           <div className="min-h-0 flex-1 overflow-auto">
             <div className="min-w-[980px]">
-              <div className={`${tableGridClass} ${tableHeader} border-b border-gray-200 px-4 py-3`}>
+              <div className={`${tableGridClass} ${tableHeader} border-b border-border-soft px-4 py-3`}>
                 <p>Code</p>
                 <p>Label</p>
                 <p>Category</p>
@@ -260,33 +260,33 @@ export function ReasonCodesManagementTab() {
               </div>
 
               {isLoading ? (
-                <div className="px-6 py-10 text-sm font-medium text-gray-500">Loading reason codes...</div>
+                <div className="px-6 py-10 text-sm font-medium text-text-soft">Loading reason codes...</div>
               ) : filtered.length === 0 ? (
                 <div className="px-6 py-10 text-center">
                   <p className={sectionLabel}>No Reason Codes</p>
-                  <p className="mt-2 text-sm font-medium text-gray-500">
+                  <p className="mt-2 text-sm font-medium text-text-soft">
                     {rows.length === 0 ? 'Add the first reason code for inventory adjustments.' : 'No codes match your filter.'}
                   </p>
                 </div>
               ) : (
                 filtered.map((row) => (
-                  <div key={row.id} className={`${tableGridClass} items-center border-b border-gray-100 px-4 py-3 text-sm last:border-b-0`}>
+                  <div key={row.id} className={`${tableGridClass} items-center border-b border-border-hairline px-4 py-3 text-sm last:border-b-0`}>
                     <p className={`${tableCell} truncate font-mono uppercase`}>{row.code}</p>
                     <p className={`${tableCell} truncate`}>{row.label}</p>
-                    <p className={`${tableCell} truncate uppercase tracking-[0.16em] text-gray-600`}>{row.category}</p>
-                    <p className={`${tableHeader} text-gray-700`}>{row.direction}</p>
-                    <p className={`${tableHeader} ${row.requires_note ? 'text-emerald-700' : 'text-gray-400'}`}>
+                    <p className={`${tableCell} truncate uppercase tracking-[0.16em] text-text-muted`}>{row.category}</p>
+                    <p className={`${tableHeader} text-text-muted`}>{row.direction}</p>
+                    <p className={`${tableHeader} ${row.requires_note ? 'text-emerald-700' : 'text-text-faint'}`}>
                       {row.requires_note ? 'Yes' : '-'}
                     </p>
-                    <p className={`${tableHeader} ${row.requires_photo ? 'text-emerald-700' : 'text-gray-400'}`}>
+                    <p className={`${tableHeader} ${row.requires_photo ? 'text-emerald-700' : 'text-text-faint'}`}>
                       {row.requires_photo ? 'Yes' : '-'}
                     </p>
-                    <p className={`${tableCell} text-gray-600`}>{row.sort_order}</p>
+                    <p className={`${tableCell} text-text-muted`}>{row.sort_order}</p>
                     <div className="flex items-center justify-end gap-2">
                       <HoverTooltip label="Edit reason code" asChild>
                         <IconButton
                           onClick={() => openEdit(row)}
-                          className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 hover:bg-gray-50"
+                          className="inline-flex h-8 w-8 items-center justify-center border border-border-soft hover:bg-surface-hover"
                           ariaLabel={`Edit ${row.code}`}
                           icon={<Edit className="h-3.5 w-3.5" />}
                         />
@@ -313,23 +313,23 @@ export function ReasonCodesManagementTab() {
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           {/* ds-raw-button: full-bleed modal scrim, not a styled control */}
           <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close reason code form" />
-          <div className="relative flex w-full max-w-2xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          <div className="relative flex w-full max-w-2xl flex-col overflow-hidden border border-border-soft bg-surface-card shadow-xl">
+            <div className="flex items-center justify-between border-b border-border-soft px-5 py-4">
               <div>
                 <p className={sectionLabel}>{editingId != null ? 'Edit Reason Code' : 'New Reason Code'}</p>
-                <h3 className="mt-1 text-base font-semibold text-gray-900">
+                <h3 className="mt-1 text-base font-semibold text-text-default">
                   {editingId != null ? `Update ${form.code}` : 'Add an inventory reason code'}
                 </h3>
               </div>
               <IconButton
                 onClick={closeForm}
-                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 hover:bg-gray-50"
+                className="inline-flex h-9 w-9 items-center justify-center border border-border-soft hover:bg-surface-hover"
                 ariaLabel="Close"
                 icon={<X className="h-4 w-4" />}
               />
             </div>
 
-            <div className="grid gap-4 border-b border-gray-200 px-5 py-5 md:grid-cols-2">
+            <div className="grid gap-4 border-b border-border-soft px-5 py-5 md:grid-cols-2">
               <label className="space-y-1">
                 <span className={`block ${sectionLabel}`}>Code</span>
                 <input
@@ -338,10 +338,10 @@ export function ReasonCodesManagementTab() {
                   disabled={editingId != null}
                   onChange={(e) => setForm((c) => ({ ...c, code: e.target.value.toUpperCase() }))}
                   placeholder="DAMAGED"
-                  className={`${inputClass} ${editingId != null ? 'cursor-not-allowed bg-gray-50 text-gray-500' : ''}`}
+                  className={`${inputClass} ${editingId != null ? 'cursor-not-allowed bg-surface-canvas text-text-soft' : ''}`}
                 />
                 {editingId != null && (
-                  <span className={`block ${fieldLabel} text-gray-400`}>Code is the key and can&apos;t be changed.</span>
+                  <span className={`block ${fieldLabel} text-text-faint`}>Code is the key and can&apos;t be changed.</span>
                 )}
               </label>
 
@@ -395,15 +395,15 @@ export function ReasonCodesManagementTab() {
 
               <div className="space-y-1 md:col-span-2">
                 <span className={`block ${sectionLabel}`}>Applies to nodes</span>
-                <span className={`block ${fieldLabel} text-gray-400`}>
+                <span className={`block ${fieldLabel} text-text-faint`}>
                   Empty = applies to every node (global). Select nodes to scope this reason to them (D3 palette).
                 </span>
-                <div className="mt-1 max-h-40 space-y-1 overflow-y-auto border border-gray-200 bg-white p-2">
+                <div className="mt-1 max-h-40 space-y-1 overflow-y-auto border border-border-soft bg-surface-card p-2">
                   {workflowNodes.length === 0 ? (
-                    <p className="text-xs font-medium text-gray-400">No workflow nodes available.</p>
+                    <p className="text-xs font-medium text-text-faint">No workflow nodes available.</p>
                   ) : (
                     workflowNodes.map((node) => (
-                      <label key={node.id} className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-gray-50">
+                      <label key={node.id} className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-surface-hover">
                         <input
                           type="checkbox"
                           checked={form.appliesTo.includes(node.id)}
@@ -415,11 +415,11 @@ export function ReasonCodesManagementTab() {
                                 : c.appliesTo.filter((nid) => nid !== node.id),
                             }))
                           }
-                          className="h-4 w-4 border-gray-300 text-gray-900 focus:ring-gray-300"
+                          className="h-4 w-4 border-border-default text-text-default focus:ring-border-default"
                         />
-                        <span className="text-xs font-medium text-gray-700">
+                        <span className="text-xs font-medium text-text-muted">
                           {node.label}
-                          {node.definitionName ? <span className="ml-1 text-gray-400">({node.definitionName})</span> : null}
+                          {node.definitionName ? <span className="ml-1 text-text-faint">({node.definitionName})</span> : null}
                         </span>
                       </label>
                     ))
@@ -427,24 +427,24 @@ export function ReasonCodesManagementTab() {
                 </div>
               </div>
 
-              <label className="flex items-center gap-3 border border-gray-200 px-3 py-3">
+              <label className="flex items-center gap-3 border border-border-soft px-3 py-3">
                 <input
                   type="checkbox"
                   checked={form.requiresNote}
                   onChange={(e) => setForm((c) => ({ ...c, requiresNote: e.target.checked }))}
-                  className="h-4 w-4 border-gray-300 text-gray-900 focus:ring-gray-300"
+                  className="h-4 w-4 border-border-default text-text-default focus:ring-border-default"
                 />
-                <span className={`${sectionLabel} text-gray-700`}>Requires note</span>
+                <span className={`${sectionLabel} text-text-muted`}>Requires note</span>
               </label>
 
-              <label className="flex items-center gap-3 border border-gray-200 px-3 py-3">
+              <label className="flex items-center gap-3 border border-border-soft px-3 py-3">
                 <input
                   type="checkbox"
                   checked={form.requiresPhoto}
                   onChange={(e) => setForm((c) => ({ ...c, requiresPhoto: e.target.checked }))}
-                  className="h-4 w-4 border-gray-300 text-gray-900 focus:ring-gray-300"
+                  className="h-4 w-4 border-border-default text-text-default focus:ring-border-default"
                 />
-                <span className={`${sectionLabel} text-gray-700`}>Requires photo</span>
+                <span className={`${sectionLabel} text-text-muted`}>Requires photo</span>
               </label>
             </div>
 

@@ -103,6 +103,10 @@ async function createOrUpdateOrderFromEbayTracking(params: {
   const saleAmount = parsedAmount != null && !Number.isNaN(parsedAmount) ? parsedAmount : null;
   const currency = String(params.ebayOrder?.pricingSummary?.total?.currency || '').trim() || 'USD';
 
+  // Buyer checkout note — mirrored raw (plan §2.3: the mirror is the signal
+  // source; the connector only persists). COALESCE below never clobbers.
+  const buyerNote = String(params.ebayOrder?.buyerCheckoutNotes || '').trim() || null;
+
   const trackingKey18 = normalizeTrackingKey18(params.trackingNumber);
   if (!trackingKey18) return 'updated';
 
@@ -152,7 +156,8 @@ async function createOrUpdateOrderFromEbayTracking(params: {
            status = CASE
              WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
              ELSE status
-           END
+           END,
+           buyer_note = COALESCE(buyer_note, $11)
        WHERE id = $9 AND organization_id = $10`,
       [
         orderId,
@@ -165,6 +170,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
         skuCatalogId,
         existingId,
         params.organizationId,
+        buyerNote,
       ]
     );
 
@@ -187,9 +193,10 @@ async function createOrUpdateOrderFromEbayTracking(params: {
       order_date,
       sku_catalog_id,
       sale_amount,
-      currency
+      currency,
+      buyer_note
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15
+      $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16
     )
     ON CONFLICT ON CONSTRAINT idx_orders_unique_account_order DO UPDATE
       SET product_title = COALESCE(NULLIF(EXCLUDED.product_title, 'No title'), orders.product_title),
@@ -201,7 +208,8 @@ async function createOrUpdateOrderFromEbayTracking(params: {
           status = CASE
             WHEN orders.status IS NULL OR orders.status = '' OR orders.status = 'unassigned' THEN 'shipped'
             ELSE orders.status
-          END`,
+          END,
+          buyer_note = COALESCE(orders.buyer_note, EXCLUDED.buyer_note)`,
     [
       params.organizationId,
       orderId,
@@ -218,6 +226,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
       skuCatalogId,
       saleAmount,
       currency,
+      buyerNote,
     ]
   );
 

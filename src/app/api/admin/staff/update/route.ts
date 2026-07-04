@@ -18,6 +18,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/withAuth';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { requireSensitiveStepUp } from '@/lib/auth/sensitive-stepup';
 
@@ -85,6 +87,7 @@ export const POST = withAuth(async (req, ctx) => {
   if (r.rowCount === 0) {
     return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
   }
+  await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.staffOverrides]);
   return NextResponse.json({ staff: r.rows[0] });
 }, {
   permission: 'admin.manage_staff',

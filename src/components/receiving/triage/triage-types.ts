@@ -157,9 +157,9 @@ export function ticketStatusTone(status: string): {
     case 'solved':
       return { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200', label: 'Solved' };
     case 'closed':
-      return { bg: 'bg-gray-100', text: 'text-gray-600', ring: 'ring-gray-200', label: 'Closed' };
+      return { bg: 'bg-surface-sunken', text: 'text-text-muted', ring: 'ring-border-soft', label: 'Closed' };
     default:
-      return { bg: 'bg-gray-50', text: 'text-gray-600', ring: 'ring-gray-200', label: status || '—' };
+      return { bg: 'bg-surface-canvas', text: 'text-text-muted', ring: 'ring-border-soft', label: status || '—' };
   }
 }
 

@@ -48,7 +48,7 @@ function StageBar({ title, href, stages, isLoading, empty }: StageBarProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
-      className="block bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+      className="block bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
     >
       <div className="flex items-baseline justify-between mb-4">
         <p className="text-[13px] font-extrabold text-text-default tracking-tight">{title}</p>

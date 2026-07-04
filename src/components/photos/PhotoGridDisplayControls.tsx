@@ -74,8 +74,8 @@ export function PhotoGridDisplayControls({
             disabled={disabled || isRefreshing}
             onClick={onRefresh}
             className={cn(
-              'ds-raw-button flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors',
-              'hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60',
+              'ds-raw-button flex h-8 w-8 items-center justify-center rounded-lg border border-border-soft bg-surface-card text-text-soft transition-colors',
+              'hover:bg-surface-sunken hover:text-text-default disabled:cursor-not-allowed disabled:opacity-60',
             )}
           >
             {isRefreshing ? (

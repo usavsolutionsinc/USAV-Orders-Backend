@@ -120,7 +120,7 @@ export function TestingRecentRail({
           const tested = getTestedQty(row);
           const received = row.quantity_received;
           return (
-            <span className={tested >= received && received > 0 ? 'text-emerald-600' : 'text-gray-600'}>
+            <span className={tested >= received && received > 0 ? 'text-emerald-600' : 'text-text-muted'}>
               {tested}/{received}
             </span>
           );

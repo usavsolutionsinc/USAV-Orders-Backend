@@ -53,7 +53,7 @@ export function VoicemailQueue({ modeToggle = null }: { modeToggle?: ReactNode }
   const openCount = data?.openCount ?? 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       <div className="shrink-0 px-2 pt-2">
         <SearchBar
           value={text}
@@ -99,7 +99,7 @@ export function VoicemailQueue({ modeToggle = null }: { modeToggle?: ReactNode }
             />
           </div>
         ) : (
-          <ul className="divide-y divide-gray-50">
+          <ul className="divide-y divide-border-hairline">
             {items.map((vm) => (
               <VoicemailRow
                 key={vm.id}
@@ -113,7 +113,7 @@ export function VoicemailQueue({ modeToggle = null }: { modeToggle?: ReactNode }
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 border-t border-gray-100 px-3 py-2 text-micro font-bold uppercase tracking-widest text-gray-400">
+      <div className="flex shrink-0 items-center gap-1.5 border-t border-border-hairline px-3 py-2 text-micro font-bold uppercase tracking-widest text-text-faint">
         <Voicemail className="h-3 w-3" />
         {openCount > 0 ? `${openCount} open follow-up${openCount === 1 ? '' : 's'}` : 'Follow-up queue'}
       </div>
@@ -149,7 +149,7 @@ function VoicemailRow({
         onClick={onSelect}
         className={cn(
           'ds-raw-button flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors',
-          selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50',
+          selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-surface-hover',
         )}
       >
         <HoverTooltip label={VOICEMAIL_STATUS_LABEL[vm.followupStatus]} asChild focusable={false}>
@@ -162,7 +162,7 @@ function VoicemailRow({
           <span className="flex items-center gap-1.5">
             <span
               className={cn(
-                'min-w-0 flex-1 truncate text-label font-bold text-gray-900',
+                'min-w-0 flex-1 truncate text-label font-bold text-text-default',
                 !vm.isRead && 'after:ml-1 after:inline-block after:h-1.5 after:w-1.5 after:rounded-full after:bg-blue-500 after:align-middle',
               )}
             >
@@ -174,13 +174,13 @@ function VoicemailRow({
               </span>
             ) : null}
           </span>
-          <span className="mt-0.5 flex items-center gap-1 truncate text-micro font-semibold uppercase tracking-widest text-gray-500">
-            <Clock className="h-2.5 w-2.5 shrink-0 text-gray-300" />
+          <span className="mt-0.5 flex items-center gap-1 truncate text-micro font-semibold uppercase tracking-widest text-text-soft">
+            <Clock className="h-2.5 w-2.5 shrink-0 text-text-faint" />
             {meta}
-            {number ? <span className="text-gray-400">· {number}</span> : null}
+            {number ? <span className="text-text-faint">· {number}</span> : null}
           </span>
           {vm.transcriptPreview ? (
-            <span className="mt-1 block truncate text-caption leading-4 text-gray-500">
+            <span className="mt-1 block truncate text-caption leading-4 text-text-soft">
               “{vm.transcriptPreview}”
             </span>
           ) : null}

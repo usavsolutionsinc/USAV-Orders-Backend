@@ -252,7 +252,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
             label="Reason or Ticket #"
             required
             hintBelow={
-              <p className="text-eyebrow font-medium text-gray-500">
+              <p className="text-eyebrow font-medium text-text-soft">
                 Will be saved as:{' '}
                 <span className="font-bold">
                   {replacementData.reason || '[Reason]'} - {replacementData.product_title || '[Product Title]'}

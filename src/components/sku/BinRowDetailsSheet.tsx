@@ -286,20 +286,20 @@ export function BinRowDetailsSheet({
       role="dialog"
       aria-modal="true"
       aria-label="Edit row details"
-      className="fixed inset-0 z-panelOverlay flex flex-col bg-slate-50"
+      className="fixed inset-0 z-panelOverlay flex flex-col bg-surface-canvas"
     >
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
+      <header className="flex items-center gap-2 border-b border-border-soft bg-surface-card px-3 py-3">
         <IconButton
           icon={<span className="text-sm font-bold">←</span>}
           ariaLabel="Back"
           onClick={onClose}
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-slate-700 active:bg-slate-50"
+          className="h-11 w-11 rounded-md border border-border-default bg-surface-card text-text-muted active:bg-surface-hover"
         />
         <div className="min-w-0 flex-1 text-center">
-          <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.18em] text-text-soft">
             Row details
           </p>
-          <p className="truncate font-mono text-sm font-black text-slate-900">
+          <p className="truncate font-mono text-sm font-black text-text-default">
             {row.sku}
           </p>
         </div>
@@ -317,15 +317,15 @@ export function BinRowDetailsSheet({
         {/* Title override */}
         <section
           aria-disabled={!isAdmin}
-          className={`rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-2 ${
+          className={`rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm space-y-2 ${
             isAdmin ? '' : 'opacity-50 pointer-events-none'
           }`}
         >
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
             Product title
           </p>
           {row.productTitle && (
-            <p className="text-micro leading-snug text-slate-500">
+            <p className="text-micro leading-snug text-text-soft">
               <span className="font-bold">Catalog:</span>{' '}
               <span className="font-mono">{row.productTitle}</span>
             </p>
@@ -335,7 +335,7 @@ export function BinRowDetailsSheet({
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
             placeholder="Short label (overrides catalog/Ecwid)"
-            className="w-full resize-none rounded-md border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
+            className="w-full resize-none rounded-md border border-border-default px-3 py-2 text-sm font-bold text-text-default focus:border-blue-500 focus:outline-none"
           />
           <div className="flex gap-2">
             <Button
@@ -349,7 +349,7 @@ export function BinRowDetailsSheet({
               {titleDraft.trim() === '' ? 'Clear override' : 'Save title'}
             </Button>
           </div>
-          <p className="text-micro font-bold uppercase tracking-widest text-slate-400">
+          <p className="text-micro font-bold uppercase tracking-widest text-text-faint">
             Stored in sku_stock.display_name_override · wins over Ecwid
           </p>
         </section>
@@ -357,14 +357,14 @@ export function BinRowDetailsSheet({
         {/* SKU swap */}
         <section
           aria-disabled={!isAdmin}
-          className={`rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-2 ${
+          className={`rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm space-y-2 ${
             isAdmin ? '' : 'opacity-50 pointer-events-none'
           }`}
         >
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
             Change SKU
           </p>
-          <p className="text-micro leading-snug text-slate-500">
+          <p className="text-micro leading-snug text-text-soft">
             Move{' '}
             <span className="font-mono font-bold">{row.qty}</span> from{' '}
             <span className="font-mono">{row.sku}</span> to the SKU below.
@@ -376,7 +376,7 @@ export function BinRowDetailsSheet({
             value={skuDraft}
             onChange={(e) => setSkuDraft(e.target.value)}
             placeholder="New SKU"
-            className="w-full rounded-md border border-slate-300 px-3 py-3 text-center font-mono text-base font-black text-slate-900 focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-border-default px-3 py-3 text-center font-mono text-base font-black text-text-default focus:border-blue-500 focus:outline-none"
           />
           <Button
             variant="brand"
@@ -391,11 +391,11 @@ export function BinRowDetailsSheet({
         </section>
 
         {/* Transfer to another bin */}
-        <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-2">
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+        <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm space-y-2">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
             Move to another bin
           </p>
-          <p className="text-micro leading-snug text-slate-500">
+          <p className="text-micro leading-snug text-text-soft">
             Scan or type the destination bin and how many to move.
           </p>
           <div className="grid grid-cols-[1fr_5rem] gap-2">
@@ -406,7 +406,7 @@ export function BinRowDetailsSheet({
               value={transferToDraft}
               onChange={(e) => setTransferToDraft(e.target.value)}
               placeholder="To bin"
-              className="rounded-md border border-slate-300 px-3 py-2.5 text-center font-mono text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-border-default px-3 py-2.5 text-center font-mono text-sm font-black text-text-default focus:border-blue-500 focus:outline-none"
             />
             <input
               type="number"
@@ -416,7 +416,7 @@ export function BinRowDetailsSheet({
               value={transferQtyDraft}
               onChange={(e) => setTransferQtyDraft(e.target.value)}
               placeholder={`≤ ${row.qty}`}
-              className="rounded-md border border-slate-300 px-2 py-2.5 text-center font-mono text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-border-default px-2 py-2.5 text-center font-mono text-sm font-black text-text-default focus:border-blue-500 focus:outline-none"
             />
           </div>
           <Button
@@ -434,13 +434,13 @@ export function BinRowDetailsSheet({
         </section>
 
         {/* Min / max */}
-        <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-2">
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+        <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm space-y-2">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
             Min / max
           </p>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
-              <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
                 Min
               </span>
               <input
@@ -449,11 +449,11 @@ export function BinRowDetailsSheet({
                 placeholder="—"
                 value={minDraft}
                 onChange={(e) => setMinDraft(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-center font-mono text-base font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-border-default px-2 py-2 text-center font-mono text-base font-bold text-text-default focus:border-blue-500 focus:outline-none"
               />
             </label>
             <label className="block">
-              <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
                 Max
               </span>
               <input
@@ -462,7 +462,7 @@ export function BinRowDetailsSheet({
                 placeholder="—"
                 value={maxDraft}
                 onChange={(e) => setMaxDraft(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-center font-mono text-base font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-border-default px-2 py-2 text-center font-mono text-base font-bold text-text-default focus:border-blue-500 focus:outline-none"
               />
             </label>
           </div>

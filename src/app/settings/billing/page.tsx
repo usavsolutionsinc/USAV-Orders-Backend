@@ -48,25 +48,25 @@ export default async function BillingPage() {
     <Shell>
       <PageHeader title="Billing" maxWidth="5xl" />
       <div className="mx-auto max-w-5xl space-y-6 px-6 py-6">
-        <p className="text-[13px] text-gray-500">Workspace: <span className="font-medium text-gray-700">{org.name}</span></p>
+        <p className="text-caption text-text-soft">Workspace: <span className="font-medium text-text-muted">{org.name}</span></p>
 
         <Card>
           <div className="flex items-start justify-between gap-6">
             <div>
-              <div className="text-caption font-medium uppercase tracking-[0.12em] text-gray-500">Current plan</div>
-              <div className="mt-1 text-[22px] font-semibold text-gray-900">{PLAN_LABELS[org.plan].label}</div>
-              <p className="mt-1 text-[12.5px] text-gray-500">{PLAN_LABELS[org.plan].tagline}</p>
+              <div className="text-caption font-medium uppercase tracking-[0.12em] text-text-soft">Current plan</div>
+              <div className="mt-1 text-[22px] font-semibold text-text-default">{PLAN_LABELS[org.plan].label}</div>
+              <p className="mt-1 text-[12.5px] text-text-soft">{PLAN_LABELS[org.plan].tagline}</p>
               <dl className="mt-4 grid grid-cols-2 gap-x-8 gap-y-1.5 text-label">
-                <dt className="text-gray-500">Status</dt>
-                <dd className="font-medium text-gray-900">{sub?.status ?? org.status}</dd>
-                <dt className="text-gray-500">Trial ends</dt>
-                <dd className="font-medium text-gray-900">{fmtDate(org.trialEndsAt)}</dd>
+                <dt className="text-text-soft">Status</dt>
+                <dd className="font-medium text-text-default">{sub?.status ?? org.status}</dd>
+                <dt className="text-text-soft">Trial ends</dt>
+                <dd className="font-medium text-text-default">{fmtDate(org.trialEndsAt)}</dd>
                 {sub && (
                   <>
-                    <dt className="text-gray-500">Current period ends</dt>
-                    <dd className="font-medium text-gray-900">{fmtDate(sub.currentPeriodEnd)}</dd>
-                    <dt className="text-gray-500">Cancels at period end</dt>
-                    <dd className="font-medium text-gray-900">{sub.cancelAtPeriodEnd ? 'Yes' : 'No'}</dd>
+                    <dt className="text-text-soft">Current period ends</dt>
+                    <dd className="font-medium text-text-default">{fmtDate(sub.currentPeriodEnd)}</dd>
+                    <dt className="text-text-soft">Cancels at period end</dt>
+                    <dd className="font-medium text-text-default">{sub.cancelAtPeriodEnd ? 'Yes' : 'No'}</dd>
                   </>
                 )}
               </dl>
@@ -76,23 +76,23 @@ export default async function BillingPage() {
         </Card>
 
         <Card>
-          <div className="text-caption font-medium uppercase tracking-[0.12em] text-gray-500">Entitlements</div>
-          <ul className="mt-3 grid grid-cols-2 gap-y-1.5 text-[12.5px] text-gray-700 sm:grid-cols-3">
+          <div className="text-caption font-medium uppercase tracking-[0.12em] text-text-soft">Entitlements</div>
+          <ul className="mt-3 grid grid-cols-2 gap-y-1.5 text-[12.5px] text-text-muted sm:grid-cols-3">
             {Object.entries(ent.features).map(([key, on]) => (
               <li key={key} className="flex items-center gap-2">
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${on ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                <span className={on ? 'text-gray-900' : 'text-gray-400'}>{key}</span>
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${on ? 'bg-emerald-500' : 'bg-surface-strong'}`} />
+                <span className={on ? 'text-text-default' : 'text-text-faint'}>{key}</span>
               </li>
             ))}
           </ul>
-          <div className="mt-4 text-label text-gray-500">
+          <div className="mt-4 text-label text-text-soft">
             Caps: {ent.maxStaff || '∞'} staff · {ent.maxMonthlyOrders || '∞'} orders/mo ·{' '}
             {ent.maxWarehouses || '∞'} warehouses · {ent.maxIntegrations || '∞'} integrations
           </div>
         </Card>
 
         <Card>
-          <div className="text-caption font-medium uppercase tracking-[0.12em] text-gray-500">Change plan</div>
+          <div className="text-caption font-medium uppercase tracking-[0.12em] text-text-soft">Change plan</div>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {UPGRADABLE.map((plan) => {
               const labels = PLAN_LABELS[plan];
@@ -102,13 +102,13 @@ export default async function BillingPage() {
               return (
                 <div
                   key={plan}
-                  className={`rounded-2xl border p-4 ${current ? 'border-slate-900 bg-slate-50' : 'border-gray-200 bg-white'}`}
+                  className={`rounded-2xl border p-4 ${current ? 'border-border-strong bg-surface-canvas' : 'border-border-soft bg-surface-card'}`}
                 >
-                  <div className="text-[14px] font-semibold text-gray-900">{labels.label}</div>
-                  <p className="mt-0.5 text-label text-gray-500">{labels.tagline}</p>
+                  <div className="text-[14px] font-semibold text-text-default">{labels.label}</div>
+                  <p className="mt-0.5 text-label text-text-soft">{labels.tagline}</p>
                   <div className="mt-3">
                     {current ? (
-                      <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-caption font-medium text-white">Current</span>
+                      <span className="inline-flex items-center rounded-full bg-surface-inverse px-3 py-1 text-caption font-medium text-white">Current</span>
                     ) : configured ? (
                       // No wrapping <form>: UpgradeButton POSTs JSON via fetch.
                       // A native form-POST would send urlencoded and 400 the
@@ -122,8 +122,8 @@ export default async function BillingPage() {
               );
             })}
           </div>
-          <p className="mt-3 text-[11.5px] text-gray-500">
-            Enterprise is sales-assisted — <a className="font-medium text-slate-900 hover:underline" href="mailto:sales@usav.example.com">contact us</a>.
+          <p className="mt-3 text-[11.5px] text-text-soft">
+            Enterprise is sales-assisted — <a className="font-medium text-text-default hover:underline" href="mailto:sales@usav.example.com">contact us</a>.
           </p>
         </Card>
       </div>
@@ -133,12 +133,12 @@ export default async function BillingPage() {
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-900/[0.02]">
+    <div className="rounded-2xl border border-border-soft bg-surface-card p-6 shadow-sm shadow-gray-900/[0.02]">
       {children}
     </div>
   );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-gray-50 antialiased">{children}</div>;
+  return <div className="min-h-screen bg-surface-canvas antialiased">{children}</div>;
 }

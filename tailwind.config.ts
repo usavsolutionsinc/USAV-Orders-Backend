@@ -15,6 +15,20 @@ const zIndexScale = Object.fromEntries(
     Object.entries(zIndex).map(([name, value]) => [name, String(value)]),
 );
 
+/**
+ * Theme-registry color: a Tailwind v3 "function color". With no alpha modifier
+ * Tailwind passes `opacityValue = 'var(--tw-*-opacity)'` — we return the plain
+ * `var()` (byte-identical CSS to a string color, zero regression). With a
+ * modifier (`bg-surface-card/90`) it passes the number — we wrap in
+ * `color-mix()` so alpha works over hex/rgba CSS variables (which `<alpha-value>`
+ * substitution cannot do). Chrome 111+/Safari 16.2+ — fine for this app.
+ */
+const themed = (cssVar: string) =>
+    (({ opacityValue }: { opacityValue?: string }) =>
+        opacityValue === undefined || opacityValue.startsWith('var(')
+            ? `var(${cssVar})`
+            : `color-mix(in srgb, var(${cssVar}) calc(${opacityValue} * 100%), transparent)`) as unknown as string;
+
 const config: Config = {
     content: [
         "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -33,6 +47,13 @@ const config: Config = {
             colors: {
                 background: "var(--background)",
                 foreground: "var(--foreground)",
+                // Dynamic Staff Accent Theme:
+                'accent-bg': themed('--ds-color-accent-bg'),
+                'accent-hover': themed('--ds-color-accent-hover'),
+                'accent-light': themed('--ds-color-accent-light'),
+                'accent-border': themed('--ds-color-accent-border'),
+                'accent-text': themed('--ds-color-accent-text'),
+                'accent-shadow': themed('--ds-color-accent-shadow'),
                 // USAV brand navy
                 navy: {
                     50:  '#f0f4fb',
@@ -52,29 +73,79 @@ const config: Config = {
                 // doubles it — `text-text-default`, `bg-surface-canvas`,
                 // `border-border-soft`. Keeps neutral + functional families
                 // symmetric. CSS vars are curated in src/styles/globals.css.
-                'text-default': 'var(--ds-color-text-primary)',
-                'text-muted': 'var(--ds-color-text-secondary)',
-                'text-soft': 'var(--ds-color-text-soft)',
-                'text-faint': 'var(--ds-color-text-faint)',
-                'surface-canvas': 'var(--ds-color-background-canvas)',
-                'surface-card': 'var(--ds-color-background-surface)',
-                'surface-sunken': 'var(--ds-color-surface-sunken)',
-                'border-soft': 'var(--ds-color-border-subtle)',
-                'border-default': 'var(--ds-color-border-default)',
+                'text-default': themed('--ds-color-text-primary'),
+                'text-muted': themed('--ds-color-text-secondary'),
+                'text-soft': themed('--ds-color-text-soft'),
+                'text-faint': themed('--ds-color-text-faint'),
+                'surface-canvas': themed('--ds-color-background-canvas'),
+                'surface-card': themed('--ds-color-background-surface'),
+                'surface-sunken': themed('--ds-color-surface-sunken'),
+                // Interaction wash (row hover) — lighter than card on dark,
+                // canvas-toned on light. The codemod target for hover:bg-gray-50.
+                'surface-hover': themed('--ds-color-surface-hover'),
+                // Tracks / skeletons / avatar placeholders (≈ gray-200).
+                'surface-strong': themed('--ds-color-surface-strong'),
+                // Inverted chrome — dark pills/action bars/headers that must
+                // stay distinct-but-themed (mid-slate on dark, near-black on
+                // light). Text on them = text-inverse / text-inverse-soft.
+                'surface-inverse': themed('--ds-color-surface-inverse'),
+                'surface-inverse-hover': themed('--ds-color-surface-inverse-hover'),
+                // Chip resting ON an inverse bar (≈ gray-700 fill).
+                'surface-inverse-raised': themed('--ds-color-surface-inverse-raised'),
+                // Muted standalone dark fill (≈ gray-600 fill).
+                'surface-inverse-soft': themed('--ds-color-surface-inverse-soft'),
+                'text-inverse': themed('--ds-color-text-inverse'),
+                'text-inverse-soft': themed('--ds-color-text-inverse-soft'),
+                // ── Fixed, scheme-INDEPENDENT stage/overlay vocabulary ──
+                // These are deliberately identical in every theme (plain hex, so
+                // Tailwind's native alpha modifiers work: bg-scrim/40, bg-glass/10).
+                // scrim  — modal/photo backdrop washes (was bg-black/NN, bg-gray-900/NN)
+                // glass  — light glass highlight on colored/dark fills (was bg-white/5..40)
+                // stage  — immersive media chrome: camera viewfinders, photo
+                //          lightboxes, fullscreen scanners. Always dark, in every
+                //          theme — the stage serves the media, not the palette.
+                scrim: '#020617',
+                glass: '#ffffff',
+                stage: {
+                    DEFAULT: '#000000', // viewfinder / lightbox backdrop
+                    raised: '#1f2937', // control pills on the stage (≈ gray-800)
+                    soft: '#d1d5db', // secondary text/icons on the stage (≈ gray-300)
+                    contrast: '#ffffff', // shutter buttons / max-contrast elements
+                },
+                'border-soft': themed('--ds-color-border-subtle'),
+                'border-default': themed('--ds-color-border-default'),
+                // Near-invisible hairlines (≈ border-gray-100).
+                'border-hairline': themed('--ds-color-border-hairline'),
+                // Emphasis border (≈ gray-400: dashed drop-zones, dotted underlines).
+                'border-emphasis': themed('--ds-color-border-emphasis'),
+                // Max-emphasis border (≈ gray-900 selection outlines).
+                'border-strong': themed('--ds-color-border-strong'),
+                // Border on inverted chrome (≈ gray-700 on a gray-900 bar).
+                'border-inverse': themed('--ds-color-border-inverse'),
                 // Functional tones — status pills/badges:
                 // bg-surface-success + text-text-success + border-border-success.
-                'text-success': 'var(--ds-color-text-success)',
-                'text-warning': 'var(--ds-color-text-warning)',
-                'text-danger': 'var(--ds-color-text-danger)',
-                'text-accent': 'var(--ds-color-text-accent)',
-                'surface-success': 'var(--ds-color-surface-success)',
-                'surface-warning': 'var(--ds-color-surface-warning)',
-                'surface-danger': 'var(--ds-color-surface-danger)',
-                'surface-accent': 'var(--ds-color-surface-accent)',
-                'border-success': 'var(--ds-color-border-success)',
-                'border-warning': 'var(--ds-color-border-warning)',
-                'border-danger': 'var(--ds-color-border-danger)',
-                'border-accent': 'var(--ds-color-border-accent)',
+                'text-success': themed('--ds-color-text-success'),
+                'text-warning': themed('--ds-color-text-warning'),
+                'text-danger': themed('--ds-color-text-danger'),
+                'text-accent': themed('--ds-color-text-accent'),
+                'surface-success': themed('--ds-color-surface-success'),
+                'surface-warning': themed('--ds-color-surface-warning'),
+                'surface-danger': themed('--ds-color-surface-danger'),
+                'surface-accent': themed('--ds-color-surface-accent'),
+                'border-success': themed('--ds-color-border-success'),
+                'border-warning': themed('--ds-color-border-warning'),
+                'border-danger': themed('--ds-color-border-danger'),
+                'border-accent': themed('--ds-color-border-accent'),
+                // Extended tone text (dashboard categories / informational accents).
+                'text-info': themed('--ds-color-text-info'),
+                'text-fulfillment': themed('--ds-color-text-fulfillment'),
+                // Solid tone fills — progress bars, accent lines, saturated
+                // indicators (bg-fill-info, …). Themed per palette.
+                'fill-info': themed('--ds-color-fill-info'),
+                'fill-success': themed('--ds-color-fill-success'),
+                'fill-warning': themed('--ds-color-fill-warning'),
+                'fill-danger': themed('--ds-color-fill-danger'),
+                'fill-fulfillment': themed('--ds-color-fill-fulfillment'),
             },
             fontFamily: {
                 sans: ['var(--ds-font-sans)', 'DM Sans', 'Inter', 'system-ui', 'sans-serif'],

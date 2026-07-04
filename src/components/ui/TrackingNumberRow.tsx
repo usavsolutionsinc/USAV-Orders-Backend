@@ -64,7 +64,7 @@ export function TrackingNumberRow({
     : null;
 
   const actions = (
-    <div className="flex items-center gap-1.5 text-gray-400">
+    <div className="flex items-center gap-1.5 text-text-faint">
       {trackingUrl ? (
         <HoverTooltip label={`Open ${label} on the carrier site for full tracking updates`} asChild>
           <a
@@ -102,7 +102,7 @@ export function TrackingNumberRow({
     <DetailsPanelRow
       label={label}
       headerAccessory={headerAccessory ? (
-        <span className={headerAccessoryClassName || 'text-micro font-black uppercase tracking-wide text-gray-500'}>
+        <span className={headerAccessoryClassName || 'text-micro font-black uppercase tracking-wide text-text-soft'}>
           {headerAccessory}
         </span>
       ) : null}
@@ -121,14 +121,14 @@ export function TrackingNumberRow({
           }}
           placeholder={placeholder}
           autoFocus
-          className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0"
+          className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-text-default outline-none ring-0"
         />
       ) : allowEdit ? (
         <button type="button" onClick={() => setIsEditing(true)} className="ds-raw-button block w-full py-0 text-left">
-          <p className="truncate text-sm font-bold text-gray-900">{displayValue || placeholder}</p>
+          <p className="truncate text-sm font-bold text-text-default">{displayValue || placeholder}</p>
         </button>
       ) : (
-        <p className="truncate text-sm font-bold text-gray-900">{displayValue || placeholder}</p>
+        <p className="truncate text-sm font-bold text-text-default">{displayValue || placeholder}</p>
       )}
     </DetailsPanelRow>
   );

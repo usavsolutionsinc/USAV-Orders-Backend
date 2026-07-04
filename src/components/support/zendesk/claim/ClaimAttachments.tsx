@@ -19,8 +19,8 @@ export function ClaimAttachments({ c }: { c: ZendeskClaimController }) {
   return (
     <section className="space-y-2.5">
       <div className="flex items-center justify-between">
-        <p className="text-micro font-black uppercase tracking-widest text-gray-500">Attachments</p>
-        <span className="text-caption font-semibold text-gray-400">{c.totalAttach} selected</span>
+        <p className="text-micro font-black uppercase tracking-widest text-text-soft">Attachments</p>
+        <span className="text-caption font-semibold text-text-faint">{c.totalAttach} selected</span>
       </div>
 
       {hasLibrary ? (
@@ -39,7 +39,7 @@ export function ClaimAttachments({ c }: { c: ZendeskClaimController }) {
                   aria-pressed={on}
                   className={cn(
                     'ds-raw-button group relative aspect-square overflow-hidden rounded-lg ring-1 ring-inset transition',
-                    on ? 'ring-blue-400' : 'opacity-40 grayscale ring-gray-200 hover:opacity-75',
+                    on ? 'ring-blue-400' : 'opacity-40 grayscale ring-border-soft hover:opacity-75',
                   )}
                 >
                   <PhotoThumb src={p.src} alt={p.caption ?? `Photo ${p.id}`} ratio="square" className="h-full w-full" />
@@ -62,7 +62,7 @@ export function ClaimAttachments({ c }: { c: ZendeskClaimController }) {
         {...dz.rootProps}
         className={cn(
           'rounded-xl border border-dashed px-4 py-3.5 transition',
-          dz.isDragging ? 'border-blue-400 bg-blue-50/60' : 'border-gray-200 bg-gray-50/60',
+          dz.isDragging ? 'border-blue-400 bg-blue-50/60' : 'border-border-soft bg-surface-canvas/60',
         )}
       >
         {c.added.length > 0 ? (
@@ -70,7 +70,7 @@ export function ClaimAttachments({ c }: { c: ZendeskClaimController }) {
             {c.added.map((a) => (
               <div
                 key={a.id}
-                className="relative aspect-square overflow-hidden rounded-lg ring-1 ring-inset ring-gray-200"
+                className="relative aspect-square overflow-hidden rounded-lg ring-1 ring-inset ring-border-soft"
               >
                 {/* blob preview of a just-dropped file (not a library tile) */}
                 <img src={a.url} alt={a.file.name} className="h-full w-full object-cover" />
@@ -91,8 +91,8 @@ export function ClaimAttachments({ c }: { c: ZendeskClaimController }) {
           onClick={dz.openPicker}
           className="ds-raw-button flex w-full flex-col items-center justify-center gap-1.5 py-1.5 text-center"
         >
-          <Upload className="h-5 w-5 text-gray-400" />
-          <span className="text-label font-semibold text-gray-600">
+          <Upload className="h-5 w-5 text-text-faint" />
+          <span className="text-label font-semibold text-text-muted">
             Drag photos here or <span className="text-blue-600">browse</span>
           </span>
         </button>

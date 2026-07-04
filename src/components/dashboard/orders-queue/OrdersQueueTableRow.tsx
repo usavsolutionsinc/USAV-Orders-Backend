@@ -115,8 +115,8 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       aria-pressed={selectMode ? undefined : isSelected}
       aria-label={selectMode ? `Select order ${record.order_id || record.id}` : `Open order ${record.order_id || record.id}`}
       data-order-row-id={String(record.id)}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-all cursor-pointer hover:bg-blue-50/50 ${
-        isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/40'
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-border-hairline px-3 py-1.5 transition-all cursor-pointer hover:bg-blue-50/50 ${
+        isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-surface-card' : 'bg-surface-canvas/40'
       }`}
     >
       <div className="flex flex-col min-w-0">
@@ -125,7 +125,7 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
             selectMode ? (
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                  isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                  isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-border-default bg-surface-card'
                 }`}
               >
                 {isChecked && <Check className="h-3 w-3" />}
@@ -140,9 +140,9 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
           // Select mode adds a leading checkbox (w-4 + mr-2 = 1.5rem); shift the
           // meta indent by that same offset so qty stays under the title.
           indent={selectMode ? `calc(${META_COL.indent} + 1.5rem)` : undefined}
-          qty={<span className={qty > 1 ? 'text-yellow-600' : 'text-gray-500'}>{qty}</span>}
+          qty={<span className={qty > 1 ? 'text-yellow-600' : 'text-text-soft'}>{qty}</span>}
           condition={
-            <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>
+            <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-text-faint'}>
               {record.condition || 'N/A'}
             </span>
           }
@@ -188,7 +188,7 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
 
       <OrderIdentityChips
         platformLabel={platformLabel}
-        platformIconClass={platformLabel && productPageUrl ? platformColor : 'text-gray-500'}
+        platformIconClass={platformLabel && productPageUrl ? platformColor : 'text-text-soft'}
         platformBorderClass={getOrderPlatformBorderColor(platformLabel)}
         productPageUrl={productPageUrl}
         isFba={isFba}

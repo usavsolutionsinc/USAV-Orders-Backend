@@ -9,9 +9,9 @@ import { ClaimTicketPicker } from './ClaimTicketPicker';
 import { PRIORITY_OPTIONS } from './claim-types';
 import type { ZendeskClaimController } from './useZendeskClaimController';
 
-const labelCls = 'text-micro font-black uppercase tracking-widest text-gray-500';
+const labelCls = 'text-micro font-black uppercase tracking-widest text-text-soft';
 const inputCls =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-[13px] text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
+  'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2.5 text-[13px] text-text-default outline-none transition placeholder:text-text-faint focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
 
 /** Internal-note ↔ public-reply segmented toggle. */
 function VisibilityToggle({
@@ -26,13 +26,13 @@ function VisibilityToggle({
   publicLabel: string;
 }) {
   return (
-    <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+    <div className="inline-flex rounded-lg bg-surface-sunken p-0.5">
       <button
         type="button"
         onClick={() => onChange(false)}
         className={cn(
           'ds-raw-button inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-caption font-bold transition',
-          !value ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+          !value ? 'bg-surface-card text-amber-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
         )}
       >
         <Lock className="h-3.5 w-3.5" /> {internalLabel}
@@ -42,7 +42,7 @@ function VisibilityToggle({
         onClick={() => onChange(true)}
         className={cn(
           'ds-raw-button inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-caption font-bold transition',
-          value ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+          value ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
         )}
       >
         <Globe className="h-3.5 w-3.5" /> {publicLabel}
@@ -95,11 +95,11 @@ export function ClaimComposer({ c }: { c: ZendeskClaimController }) {
             </div>
           </div>
 
-          <div className="space-y-2.5 rounded-xl bg-gray-50/80 p-3.5 ring-1 ring-inset ring-gray-100">
+          <div className="space-y-2.5 rounded-xl bg-surface-canvas/80 p-3.5 ring-1 ring-inset ring-border-hairline">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-label font-bold text-gray-700">First message</p>
-                <p className="text-caption text-gray-500">
+                <p className="text-label font-bold text-text-muted">First message</p>
+                <p className="text-caption text-text-soft">
                   {c.createPublic ? 'Emails the requester below.' : 'Internal note — nobody is emailed.'}
                 </p>
               </div>
@@ -119,7 +119,7 @@ export function ClaimComposer({ c }: { c: ZendeskClaimController }) {
                   className={inputCls}
                 />
                 <div className="relative">
-                  <AtSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <AtSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-faint" />
                   <input
                     value={c.requesterEmail}
                     onChange={(e) => c.setRequesterEmail(e.target.value)}

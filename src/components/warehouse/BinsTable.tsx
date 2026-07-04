@@ -89,10 +89,10 @@ export function BinsTable({ rows, loading, selected, onSelectChange, onRowClick 
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-border-soft bg-surface-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-micro font-bold uppercase tracking-wider text-gray-500">
+          <thead className="bg-surface-canvas text-left text-micro font-bold uppercase tracking-wider text-text-soft">
             <tr>
               <th className="w-10 px-3 py-2">
                 <input
@@ -114,19 +114,19 @@ export function BinsTable({ rows, loading, selected, onSelectChange, onRowClick 
               <th className="px-3 py-2">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border-hairline">
             {loading && sorted.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">Loading bins…</td></tr>
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-text-faint">Loading bins…</td></tr>
             )}
             {!loading && sorted.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">No bins match the current filters.</td></tr>
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-text-faint">No bins match the current filters.</td></tr>
             )}
             {sorted.map((row) => {
               const isSelected = selected.has(row.id);
               return (
                 <tr
                   key={row.id}
-                  className={`cursor-pointer ${isSelected ? 'bg-blue-50/40' : 'hover:bg-gray-50'}`}
+                  className={`cursor-pointer ${isSelected ? 'bg-blue-50/40' : 'hover:bg-surface-hover'}`}
                   onClick={() => onRowClick(row)}
                 >
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
@@ -138,30 +138,30 @@ export function BinsTable({ rows, loading, selected, onSelectChange, onRowClick 
                     />
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-blue-700">
-                    {row.barcode ?? <span className="text-gray-300">—</span>}
+                    {row.barcode ?? <span className="text-text-faint">—</span>}
                   </td>
                   <td className="px-3 py-2 text-xs">
-                    <div className="font-semibold text-gray-900">
-                      {row.room ?? <span className="text-gray-400">—</span>}
+                    <div className="font-semibold text-text-default">
+                      {row.room ?? <span className="text-text-faint">—</span>}
                       {row.zone_letter && (
                         <span className="ml-1 font-mono text-micro text-blue-600">[{row.zone_letter}]</span>
                       )}
                     </div>
-                    <div className="text-micro text-gray-500">
+                    <div className="text-micro text-text-soft">
                       {row.row_label ?? '—'} · {row.col_label ?? '—'}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums text-gray-700">
+                  <td className="px-3 py-2 text-right text-xs tabular-nums text-text-muted">
                     {row.sku_count}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums text-gray-700">
+                  <td className="px-3 py-2 text-right text-xs tabular-nums text-text-muted">
                     {row.total_qty}
                   </td>
                   <td className="w-32 px-3 py-2">
                     <FillBar pct={row.fill_pct} current={row.total_qty} max={row.capacity} />
                   </td>
                   <HoverTooltip label={row.last_counted ?? 'never'} asChild>
-                    <td className="px-3 py-2 text-xs text-gray-500">
+                    <td className="px-3 py-2 text-xs text-text-soft">
                       {fmtAge(row.last_counted)}
                     </td>
                   </HoverTooltip>
@@ -198,7 +198,7 @@ function Th({
         type="button"
         onClick={onClick}
         className={`ds-raw-button inline-flex items-center gap-1 transition-colors ${
-          active ? 'text-gray-900' : 'hover:text-gray-700'
+          active ? 'text-text-default' : 'hover:text-text-muted'
         }`}
       >
         {label}

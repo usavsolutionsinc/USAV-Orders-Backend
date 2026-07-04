@@ -21,7 +21,7 @@ export function StaffSigningIn({ staff }: StaffSigningInProps) {
     : theme === 'red' ? 'ring-red-100'
     : theme === 'lightblue' ? 'ring-sky-100'
     : theme === 'pink' ? 'ring-pink-100'
-    : 'ring-slate-200';
+    : 'ring-border-soft';
 
   return (
     <div className="flex w-full max-w-md flex-col items-center gap-5 text-center">
@@ -32,10 +32,10 @@ export function StaffSigningIn({ staff }: StaffSigningInProps) {
         {initials(staff.name)}
       </div>
       <div>
-        <p className="text-lg font-semibold tracking-tight text-gray-900">Signing in as {staff.name}</p>
-        <p className="mt-1.5 text-sm text-gray-500">One moment…</p>
+        <p className="text-lg font-semibold tracking-tight text-text-default">Signing in as {staff.name}</p>
+        <p className="mt-1.5 text-sm text-text-soft">One moment…</p>
       </div>
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-700" aria-hidden />
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-soft border-t-gray-700" aria-hidden />
     </div>
   );
 }

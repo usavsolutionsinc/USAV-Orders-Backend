@@ -44,7 +44,7 @@ function Avatar({ name, photo, ours }: { name: string; photo: string | null; our
     <span
       className={cn(
         'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-micro font-black',
-        ours ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600',
+        ours ? 'bg-blue-100 text-blue-700' : 'bg-surface-strong text-text-muted',
       )}
     >
       {initials(name)}
@@ -75,7 +75,7 @@ function Attachments({
           onClick={() => onOpenPhoto?.(a.content_url)}
           className={cn(
             'ds-raw-button block h-28 w-28 overflow-hidden rounded-xl ring-1 ring-inset transition hover:opacity-90 hover:ring-2',
-            onDark ? 'ring-white/30 hover:ring-white/60' : 'ring-gray-200 hover:ring-blue-300',
+            onDark ? 'ring-white/30 hover:ring-white/60' : 'ring-border-soft hover:ring-blue-300',
           )}
         >
           <img
@@ -146,7 +146,7 @@ export function SupportChatThread({
   if (!comments.length) {
     return (
       <div className="px-5 py-16 text-center">
-        <p className="text-sm text-gray-400">No messages yet — start the conversation below.</p>
+        <p className="text-sm text-text-faint">No messages yet — start the conversation below.</p>
       </div>
     );
   }
@@ -173,11 +173,11 @@ export function SupportChatThread({
                     <Globe className="h-2.5 w-2.5" /> Public
                   </span>
                 ) : null}
-                <span className="font-bold text-gray-600">{a.name}</span>
+                <span className="font-bold text-text-muted">{a.name}</span>
                 {a.email && a.email !== a.name ? (
-                  <span className="truncate text-gray-400">· {a.email}</span>
+                  <span className="truncate text-text-faint">· {a.email}</span>
                 ) : null}
-                <span className="text-gray-400">
+                <span className="text-text-faint">
                   · <Time iso={c.created_at} />
                 </span>
               </div>
@@ -188,7 +188,7 @@ export function SupportChatThread({
                     ? internal
                       ? 'rounded-bl-md border border-amber-200 bg-amber-50 text-amber-900'
                       : 'rounded-bl-md bg-blue-600 text-white'
-                    : 'rounded-bl-md border border-gray-200 bg-white text-gray-800',
+                    : 'rounded-bl-md border border-border-soft bg-surface-card text-text-default',
                 )}
               >
                 <div className="whitespace-pre-wrap break-words">{renderInlineMarkdown(c.body)}</div>

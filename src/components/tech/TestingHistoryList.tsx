@@ -111,7 +111,7 @@ export function TestingHistoryList({ staffId, selectMode = false, onOpenLine }: 
   }, [onOpenLine]);
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-white">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-surface-card">
       <div className="min-h-0 flex-1 overflow-auto">
         {isLoading && rows.length === 0 ? (
           <div className="p-3">
@@ -119,7 +119,7 @@ export function TestingHistoryList({ staffId, selectMode = false, onOpenLine }: 
           </div>
         ) : rows.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <p className="text-sm font-semibold text-gray-500">
+            <p className="text-sm font-semibold text-text-soft">
               No tested lines yet — pass a unit to populate your history.
             </p>
           </div>

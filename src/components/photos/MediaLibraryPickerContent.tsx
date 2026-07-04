@@ -246,25 +246,27 @@ export function MediaLibraryPickerContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 space-y-2.5 border-b border-gray-100 px-4 py-3">
+      <div className="shrink-0 space-y-2.5 border-b border-border-hairline px-4 py-3">
         {scopeToggleVisible ? (
-          <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+          <div className="inline-flex rounded-lg bg-surface-sunken p-0.5">
+            {/* ds-raw-button */}
             <button
               type="button"
               onClick={() => switchTab('browse')}
               className={cn(
                 'rounded-md px-3 py-1 text-caption font-bold transition',
-                tab === 'browse' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+                tab === 'browse' ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
               )}
             >
               Media types
             </button>
+            {/* ds-raw-button */}
             <button
               type="button"
               onClick={() => switchTab('ticket')}
               className={cn(
                 'rounded-md px-3 py-1 text-caption font-bold transition',
-                tab === 'ticket' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+                tab === 'ticket' ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
               )}
             >
               This ticket
@@ -277,12 +279,12 @@ export function MediaLibraryPickerContent({
             <button
               type="button"
               onClick={backToTypes}
-              className="ds-raw-button inline-flex items-center gap-1 rounded-lg px-2 py-1 text-caption font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+              className="ds-raw-button inline-flex items-center gap-1 rounded-lg px-2 py-1 text-caption font-bold text-text-soft hover:bg-surface-sunken hover:text-text-default"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Media types
             </button>
-            <span className="text-caption font-semibold text-gray-700">{mediaType.label}</span>
+            <span className="text-caption font-semibold text-text-muted">{mediaType.label}</span>
           </div>
         ) : null}
 
@@ -331,7 +333,7 @@ export function MediaLibraryPickerContent({
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {onTypeList ? (
           <div className="space-y-2">
-            <p className="px-1 text-eyebrow font-black uppercase tracking-widest text-gray-500">Media type</p>
+            <p className="px-1 text-eyebrow font-black uppercase tracking-widest text-text-soft">Media type</p>
             <ul className="space-y-1">
               {builtIn.map((type) => {
                 const Icon = BUILTIN_ICON_OVERRIDE[type.key] ?? ICONS[type.icon] ?? Folder;
@@ -356,14 +358,14 @@ export function MediaLibraryPickerContent({
                 );
               })}
               {typesLoading && custom.length === 0 ? (
-                <li className="flex items-center gap-2 px-3 py-2 text-caption text-gray-400">
+                <li className="flex items-center gap-2 px-3 py-2 text-caption text-text-faint">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading types…
                 </li>
               ) : null}
             </ul>
           </div>
         ) : photosQuery.isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-caption text-gray-400">
+          <div className="flex items-center justify-center gap-2 py-10 text-caption text-text-faint">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : photosQuery.isError ? (
@@ -372,10 +374,10 @@ export function MediaLibraryPickerContent({
           </div>
         ) : searchActive ? (
           visibleSearchPhotos.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center">
-              <Search className="mx-auto mb-2 h-5 w-5 text-gray-300" />
-              <p className="text-caption font-semibold text-gray-600">No photos match</p>
-              <p className="mt-1 text-micro text-gray-400">Try a different search.</p>
+            <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-8 text-center">
+              <Search className="mx-auto mb-2 h-5 w-5 text-text-faint" />
+              <p className="text-caption font-semibold text-text-muted">No photos match</p>
+              <p className="mt-1 text-micro text-text-faint">Try a different search.</p>
             </div>
           ) : (
             <div className={photoGridLeafClass(gridDensity)}>
@@ -390,7 +392,7 @@ export function MediaLibraryPickerContent({
                     aria-pressed={on}
                     className={cn(
                       'ds-raw-button relative overflow-hidden rounded-lg border-2 transition',
-                      on ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-gray-300',
+                      on ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-border-default',
                     )}
                   >
                     <PhotoThumb src={tile.imageUrl} alt={p.caption ?? ''} ratio={tile.ratio} />
@@ -435,9 +437,9 @@ function MediaTypeRow({
       <button
         type="button"
         onClick={onClick}
-        className="ds-raw-button flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold text-gray-700 transition hover:bg-gray-50"
+        className="ds-raw-button flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold text-text-muted transition hover:bg-surface-hover"
       >
-        <Icon className="h-5 w-5 shrink-0 text-gray-400" />
+        <Icon className="h-5 w-5 shrink-0 text-text-faint" />
         <span className="flex-1 truncate">{label}</span>
       </button>
     </li>

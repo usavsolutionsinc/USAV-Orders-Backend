@@ -32,11 +32,11 @@ export function SupportLinkedContext({
   const libraryHref = `/ops/photos?sourceScope=claims&entityType=ZENDESK_TICKET&entityId=${ticketId}`;
 
   return (
-    <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-4">
+    <div className="border-t border-border-hairline bg-surface-canvas/60 px-5 py-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <Link2 className="h-3.5 w-3.5 text-gray-400" />
-          <p className="text-micro font-black uppercase tracking-widest text-gray-500">Linked context</p>
+          <Link2 className="h-3.5 w-3.5 text-text-faint" />
+          <p className="text-micro font-black uppercase tracking-widest text-text-soft">Linked context</p>
         </div>
         <a
           href={libraryHref}
@@ -49,21 +49,21 @@ export function SupportLinkedContext({
       </div>
 
       {!entity?.type && photos.length === 0 ? (
-        <p className="mt-2 text-caption text-gray-400">
+        <p className="mt-2 text-caption text-text-faint">
           No internal record linked — use Library in the composer to attach media from the library.
         </p>
       ) : null}
 
       {entity?.type ? (
-        <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
-          <span className="text-label font-bold text-gray-700">{ENTITY_LABELS[entity.type] ?? entity.type}</span>
-          {entity.id ? <span className="text-caption font-semibold text-gray-400">#{entity.id}</span> : null}
+        <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5">
+          <span className="text-label font-bold text-text-muted">{ENTITY_LABELS[entity.type] ?? entity.type}</span>
+          {entity.id ? <span className="text-caption font-semibold text-text-faint">#{entity.id}</span> : null}
         </div>
       ) : null}
 
       {photos.length ? (
         <div className="mt-3">
-          <p className="mb-1.5 flex items-center gap-1 text-caption font-semibold text-gray-400">
+          <p className="mb-1.5 flex items-center gap-1 text-caption font-semibold text-text-faint">
             <ImageIcon className="h-3 w-3" /> {photos.length} linked photo{photos.length === 1 ? '' : 's'}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -72,7 +72,7 @@ export function SupportLinkedContext({
                 key={p.id}
                 type="button"
                 onClick={() => onOpenPhoto?.(p.url)}
-                className="ds-raw-button block h-20 w-20 overflow-hidden rounded-lg ring-1 ring-inset ring-gray-200 transition hover:opacity-90 hover:ring-2 hover:ring-blue-300"
+                className="ds-raw-button block h-20 w-20 overflow-hidden rounded-lg ring-1 ring-inset ring-border-soft transition hover:opacity-90 hover:ring-2 hover:ring-blue-300"
               >
                 <img src={p.url} alt={p.caption ?? ''} className="h-full w-full object-cover" />
               </button>

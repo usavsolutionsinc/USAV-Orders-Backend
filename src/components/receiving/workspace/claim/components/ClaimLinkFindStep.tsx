@@ -11,7 +11,7 @@ export function ClaimLinkFindStep({ c }: { c: ReceivingClaimController }) {
     <>
       <ClaimTicketPicker search={c.search} onSelect={c.selectLinkTicket} />
 
-      <p className="text-caption font-semibold leading-5 text-gray-500">
+      <p className="text-caption font-semibold leading-5 text-text-soft">
         Pick the existing ticket this carton belongs to, then link it. You&apos;ll confirm the link
         and draft the seller message next.
       </p>

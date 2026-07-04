@@ -90,9 +90,9 @@ export const stationThemeColors: Record<StationTheme, StationThemeColors> = {
   black: {
     bg: 'bg-slate-900',
     hover: 'hover:bg-slate-800',
-    light: 'bg-slate-50',
-    border: 'border-slate-200',
-    text: 'text-slate-900',
+    light: 'bg-surface-canvas',
+    border: 'border-border-soft',
+    text: 'text-text-default',
     shadow: 'shadow-slate-200',
   },
   red: {
@@ -141,41 +141,41 @@ export const stationThemeClasses: Record<
 > = {
   green: {
     active: 'bg-emerald-600 text-white border-emerald-600',
-    inactive: 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50',
+    inactive: 'bg-surface-card text-emerald-700 border-emerald-200 hover:bg-emerald-50',
   },
   blue: {
     active: 'bg-blue-600 text-white border-blue-600',
-    inactive: 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50',
+    inactive: 'bg-surface-card text-blue-700 border-blue-200 hover:bg-blue-50',
   },
   purple: {
     active: 'bg-purple-600 text-white border-purple-600',
-    inactive: 'bg-white text-purple-700 border-purple-200 hover:bg-purple-50',
+    inactive: 'bg-surface-card text-purple-700 border-purple-200 hover:bg-purple-50',
   },
   yellow: {
     active: 'bg-amber-500 text-white border-amber-500',
-    inactive: 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50',
+    inactive: 'bg-surface-card text-amber-700 border-amber-200 hover:bg-amber-50',
   },
   black: {
     active: 'bg-slate-900 text-white border-slate-900',
-    inactive: 'bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200',
+    inactive: 'bg-surface-sunken text-text-default border-border-default hover:bg-surface-strong',
   },
   red: {
     active: 'bg-red-600 text-white border-red-600',
-    inactive: 'bg-white text-red-700 border-red-200 hover:bg-red-50',
+    inactive: 'bg-surface-card text-red-700 border-red-200 hover:bg-red-50',
   },
   lightblue: {
     active: 'bg-sky-400 text-white border-sky-400',
-    inactive: 'bg-white text-sky-600 border-sky-200 hover:bg-sky-50',
+    inactive: 'bg-surface-card text-sky-600 border-sky-200 hover:bg-sky-50',
   },
   pink: {
     active: 'bg-pink-500 text-white border-pink-500',
-    inactive: 'bg-white text-pink-600 border-pink-200 hover:bg-pink-50',
+    inactive: 'bg-surface-card text-pink-600 border-pink-200 hover:bg-pink-50',
   },
 };
 
 export const packerInputThemeClasses: Record<PackerStationTheme, StationInputThemeClasses> = {
   black: {
-    text: 'text-slate-900',
+    text: 'text-text-default',
     bg: 'bg-slate-900',
     ring: 'focus:ring-slate-500/10',
     border: 'focus:border-slate-500',
@@ -465,17 +465,17 @@ export const printQueueTableUi: Record<
   },
   black: {
     checkboxChecked: 'border-slate-900 bg-slate-900',
-    checkboxIdleHover: 'hover:border-slate-600 hover:bg-slate-50',
+    checkboxIdleHover: 'hover:border-slate-600 hover:bg-surface-hover',
     checkboxFocusRing:
       'focus-visible:ring-2 focus-visible:ring-slate-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-    rowSelected: 'bg-slate-100/80 hover:bg-slate-100',
+    rowSelected: 'bg-surface-sunken/80 hover:bg-surface-sunken',
     rowFocusRing: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40',
     readyStatusPill:
-      'rounded-md bg-slate-200 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wide text-slate-900',
-    toolbarAccent: 'text-slate-800',
-    toolbarIconMuted: 'text-slate-800',
-    metaIconAccent: 'text-slate-800',
-    refreshHover: 'hover:border-slate-400 hover:text-slate-800',
+      'rounded-md bg-surface-strong px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wide text-text-default',
+    toolbarAccent: 'text-text-default',
+    toolbarIconMuted: 'text-text-default',
+    metaIconAccent: 'text-text-default',
+    refreshHover: 'hover:border-border-emphasis hover:text-text-default',
     statusFocusRing: 'focus-visible:ring-2 focus-visible:ring-slate-500/50',
   },
   red: {
@@ -610,15 +610,15 @@ export const fbaWorkspaceScanChrome: Record<
   black: {
     trackingCard:
       'space-y-3 rounded-xl border-2 border-slate-500/90 bg-gradient-to-b from-slate-50/90 to-white px-3 py-3 shadow-sm shadow-slate-200/40',
-    trackingSectionBorder: 'border-t border-slate-400',
-    selectedItemsLabel: 'text-eyebrow font-black uppercase tracking-[0.14em] text-slate-800',
+    trackingSectionBorder: 'border-t border-border-emphasis',
+    selectedItemsLabel: 'text-eyebrow font-black uppercase tracking-[0.14em] text-text-default',
     fnskuSubtext:
-      'font-mono text-micro font-semibold uppercase tracking-[0.12em] text-slate-600',
+      'font-mono text-micro font-semibold uppercase tracking-[0.12em] text-text-muted',
     fieldFocusRing: 'focus:ring-slate-500',
-    savingSpinner: 'text-slate-500',
-    fnskuScanIconClass: 'text-slate-700',
+    savingSpinner: 'text-text-soft',
+    fnskuScanIconClass: 'text-text-muted',
     fnskuScanInputClass:
-      '!text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-500/25',
+      '!text-text-default placeholder:text-text-faint focus:border-border-emphasis focus:ring-2 focus:ring-slate-500/25',
   },
   red: {
     trackingCard:
@@ -692,7 +692,7 @@ export const fbaFnskuChecklistChrome: Record<
   black: {
     shell:
       'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-slate-700/95 bg-gradient-to-b from-slate-50/90 via-white to-stone-50 shadow-md shadow-slate-300/30',
-    headerBarDivider: 'border-b-2 border-slate-400',
+    headerBarDivider: 'border-b-2 border-border-emphasis',
   },
   red: {
     shell:
@@ -750,8 +750,8 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     emptyShell: 'rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3',
     emptyLabel: 'text-emerald-400',
     emptyIcon: 'text-emerald-200',
-    cardActive: 'bg-white border-emerald-500',
-    cardIdle: 'bg-white border-emerald-300 hover:border-emerald-500',
+    cardActive: 'bg-surface-card border-emerald-500',
+    cardIdle: 'bg-surface-card border-emerald-300 hover:border-emerald-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-emerald-400/50',
     cardDateText: 'text-sm font-black text-emerald-700',
     cardOpenPill:
@@ -760,7 +760,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
       'inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 text-emerald-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(16,185,129,0.16)]',
     cardExpandedDivider: 'border-t border-emerald-100',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-emerald-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-emerald-400',
     cardProgress: 'h-full rounded-full bg-emerald-400',
     selectedRow: 'border-l-4 border-l-emerald-400 bg-emerald-100/60 hover:bg-emerald-100/80',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-emerald-700',
@@ -773,11 +773,11 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-micro font-black uppercase tracking-wide text-emerald-700 transition-all hover:bg-emerald-100',
     input:
-      'w-full rounded-xl border-2 border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-emerald-500',
+      'w-full rounded-xl border-2 border-emerald-200 bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-emerald-500',
     monoInput:
-      'w-full rounded-xl border-2 border-emerald-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-emerald-500',
+      'w-full rounded-xl border-2 border-emerald-200 bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-emerald-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 disabled:cursor-not-allowed disabled:bg-gray-300',
+      'w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 disabled:cursor-not-allowed disabled:bg-surface-strong',
     lineItemShell: 'space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3',
     lineItemLabel: 'text-micro font-black uppercase tracking-widest text-emerald-700',
   },
@@ -788,8 +788,8 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     emptyShell: 'rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3',
     emptyLabel: 'text-blue-400',
     emptyIcon: 'text-blue-200',
-    cardActive: 'bg-white border-blue-500',
-    cardIdle: 'bg-white border-blue-300 hover:border-blue-500',
+    cardActive: 'bg-surface-card border-blue-500',
+    cardIdle: 'bg-surface-card border-blue-300 hover:border-blue-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-blue-400/50',
     cardDateText: 'text-sm font-black text-blue-700',
     cardOpenPill:
@@ -798,7 +798,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
       'inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 text-blue-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(37,99,235,0.16)]',
     cardExpandedDivider: 'border-t border-blue-100',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-blue-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-blue-400',
     cardProgress: 'h-full rounded-full bg-blue-400',
     selectedRow: 'border-l-4 border-l-blue-400 bg-blue-100/60 hover:bg-blue-100/80',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-blue-700',
@@ -811,11 +811,11 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-micro font-black uppercase tracking-wide text-blue-700 transition-all hover:bg-blue-100',
     input:
-      'w-full rounded-xl border-2 border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500',
+      'w-full rounded-xl border-2 border-blue-200 bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-blue-500',
     monoInput:
-      'w-full rounded-xl border-2 border-blue-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500',
+      'w-full rounded-xl border-2 border-blue-200 bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-blue-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-blue-600 to-sky-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-blue-500/20 hover:from-blue-700 hover:to-sky-700 disabled:cursor-not-allowed disabled:bg-gray-300',
+      'w-full rounded-xl bg-gradient-to-r from-blue-600 to-sky-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-blue-500/20 hover:from-blue-700 hover:to-sky-700 disabled:cursor-not-allowed disabled:bg-surface-strong',
     lineItemShell: 'space-y-2 rounded-xl border border-blue-100 bg-blue-50/50 p-3',
     lineItemLabel: 'text-micro font-black uppercase tracking-widest text-blue-700',
   },
@@ -826,8 +826,8 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     emptyShell: 'rounded-2xl border border-purple-100 bg-purple-50/70 px-4 py-3',
     emptyLabel: 'text-purple-400',
     emptyIcon: 'text-purple-200',
-    cardActive: 'bg-white border-purple-500',
-    cardIdle: 'bg-white border-purple-300 hover:border-purple-500',
+    cardActive: 'bg-surface-card border-purple-500',
+    cardIdle: 'bg-surface-card border-purple-300 hover:border-purple-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-purple-400/50',
     cardDateText: 'text-sm font-black text-purple-700',
     cardOpenPill:
@@ -836,7 +836,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
       'inline-flex h-8 w-8 items-center justify-center rounded-full border border-purple-200 text-purple-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(147,51,234,0.16)]',
     cardExpandedDivider: 'border-t border-purple-100',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-purple-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-purple-400',
     cardProgress: 'h-full rounded-full bg-purple-400',
     selectedRow: 'border-l-4 border-l-purple-400 bg-purple-100/60 hover:bg-purple-100/80',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-purple-700',
@@ -849,11 +849,11 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-micro font-black uppercase tracking-wide text-purple-700 transition-all hover:bg-purple-100',
     input:
-      'w-full rounded-xl border-2 border-purple-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-purple-500',
+      'w-full rounded-xl border-2 border-purple-200 bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-purple-500',
     monoInput:
-      'w-full rounded-xl border-2 border-purple-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-purple-500',
+      'w-full rounded-xl border-2 border-purple-200 bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-purple-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-purple-500/20 hover:from-purple-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:bg-gray-300',
+      'w-full rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-purple-500/20 hover:from-purple-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:bg-surface-strong',
     lineItemShell: 'space-y-2 rounded-xl border border-purple-100 bg-purple-50/50 p-3',
     lineItemLabel: 'text-micro font-black uppercase tracking-widest text-purple-700',
   },
@@ -864,8 +864,8 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     emptyShell: 'rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3',
     emptyLabel: 'text-amber-500',
     emptyIcon: 'text-amber-200',
-    cardActive: 'bg-white border-amber-500',
-    cardIdle: 'bg-white border-amber-300 hover:border-amber-500',
+    cardActive: 'bg-surface-card border-amber-500',
+    cardIdle: 'bg-surface-card border-amber-300 hover:border-amber-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-amber-400/50',
     cardDateText: 'text-sm font-black text-amber-800',
     cardOpenPill:
@@ -874,7 +874,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
       'inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-200 text-amber-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(245,158,11,0.16)]',
     cardExpandedDivider: 'border-t border-amber-100',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-amber-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-amber-400',
     cardProgress: 'h-full rounded-full bg-amber-400',
     selectedRow: 'border-l-4 border-l-amber-400 bg-amber-100/60 hover:bg-amber-100/80',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-amber-800',
@@ -887,51 +887,51 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-micro font-black uppercase tracking-wide text-amber-800 transition-all hover:bg-amber-100',
     input:
-      'w-full rounded-xl border-2 border-amber-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-amber-500',
+      'w-full rounded-xl border-2 border-amber-200 bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-amber-500',
     monoInput:
-      'w-full rounded-xl border-2 border-amber-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-amber-500',
+      'w-full rounded-xl border-2 border-amber-200 bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-amber-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-amber-500/20 hover:from-amber-600 hover:to-orange-600 disabled:cursor-not-allowed disabled:bg-gray-300',
+      'w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-amber-500/20 hover:from-amber-600 hover:to-orange-600 disabled:cursor-not-allowed disabled:bg-surface-strong',
     lineItemShell: 'space-y-2 rounded-xl border border-amber-100 bg-amber-50/50 p-3',
     lineItemLabel: 'text-micro font-black uppercase tracking-widest text-amber-800',
   },
   black: {
-    sectionRule: 'bg-slate-300',
-    sectionLabel: 'text-slate-700',
-    loading: 'text-slate-400',
-    emptyShell: 'rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3',
-    emptyLabel: 'text-slate-500',
+    sectionRule: 'bg-surface-strong',
+    sectionLabel: 'text-text-muted',
+    loading: 'text-text-faint',
+    emptyShell: 'rounded-2xl border border-border-soft bg-surface-canvas/80 px-4 py-3',
+    emptyLabel: 'text-text-soft',
     emptyIcon: 'text-slate-300',
-    cardActive: 'bg-white border-slate-500',
-    cardIdle: 'bg-white border-slate-300 hover:border-slate-500',
+    cardActive: 'bg-surface-card border-slate-500',
+    cardIdle: 'bg-surface-card border-border-default hover:border-slate-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-slate-400/50',
-    cardDateText: 'text-sm font-black text-slate-800',
+    cardDateText: 'text-sm font-black text-text-default',
     cardOpenPill:
-      'rounded-full bg-slate-200 px-2 py-0.5 text-mini font-black uppercase tracking-wide text-slate-900',
+      'rounded-full bg-surface-strong px-2 py-0.5 text-mini font-black uppercase tracking-wide text-text-default',
     cardChevron:
-      'inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(71,85,105,0.16)]',
-    cardExpandedDivider: 'border-t border-slate-200',
+      'inline-flex h-8 w-8 items-center justify-center rounded-full border border-border-default text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(71,85,105,0.16)]',
+    cardExpandedDivider: 'border-t border-border-soft',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-slate-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-border-emphasis',
     cardProgress: 'h-full rounded-full bg-slate-500',
-    selectedRow: 'border-l-4 border-l-slate-400 bg-slate-100/80 hover:bg-slate-100',
-    selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-slate-700',
-    scanResultsShell: 'rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2',
-    scanResultsTitle: 'text-micro font-semibold uppercase tracking-widest text-slate-800',
-    scanResultsCount: 'text-micro font-semibold tabular-nums text-slate-700',
+    selectedRow: 'border-l-4 border-l-border-emphasis bg-surface-sunken/80 hover:bg-surface-sunken',
+    selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-text-muted',
+    scanResultsShell: 'rounded-xl border border-border-soft bg-surface-canvas/80 px-2.5 py-2',
+    scanResultsTitle: 'text-micro font-semibold uppercase tracking-widest text-text-default',
+    scanResultsCount: 'text-micro font-semibold tabular-nums text-text-muted',
     scanResultsQtyStepper:
-      'flex w-8 flex-col items-center justify-center rounded-md border border-slate-300 bg-slate-100',
-    scanResultsHint: 'text-micro text-slate-700',
+      'flex w-8 flex-col items-center justify-center rounded-md border border-border-default bg-surface-sunken',
+    scanResultsHint: 'text-micro text-text-muted',
     secondaryButton:
-      'inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-micro font-black uppercase tracking-wide text-slate-700 transition-all hover:bg-slate-200',
+      'inline-flex items-center gap-1 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-micro font-black uppercase tracking-wide text-text-muted transition-all hover:bg-surface-strong',
     input:
-      'w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-slate-500',
+      'w-full rounded-xl border-2 border-border-soft bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-slate-500',
     monoInput:
-      'w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-slate-500',
+      'w-full rounded-xl border-2 border-border-soft bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-slate-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-slate-500/20 hover:from-slate-800 hover:to-black disabled:cursor-not-allowed disabled:bg-gray-300',
-    lineItemShell: 'space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3',
-    lineItemLabel: 'text-micro font-black uppercase tracking-widest text-slate-700',
+      'w-full rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-slate-500/20 hover:from-slate-800 hover:to-black disabled:cursor-not-allowed disabled:bg-surface-strong',
+    lineItemShell: 'space-y-2 rounded-xl border border-border-soft bg-surface-canvas/80 p-3',
+    lineItemLabel: 'text-micro font-black uppercase tracking-widest text-text-muted',
   },
   red: {
     sectionRule: 'bg-red-200',
@@ -940,8 +940,8 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     emptyShell: 'rounded-2xl border border-red-100 bg-red-50/70 px-4 py-3',
     emptyLabel: 'text-red-400',
     emptyIcon: 'text-red-200',
-    cardActive: 'bg-white border-red-500',
-    cardIdle: 'bg-white border-red-300 hover:border-red-500',
+    cardActive: 'bg-surface-card border-red-500',
+    cardIdle: 'bg-surface-card border-red-300 hover:border-red-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-red-400/50',
     cardDateText: 'text-sm font-black text-red-700',
     cardOpenPill:
@@ -950,7 +950,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
       'inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 text-red-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(220,38,38,0.16)]',
     cardExpandedDivider: 'border-t border-red-100',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-red-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-red-400',
     cardProgress: 'h-full rounded-full bg-red-400',
     selectedRow: 'border-l-4 border-l-red-400 bg-red-100/60 hover:bg-red-100/80',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-red-700',
@@ -963,11 +963,11 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-micro font-black uppercase tracking-wide text-red-700 transition-all hover:bg-red-100',
     input:
-      'w-full rounded-xl border-2 border-red-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-red-500',
+      'w-full rounded-xl border-2 border-red-200 bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-red-500',
     monoInput:
-      'w-full rounded-xl border-2 border-red-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-red-500',
+      'w-full rounded-xl border-2 border-red-200 bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-red-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-red-500/20 hover:from-red-700 hover:to-rose-700 disabled:cursor-not-allowed disabled:bg-gray-300',
+      'w-full rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-red-500/20 hover:from-red-700 hover:to-rose-700 disabled:cursor-not-allowed disabled:bg-surface-strong',
     lineItemShell: 'space-y-2 rounded-xl border border-red-100 bg-red-50/50 p-3',
     lineItemLabel: 'text-micro font-black uppercase tracking-widest text-red-700',
   },
@@ -978,8 +978,8 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     emptyShell: 'rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3',
     emptyLabel: 'text-sky-400',
     emptyIcon: 'text-sky-200',
-    cardActive: 'bg-white border-sky-500',
-    cardIdle: 'bg-white border-sky-300 hover:border-sky-500',
+    cardActive: 'bg-surface-card border-sky-500',
+    cardIdle: 'bg-surface-card border-sky-300 hover:border-sky-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-sky-400/50',
     cardDateText: 'text-sm font-black text-sky-700',
     cardOpenPill:
@@ -988,7 +988,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
       'inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-200 text-sky-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(14,165,233,0.16)]',
     cardExpandedDivider: 'border-t border-sky-100',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-sky-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-sky-400',
     cardProgress: 'h-full rounded-full bg-sky-400',
     selectedRow: 'border-l-4 border-l-sky-400 bg-sky-100/60 hover:bg-sky-100/80',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-sky-700',
@@ -1001,11 +1001,11 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-micro font-black uppercase tracking-wide text-sky-700 transition-all hover:bg-sky-100',
     input:
-      'w-full rounded-xl border-2 border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-sky-500',
+      'w-full rounded-xl border-2 border-sky-200 bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-sky-500',
     monoInput:
-      'w-full rounded-xl border-2 border-sky-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-sky-500',
+      'w-full rounded-xl border-2 border-sky-200 bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-sky-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-sky-500/20 hover:from-sky-600 hover:to-cyan-600 disabled:cursor-not-allowed disabled:bg-gray-300',
+      'w-full rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-sky-500/20 hover:from-sky-600 hover:to-cyan-600 disabled:cursor-not-allowed disabled:bg-surface-strong',
     lineItemShell: 'space-y-2 rounded-xl border border-sky-100 bg-sky-50/50 p-3',
     lineItemLabel: 'text-micro font-black uppercase tracking-widest text-sky-700',
   },
@@ -1016,8 +1016,8 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     emptyShell: 'rounded-2xl border border-pink-100 bg-pink-50/70 px-4 py-3',
     emptyLabel: 'text-pink-400',
     emptyIcon: 'text-pink-200',
-    cardActive: 'bg-white border-pink-500',
-    cardIdle: 'bg-white border-pink-300 hover:border-pink-500',
+    cardActive: 'bg-surface-card border-pink-500',
+    cardIdle: 'bg-surface-card border-pink-300 hover:border-pink-500',
     cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-pink-400/50',
     cardDateText: 'text-sm font-black text-pink-700',
     cardOpenPill:
@@ -1026,7 +1026,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
       'inline-flex h-8 w-8 items-center justify-center rounded-full border border-pink-200 text-pink-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(236,72,153,0.16)]',
     cardExpandedDivider: 'border-t border-pink-100',
     cardQtyInput:
-      'w-14 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-micro font-black tabular-nums text-gray-900 outline-none focus:border-pink-400',
+      'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-pink-400',
     cardProgress: 'h-full rounded-full bg-pink-400',
     selectedRow: 'border-l-4 border-l-pink-400 bg-pink-100/60 hover:bg-pink-100/80',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-pink-700',
@@ -1039,11 +1039,11 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-pink-200 bg-pink-50 px-3 py-2 text-micro font-black uppercase tracking-wide text-pink-700 transition-all hover:bg-pink-100',
     input:
-      'w-full rounded-xl border-2 border-pink-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-pink-500',
+      'w-full rounded-xl border-2 border-pink-200 bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-pink-500',
     monoInput:
-      'w-full rounded-xl border-2 border-pink-200 bg-white px-4 py-3 text-sm font-semibold font-mono text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-pink-500',
+      'w-full rounded-xl border-2 border-pink-200 bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-pink-500',
     primaryButton:
-      'w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-pink-500/20 hover:from-pink-600 hover:to-rose-600 disabled:cursor-not-allowed disabled:bg-gray-300',
+      'w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-pink-500/20 hover:from-pink-600 hover:to-rose-600 disabled:cursor-not-allowed disabled:bg-surface-strong',
     lineItemShell: 'space-y-2 rounded-xl border border-pink-100 bg-pink-50/50 p-3',
     lineItemLabel: 'text-micro font-black uppercase tracking-widest text-pink-700',
   },

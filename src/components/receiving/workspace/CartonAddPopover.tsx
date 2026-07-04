@@ -86,10 +86,10 @@ export function CartonAddPopover({
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="pointer-events-auto flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl ring-1 ring-gray-200"
+          className="pointer-events-auto flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-2xl ring-1 ring-border-soft"
         >
           {/* Header: tab segment + close */}
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-border-hairline px-3 py-2">
             {tabs.length > 1 ? (
               <div className="flex gap-1">
                 {tabs.map((t) => {
@@ -102,8 +102,8 @@ export function CartonAddPopover({
                       onClick={() => setTab(t)}
                       className={`ds-raw-button flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-mini font-bold uppercase tracking-wider transition-colors ${
                         active
-                          ? 'bg-gray-900 text-white'
-                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                          ? 'bg-surface-inverse text-white'
+                          : 'text-text-soft hover:bg-surface-sunken hover:text-text-default'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
@@ -113,12 +113,12 @@ export function CartonAddPopover({
                 })}
               </div>
             ) : (
-              <span className={`${microBadge} flex items-center gap-1.5 text-gray-700`}>
+              <span className={`${microBadge} flex items-center gap-1.5 text-text-muted`}>
                 {(() => {
                   const { label, Icon } = TAB_META[tab];
                   return (
                     <>
-                      <Icon className="h-3.5 w-3.5 text-gray-500" />
+                      <Icon className="h-3.5 w-3.5 text-text-soft" />
                       Add to {label.toLowerCase()}
                     </>
                   );
@@ -129,7 +129,7 @@ export function CartonAddPopover({
               onClick={onClose}
               ariaLabel="Close"
               icon={<X className="h-4 w-4" />}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-lg p-1.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
             />
           </div>
 

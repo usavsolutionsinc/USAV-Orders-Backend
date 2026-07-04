@@ -84,7 +84,7 @@ export function ScanSurface({
   const isPulse = scanner.lastScannedValue != null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
+    <div className="overflow-hidden rounded-2xl border border-border-soft bg-slate-900">
       {/* Camera frame */}
       <div className="relative w-full bg-black" style={{ aspectRatio }}>
         <video

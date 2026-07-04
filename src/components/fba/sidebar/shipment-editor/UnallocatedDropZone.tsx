@@ -41,7 +41,7 @@ export function UnallocatedDropZone({
       className={`rounded-lg border transition-colors ${
         isOver
           ? 'border-dashed border-amber-400 bg-amber-50/40'
-          : 'border-gray-200 bg-gray-50/30'
+          : 'border-border-soft bg-surface-canvas/30'
       }`}
     >
       {/* Header — matches bundle card + item row grid so checkboxes align vertically */}
@@ -61,20 +61,20 @@ export function UnallocatedDropZone({
           Unallocated
         </p>
         {items.length > 0 && (
-          <span className="shrink-0 text-mini font-black tabular-nums text-gray-400">
+          <span className="shrink-0 text-mini font-black tabular-nums text-text-faint">
             {items.length} · {totalUnits}
           </span>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div className="border-t border-gray-100 px-3 py-2">
-          <p className="text-center text-eyebrow font-bold text-gray-300">
+        <div className="border-t border-border-hairline px-3 py-2">
+          <p className="text-center text-eyebrow font-bold text-text-faint">
             All items allocated to boxes
           </p>
         </div>
       ) : (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-border-hairline">
           {items.map((item) => {
             const pendingUndo = moveUndo.get(item.item_id);
             return (

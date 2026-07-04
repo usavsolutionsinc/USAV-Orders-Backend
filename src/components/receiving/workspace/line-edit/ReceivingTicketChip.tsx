@@ -206,23 +206,23 @@ function TicketThreadPanel({
     <div
       role="dialog"
       aria-label="Ticket history"
-      className="flex max-h-[460px] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+      className="flex max-h-[460px] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-xl"
     >
-      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-gray-100 px-3 py-2">
+      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-border-hairline px-3 py-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
           <div className="min-w-0">
-            <div className="break-words text-[13px] font-semibold leading-snug text-gray-800">
+            <div className="break-words text-[13px] font-semibold leading-snug text-text-default">
               {displayTicketId ? `Ticket ${displayTicketId.startsWith('#') ? displayTicketId : `#${displayTicketId}`}` : 'Ticket'}
             </div>
             {data?.ticket.subject ? (
-              <div className="break-words text-micro leading-snug text-gray-400">{data.ticket.subject}</div>
+              <div className="break-words text-micro leading-snug text-text-faint">{data.ticket.subject}</div>
             ) : null}
           </div>
         </div>
         <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {data?.ticket.status ? (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-gray-500">
+            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-text-soft">
               {data.ticket.status}
             </span>
           ) : null}
@@ -233,7 +233,7 @@ function TicketThreadPanel({
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Open in Zendesk"
-                className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-md p-1 text-text-faint transition hover:bg-surface-sunken hover:text-text-muted"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
@@ -244,7 +244,7 @@ function TicketThreadPanel({
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {!ticketId ? (
-          <p className="py-6 text-center text-sm text-gray-400">No ticket id to look up.</p>
+          <p className="py-6 text-center text-sm text-text-faint">No ticket id to look up.</p>
         ) : isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
@@ -254,7 +254,7 @@ function TicketThreadPanel({
             History unavailable: {error instanceof Error ? error.message : 'request failed'}
           </p>
         ) : !data || data.comments.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-400">No history yet.</p>
+          <p className="py-6 text-center text-sm text-text-faint">No history yet.</p>
         ) : (
           <ul className="space-y-2">
             {data.comments.map((c) => (
@@ -269,20 +269,20 @@ function TicketThreadPanel({
                   <span className={c.public ? 'font-semibold text-blue-600' : 'font-semibold text-amber-600'}>
                     {c.public ? 'Public reply' : 'Internal note'}
                   </span>
-                  <span className="flex items-center gap-1 normal-case text-gray-400">
+                  <span className="flex items-center gap-1 normal-case text-text-faint">
                     <Clock className="h-3 w-3" />
                     {formatDateTimePST(c.createdAt)}
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap break-words text-[13px] leading-snug text-gray-800">{c.body}</p>
+                <p className="whitespace-pre-wrap break-words text-[13px] leading-snug text-text-default">{c.body}</p>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
-        <span className="min-w-0 flex-1 text-caption leading-snug text-gray-400">
+      <footer className="flex flex-wrap items-center gap-2 border-t border-border-hairline bg-surface-canvas/60 px-3 py-2.5">
+        <span className="min-w-0 flex-1 text-caption leading-snug text-text-faint">
           Unlinking only removes our reference — the ticket stays in Zendesk.
         </span>
         <HoverTooltip label="Archive this carton's photos to the ticket's NAS folder" asChild>
@@ -294,7 +294,7 @@ function TicketThreadPanel({
             disabled={archive.isPending || receivingId == null || ticketId == null}
             onClick={() => archive.mutate()}
             aria-label="Archive this carton's photos to the ticket's NAS folder"
-            className="shrink-0 border border-blue-200 bg-white text-blue-700 ring-0 hover:bg-blue-50"
+            className="shrink-0 border border-blue-200 bg-surface-card text-blue-700 ring-0 hover:bg-blue-50"
           >
             Archive
           </Button>
@@ -306,7 +306,7 @@ function TicketThreadPanel({
           icon={<Unlink className="h-3.5 w-3.5" />}
           disabled={unlink.isPending || receivingId == null}
           onClick={() => unlink.mutate()}
-          className="shrink-0 border border-rose-200 bg-white text-rose-600 ring-0 hover:bg-rose-50"
+          className="shrink-0 border border-rose-200 bg-surface-card text-rose-600 ring-0 hover:bg-rose-50"
         >
           Unlink
         </Button>

@@ -8,7 +8,7 @@ import { Loader2 } from '@/components/Icons';
 const SkuDetailView = dynamic(() => import('@/components/sku/SkuDetailView'), {
     ssr: false,
     loading: () => (
-        <div className="flex items-center justify-center py-16 text-gray-400">
+        <div className="flex items-center justify-center py-16 text-text-faint">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span className="ml-2 text-sm">Loading SKU…</span>
         </div>

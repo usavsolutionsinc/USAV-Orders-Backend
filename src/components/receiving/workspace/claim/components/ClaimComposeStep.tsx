@@ -11,7 +11,7 @@ export function ClaimComposeStep({ c }: { c: ReceivingClaimController }) {
     <>
       <ClaimTemplateEditor template={c.template} filedTicket={c.filedTicket} />
 
-      <p className="text-caption font-semibold leading-5 text-gray-500">
+      <p className="text-caption font-semibold leading-5 text-text-soft">
         Refine the subject and body. Continue to Review to confirm everything before the ticket is
         filed and the photos are backed up.
       </p>

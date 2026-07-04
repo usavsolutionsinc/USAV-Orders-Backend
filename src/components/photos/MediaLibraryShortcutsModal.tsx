@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 
 interface ShortcutRow {
   keys: string[];
@@ -33,7 +34,7 @@ const VIEWER_SHORTCUTS: ShortcutRow[] = [
 
 function KeyCap({ children }: { children: string }) {
   return (
-    <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-mini font-black uppercase tracking-widest text-gray-600">
+    <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded border border-border-default bg-surface-canvas px-1.5 py-0.5 text-mini font-black uppercase tracking-widest text-text-muted">
       {children}
     </kbd>
   );
@@ -42,11 +43,11 @@ function KeyCap({ children }: { children: string }) {
 function ShortcutList({ title, rows }: { title: string; rows: ShortcutRow[] }) {
   return (
     <div className="space-y-1">
-      <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{title}</p>
-      <ul className="divide-y divide-gray-100">
+      <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">{title}</p>
+      <ul className="divide-y divide-border-hairline">
         {rows.map((row) => (
           <li key={`${title}-${row.label}`} className="flex items-center justify-between gap-4 py-1.5">
-            <span className="truncate text-caption text-gray-700">{row.label}</span>
+            <span className="truncate text-caption text-text-muted">{row.label}</span>
             <span className="flex shrink-0 items-center gap-1">
               {row.keys.map((k, i) => (
                 <KeyCap key={i}>{k}</KeyCap>
@@ -84,19 +85,17 @@ export function MediaLibraryShortcutsModal({ open, onClose }: { open: boolean; o
       aria-label="Media library keyboard shortcuts"
     >
       <div
-        className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-5 shadow-xl"
+        className="w-full max-w-md rounded-xl border border-border-soft bg-surface-card p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-caption font-bold text-gray-900">Keyboard shortcuts</h2>
-          <button
-            type="button"
+          <h2 className="text-caption font-bold text-text-default">Keyboard shortcuts</h2>
+          <IconButton
             onClick={onClose}
-            aria-label="Close shortcuts"
-            className="-my-1 rounded p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close shortcuts"
+            className="-my-1 rounded p-1 text-text-faint hover:bg-surface-hover hover:text-text-muted"
+            icon={<X className="h-4 w-4" />}
+          />
         </div>
         <div className="space-y-4">
           <ShortcutList title="Grid" rows={GRID_SHORTCUTS} />

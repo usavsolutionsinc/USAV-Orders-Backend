@@ -76,17 +76,17 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
   ];
 
   return (
-    <div className="shrink-0 border-b border-gray-100 bg-white px-5 py-3.5">
+    <div className="shrink-0 border-b border-border-hairline bg-surface-card px-5 py-3.5">
       <div className="flex items-start gap-3">
         {onBack ? (
           <IconButton
             icon={<ChevronLeft className="h-4 w-4" />}
             onClick={onBack}
             ariaLabel="Back to list"
-            className="-ml-1 mt-0.5 rounded-md p-1 hover:bg-gray-100 lg:hidden"
+            className="-ml-1 mt-0.5 rounded-md p-1 hover:bg-surface-sunken lg:hidden"
           />
         ) : null}
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-label font-black text-gray-500">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-label font-black text-text-soft">
           {initials(reqName)}
         </span>
         <div className="min-w-0 flex-1">
@@ -105,7 +105,7 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
                       setEditingTitle(false);
                     }
                   }}
-                  className="min-w-0 flex-1 rounded-md border border-blue-300 bg-white px-2 py-0.5 text-[15px] font-bold tracking-tight text-gray-900 outline-none focus:ring-2 focus:ring-blue-100"
+                  className="min-w-0 flex-1 rounded-md border border-blue-300 bg-surface-card px-2 py-0.5 text-[15px] font-bold tracking-tight text-text-default outline-none focus:ring-2 focus:ring-blue-100"
                 />
                 <HoverTooltip label="Save title" asChild>
                   <IconButton
@@ -121,7 +121,7 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
                     icon={<X className="h-3.5 w-3.5" />}
                     onClick={() => setEditingTitle(false)}
                     ariaLabel="Cancel"
-                    className="shrink-0 rounded-md p-1 hover:bg-gray-100"
+                    className="shrink-0 rounded-md p-1 hover:bg-surface-sunken"
                   />
                 </HoverTooltip>
               </>
@@ -133,7 +133,7 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
                     type="button"
                     onClick={startEditTitle}
                     aria-label="Click to edit title"
-                    className="min-w-0 truncate text-left text-[15px] font-bold tracking-tight text-gray-900 transition hover:text-blue-700"
+                    className="min-w-0 truncate text-left text-[15px] font-bold tracking-tight text-text-default transition hover:text-blue-700"
                   >
                     {ticket.subject || '(no subject)'}
                   </button>
@@ -144,10 +144,10 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
               </>
             )}
           </div>
-          <p className="mt-0.5 truncate text-label text-gray-500">
-            <span className="font-semibold text-gray-600">{reqName}</span>
-            {requester.email && requester.name ? <span className="text-gray-400"> · {requester.email}</span> : null}
-            <span className="text-gray-300"> · #{ticket.id}</span>
+          <p className="mt-0.5 truncate text-label text-text-soft">
+            <span className="font-semibold text-text-muted">{reqName}</span>
+            {requester.email && requester.name ? <span className="text-text-faint"> · {requester.email}</span> : null}
+            <span className="text-text-faint"> · #{ticket.id}</span>
           </p>
         </div>
         {/* Details stack — secondary detail + tags, just left of the Zendesk link. */}
@@ -159,7 +159,7 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open in Zendesk"
-              className="mt-0.5 shrink-0 rounded-lg border border-gray-200 p-1.5 text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+              className="mt-0.5 shrink-0 rounded-lg border border-border-soft p-1.5 text-text-soft transition hover:bg-surface-hover hover:text-text-muted"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
@@ -170,7 +170,7 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* Zendesk ticket fields — these write back to Zendesk. */}
         <div className="flex items-center gap-2">
-          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">Zendesk</span>
+          <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">Zendesk</span>
           <ZendeskSelect
             value={String(ticket.status)}
             options={STATUS_OPTIONS}
@@ -196,8 +196,8 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
         </div>
 
         {/* In-website follow-up — assigning notifies that staffer's inbox bell. */}
-        <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
-          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">Follow-up</span>
+        <div className="flex items-center gap-2 border-l border-border-soft pl-3">
+          <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">Follow-up</span>
           <ZendeskSelect
             value={assignment ? String(assignment.assignedStaffId) : UNASSIGNED}
             options={staffOptions}

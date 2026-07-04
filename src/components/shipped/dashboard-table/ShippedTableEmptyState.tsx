@@ -62,7 +62,7 @@ export function ShippedTableEmptyState({
         </>
       ) : (
         <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-          <p className="text-gray-500 font-semibold italic opacity-20">No shipped records for this week</p>
+          <p className="text-text-soft font-semibold italic opacity-20">No shipped records for this week</p>
         </div>
       )}
     </div>

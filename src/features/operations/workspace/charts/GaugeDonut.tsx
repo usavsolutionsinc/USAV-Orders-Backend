@@ -92,12 +92,12 @@ export function GaugeDonut({
           />
         ))}
         {/* center readout — currentColor so it inherits the dark-mode remap */}
-        <g className="text-gray-900">
+        <g className="text-text-default">
           <text x={cx} y={cy - r * 0.18} textAnchor="middle" fill="currentColor" className="text-2xl font-black tabular-nums">
             {sum.toLocaleString()}
           </text>
         </g>
-        <g className="text-gray-400">
+        <g className="text-text-faint">
           <text x={cx} y={cy + 4} textAnchor="middle" fill="currentColor" className="text-micro font-bold uppercase tracking-[0.18em]">
             {centerLabel}
           </text>

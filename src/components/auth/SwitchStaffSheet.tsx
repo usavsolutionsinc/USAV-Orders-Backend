@@ -100,7 +100,7 @@ export function SwitchStaffSheet() {
           type="button"
           onClick={closeSwitcher}
           ariaLabel="Close switch staff"
-          className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white transition hover:bg-gray-50"
+          className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-soft bg-surface-card transition hover:bg-surface-hover"
           icon={
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
           }
@@ -116,8 +116,8 @@ export function SwitchStaffSheet() {
         ) : (
           <>
             <div className="text-center">
-              <h2 className="text-2xl font-semibold tracking-tight text-gray-900">Switch staff</h2>
-              <p className="mt-1 text-label text-gray-500">{currentStaffName}</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-text-default">Switch staff</h2>
+              <p className="mt-1 text-label text-text-soft">{currentStaffName}</p>
             </div>
             <div className="mt-6">
               <StaffPickerList

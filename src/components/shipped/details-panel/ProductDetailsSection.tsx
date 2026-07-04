@@ -46,12 +46,12 @@ const PLATFORM_STYLE: Record<
   ebay:    { label: 'eBay',    underline: 'border-yellow-500',  chip: 'border-yellow-200 bg-yellow-50 text-yellow-800' },
   walmart: { label: 'Walmart', underline: 'border-amber-500',   chip: 'border-amber-200  bg-amber-50  text-amber-800' },
   mercari: { label: 'Mercari', underline: 'border-purple-500',  chip: 'border-purple-200 bg-purple-50 text-purple-700' },
-  shopify: { label: 'Shopify', underline: 'border-slate-500',   chip: 'border-slate-300  bg-slate-50  text-slate-800' },
+  shopify: { label: 'Shopify', underline: 'border-slate-500',   chip: 'border-border-default  bg-surface-canvas  text-text-default' },
 };
 const DEFAULT_STYLE = {
   label: 'Other',
   underline: 'border-slate-500',
-  chip: 'border-slate-200 bg-slate-50 text-slate-700',
+  chip: 'border-border-soft bg-surface-canvas text-text-muted',
 };
 
 function styleFor(platform: string) {
@@ -79,7 +79,7 @@ function PlatformSkuRow({ entry }: { entry: PlatformSkuEntry }) {
           {style.label}
         </span>
         {entry.accountName && (
-          <span className="w-full truncate text-eyebrow font-medium uppercase tracking-wider text-gray-400">
+          <span className="w-full truncate text-eyebrow font-medium uppercase tracking-wider text-text-faint">
             {entry.accountName}
           </span>
         )}
@@ -94,7 +94,7 @@ function PlatformSkuRow({ entry }: { entry: PlatformSkuEntry }) {
         />
       </div>
       {entry.itemId && entry.itemId !== entry.value && (
-        <span className="shrink-0 font-mono text-micro text-gray-400">
+        <span className="shrink-0 font-mono text-micro text-text-faint">
           {entry.itemId}
         </span>
       )}
@@ -122,14 +122,14 @@ function SkuPlatformList({
   if (loading && rows.length === 0) {
     return (
       <div className="py-2">
-        <div className="h-6 w-32 animate-pulse rounded bg-slate-100" />
+        <div className="h-6 w-32 animate-pulse rounded bg-surface-sunken" />
       </div>
     );
   }
 
   if (rows.length === 0) {
     return (
-      <div className="py-2 text-xs text-gray-400">No SKU mappings</div>
+      <div className="py-2 text-xs text-text-faint">No SKU mappings</div>
     );
   }
 
@@ -241,7 +241,7 @@ export function ProductDetailsSection({
             valueClassName="font-dm-sans"
           />
 
-          <div className="border-b border-gray-100 py-3">
+          <div className="border-b border-border-hairline py-3">
             {isSavingCondition ? (
               <div className="mb-1 flex justify-end">
                 <span className="text-micro font-black uppercase tracking-wide text-blue-600">Saving</span>

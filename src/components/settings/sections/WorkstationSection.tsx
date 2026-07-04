@@ -17,8 +17,8 @@ const ROLES: { value: WorkstationRole; label: string }[] = [
 ];
 
 const FIELD_CLS =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
-  'placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 ' +
+  'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2 text-sm text-text-default ' +
+  'placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 ' +
   'focus:ring-blue-500/20';
 
 export function WorkstationSection() {
@@ -41,14 +41,14 @@ export function WorkstationSection() {
     <div className="space-y-6">
       <header>
         <h2 className="sr-only">Workstation</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-text-soft">
           Identifies which station this is so forms and filters can pre-fill. Local to this device.
         </p>
       </header>
 
-      <div className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="space-y-5 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Station name</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Station name</span>
           <input
             type="text"
             placeholder="e.g. Packing 02, Receiving Bay A"
@@ -59,7 +59,7 @@ export function WorkstationSection() {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Default warehouse / location</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Default warehouse / location</span>
           <input
             type="text"
             placeholder="e.g. SAL, MAIN, TSN"
@@ -70,7 +70,7 @@ export function WorkstationSection() {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Default role</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Default role</span>
           <select
             value={settings.defaultRole}
             onChange={(e) => update('defaultRole', e.target.value as WorkstationRole)}
@@ -80,12 +80,12 @@ export function WorkstationSection() {
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </select>
-          <span className="mt-1 block text-caption text-gray-500">
+          <span className="mt-1 block text-caption text-text-soft">
             Determines which dashboard opens by default when the app launches.
           </span>
         </label>
 
-        {status && <span className="block text-xs text-gray-500">{status}</span>}
+        {status && <span className="block text-xs text-text-soft">{status}</span>}
       </div>
     </div>
   );

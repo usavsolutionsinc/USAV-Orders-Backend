@@ -63,27 +63,27 @@ function SortableBlockRow({ inst, onConfigure, onRemove }: SortableBlockRowProps
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="rounded-md bg-white ring-1 ring-gray-200">
-      <div className="flex items-center gap-1.5 border-b border-gray-100 px-2 py-1">
+    <div ref={setNodeRef} style={style} className="rounded-md bg-surface-card ring-1 ring-border-soft">
+      <div className="flex items-center gap-1.5 border-b border-border-hairline px-2 py-1">
         {/* ds-raw-button: dnd-kit drag handle — spreads {...attributes}/{...listeners} and owns cursor-grab/active:cursor-grabbing semantics, not a standard icon action */}
         <button
           type="button"
           {...attributes}
           {...listeners}
           aria-label="Drag to reorder"
-          className="flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
+          className="flex-shrink-0 cursor-grab text-text-faint transition hover:text-text-soft active:cursor-grabbing"
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
-        <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-gray-400" />
-        <span className="flex-1 truncate text-mini font-bold text-gray-600">
+        <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-text-faint" />
+        <span className="flex-1 truncate text-mini font-bold text-text-muted">
           {blockDef?.label ?? inst.block}
         </span>
         <HoverTooltip label="Configure source, display & actions" asChild>
           <IconButton
             onClick={() => onConfigure(inst)}
             ariaLabel="Configure source, display & actions"
-            className="rounded p-0.5 hover:bg-gray-100 hover:text-gray-700"
+            className="rounded p-0.5 hover:bg-surface-sunken hover:text-text-muted"
             icon={<Settings className="h-3.5 w-3.5" />}
           />
         </HoverTooltip>
@@ -207,7 +207,7 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
           when there's nothing to show. */}
       {(editing || instances.length > 0 || canManage) && (
         <div className="flex items-center justify-between px-2.5 pt-2">
-          <span className="text-eyebrow font-black uppercase tracking-wider text-gray-400">
+          <span className="text-eyebrow font-black uppercase tracking-wider text-text-faint">
             {editing ? `Blocks · editing (${slot})` : instances.length > 0 ? 'Blocks' : ''}
           </span>
           {canManage && !editing ? (
@@ -218,7 +218,7 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
                 onClick={enterEdit}
                 ariaLabel="Customize this station's blocks"
                 icon={<Pencil className="h-3 w-3" />}
-                className="text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                className="text-text-faint hover:bg-surface-sunken hover:text-text-muted"
               >
                 {instances.length === 0 ? 'Customize' : null}
               </Button>
@@ -229,7 +229,7 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
               <IconButton
                 onClick={exitEdit}
                 ariaLabel="Exit edit mode"
-                className="rounded-md p-1 hover:bg-gray-100 hover:text-gray-700"
+                className="rounded-md p-1 hover:bg-surface-sunken hover:text-text-muted"
                 icon={<X className="h-3.5 w-3.5" />}
               />
             </HoverTooltip>
@@ -265,7 +265,7 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
             size="sm"
             onClick={openPalette}
             icon={<Plus className="h-3.5 w-3.5" />}
-            className="w-full border border-dashed border-gray-300 bg-white text-gray-500 hover:border-blue-400 hover:text-blue-600"
+            className="w-full border border-dashed border-border-default bg-surface-card text-text-soft hover:border-blue-400 hover:text-blue-600"
           >
             Add block
           </Button>

@@ -73,7 +73,7 @@ function viaAckMeta(via: ResolvedVia): { label: string; Icon: typeof MapPin; chi
     case 'handle':
     case 'receiving_id':
     default:
-      return { label: 'Carton', Icon: Package, chip: 'bg-slate-50 text-slate-700 ring-slate-200' };
+      return { label: 'Carton', Icon: Package, chip: 'bg-surface-canvas text-text-muted ring-border-soft' };
   }
 }
 
@@ -204,7 +204,7 @@ export function TestingSidebarPanel({
   }, []);
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-surface-card">
       {/* Scan bar — same chrome + mode toggles as the shipping StationScanBar.
           Tap Tracking / PO# / Serial to force the next scan's search type, or
           leave unarmed to auto-detect. Top padding matches the shipping scan
@@ -232,7 +232,7 @@ export function TestingSidebarPanel({
                 {meta.label}
               </span>
               {/* ds-allow-title: truncation overflow on a non-interactive readout */}
-              <span className="min-w-0 truncate font-mono text-micro font-bold text-gray-600" title={lastAck.value}>
+              <span className="min-w-0 truncate font-mono text-micro font-bold text-text-muted" title={lastAck.value}>
                 {lastAck.value}
               </span>
             </div>
@@ -260,10 +260,10 @@ export function TestingSidebarPanel({
                     setPicker(null);
                     setScanValue('');
                   }}
-                  className="ds-raw-button w-full rounded-md bg-white px-2 py-1.5 text-left text-caption font-bold text-gray-800 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+                  className="ds-raw-button w-full rounded-md bg-surface-card px-2 py-1.5 text-left text-caption font-bold text-text-default ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
                 >
                   <span className="block truncate">{row.item_name || row.sku || `Line #${row.id}`}</span>
-                  <span className="block text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+                  <span className="block text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
                     {row.quantity_received}/{row.quantity_expected ?? '?'} ·{' '}
                     {row.workflow_status || 'EXPECTED'}
                   </span>

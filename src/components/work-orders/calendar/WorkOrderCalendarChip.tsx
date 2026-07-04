@@ -23,7 +23,7 @@ export function WorkOrderCalendarChip({
   const [open, setOpen] = useState(false);
 
   const assignee = row.techName || row.packerName || 'Unassigned';
-  const tone = STATUS_COLOR[row.status] ?? 'text-slate-600 bg-slate-100';
+  const tone = STATUS_COLOR[row.status] ?? 'text-text-muted bg-surface-sunken';
 
   return (
     <>

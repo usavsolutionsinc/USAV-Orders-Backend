@@ -39,7 +39,7 @@ export function DashboardOrdersView({
       <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <Suspense
           fallback={
-            <div className="flex-1 flex items-center justify-center bg-gray-50">
+            <div className="flex-1 flex items-center justify-center bg-surface-canvas">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
           }

@@ -31,23 +31,23 @@ export function AdminSidebarShell({
 }: AdminSidebarShellProps) {
   return (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       search={search}
       headerBelow={
         filters || stats || action ? (
           <>
             {filters ? (
-              <div className={`flex items-center gap-1.5 border-b border-gray-200 ${SIDEBAR_GUTTER} py-2`}>
+              <div className={`flex items-center gap-1.5 border-b border-border-soft ${SIDEBAR_GUTTER} py-2`}>
                 {filters}
               </div>
             ) : null}
             {stats ? (
-              <div className={`flex flex-wrap items-center gap-1.5 border-b border-gray-200 ${SIDEBAR_GUTTER} py-2`}>
+              <div className={`flex flex-wrap items-center gap-1.5 border-b border-border-soft ${SIDEBAR_GUTTER} py-2`}>
                 {stats}
               </div>
             ) : null}
             {action ? (
-              <div className={`border-b border-gray-200 ${SIDEBAR_GUTTER} py-2.5`}>{action}</div>
+              <div className={`border-b border-border-soft ${SIDEBAR_GUTTER} py-2.5`}>{action}</div>
             ) : null}
           </>
         ) : null

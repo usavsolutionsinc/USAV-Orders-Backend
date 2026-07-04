@@ -271,7 +271,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
   }
 
   return (
-    <div className={embedded ? 'flex min-h-0 flex-1 flex-col overflow-hidden bg-white' : 'flex min-h-0 flex-1 flex-col bg-white'}>
+    <div className={embedded ? 'flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-card' : 'flex min-h-0 flex-1 flex-col bg-surface-card'}>
       {error ? (
         <div className="mx-3 my-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-caption font-semibold text-red-700">
           {error}
@@ -280,11 +280,11 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
-          <div className="px-4 py-10 text-center text-caption font-bold uppercase tracking-wider text-gray-400">
+          <div className="px-4 py-10 text-center text-caption font-bold uppercase tracking-wider text-text-faint">
             No shipped rows
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border-hairline">
             {grouped.map((group) => {
               const row = group.rows[0];
               const isOpen = expanded.has(row.id);
@@ -300,30 +300,30 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                   whileHover={{ x: 2 }}
                   whileTap={{ scale: 0.998 }}
                   key={group.key}
-                  className="bg-white"
+                  className="bg-surface-card"
                 >
                   {/* ds-raw-button: multi-line text-left master-detail expand row */}
                   <button
                     type="button"
                     onClick={() => void toggleExpand(row.id)}
-                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left hover:bg-gray-50"
+                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left hover:bg-surface-hover"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-mono text-caption font-black text-gray-900">
+                      <p className="truncate font-mono text-caption font-black text-text-default">
                         {String(row.amazon_shipment_id || row.shipment_ref || `#${row.id}`).toUpperCase()}
                       </p>
-                      <p className="mt-0.5 truncate text-micro font-bold text-gray-500">
+                      <p className="mt-0.5 truncate text-micro font-bold text-text-soft">
                         UPS {String(primaryUps?.tracking_number || '—')} · {Number(row.shipped_items || 0)}/{Number(row.total_items || 0)}
                       </p>
                     </div>
-                    <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-4 w-4 text-text-faint transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {isOpen ? (
-                    <div className="space-y-2 border-t border-gray-100 px-3 py-2.5">
+                    <div className="space-y-2 border-t border-border-hairline px-3 py-2.5">
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <label className="min-w-0">
-                          <span className="mb-1 block text-micro font-black uppercase tracking-widest text-gray-500">
+                          <span className="mb-1 block text-micro font-black uppercase tracking-widest text-text-soft">
                             FBA Shipment ID
                           </span>
                           <input
@@ -334,12 +334,12 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                 [row.id]: { ...shipmentDraft, amazon: e.target.value.toUpperCase() },
                               }))
                             }
-                            className="h-9 w-full rounded-lg border border-gray-300 px-2 font-mono text-xs font-bold text-gray-900 outline-none focus:border-gray-500"
+                            className="h-9 w-full rounded-lg border border-border-default px-2 font-mono text-xs font-bold text-text-default outline-none focus:border-gray-500"
                             placeholder="FBA17XXXXXXXX"
                           />
                         </label>
                         <label className="min-w-0">
-                          <span className="mb-1 block text-micro font-black uppercase tracking-widest text-gray-500">
+                          <span className="mb-1 block text-micro font-black uppercase tracking-widest text-text-soft">
                             UPS Tracking
                           </span>
                           <input
@@ -350,7 +350,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                 [row.id]: { ...shipmentDraft, ups: e.target.value.toUpperCase() },
                               }))
                             }
-                            className="h-9 w-full rounded-lg border border-gray-300 px-2 font-mono text-xs font-bold text-gray-900 outline-none focus:border-gray-500"
+                            className="h-9 w-full rounded-lg border border-border-default px-2 font-mono text-xs font-bold text-text-default outline-none focus:border-gray-500"
                             placeholder="1Z..."
                           />
                         </label>
@@ -369,7 +369,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                       </Button>
 
                       {itemLoadingId === row.id ? (
-                        <div className="flex items-center gap-2 py-2 text-caption font-semibold text-gray-500">
+                        <div className="flex items-center gap-2 py-2 text-caption font-semibold text-text-soft">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           Loading FNSKUs…
                         </div>
@@ -378,7 +378,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                           {(itemsByShipment[row.id] || []).map((item) => (
                             <div
                               key={item.id}
-                              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-2 py-2"
+                              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-border-hairline bg-surface-canvas px-2 py-2"
                             >
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
@@ -387,7 +387,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                     onChange={(e) =>
                                       setItemFnskuDrafts((prev) => ({ ...prev, [item.id]: e.target.value.toUpperCase() }))
                                     }
-                                    className="h-8 w-40 max-w-full rounded-md border border-gray-300 bg-white px-2 font-mono text-caption font-bold text-gray-900 outline-none focus:border-gray-500"
+                                    className="h-8 w-40 max-w-full rounded-md border border-border-default bg-surface-card px-2 font-mono text-caption font-bold text-text-default outline-none focus:border-gray-500"
                                   />
                                   <Button
                                     type="button"
@@ -400,7 +400,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                     Save
                                   </Button>
                                 </div>
-                                <p className="mt-1 truncate text-micro font-semibold text-gray-600">
+                                <p className="mt-1 truncate text-micro font-semibold text-text-muted">
                                   {item.display_title || 'No title'}
                                 </p>
                               </div>
@@ -413,7 +413,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                       )}
 
                       {/* Audit trace — shipment → FNSKU → unit path (P2-FBA-01) */}
-                      <div className="border-t border-gray-100 pt-2">
+                      <div className="border-t border-border-hairline pt-2">
                         <Button
                           type="button"
                           variant="secondary"
@@ -422,7 +422,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                           icon={<Boxes />}
                           iconRight={
                             <ChevronDown
-                              className={`text-gray-400 transition-transform ${tracing.has(row.id) ? 'rotate-180' : ''}`}
+                              className={`text-text-faint transition-transform ${tracing.has(row.id) ? 'rotate-180' : ''}`}
                             />
                           }
                         >

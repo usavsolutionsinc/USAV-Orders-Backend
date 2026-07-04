@@ -43,7 +43,7 @@ const SEEDED_STAGES = ['Receive', 'Test', 'Wipe', 'Grade', 'List', 'Ship'] as co
 
 const EYEBROW = 'text-eyebrow font-black uppercase tracking-widest text-blue-700';
 const STAGE_CHIP =
-  'rounded bg-white text-gray-600 ring-1 ring-inset ring-gray-200 px-1.5 py-0.5 text-micro font-black uppercase tracking-widest';
+  'rounded bg-surface-card text-text-muted ring-1 ring-inset ring-border-soft px-1.5 py-0.5 text-micro font-black uppercase tracking-widest';
 
 /**
  * Permission gate. Rendering the data-owning inner component conditionally keeps
@@ -68,8 +68,8 @@ function FirstScanOnboardingCardInner({ variant }: { variant: 'band' | 'sidebar'
     <section
       className={
         variant === 'sidebar'
-          ? 'bg-white'
-          : 'shrink-0 border-b border-gray-100 bg-white px-4 py-3'
+          ? 'bg-surface-card'
+          : 'shrink-0 border-b border-border-hairline bg-surface-card px-4 py-3'
       }
       aria-label="Get started — scan your first unit"
     >
@@ -85,10 +85,10 @@ function FirstScanOnboardingCardInner({ variant }: { variant: 'band' | 'sidebar'
         </span>
 
         {/* Headline + one-line explainer of the seeded flow. */}
-        <h2 className="mt-2 text-lg font-black leading-tight text-gray-900">
+        <h2 className="mt-2 text-lg font-black leading-tight text-text-default">
           Let&apos;s process your first unit
         </h2>
-        <p className="mt-1 text-caption font-medium text-gray-600">
+        <p className="mt-1 text-caption font-medium text-text-muted">
           Your refurb workflow is ready. Every unit you scan flows down this line:
         </p>
 
@@ -98,7 +98,7 @@ function FirstScanOnboardingCardInner({ variant }: { variant: 'band' | 'sidebar'
             <span key={stage} className="inline-flex items-center gap-1.5">
               <span className={STAGE_CHIP}>{stage}</span>
               {i < SEEDED_STAGES.length - 1 ? (
-                <ChevronRight className="h-3 w-3 text-gray-300" />
+                <ChevronRight className="h-3 w-3 text-text-faint" />
               ) : null}
             </span>
           ))}

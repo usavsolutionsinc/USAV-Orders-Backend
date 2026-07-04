@@ -34,7 +34,7 @@ export function CallLogView() {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <EmptyState
-          icon={<Phone className="h-6 w-6 text-gray-400" />}
+          icon={<Phone className="h-6 w-6 text-text-faint" />}
           title="Call log isn’t connected"
           description="Connect Nextiva in Settings → Integrations to watch inbound, outbound, and missed calls stream in here."
         />
@@ -55,7 +55,7 @@ export function CallLogView() {
   return (
     <div className="mx-auto h-full w-full max-w-3xl overflow-y-auto px-6 py-6">
       <header className="mb-2 flex items-baseline justify-between gap-3">
-        <h1 className="text-xl font-black uppercase tracking-tighter text-gray-900">Call log</h1>
+        <h1 className="text-xl font-black uppercase tracking-tighter text-text-default">Call log</h1>
         <p className="text-eyebrow font-bold uppercase tracking-widest text-blue-600">
           {directionLabel} · live
         </p>
@@ -65,7 +65,7 @@ export function CallLogView() {
         loading={isLoading}
         items={items}
         emptyMessage={query ? 'No calls match this search.' : 'No calls recorded yet.'}
-        className="border-t border-gray-100 pt-4"
+        className="border-t border-border-hairline pt-4"
       />
     </div>
   );

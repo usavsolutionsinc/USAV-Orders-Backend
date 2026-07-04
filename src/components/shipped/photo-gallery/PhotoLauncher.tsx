@@ -72,7 +72,7 @@ export function PhotoLauncher({ g }: { g: PhotoGalleryController }) {
             </div>
           </button>
         </HoverTooltip>
-        <div className="flex shrink-0 items-stretch self-center overflow-hidden rounded-lg border border-blue-200/90 bg-white/90 shadow-sm">
+        <div className="flex shrink-0 items-stretch self-center overflow-hidden rounded-lg border border-blue-200/90 bg-surface-card/90 shadow-sm">
           <HoverTooltip label={g.downloading ? 'Downloading…' : 'Download all photos'} asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); void g.handleDownloadAll(); }}
@@ -114,7 +114,7 @@ export function PhotoLauncher({ g }: { g: PhotoGalleryController }) {
             <ImageIcon className="h-5 w-5 text-white" />
           </div>
           <div className="flex flex-col items-start">
-            <span className="text-sm font-bold text-gray-900">{g.launcherTitle}</span>
+            <span className="text-sm font-bold text-text-default">{g.launcherTitle}</span>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-micro font-black text-blue-600 uppercase tracking-wider">
                 {photoItems.length} {photoItems.length === 1 ? 'Photo' : 'Photos'}

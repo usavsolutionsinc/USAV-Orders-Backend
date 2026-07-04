@@ -12,7 +12,7 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
   const { title, description, emptyLabel, useLabel, onUseFavorite, hideHeading = false, inlineRows = false, addButtonAccent = 'orange', onAddFavorite, isFavoriteAdded } = f.props;
 
   return (
-    <section className={inlineRows ? 'space-y-2' : 'space-y-3 rounded-[1.75rem] border border-gray-200 bg-white p-4'}>
+    <section className={inlineRows ? 'space-y-2' : 'space-y-3 rounded-[1.75rem] border border-border-soft bg-surface-card p-4'}>
       {/* Header — click title area to collapse/expand list */}
       <div className="flex items-center justify-between gap-3">
         {hideHeading ? (
@@ -23,16 +23,16 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
             <motion.span
               animate={{ rotate: f.isListOpen ? 90 : 0 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className="shrink-0 text-gray-500 group-hover:text-gray-600"
+              className="shrink-0 text-text-soft group-hover:text-text-muted"
             >
               <ChevronRight className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} />
             </motion.span>
             <div className="min-w-0">
-              <h3 className={`${inlineRows ? 'text-base' : 'text-sm'} font-black tracking-tight text-gray-900`}>
+              <h3 className={`${inlineRows ? 'text-base' : 'text-sm'} font-black tracking-tight text-text-default`}>
                 {title}
-                {f.favorites.length > 0 && <span className="ml-1.5 text-micro font-semibold tabular-nums text-gray-500">{f.favorites.length}</span>}
+                {f.favorites.length > 0 && <span className="ml-1.5 text-micro font-semibold tabular-nums text-text-soft">{f.favorites.length}</span>}
               </h3>
-              {description && f.isListOpen ? <p className="mt-0.5 text-caption font-semibold leading-relaxed text-gray-500">{description}</p> : null}
+              {description && f.isListOpen ? <p className="mt-0.5 text-caption font-semibold leading-relaxed text-text-soft">{description}</p> : null}
             </div>
           </button>
         )}
@@ -41,7 +41,7 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
             <IconButton
               onClick={() => f.setIsManageMode((prev) => !prev)}
               className={`inline-flex ${inlineRows ? 'h-7 w-7 rounded-lg' : 'h-10 w-10 rounded-2xl'} items-center justify-center border transition-colors ${
-                f.isManageMode ? 'border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-600'
+                f.isManageMode ? 'border-border-default bg-surface-sunken text-text-muted hover:bg-surface-strong' : 'border-border-soft bg-surface-card text-text-soft hover:bg-surface-hover hover:text-text-muted'
               }`}
               ariaLabel={f.isManageMode ? 'Done managing' : 'Manage favorites'}
               icon={f.isManageMode ? <X className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} /> : <Pencil className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} />}
@@ -83,15 +83,15 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
               )}
 
               {f.isLoading ? (
-                <div className="flex items-center justify-center rounded-2xl border border-dashed border-gray-200 px-3 py-8 text-gray-500">
+                <div className="flex items-center justify-center rounded-2xl border border-dashed border-border-soft px-3 py-8 text-text-soft">
                   <Loader2 className="h-4 w-4 animate-spin" />
                 </div>
               ) : f.favorites.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center">
+                <div className="rounded-2xl border border-dashed border-border-soft px-4 py-8 text-center">
                   <p className={sectionLabel}>{emptyLabel}</p>
                 </div>
               ) : (
-                <div className={inlineRows ? 'divide-y divide-gray-200 border-t border-gray-200' : 'space-y-2'}>
+                <div className={inlineRows ? 'divide-y divide-border-soft border-t border-border-soft' : 'space-y-2'}>
                   {f.favorites.map((favorite) => {
                     const isAdded = isFavoriteAdded?.(favorite) ?? false;
                     const addButtonClassName = isAdded
@@ -106,18 +106,18 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
 
                     return (
                       <div key={`${favorite.workspaceKey}-${favorite.id}`}>
-                        <div className={inlineRows ? 'py-1.5' : 'rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3'}>
+                        <div className={inlineRows ? 'py-1.5' : 'rounded-2xl border border-border-soft bg-surface-canvas px-3 py-3'}>
                           <p className={`${inlineRows ? 'text-micro leading-tight' : 'text-label leading-snug'} font-black tracking-tight text-black`}>{favorite.label}</p>
                           <div className={`${inlineRows ? 'mt-0.5 gap-1' : 'mt-1 gap-2'} flex items-start`}>
                             <div className="min-w-0 flex-1">
                               <div className={`flex w-full min-w-0 items-center justify-start gap-2 font-bold ${inlineRows ? 'text-mini tracking-[0.12em]' : 'text-micro tracking-[0.16em]'}`}>
                                 <span className="shrink-0 tabular-nums text-emerald-600">{favorite.defaultPrice ? `$${favorite.defaultPrice}` : ''}</span>
-                                <span className="min-w-0 truncate uppercase text-gray-500">{favorite.sku || 'No SKU'}</span>
+                                <span className="min-w-0 truncate uppercase text-text-soft">{favorite.sku || 'No SKU'}</span>
                               </div>
                               {favorite.issueTemplate ? (
-                                <p className={`${inlineRows ? 'mt-0 text-mini' : 'mt-0.5 text-micro'} font-semibold uppercase tracking-[0.14em] text-gray-500`}>{favorite.issueTemplate}</p>
+                                <p className={`${inlineRows ? 'mt-0 text-mini' : 'mt-0.5 text-micro'} font-semibold uppercase tracking-[0.14em] text-text-soft`}>{favorite.issueTemplate}</p>
                               ) : null}
-                              {!inlineRows && favorite.productTitle && <p className="mt-1 text-caption font-semibold text-gray-500">{favorite.productTitle}</p>}
+                              {!inlineRows && favorite.productTitle && <p className="mt-1 text-caption font-semibold text-text-soft">{favorite.productTitle}</p>}
                             </div>
                             <div className={`${inlineRows ? 'flex items-center gap-1 pt-0.5' : 'flex items-center gap-2'}`}>
                               <HoverTooltip label="Edit favorite" asChild>
@@ -129,7 +129,7 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
                                   className={`inline-flex ${subButtonSizeClass} shrink-0 items-center justify-center border transition-colors ${
                                     f.editingFavoriteId === favorite.id && f.showForm
                                       ? 'border-blue-200 bg-blue-50 text-blue-600'
-                                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600'
+                                      : 'border-border-soft bg-surface-card text-text-soft hover:border-border-default hover:bg-surface-hover hover:text-text-muted'
                                   }`}
                                   ariaLabel={`Edit ${favorite.label}`}
                                   icon={<Pencil className={`${subIconSizeClass} ${f.editingFavoriteId === favorite.id && f.showForm ? 'text-blue-600' : ''}`} />}

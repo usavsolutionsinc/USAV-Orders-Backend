@@ -17,7 +17,7 @@ import { motion } from 'framer-motion';
  */
 export function BootSplash({ label = 'Loading your workspace' }: { label?: string }) {
   return (
-    <div className="fixed inset-0 z-splash flex items-center justify-center bg-white">
+    <div className="fixed inset-0 z-splash flex items-center justify-center bg-surface-card">
       {/* faint dotted field — same texture as the sign-in Shell */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.025]"
@@ -51,7 +51,7 @@ export function BootSplash({ label = 'Loading your workspace' }: { label?: strin
         {/* breathing ring around the site favicon */}
         <div className="relative flex h-16 w-16 items-center justify-center">
           <motion.span
-            className="absolute inset-0 rounded-2xl border-2 border-gray-200"
+            className="absolute inset-0 rounded-2xl border-2 border-border-soft"
             animate={{ scale: [1, 1.12, 1], opacity: [0.6, 0.15, 0.6] }}
             transition={{ duration: 1.8, ease: 'easeInOut', repeat: Infinity }}
             aria-hidden
@@ -68,15 +68,15 @@ export function BootSplash({ label = 'Loading your workspace' }: { label?: strin
         </div>
 
         {/* indeterminate sweep */}
-        <div className="h-1 w-40 overflow-hidden rounded-full bg-gray-100">
+        <div className="h-1 w-40 overflow-hidden rounded-full bg-surface-sunken">
           <motion.div
-            className="h-full w-1/3 rounded-full bg-slate-900"
+            className="h-full w-1/3 rounded-full bg-surface-inverse"
             animate={{ x: ['-120%', '320%'] }}
             transition={{ duration: 1.1, ease: 'easeInOut', repeat: Infinity }}
           />
         </div>
 
-        <p className="text-caption font-bold uppercase tracking-widest text-gray-400">
+        <p className="text-caption font-bold uppercase tracking-widest text-text-faint">
           {label}…
         </p>
       </motion.div>

@@ -84,7 +84,7 @@ export function FbaTrackingBucket({
           ? 'border-dashed border-blue-400 bg-blue-50/40'
           : bucket.allocations.length > 0
             ? 'border-blue-200 bg-blue-50/20'
-            : 'border-gray-200 bg-white'
+            : 'border-border-soft bg-surface-card'
       }`}
     >
       {/* Header */}
@@ -94,7 +94,7 @@ export function FbaTrackingBucket({
           icon={bucket.collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
           ariaLabel={bucket.collapsed ? 'Expand box' : 'Collapse box'}
           onClick={() => onToggleCollapse(bucket.bucketId)}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-600"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-faint hover:text-text-muted"
         />
 
         <input
@@ -106,7 +106,7 @@ export function FbaTrackingBucket({
           autoFocus={!bucket.trackingNumber}
         />
 
-        <span className={`${microBadge} shrink-0 tabular-nums text-gray-400`}>
+        <span className={`${microBadge} shrink-0 tabular-nums text-text-faint`}>
           {bucket.allocations.length > 0 ? `${bucket.allocations.length} · ${totalUnits}` : ''}
         </span>
 
@@ -116,7 +116,7 @@ export function FbaTrackingBucket({
             icon={<Trash2 className="h-3 w-3" />}
             ariaLabel="Delete this UPS box"
             onClick={() => onDelete(bucket.bucketId)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-300 hover:bg-red-50 hover:text-red-500"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-faint hover:bg-red-50 hover:text-red-500"
           />
         </HoverTooltip>
       </div>
@@ -132,13 +132,13 @@ export function FbaTrackingBucket({
             className="overflow-hidden"
           >
             {bucket.allocations.length === 0 ? (
-              <div className="border-t border-gray-100 px-3 py-2">
-                <p className={`${microBadge} text-center tracking-wider text-gray-400`}>
+              <div className="border-t border-border-hairline px-3 py-2">
+                <p className={`${microBadge} text-center tracking-wider text-text-faint`}>
                   Drag items here
                 </p>
               </div>
             ) : (
-              <div className="border-t border-gray-100">
+              <div className="border-t border-border-hairline">
                 {bucket.allocations.map((alloc) => {
                   const item = itemMap.get(alloc.item_id);
                   if (!item) return null;

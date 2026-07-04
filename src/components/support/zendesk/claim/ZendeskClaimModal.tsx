@@ -38,7 +38,7 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
       className="flex h-[min(88vh,46rem)] w-[min(94vw,40rem)] -mt-6 flex-col"
       aria-label="Create or update a support ticket"
     >
-      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border-hairline px-5 py-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-100">
             {onPickStep ? <ImageIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
@@ -47,7 +47,7 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
             <p className="text-micro font-black uppercase tracking-widest text-rose-500">
               {onPickStep ? 'Step 1 · Photos' : 'Support'}
             </p>
-            <h2 className="text-[15px] font-bold tracking-tight text-gray-900">
+            <h2 className="text-[15px] font-bold tracking-tight text-text-default">
               {c.result
                 ? 'Done'
                 : onPickStep
@@ -62,7 +62,7 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
           icon={<X className="h-4 w-4" />}
           ariaLabel="Close"
           onClick={c.onClose}
-          className="-mr-1 -mt-1 rounded-lg p-1.5 hover:bg-gray-100"
+          className="-mr-1 -mt-1 rounded-lg p-1.5 hover:bg-surface-sunken"
         />
       </div>
 
@@ -76,7 +76,7 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
             onSelectedChange={c.setLibraryPhotos}
             showScopeToggle={Boolean(props.defaultTicketId)}
           />
-          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-100 px-5 py-3.5">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border-hairline px-5 py-3.5">
             <a
               href="/ops/photos"
               target="_blank"
@@ -86,7 +86,7 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
               Open full library <ExternalLink className="h-3 w-3" />
             </a>
             <div className="flex items-center gap-2">
-              <span className="text-caption text-gray-500">{c.libraryPhotos.length} selected</span>
+              <span className="text-caption text-text-soft">{c.libraryPhotos.length} selected</span>
               <Button variant="ghost" onClick={c.onClose}>
                 Cancel
               </Button>
@@ -99,7 +99,7 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
       ) : (
         <>
           {!lockedToTicket ? (
-            <div className="shrink-0 overflow-visible border-b border-gray-100 px-5 pb-3 pt-3">
+            <div className="shrink-0 overflow-visible border-b border-border-hairline px-5 pb-3 pt-3">
               <HorizontalButtonSlider
                 items={MODE_ITEMS}
                 value={c.mode}
@@ -115,8 +115,8 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
             <ClaimComposer c={c} />
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 px-5 py-3.5">
-            <div className="flex items-center gap-1.5 text-caption font-semibold text-gray-400">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border-hairline px-5 py-3.5">
+            <div className="flex items-center gap-1.5 text-caption font-semibold text-text-faint">
               <Paperclip className="h-3.5 w-3.5" />
               {c.totalAttach} attachment{c.totalAttach === 1 ? '' : 's'}
             </div>

@@ -60,7 +60,7 @@ export function SupportOverviewCard() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         whileHover={{ y: -2 }}
-        className="block bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+        className="block bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
       >
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl bg-surface-canvas text-text-muted flex items-center justify-center shrink-0">

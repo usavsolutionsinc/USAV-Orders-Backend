@@ -60,26 +60,26 @@ export const CONDITION_OPTS = CONDITION_GRADES.map((v) => ({
 // ─── Pill-button option arrays (active/inactive Tailwind classes) ─────────────
 
 export const QA_BTN_OPTS = [
-  { value: 'PENDING',           label: 'Pending',    active: 'bg-gray-600 text-white',      inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'PASSED',            label: 'Passed',     active: 'bg-emerald-500 text-white',   inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'FAILED_DAMAGED',    label: 'Damaged',    active: 'bg-red-500 text-white',       inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'FAILED_INCOMPLETE', label: 'Incomplete', active: 'bg-orange-400 text-white',    inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'FAILED_FUNCTIONAL', label: 'Functional', active: 'bg-rose-500 text-white',      inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'HOLD',              label: 'Hold',       active: 'bg-yellow-400 text-gray-900', inactive: 'bg-gray-100 text-gray-500' },
+  { value: 'PENDING',           label: 'Pending',    active: 'bg-gray-600 text-white',      inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'PASSED',            label: 'Passed',     active: 'bg-emerald-500 text-white',   inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'FAILED_DAMAGED',    label: 'Damaged',    active: 'bg-red-500 text-white',       inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'FAILED_INCOMPLETE', label: 'Incomplete', active: 'bg-orange-400 text-white',    inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'FAILED_FUNCTIONAL', label: 'Functional', active: 'bg-rose-500 text-white',      inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'HOLD',              label: 'Hold',       active: 'bg-yellow-400 text-text-default', inactive: 'bg-surface-sunken text-text-soft' },
 ];
 
 export const DISP_BTN_OPTS = [
-  { value: 'ACCEPT', label: 'Accept', active: 'bg-emerald-500 text-white',      inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'HOLD',   label: 'Hold',   active: 'bg-yellow-400 text-gray-900',    inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'RTV',    label: 'RTV',    active: 'bg-purple-500 text-white',       inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'SCRAP',  label: 'Scrap',  active: 'bg-gray-700 text-white',         inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'REWORK', label: 'Rework', active: 'bg-blue-500 text-white',         inactive: 'bg-gray-100 text-gray-500' },
+  { value: 'ACCEPT', label: 'Accept', active: 'bg-emerald-500 text-white',      inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'HOLD',   label: 'Hold',   active: 'bg-yellow-400 text-text-default',    inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'RTV',    label: 'RTV',    active: 'bg-purple-500 text-white',       inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'SCRAP',  label: 'Scrap',  active: 'bg-gray-700 text-white',         inactive: 'bg-surface-sunken text-text-soft' },
+  { value: 'REWORK', label: 'Rework', active: 'bg-blue-500 text-white',         inactive: 'bg-surface-sunken text-text-soft' },
 ];
 
 // ─── Badge class maps ─────────────────────────────────────────────────────────
 
 export const QA_BADGE: Record<string, string> = {
-  PENDING:           'bg-gray-100 text-gray-500',
+  PENDING:           'bg-surface-sunken text-text-soft',
   PASSED:            'bg-emerald-100 text-emerald-700',
   FAILED_DAMAGED:    'bg-red-100 text-red-600',
   FAILED_INCOMPLETE: 'bg-orange-100 text-orange-600',
@@ -91,7 +91,7 @@ export const DISP_BADGE: Record<string, string> = {
   ACCEPT: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   HOLD:   'bg-yellow-50 text-yellow-700 border-yellow-200',
   RTV:    'bg-purple-50 text-purple-700 border-purple-200',
-  SCRAP:  'bg-gray-100 text-gray-500 border-gray-200',
+  SCRAP:  'bg-surface-sunken text-text-soft border-border-soft',
   REWORK: 'bg-blue-50 text-blue-700 border-blue-200',
 };
 
@@ -128,20 +128,20 @@ export const CONDITION_BADGE: Record<string, string> = {
   REFURBISHED: 'bg-teal-100 text-teal-700',
   USED_A:      'bg-blue-100 text-blue-700',
   USED_B:      'bg-indigo-100 text-indigo-700',
-  USED_C:      'bg-slate-100 text-slate-600',
+  USED_C:      'bg-surface-sunken text-text-muted',
   PARTS:       'bg-amber-100 text-amber-800',
 };
 
 export function conditionBadgeTone(code: string | null | undefined): string {
   const c = String(code || '').trim().toUpperCase();
-  return CONDITION_BADGE[c] || 'bg-slate-100 text-slate-600';
+  return CONDITION_BADGE[c] || 'bg-surface-sunken text-text-muted';
 }
 
 /** Soft pill tone per serial-unit lifecycle status (RECEIVED → … → SHIPPED).
  *  This is the unit domain, distinct from receiving workflow_status. Shared by
  *  the desktop /serial/[id] page and the mobile /m/u/[id] page. */
 export const UNIT_STATUS_BADGE: Record<string, string> = {
-  UNKNOWN:  'bg-slate-100 text-slate-600',
+  UNKNOWN:  'bg-surface-sunken text-text-muted',
   LABELED:  'bg-amber-100 text-amber-700',
   RECEIVED: 'bg-amber-100 text-amber-800',
   IN_TEST:  'bg-blue-100 text-blue-700',
@@ -156,7 +156,7 @@ export const UNIT_STATUS_BADGE: Record<string, string> = {
 
 export function unitStatusBadgeTone(status: string | null | undefined): string {
   const s = String(status || '').trim().toUpperCase();
-  return UNIT_STATUS_BADGE[s] || 'bg-slate-100 text-slate-600';
+  return UNIT_STATUS_BADGE[s] || 'bg-surface-sunken text-text-muted';
 }
 
 /**
@@ -185,7 +185,7 @@ export function getStatusDotBg(
   if (value === 'AWAITING_TEST' || value === 'IN_TEST') return 'bg-violet-500';
   if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
   if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
-  return 'bg-gray-400';
+  return 'bg-border-emphasis';
 }
 
 // ─── Shared row-display contract (desktop ⇄ mobile) ──────────────────────────
@@ -214,7 +214,7 @@ export function getWorkflowIconMeta(label: string): {
   if (label === 'RECEIVED') return { Icon: PackageCheck, tone: 'text-emerald-600' };
   if (label === 'EXPECTED') return { Icon: Clock, tone: 'text-amber-500' };
   if (label === 'SCANNED') return { Icon: Truck, tone: 'text-blue-600' };
-  return { Icon: Package, tone: 'text-gray-400' };
+  return { Icon: Package, tone: 'text-text-faint' };
 }
 
 /**

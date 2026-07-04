@@ -51,7 +51,7 @@ const KIND_META: Record<IncomingSyncKind, { eyebrow: string; icon: typeof Refres
 const TONE_MAP = {
   emerald: 'border-emerald-200 bg-emerald-50/60 text-emerald-700',
   blue: 'border-blue-200 bg-blue-50/60 text-blue-700',
-  gray: 'border-gray-200 bg-gray-50/60 text-gray-700',
+  gray: 'border-border-soft bg-surface-canvas/60 text-text-muted',
   red: 'border-red-200 bg-red-50/60 text-red-700',
 } as const;
 
@@ -120,14 +120,14 @@ export function IncomingSyncDialog({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: 'spring', damping: 26, stiffness: 320, mass: 0.55 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-gray-200"
+        className="relative flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-surface-card shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-border-soft"
       >
-        <header className="flex items-start gap-3 border-b border-gray-200 px-5 py-3.5">
+        <header className="flex items-start gap-3 border-b border-border-soft px-5 py-3.5">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Icon className={`h-4 w-4 ${kind === 'zoho' ? 'text-emerald-600' : 'text-violet-600'} ${isRunning ? 'animate-pulse' : ''}`} />
             <div className="min-w-0">
-              <p className={`${microBadge} text-gray-500`}>{meta.eyebrow}</p>
-              <h2 className={`${sectionLabel} text-gray-900 mt-0.5`}>{title}</h2>
+              <p className={`${microBadge} text-text-soft`}>{meta.eyebrow}</p>
+              <h2 className={`${sectionLabel} text-text-default mt-0.5`}>{title}</h2>
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
@@ -144,15 +144,15 @@ export function IncomingSyncDialog({
               disabled={isRunning}
               ariaLabel="Close"
               icon={<X className="w-4 h-4" />}
-              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+              className="rounded-lg p-1.5 text-text-soft hover:bg-surface-sunken hover:text-text-muted disabled:opacity-50"
             />
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {isRunning || !result ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-500">
-              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-text-soft">
+              <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
               <p className={fieldLabel}>{meta.runningTitle}…</p>
             </div>
           ) : (
@@ -169,7 +169,7 @@ export function IncomingSyncDialog({
               {result.updated.length > 0 ? (
                 <ul className="space-y-1">
                   {result.updated.map((line, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm font-semibold text-gray-700">
+                    <li key={i} className="flex items-start gap-2 text-sm font-semibold text-text-muted">
                       <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
                       <span className="tabular-nums">{line}</span>
                     </li>
@@ -179,15 +179,15 @@ export function IncomingSyncDialog({
 
               {/* Per-leg breakdown (Issued sync / Mirror sync / Scan). */}
               {result.sections.map((s) => (
-                <div key={s.label} className="overflow-hidden rounded-xl border border-gray-200">
-                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-1.5">
-                    <p className={`${microBadge} text-gray-500`}>{s.label}</p>
+                <div key={s.label} className="overflow-hidden rounded-xl border border-border-soft">
+                  <div className="border-b border-border-hairline bg-surface-canvas px-3 py-1.5">
+                    <p className={`${microBadge} text-text-soft`}>{s.label}</p>
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-3 py-2.5 sm:grid-cols-3">
                     {s.rows.map((r) => (
                       <div key={r.k} className="flex items-baseline justify-between gap-2">
-                        <dt className={`${fieldLabel} text-gray-500`}>{r.k}</dt>
-                        <dd className="text-sm font-bold tabular-nums text-gray-900">{r.v}</dd>
+                        <dt className={`${fieldLabel} text-text-soft`}>{r.k}</dt>
+                        <dd className="text-sm font-bold tabular-nums text-text-default">{r.v}</dd>
                       </div>
                     ))}
                   </dl>
@@ -210,7 +210,7 @@ export function IncomingSyncDialog({
               ) : null}
 
               {result.note ? (
-                <p className={`text-sm font-semibold ${result.ok ? 'text-gray-500' : 'text-red-600'}`}>
+                <p className={`text-sm font-semibold ${result.ok ? 'text-text-soft' : 'text-red-600'}`}>
                   {result.note}
                 </p>
               ) : null}
@@ -218,7 +218,7 @@ export function IncomingSyncDialog({
           )}
         </div>
 
-        <footer className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-5 py-2.5">
+        <footer className="flex items-center justify-end gap-3 border-t border-border-soft bg-surface-canvas px-5 py-2.5">
           <Button
             variant="brand"
             size="sm"

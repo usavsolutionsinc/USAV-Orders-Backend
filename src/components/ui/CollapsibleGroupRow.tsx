@@ -70,7 +70,7 @@ export function CollapsibleGroupRow({
   return (
     // When expanded, a darker bottom hairline closes off the revealed child rows
     // as one visually-bounded unit; collapsed, it matches the gray-100 row dividers.
-    <div className={cn('border-b', isOpen ? 'border-gray-300' : 'border-gray-100', className)}>
+    <div className={cn('border-b', isOpen ? 'border-border-default' : 'border-border-hairline', className)}>
       {/* role="button" instead of a real <button>: the `summary` is built from
           the same identity chips the child rows use (OrderIdChip / SerialChip …),
           and those are themselves <button>s for copy-to-clipboard. A real
@@ -89,20 +89,20 @@ export function CollapsibleGroupRow({
         aria-expanded={isOpen}
         className={cn(
           'ds-raw-button flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-blue-50/50',
-          isOpen ? 'bg-blue-50/40' : index != null && index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white',
+          isOpen ? 'bg-blue-50/40' : index != null && index % 2 === 1 ? 'bg-surface-canvas/40' : 'bg-surface-card',
         )}
       >
         {showChevron ? (
           <ChevronDown
             className={cn(
-              'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform duration-200',
+              'h-3.5 w-3.5 shrink-0 text-text-faint transition-transform duration-200',
               isOpen && 'rotate-180',
             )}
           />
         ) : null}
         <div className="min-w-0 flex-1">{summary}</div>
         {count != null ? (
-          <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-gray-500">
+          <span className="shrink-0 rounded-full bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-text-soft">
             {count} {countLabel}
           </span>
         ) : null}
@@ -118,7 +118,7 @@ export function CollapsibleGroupRow({
             {/* Indent the child rows past the chevron so the nesting reads as
                 "these belong to the row above". Left padding only — the child
                 rows' right-aligned chips stay flush with the summary's. */}
-            <div className="border-l-2 border-gray-100 bg-gray-50/30 pl-5">{children}</div>
+            <div className="border-l-2 border-border-hairline bg-surface-canvas/30 pl-5">{children}</div>
           </motion.div>
         ) : null}
       </AnimatePresence>

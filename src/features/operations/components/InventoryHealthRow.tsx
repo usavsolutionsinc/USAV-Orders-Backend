@@ -61,7 +61,7 @@ export function InventoryHealthRow() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
               whileHover={{ y: -2 }}
-              className="block bg-white rounded-2xl border border-border-soft p-4 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+              className="block bg-surface-card rounded-2xl border border-border-soft p-4 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${c.tone.ring} ${c.tone.text}`}>

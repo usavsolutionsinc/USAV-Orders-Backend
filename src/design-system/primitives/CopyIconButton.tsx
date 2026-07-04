@@ -19,8 +19,8 @@ export function CopyIconButton({ copied, onClick, ariaLabel }: CopyIconButtonPro
       onClick={onClick}
       className={`flex-shrink-0 transition-colors ${
         isMobile
-          ? 'h-11 w-11 flex items-center justify-center text-gray-400 active:text-emerald-600 active:scale-95 transition-transform'
-          : 'text-gray-400 hover:text-emerald-600'
+          ? 'h-11 w-11 flex items-center justify-center text-text-faint active:text-emerald-600 active:scale-95 transition-transform'
+          : 'text-text-faint hover:text-emerald-600'
       }`}
       aria-label={ariaLabel ?? (copied ? 'Copied' : 'Copy')}
     >

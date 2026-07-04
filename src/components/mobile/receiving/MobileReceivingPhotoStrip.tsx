@@ -81,7 +81,7 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
 
   if (isLoading && data === undefined) {
     return (
-      <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-2" aria-hidden>
+      <div className="flex items-center gap-3 rounded-xl bg-surface-canvas p-2" aria-hidden>
         <div className="flex min-w-0 flex-1 gap-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <SkeletonBase key={i} width="4.5rem" height="96px" className="shrink-0 rounded-lg" />
@@ -102,10 +102,10 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
 
   return (
     <>
-      <div className="flex items-stretch gap-2 rounded-xl bg-gray-50 p-2 ring-1 ring-inset ring-gray-200">
+      <div className="flex items-stretch gap-2 rounded-xl bg-surface-canvas p-2 ring-1 ring-inset ring-border-soft">
         <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {photos.length === 0 ? (
-            <div className="flex h-24 w-full items-center justify-center rounded-lg bg-gray-100/80 text-caption font-semibold text-gray-400">
+            <div className="flex h-24 w-full items-center justify-center rounded-lg bg-surface-sunken/80 text-caption font-semibold text-text-faint">
               No photos yet
             </div>
           ) : (
@@ -114,7 +114,7 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
                 key={p.id}
                 type="button"
                 onClick={() => openViewer(index)}
-                className="ds-raw-button relative h-24 w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-gray-200 shadow-sm active:opacity-90"
+                className="ds-raw-button relative h-24 w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-surface-strong shadow-sm active:opacity-90"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.displayUrl} alt="" className="h-full w-full object-cover" />

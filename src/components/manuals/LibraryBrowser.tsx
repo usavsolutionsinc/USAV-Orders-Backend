@@ -83,14 +83,14 @@ export function LibraryBrowser({ query, basePath }: LibraryBrowserProps) {
       <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
           </div>
         ) : debouncedQuery && searchResults ? (
           <SearchResults results={searchResults} onOpenFolder={(node) => nav.setCurrentPath(node.path)} {...rowProps} />
         ) : currentNode.totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <FolderIcon className="mb-3 h-10 w-10 text-gray-300" />
-            <p className={`${tableHeader} text-gray-500`}>No manuals here</p>
+            <FolderIcon className="mb-3 h-10 w-10 text-text-faint" />
+            <p className={`${tableHeader} text-text-soft`}>No manuals here</p>
           </div>
         ) : (
           <FolderView subfolders={subfolders} files={filesHere} onEnter={nav.enterFolder} {...rowProps} />

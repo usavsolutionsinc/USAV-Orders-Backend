@@ -104,7 +104,7 @@ export function ReceivingLineWorkspace({
     // every line click (the "re-rendering the whole page" jank). Carton→carton
     // transitions still crossfade via the outer AnimatePresence.
     <div
-      className="flex h-full w-full flex-col bg-gray-50"
+      className="flex h-full w-full flex-col bg-surface-canvas"
       data-testid="receiving-workspace"
       // E2E hook: distinguishes a matched-PO carton ('zoho_po') from an unfound
       // intake carton ('unmatched'), so the scan-resolution spec can assert a

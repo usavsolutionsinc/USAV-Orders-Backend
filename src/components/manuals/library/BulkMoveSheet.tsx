@@ -40,11 +40,11 @@ export function BulkMoveSheet({
         className="ds-raw-button absolute inset-0 bg-black/40"
         aria-label="Close"
       />
-      <div className="relative z-panelPopover w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20">
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+      <div className="relative z-panelPopover w-full max-w-lg overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-2xl shadow-zinc-900/20">
+        <div className="flex items-center justify-between border-b border-border-soft px-4 py-3">
           <div>
-            <p className="text-micro font-black uppercase tracking-[0.16em] text-zinc-500">Bulk Move</p>
-            <h2 className="mt-1 text-sm font-black text-zinc-900">
+            <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">Bulk Move</p>
+            <h2 className="mt-1 text-sm font-black text-text-default">
               Move {count} {count === 1 ? 'manual' : 'manuals'}
             </h2>
           </div>
@@ -53,13 +53,13 @@ export function BulkMoveSheet({
             onClick={onCancel}
             disabled={busy}
             ariaLabel="Close"
-            className="rounded-full border border-zinc-200 bg-white p-2 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800"
+            className="rounded-full border border-border-soft bg-surface-card p-2 hover:border-border-default hover:bg-surface-hover hover:text-text-default"
           />
         </div>
         <div className="space-y-4 px-4 py-4">
           <FolderPathPicker value={target} onChange={onTargetChange} />
         </div>
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-border-hairline bg-surface-canvas/60 px-4 py-3">
           <Button variant="secondary" size="sm" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>

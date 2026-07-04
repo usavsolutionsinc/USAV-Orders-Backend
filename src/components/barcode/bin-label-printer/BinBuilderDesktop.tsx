@@ -11,7 +11,7 @@ export function BinBuilderDesktop({ c }: { c: BinLabelPrinterController }) {
   return (
     <div className="flex flex-col gap-4">
       <header className="flex items-start justify-between gap-3">
-        <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight text-gray-900">
+        <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight text-text-default">
           {c.selectedRoom ?? 'Pick a room to start'}
         </h1>
         <div className="flex shrink-0 items-center gap-2">
@@ -30,7 +30,7 @@ export function BinBuilderDesktop({ c }: { c: BinLabelPrinterController }) {
             onClick={() => c.setConfigOpen(true)}
             ariaLabel="Configure label printer"
             icon={<Settings className="h-4 w-4" />}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white hover:bg-gray-50"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface-card hover:bg-surface-hover"
           />
         </div>
       </header>
@@ -54,8 +54,8 @@ export function BinBuilderDesktop({ c }: { c: BinLabelPrinterController }) {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 ring-1 ring-blue-200">
               <ChevronLeft className="h-5 w-5 text-blue-500" />
             </div>
-            <p className="text-sm font-semibold text-gray-800">Pick a room in the sidebar</p>
-            <p className="max-w-[40ch] text-[11.5px] text-gray-500">
+            <p className="text-sm font-semibold text-text-default">Pick a room in the sidebar</p>
+            <p className="max-w-[40ch] text-[11.5px] text-text-soft">
               Tap any zone on the left. Aisle, bay, level, and position unlock here as soon as a room
               is chosen.
             </p>

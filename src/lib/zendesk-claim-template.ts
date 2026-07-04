@@ -156,8 +156,10 @@ export async function buildReceivingClaimTemplate(
            SELECT BTRIM(su.serial_number) AS serial_number
              FROM serial_units su
             WHERE su.organization_id = $3
-              AND su.origin_receiving_line_id IN (SELECT id FROM lines)
-              AND ($2::int IS NULL OR su.origin_receiving_line_id = $2)
+              AND su.id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                             WHERE p.origin_type = 'RECEIVING_LINE' AND p.organization_id = $3
+                               AND p.origin_id IN (SELECT id FROM lines)
+                               AND ($2::int IS NULL OR p.origin_id = $2))
          ) s
          WHERE BTRIM(COALESCE(serial_number, '')) <> ''
          ORDER BY serial_number
@@ -174,8 +176,10 @@ export async function buildReceivingClaimTemplate(
            UNION
            SELECT BTRIM(su.serial_number) AS serial_number
              FROM serial_units su
-            WHERE su.origin_receiving_line_id IN (SELECT id FROM lines)
-              AND ($2::int IS NULL OR su.origin_receiving_line_id = $2)
+            WHERE su.id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                             WHERE p.origin_type = 'RECEIVING_LINE'
+                               AND p.origin_id IN (SELECT id FROM lines)
+                               AND ($2::int IS NULL OR p.origin_id = $2))
          ) s
          WHERE BTRIM(COALESCE(serial_number, '')) <> ''
          ORDER BY serial_number

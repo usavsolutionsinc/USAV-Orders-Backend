@@ -89,7 +89,7 @@ export function ReasonCodePicker({
 
   return (
     <label className={`block ${compact ? '' : 'space-y-1'}`}>
-      <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
+      <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
         Reason
       </span>
       <select
@@ -100,9 +100,9 @@ export function ReasonCodePicker({
           onChange(match);
         }}
         disabled={loading || reasons.length === 0}
-        className={`mt-1 w-full rounded-md border border-slate-300 bg-white px-2 ${
+        className={`mt-1 w-full rounded-md border border-border-default bg-surface-card px-2 ${
           compact ? 'py-1.5 text-label' : 'py-2 text-sm'
-        } font-bold text-slate-900 focus:border-blue-500 focus:outline-none disabled:opacity-50`}
+        } font-bold text-text-default focus:border-blue-500 focus:outline-none disabled:opacity-50`}
       >
         {loading && <option>Loading…</option>}
         {!loading &&

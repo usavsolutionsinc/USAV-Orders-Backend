@@ -111,19 +111,19 @@ export function HeaderTopWorkOrderChip() {
         aria-label="Your top work order"
         className="w-[300px]"
       >
-        <div className="border-b border-gray-100 px-3.5 py-3">
+        <div className="border-b border-border-hairline px-3.5 py-3">
           <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-indigo-500">
             Your next work order
           </p>
-          <p className="mt-1 text-[14px] font-bold leading-tight tracking-tight text-gray-900">
+          <p className="mt-1 text-[14px] font-bold leading-tight tracking-tight text-text-default">
             {top.title}
           </p>
           {top.subtitle ? (
-            <p className="mt-0.5 truncate text-caption text-gray-500">{top.subtitle}</p>
+            <p className="mt-0.5 truncate text-caption text-text-soft">{top.subtitle}</p>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-3.5 py-2.5">
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-eyebrow font-black uppercase tracking-wider text-gray-600">
+          <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-eyebrow font-black uppercase tracking-wider text-text-muted">
             {top.queueLabel}
           </span>
           <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-eyebrow font-black uppercase tracking-wider text-indigo-600">
@@ -135,7 +135,7 @@ export function HeaderTopWorkOrderChip() {
             </span>
           ) : null}
         </div>
-        <div className="border-t border-gray-100 px-3.5 py-2.5">
+        <div className="border-t border-border-hairline px-3.5 py-2.5">
           <Link
             href={top.sourcePath}
             onClick={() => setOpen(false)}

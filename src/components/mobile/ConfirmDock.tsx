@@ -69,7 +69,7 @@ export function ConfirmDock({
 
   return (
     <div
-      className="border-t border-gray-100 bg-white px-4 pt-3"
+      className="border-t border-border-hairline bg-surface-card px-4 pt-3"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
     >
       <Button
@@ -90,7 +90,7 @@ export function ConfirmDock({
           onClick={handleSecondary}
           disabled={loading}
           className={`mt-2 h-8 w-full text-xs ${
-            secondary.destructive ? 'text-red-600 active:text-red-700' : 'text-gray-500 active:text-gray-700'
+            secondary.destructive ? 'text-red-600 active:text-red-700' : 'text-text-soft active:text-text-muted'
           }`}
         >
           {secondary.label}

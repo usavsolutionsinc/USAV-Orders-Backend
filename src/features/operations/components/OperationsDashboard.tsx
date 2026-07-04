@@ -26,7 +26,7 @@ export function OperationsDashboard() {
   const { data, isLoading } = useOperationsDashboardData();
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">
+    <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-surface-canvas text-text-default">
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-6">
 
         {/* ── TOP: the current goal (P3-ADM-01 acceptance A — goal-first) ── */}
@@ -103,11 +103,11 @@ export function OperationsDashboard() {
             eyebrow="Operational ledger"
             title="Outbound pending orders"
           />
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-surface-card rounded-xl border border-border-soft overflow-hidden">
             <Suspense
               fallback={
                 <div className="flex h-64 items-center justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                  <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
                 </div>
               }
             >

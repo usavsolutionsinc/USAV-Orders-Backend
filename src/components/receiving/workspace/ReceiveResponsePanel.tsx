@@ -289,13 +289,13 @@ export function ReceiveResponsePanel({
                 {classification.headline}
               </p>
               {classification.verdict !== 'success' ? (
-                <span className="text-eyebrow font-semibold tabular-nums text-slate-500">
+                <span className="text-eyebrow font-semibold tabular-nums text-text-soft">
                   {timestamp} · {response.durationMs}ms · HTTP {response.httpStatus || '—'}
                 </span>
               ) : null}
             </div>
             {classification.detail ? (
-              <p className="mt-0.5 text-micro font-medium leading-snug text-slate-700">
+              <p className="mt-0.5 text-micro font-medium leading-snug text-text-muted">
                 {classification.detail}
               </p>
             ) : null}
@@ -320,11 +320,11 @@ export function ReceiveResponsePanel({
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`}
                         aria-hidden
                       />
-                      <span className="truncate font-mono font-semibold text-slate-800">
+                      <span className="truncate font-mono font-semibold text-text-default">
                         PO {r.purchaseorder_id ?? '?'}
                       </span>
-                      <span className="text-slate-400">·</span>
-                      <span className="truncate text-slate-600">
+                      <span className="text-text-faint">·</span>
+                      <span className="truncate text-text-muted">
                         {ok
                           ? `receive ${r.receive_id ?? '—'}`
                           : `${r.error_kind ?? 'error'}: ${r.error ?? 'unknown'}`}
@@ -340,7 +340,7 @@ export function ReceiveResponsePanel({
               <IconButton
                 onClick={onToggle}
                 ariaLabel={expanded ? 'Hide raw response' : 'Show raw response'}
-                className="rounded p-0.5 text-slate-400 hover:bg-white/60 hover:text-slate-700"
+                className="rounded p-0.5 text-text-faint hover:bg-surface-card/60 hover:text-text-muted"
                 icon={
                   <ChevronDown
                     className={`h-3.5 w-3.5 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
@@ -352,18 +352,18 @@ export function ReceiveResponsePanel({
               <IconButton
                 onClick={onDismiss}
                 ariaLabel="Dismiss response"
-                className="rounded p-0.5 text-slate-400 hover:bg-white/60 hover:text-slate-700"
+                className="rounded p-0.5 text-text-faint hover:bg-surface-card/60 hover:text-text-muted"
                 icon={<X className="h-3 w-3" />}
               />
             </HoverTooltip>
           </div>
         </div>
         {expanded ? (
-          <div className={`border-t ${toneStyles.border} bg-white/70 px-2 py-1.5`}>
-            <p className="mb-1 text-mini font-black uppercase tracking-widest text-slate-500">
+          <div className={`border-t ${toneStyles.border} bg-surface-card/70 px-2 py-1.5`}>
+            <p className="mb-1 text-mini font-black uppercase tracking-widest text-text-soft">
               Raw response · /api/receiving/mark-received-po
             </p>
-            <pre className="max-h-56 overflow-auto rounded border border-slate-200 bg-white p-1.5 font-mono text-eyebrow leading-relaxed text-slate-700">
+            <pre className="max-h-56 overflow-auto rounded border border-border-soft bg-surface-card p-1.5 font-mono text-eyebrow leading-relaxed text-text-muted">
 {JSON.stringify(response.body ?? { networkError: response.networkError }, null, 2)}
             </pre>
             <div className="mt-1 flex justify-end">

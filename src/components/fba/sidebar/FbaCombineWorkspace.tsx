@@ -35,14 +35,14 @@ export function FbaCombineWorkspace({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
-        <p className="text-micro font-black uppercase tracking-widest text-gray-500">Combine</p>
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border-hairline px-4 py-2.5">
+        <p className="text-micro font-black uppercase tracking-widest text-text-soft">Combine</p>
         <HoverTooltip label="Back to board" asChild>
           <IconButton
             icon={<X className="h-4 w-4" />}
             onClick={handleClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100"
+            className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface-sunken"
             ariaLabel="Close — back to board"
           />
         </HoverTooltip>

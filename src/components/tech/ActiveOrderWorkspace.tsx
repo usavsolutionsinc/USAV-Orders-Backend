@@ -108,25 +108,25 @@ export function ActiveOrderWorkspace({
       animate={framerPresence.stationCard.animate}
       exit={framerPresence.stationCard.exit}
       transition={framerTransition.stationCardMount}
-      className={`flex h-full w-full flex-col ${isPreview ? 'bg-emerald-50/30' : 'bg-gray-50'}`}
+      className={`flex h-full w-full flex-col ${isPreview ? 'bg-emerald-50/30' : 'bg-surface-canvas'}`}
     >
       {/* Sticky header — identifies the order, gives a way back to history. */}
       <PaneHeader
         className={cn(
-          'bg-white',
+          'bg-surface-card',
           isPreview
             ? cn('border-b-0', receivingHeaderHairlineClass)
-            : 'border-gray-200',
+            : 'border-border-soft',
         )}
         rowClassName="px-4"
         leftSlot={
           <>
-            <PaneHeaderIconBadge Icon={Icon} bg="bg-gray-50" tint={tint} size="sm" rounded="lg" />
+            <PaneHeaderIconBadge Icon={Icon} bg="bg-surface-canvas" tint={tint} size="sm" rounded="lg" />
             <PaneHeaderLabel
               eyebrow={`${label} · ${stateLabel}`}
               value={orderIdDisplay}
               valueTitle={orderIdDisplay}
-              valueClassName="truncate text-sm font-black tracking-tight text-gray-900"
+              valueClassName="truncate text-sm font-black tracking-tight text-text-default"
             />
           </>
         }

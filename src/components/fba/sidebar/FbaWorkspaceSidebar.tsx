@@ -35,23 +35,23 @@ import {
 /** Suspense fallback for the /fba workspace sidebar. */
 export function FbaWorkspaceSidebarFallback() {
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-surface-card">
       <div className={sidebarHeaderBandClass}>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
-          <div className="h-11 bg-zinc-50 animate-pulse" />
-          <div className="h-11 bg-zinc-50 animate-pulse" />
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-border-soft">
+          <div className="h-11 bg-surface-canvas animate-pulse" />
+          <div className="h-11 bg-surface-canvas animate-pulse" />
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
-          <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
+          <div className="h-24 w-full rounded-2xl bg-surface-sunken animate-pulse" />
         </div>
-        <div className={`min-h-0 flex-1 space-y-3 ${SIDEBAR_GUTTER} py-3 overflow-y-auto bg-white`}>
-          <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
+        <div className={`min-h-0 flex-1 space-y-3 ${SIDEBAR_GUTTER} py-3 overflow-y-auto bg-surface-card`}>
+          <div className="h-4 w-32 bg-surface-sunken rounded animate-pulse" />
           <div className="space-y-2">
-            <div className="h-16 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
-            <div className="h-16 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
-            <div className="h-16 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+            <div className="h-16 w-full rounded-xl bg-surface-canvas border border-border-hairline animate-pulse" />
+            <div className="h-16 w-full rounded-xl bg-surface-canvas border border-border-hairline animate-pulse" />
+            <div className="h-16 w-full rounded-xl bg-surface-canvas border border-border-hairline animate-pulse" />
           </div>
         </div>
       </div>
@@ -91,7 +91,7 @@ export function FbaWorkspaceSidebar() {
   );
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-surface-card">
       {!masterNavEnabled && (
         <div className={sidebarHeaderPillRowClass}>
           <HorizontalButtonSlider
@@ -144,7 +144,7 @@ export function FbaWorkspaceSidebar() {
       {/* Single scroll container */}
       <div
         data-testid="fba-sidebar-scroll"
-        className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-white"
+        className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-surface-card"
         style={{ ['--fba-sticky-top' as any]: '38px' }}
       >
         {activeMode === 'plan' && !editorActive ? <FbaPlanRailBody view={planRailView} /> : null}

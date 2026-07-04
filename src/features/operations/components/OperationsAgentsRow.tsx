@@ -68,7 +68,7 @@ function AgentCard({ agent, index }: { agent: LocalAgentState; index: number }) 
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex flex-col rounded-[20px] border border-border-soft bg-white p-4
+      className="group relative flex flex-col rounded-[20px] border border-border-soft bg-surface-card p-4
                  shadow-[0_2px_12px_rgba(161,140,90,0.04)] transition-shadow
                  hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)]"
     >

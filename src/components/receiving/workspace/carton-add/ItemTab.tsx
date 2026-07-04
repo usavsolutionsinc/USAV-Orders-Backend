@@ -112,8 +112,8 @@ export function ItemTab({
   return (
     <>
       {hint ? <HintBanner text={hint} /> : null}
-      <div className="border-b border-gray-50 px-2 pb-2 pt-2">
-        <span className={`${microBadge} mb-1.5 block px-1 text-gray-400`}>Internal catalog</span>
+      <div className="border-b border-border-hairline px-2 pb-2 pt-2">
+        <span className={`${microBadge} mb-1.5 block px-1 text-text-faint`}>Internal catalog</span>
         {manualMode ? (
           <div className="flex items-center gap-2 px-1">
             <input
@@ -124,7 +124,7 @@ export function ItemTab({
                 if (e.key === 'Enter') void submitManual();
               }}
               placeholder="Type a product title…"
-              className="flex-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
+              className="flex-1 rounded-md border border-border-soft bg-surface-card px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
             />
             <Button
               variant="primary"
@@ -165,10 +165,10 @@ export function ItemTab({
             ))}
           </ul>
         ) : !manualMode && query.trim() && !loading ? (
-          <p className="px-2 py-3 text-label text-gray-400">No catalog matches.</p>
+          <p className="px-2 py-3 text-label text-text-faint">No catalog matches.</p>
         ) : null}
       </div>
-      <div className="border-t border-gray-100 px-3 py-2">
+      <div className="border-t border-border-hairline px-3 py-2">
         <button
           type="button"
           onClick={() => {

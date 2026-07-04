@@ -22,7 +22,7 @@ export function SerialNumbersRow({
       label={label}
       actions={
         serials.length > 0 ? (
-          <div className="flex items-center gap-1.5 text-gray-400">
+          <div className="flex items-center gap-1.5 text-text-faint">
             <CopyActionIcon
               value={serialsCsv}
               ariaLabel="Copy all serial numbers"
@@ -33,9 +33,9 @@ export function SerialNumbersRow({
       }
     >
       {serials.length > 0 ? (
-        <p className="truncate font-mono text-sm font-bold text-gray-900">{serialsCsv}</p>
+        <p className="truncate font-mono text-sm font-bold text-text-default">{serialsCsv}</p>
       ) : (
-        <p className="text-sm font-bold text-gray-400">N/A</p>
+        <p className="text-sm font-bold text-text-faint">N/A</p>
       )}
     </DetailsPanelRow>
   );

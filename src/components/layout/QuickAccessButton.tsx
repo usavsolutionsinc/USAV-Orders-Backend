@@ -178,13 +178,13 @@ export function QuickAccessButton({
           className={cn(
             'relative flex items-center justify-center transition-all active:scale-95 shadow-sm',
             compact
-              ? 'h-9 w-9 min-h-0 min-w-0 shrink-0 rounded-full ring-1 ring-gray-200/90'
+              ? 'h-9 w-9 min-h-0 min-w-0 shrink-0 rounded-full ring-1 ring-border-soft/90'
               : 'h-10 w-10 rounded-xl',
             menuOpen
               ? 'bg-gray-700 hover:bg-gray-600'
               : staffChipActive && staffColorHex
                 ? 'hover:brightness-110'
-                : 'bg-gray-900 hover:bg-gray-800',
+                : 'bg-surface-inverse hover:bg-surface-inverse-hover',
             buttonClassName,
           )}
           style={

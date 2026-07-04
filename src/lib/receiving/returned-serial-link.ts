@@ -37,6 +37,7 @@ import { resolveReceivingExceptionsByReceivingId } from '@/lib/tracking-exceptio
 import { getExternalUrlByItemNumber, getPlatformKeyByItemNumber } from '@/utils/external-item-url';
 import { columnsToClassification, classificationToColumns } from '@/lib/receiving/intake-classification';
 import { tapWorkflow } from '@/lib/workflow/tap';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 
 // ─── Shared types ────────────────────────────────────────────────────────────
 
@@ -300,6 +301,9 @@ export interface ReturnedSerialLinkDeps extends PersistLinkageDeps {
   /** Studio-node tap (Tap 1 — return detected, disposition unknown). Injected
    *  for testability; fire-and-forget by its own contract, never throws. */
   tap: typeof tapWorkflow;
+  /** Optional "why" signal emitter (plan §2.3 emitter #1) — fire-and-forget
+   *  by its own contract, never throws; defaults to the real impl. */
+  emitSignal?: typeof emitEntitySignalSafe;
 }
 
 const defaultDeps: ReturnedSerialLinkDeps = {
@@ -310,6 +314,7 @@ const defaultDeps: ReturnedSerialLinkDeps = {
   recordInventoryEvent,
   listingUrlForItemNumber: getExternalUrlByItemNumber,
   tap: tapWorkflow,
+  emitSignal: emitEntitySignalSafe,
 };
 
 /**
@@ -445,6 +450,27 @@ export async function linkReturnedSerial(
     source: 'scan',
   });
 
+  // "Why" signal (plan §2.3 emitter #1 — return reasons, incl. the matched-
+  // order context). Post-commit like the tap, for the same durability reason;
+  // fires for both outcomes (a physical return happened either way — the
+  // sales-order match just enriches meta). Never fails the scan.
+  await (deps.emitSignal ?? emitEntitySignalSafe)({
+    organizationId: orgId,
+    entityType: 'SERIAL_UNIT',
+    entityId: input.serialUnitId,
+    signalKind: 'return_reason',
+    notes: reason,
+    actorStaffId: input.staffId ?? null,
+    meta: {
+      receivingLineId: input.receivingLineId,
+      receivingId: input.receivingId ?? null,
+      linked: result.linked,
+      orderId: result.matchedOrder?.order_id ?? null,
+      orderPk: result.matchedOrder?.order_pk ?? null,
+      matchedVia: result.matchedOrder?.via ?? null,
+    },
+  });
+
   return result;
 }
 
@@ -511,6 +537,15 @@ export async function importSalesOrderByNumber(
   const reason = input.reason?.trim() || 'sales order import (unbox)';
 
   return deps.runTransaction(orgId, async (client) => {
+    // Prior link state — the return_reason signal below fires only on a
+    // FIRST/CHANGED link, so re-committing the same order number never
+    // double-counts one physical return in the "top reasons" aggregates.
+    const priorLink = await client.query<{ source_order_id: string | null }>(
+      `SELECT source_order_id FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [input.receivingLineId, orgId],
+    );
+    const priorSourceOrderId = priorLink.rows[0]?.source_order_id ?? null;
+
     // Exact, org-anchored match on order_id — uses idx_orders_order_id. The old
     // UPPER(order_id) = UPPER($1) wrapped the indexed column in a function, which
     // defeated the index and forced a full-table scan on every keystroke commit.
@@ -568,6 +603,25 @@ export async function importSalesOrderByNumber(
       } catch (err) {
         console.warn('importSalesOrderByNumber: NOTE event failed (non-fatal)', err);
       }
+
+      // "Why" signal (plan §2.3 emitter #1, manual-import variant). Rides the
+      // caller transaction via `client` (SAVEPOINT-guarded); never throws.
+      // Gated on first/changed link — a repeat of the same order# is a no-op.
+      if (priorSourceOrderId !== o.order_id) await emitEntitySignalSafe({
+        organizationId: orgId,
+        entityType: 'RECEIVING_LINE',
+        entityId: input.receivingLineId,
+        signalKind: 'return_reason',
+        notes: reason,
+        actorStaffId: input.staffId ?? null,
+        meta: {
+          receivingId: input.receivingId ?? null,
+          orderId: o.order_id,
+          orderPk: o.order_pk,
+          matchedVia: 'order_number',
+        },
+        client,
+      });
     }
 
     return {

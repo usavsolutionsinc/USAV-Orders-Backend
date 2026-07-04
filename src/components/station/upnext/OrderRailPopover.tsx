@@ -42,39 +42,39 @@ export function OrderRailPopover({
     <div className="space-y-3 p-3.5">
       <div>
         <div className="flex items-start gap-2">
-          <p className="flex-1 text-sm font-black leading-snug text-gray-900">{title}</p>
+          <p className="flex-1 text-sm font-black leading-snug text-text-default">{title}</p>
           {condition ? (
-            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-700 ring-1 ring-inset ring-slate-200">
+            <span className="shrink-0 rounded bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-text-muted ring-1 ring-inset ring-border-soft">
               {condition}
             </span>
           ) : null}
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-caption font-semibold text-gray-500">
-          <span className="font-mono font-bold text-gray-700">#{getLast4(orderId)}</span>
-          <span className="text-gray-300">·</span>
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-caption font-semibold text-text-soft">
+          <span className="font-mono font-bold text-text-muted">#{getLast4(orderId)}</span>
+          <span className="text-text-faint">·</span>
           <span className="truncate">{channel}</span>
           {assignee ? (
             <>
-              <span className="text-gray-300">·</span>
-              <span className="truncate text-gray-700">{assignee}</span>
+              <span className="text-text-faint">·</span>
+              <span className="truncate text-text-muted">{assignee}</span>
             </>
           ) : null}
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+      <div className="flex items-center justify-between border-t border-border-hairline pt-3">
         <div className="flex items-center gap-1.5 text-caption">
-          <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 font-bold text-gray-700">
+          <span className="inline-flex items-center rounded-md bg-surface-sunken px-1.5 py-0.5 font-bold text-text-muted">
             {shipBy}
           </span>
           <span className={`font-bold tracking-tight ${urgencyTone}`}>{urgencyText}</span>
         </div>
-        <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-micro font-bold text-gray-600">
+        <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-micro font-bold text-text-muted">
           ×{quantity}
         </span>
       </div>
 
-      <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto border-t border-gray-100 pt-3 [&>*]:shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto border-t border-border-hairline pt-3 [&>*]:shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <OrderIdChip value={orderId} display={getLast4(orderId)} />
         <SkuScanRefChip value={sku} display={getLast4(sku)} />
         <TrackingChip value={tracking} display={getLast4(tracking)} />
@@ -88,8 +88,8 @@ export function OrderRailPopover({
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between border-t border-gray-100 pt-2.5">
-        <span className="text-eyebrow font-bold uppercase tracking-widest text-gray-400">
+      <div className="flex items-center justify-between border-t border-border-hairline pt-2.5">
+        <span className="text-eyebrow font-bold uppercase tracking-widest text-text-faint">
           {railRelativeTime(order.created_at)} ago
         </span>
         <button

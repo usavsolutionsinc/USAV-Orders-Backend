@@ -10,6 +10,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { audit } from '@/lib/auth/audit';
 import { ALL_PERMISSIONS, isAdminRoleKey } from '@/lib/auth/permissions-shared';
 import { tenantQuery } from '@/lib/tenancy/db';
@@ -112,6 +114,10 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     event: 'staff.permissions.changed', result: 'ok',
     detail: { targetStaffId: id, add, remove },
   });
+
+  // Purge the auth hot-path staff-overrides cache so the permission change (esp.
+  // a revocation) takes effect fleet-wide immediately.
+  await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.staffOverrides]);
 
   return NextResponse.json({ staff: r.rows[0] });
 }, { permission: 'admin.manage_staff' });

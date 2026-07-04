@@ -64,14 +64,14 @@ export function TraceSerialPicker({ query }: { query: string }) {
           icon={<Search />}
           onClick={() => submit(trimmed)}
           disabled={!trimmed}
-          className="w-full bg-emerald-600 text-white enabled:hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400"
+          className="w-full bg-emerald-600 text-white enabled:hover:bg-emerald-700 disabled:bg-surface-strong disabled:text-text-faint"
         >
           {trimmed ? `Trace "${trimmed}"` : 'Type a serial above to trace'}
         </Button>
       </div>
       {recents.length > 0 ? (
         <>
-          <p className={`${SIDEBAR_GUTTER} pb-1 text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400`}>
+          <p className={`${SIDEBAR_GUTTER} pb-1 text-eyebrow font-black uppercase tracking-[0.14em] text-text-faint`}>
             Recently traced
           </p>
           <div className="min-h-0 flex-1">
@@ -85,7 +85,7 @@ export function TraceSerialPicker({ query }: { query: string }) {
           </div>
         </>
       ) : (
-        <div className="px-4 py-6 text-center text-caption text-gray-400">
+        <div className="px-4 py-6 text-center text-caption text-text-faint">
           Scan or type a serial above, then press Trace.
         </div>
       )}

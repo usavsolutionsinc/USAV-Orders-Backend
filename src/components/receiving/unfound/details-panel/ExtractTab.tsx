@@ -150,7 +150,7 @@ export function ExtractTab({ detail, rowId, patchTriage, onRowUpdated }: Extract
           onChange={(e) => setZohoUploaded(e.target.value)}
           onBlur={onZohoBlur}
           placeholder="e.g. PO-44821"
-          className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
+          className="w-full rounded-md border border-border-soft bg-surface-card px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
         />
       </Section>
 
@@ -161,7 +161,7 @@ export function ExtractTab({ detail, rowId, patchTriage, onRowUpdated }: Extract
           onChange={(e) => setNotes(e.target.value)}
           onBlur={onNotesBlur}
           placeholder="Anything the next reviewer needs to know…"
-          className="w-full resize-none rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
+          className="w-full resize-none rounded-md border border-border-soft bg-surface-card px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
         />
       </Section>
     </div>

@@ -92,20 +92,20 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
         type="button"
         onClick={() => void handleSendToPhone()}
         disabled={sending || !receivingId}
-        className="group flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-10 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60"
+        className="group flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border-default bg-surface-canvas px-6 py-10 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <span className="relative grid h-11 w-11 place-items-center rounded-full bg-white text-gray-400 ring-1 ring-gray-200 transition-colors group-hover:text-blue-600 group-hover:ring-blue-300">
+        <span className="relative grid h-11 w-11 place-items-center rounded-full bg-surface-card text-text-faint ring-1 ring-border-soft transition-colors group-hover:text-blue-600 group-hover:ring-blue-300">
           {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
           {!sending ? (
-            <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-blue-600 text-white ring-2 ring-gray-50">
+            <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-blue-600 text-white ring-2 ring-border-hairline">
               <Plus className="h-2.5 w-2.5" />
             </span>
           ) : null}
         </span>
-        <span className="text-caption font-bold text-gray-600 group-hover:text-blue-700">
+        <span className="text-caption font-bold text-text-muted group-hover:text-blue-700">
           {sending ? 'Sending…' : 'No photos taken yet'}
         </span>
-        <span className="max-w-xs text-micro font-medium leading-4 text-gray-400">
+        <span className="max-w-xs text-micro font-medium leading-4 text-text-faint">
           {sending
             ? 'Opening the camera on your phone…'
             : 'Send to your phone to take photos — they appear here automatically.'}
@@ -123,10 +123,10 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
               icon={<ZoomIn className="h-3.5 w-3.5" />}
               ariaLabel="View all photos fullscreen"
               onClick={() => g.openViewer(0)}
-              className="-ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="-ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-faint hover:bg-surface-sunken hover:text-text-muted"
             />
           </HoverTooltip>
-          <p className="truncate text-micro font-black uppercase tracking-widest text-gray-500">
+          <p className="truncate text-micro font-black uppercase tracking-widest text-text-soft">
             Attach {selectedPhotoIds.size === 1 ? 'photo' : 'photos'} to ticket ({selectedPhotoIds.size}/{list.length})
           </p>
         </div>
@@ -160,7 +160,7 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
                 aria-label={isSel ? 'Selected — click to remove' : 'Click to attach'}
                 className={cn(
                   'relative overflow-hidden rounded-lg ring-2 transition',
-                  isSel ? 'ring-rose-500' : 'ring-transparent hover:ring-gray-300',
+                  isSel ? 'ring-rose-500' : 'ring-transparent hover:ring-border-default',
                   tile.ratio === 'natural' ? '' : 'aspect-square',
                 )}
               >
@@ -189,7 +189,7 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
           disabled={sending || !receivingId}
           aria-label="Send to phone to take more photos"
           className={cn(
-            'group flex flex-col items-center justify-center gap-1 self-start rounded-lg border border-dashed border-gray-300 bg-gray-50 text-gray-400 transition-colors hover:border-blue-300 hover:bg-blue-50/60 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60',
+            'group flex flex-col items-center justify-center gap-1 self-start rounded-lg border border-dashed border-border-default bg-surface-canvas text-text-faint transition-colors hover:border-blue-300 hover:bg-blue-50/60 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60',
             gridDensity === 'lg' ? 'aspect-square w-full' : 'aspect-square',
           )}
         >
@@ -197,9 +197,9 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <>
-              <span className="relative grid h-7 w-7 place-items-center rounded-full bg-white ring-1 ring-gray-200 transition-colors group-hover:ring-blue-300">
+              <span className="relative grid h-7 w-7 place-items-center rounded-full bg-surface-card ring-1 ring-border-soft transition-colors group-hover:ring-blue-300">
                 <Camera className="h-4 w-4" />
-                <span className="absolute -bottom-0.5 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-blue-600 text-white ring-2 ring-gray-50">
+                <span className="absolute -bottom-0.5 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-blue-600 text-white ring-2 ring-border-hairline">
                   <Plus className="h-2 w-2" />
                 </span>
               </span>
@@ -209,7 +209,7 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
         </button>
         </HoverTooltip>
       </div>
-      <p className="mt-2 text-micro font-medium text-gray-400">
+      <p className="mt-2 text-micro font-medium text-text-faint">
         Selected photos upload to Zendesk as files. All PO photos are also saved to local storage in
         a folder named after the ticket #.
       </p>

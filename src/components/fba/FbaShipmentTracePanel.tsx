@@ -94,17 +94,17 @@ function FlagPill({ flag }: { flag: TraceFlag }) {
 function UnitRow({ unit }: { unit: TraceUnit }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-lg border border-gray-100 bg-gray-50/60">
+    <div className="rounded-lg border border-border-hairline bg-surface-canvas/60">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="ds-raw-button flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-gray-100/60"
+        className="ds-raw-button flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-surface-sunken/60"
       >
         <div className="flex min-w-0 items-center gap-2">
           <Barcode className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
           <SerialChip value={unit.serial_number} />
           {unit.current_status ? (
-            <span className="shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider bg-gray-200 text-gray-700">
+            <span className="shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider bg-surface-strong text-text-muted">
               {unit.current_status}
             </span>
           ) : null}
@@ -114,14 +114,14 @@ function UnitRow({ unit }: { unit: TraceUnit }) {
             <FlagPill key={i} flag={f} />
           ))}
           <ChevronDown
-            className={`h-3.5 w-3.5 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+            className={`h-3.5 w-3.5 text-text-faint transition-transform ${open ? 'rotate-180' : ''}`}
           />
         </div>
       </button>
 
       {open ? (
-        <div className="border-t border-gray-100 px-2.5 pb-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-micro font-semibold text-gray-500">
+        <div className="border-t border-border-hairline px-2.5 pb-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-micro font-semibold text-text-soft">
             {unit.unit_uid ? <span>UID {unit.unit_uid}</span> : null}
             {unit.condition_grade ? <span>Grade {unit.condition_grade}</span> : null}
             {unit.current_location ? (
@@ -135,7 +135,7 @@ function UnitRow({ unit }: { unit: TraceUnit }) {
             title="Unit Path"
             density="compact"
             emptyMessage="No inventory events recorded for this unit."
-            className="border-t border-gray-100 pt-3 pb-1"
+            className="border-t border-border-hairline pt-3 pb-1"
           />
         </div>
       ) : null}
@@ -151,11 +151,11 @@ function ItemBlock({ item }: { item: TraceItem }) {
           <FnskuChip value={item.fnsku} />
           <FbaStatusBadge status={item.status} size="xs" />
         </div>
-        <span className="shrink-0 text-micro font-black tabular-nums text-gray-500">
+        <span className="shrink-0 text-micro font-black tabular-nums text-text-soft">
           {item.actual_qty}/{item.expected_qty}
         </span>
       </div>
-      <p className="mb-2 truncate text-caption font-bold text-gray-700">
+      <p className="mb-2 truncate text-caption font-bold text-text-muted">
         {item.display_title || 'No title'}
       </p>
 
@@ -168,7 +168,7 @@ function ItemBlock({ item }: { item: TraceItem }) {
       ) : null}
 
       {item.units.length === 0 ? (
-        <p className="py-2 text-center text-caption font-bold text-gray-400">
+        <p className="py-2 text-center text-caption font-bold text-text-faint">
           No serialized units linked to this FNSKU
         </p>
       ) : (
@@ -215,7 +215,7 @@ export function FbaShipmentTracePanel({ shipmentId, className }: FbaShipmentTrac
   if (loading) {
     return (
       <div className={`flex items-center justify-center py-6 ${className ?? ''}`}>
-        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
       </div>
     );
   }
@@ -239,7 +239,7 @@ export function FbaShipmentTracePanel({ shipmentId, className }: FbaShipmentTrac
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className={sectionLabel}>Shipment Trace</p>
         {summary ? (
-          <span className="flex items-center gap-2 text-micro font-bold text-gray-500">
+          <span className="flex items-center gap-2 text-micro font-bold text-text-soft">
             <span className="inline-flex items-center gap-1">
               <Boxes className="h-3 w-3" />
               {summary.traced_unit_count}/{summary.unit_count} traced
@@ -264,7 +264,7 @@ export function FbaShipmentTracePanel({ shipmentId, className }: FbaShipmentTrac
         </div>
       ) : null}
 
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-border-hairline">
         {data.items.map((item) => (
           <ItemBlock key={item.item_id} item={item} />
         ))}

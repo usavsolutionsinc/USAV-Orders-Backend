@@ -265,7 +265,7 @@ export function MobilePackerFlow() {
                       onClick={goBack}
                       ariaLabel="Back to order details"
                       icon={<ChevronLeft className="h-4 w-4 text-blue-500" />}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-blue-100 active:scale-90"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-card shadow-sm ring-1 ring-blue-100 active:scale-90"
                     />
                     <SectionHeader title="What to pack" />
                   </div>
@@ -328,14 +328,14 @@ function OrderDetailsCard({
 }) {
   if (state === 'loading') {
     return (
-      <div className="flex items-center justify-center rounded-2xl bg-white py-10 shadow-sm ring-1 ring-blue-100/60">
+      <div className="flex items-center justify-center rounded-2xl bg-surface-card py-10 shadow-sm ring-1 ring-blue-100/60">
         <Loader2 className="h-6 w-6 animate-spin text-blue-300" />
       </div>
     );
   }
   if (state === 'empty' || state === 'error' || !order) {
     return (
-      <div className="rounded-2xl bg-white px-4 py-8 text-center shadow-sm ring-1 ring-rose-100">
+      <div className="rounded-2xl bg-surface-card px-4 py-8 text-center shadow-sm ring-1 ring-rose-100">
         <p className="text-xs font-black uppercase tracking-widest text-rose-400">
           {state === 'empty' ? 'No order found for that scan' : 'Order lookup failed'}
         </p>
@@ -348,7 +348,7 @@ function OrderDetailsCard({
 
   const tracking = order.trackingNumbers[0] ?? '';
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)] ring-1 ring-blue-100/60">
+    <div className="rounded-2xl bg-surface-card p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)] ring-1 ring-blue-100/60">
       <div className="flex items-start gap-2">
         <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
         <div className="min-w-0 flex-1">
@@ -426,7 +426,7 @@ function WhatToPackCard({
 }) {
   if (state === 'idle') {
     return (
-      <div className="rounded-2xl bg-white px-4 py-8 text-center opacity-60 shadow-sm ring-1 ring-blue-100/60">
+      <div className="rounded-2xl bg-surface-card px-4 py-8 text-center opacity-60 shadow-sm ring-1 ring-blue-100/60">
         <Package className="mx-auto mb-2 h-9 w-9 text-blue-200" />
         <p className="text-xs font-black uppercase tracking-widest text-blue-300">
           Scan the product label to pack
@@ -436,14 +436,14 @@ function WhatToPackCard({
   }
   if (state === 'loading') {
     return (
-      <div className="flex items-center justify-center rounded-2xl bg-white py-10 shadow-sm ring-1 ring-blue-100/60">
+      <div className="flex items-center justify-center rounded-2xl bg-surface-card py-10 shadow-sm ring-1 ring-blue-100/60">
         <Loader2 className="h-6 w-6 animate-spin text-blue-300" />
       </div>
     );
   }
   if (state === 'empty' || state === 'error') {
     return (
-      <div className="rounded-2xl bg-white px-4 py-8 text-center shadow-sm ring-1 ring-amber-100">
+      <div className="rounded-2xl bg-surface-card px-4 py-8 text-center shadow-sm ring-1 ring-amber-100">
         <p className="text-xs font-black uppercase tracking-widest text-amber-500">
           {state === 'empty' ? 'No pre-packed stock for that SKU' : 'Pack lookup failed'}
         </p>
@@ -467,7 +467,7 @@ function WhatToPackCard({
         return (
           <div
             key={line.id}
-            className="rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
+            className="rounded-2xl border border-blue-100 bg-surface-card p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
           >
             <div className="flex items-start gap-2">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
@@ -476,9 +476,9 @@ function WhatToPackCard({
               </p>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
-              <span className="text-caption font-black uppercase tracking-widest text-gray-500">
-                <span className="text-gray-900">{qty}</span>
-                <span className="px-1 text-gray-400">·</span>
+              <span className="text-caption font-black uppercase tracking-widest text-text-soft">
+                <span className="text-text-default">{qty}</span>
+                <span className="px-1 text-text-faint">·</span>
                 <span>{cond}</span>
               </span>
               {sku && <SkuScanRefChip value={sku} display={getLast4(sku)} />}

@@ -25,7 +25,7 @@ export function LabelsOrderWorkspace({ orderId, onClose }: LabelsOrderWorkspaceP
 
   if (isLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-surface-card">
         <LoadingSpinner size="lg" className="text-violet-600" />
       </div>
     );
@@ -33,8 +33,8 @@ export function LabelsOrderWorkspace({ orderId, onClose }: LabelsOrderWorkspaceP
 
   if (isError || !order) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-white px-8 text-center">
-        <p className="text-sm font-semibold text-gray-700">Order not found</p>
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface-card px-8 text-center">
+        <p className="text-sm font-semibold text-text-muted">Order not found</p>
         <Button
           variant="ghost"
           size="sm"

@@ -13,7 +13,7 @@ const TONES: Record<SyncRunStatus, string> = {
   running: 'bg-blue-50 text-blue-700',
 };
 
-const FALLBACK = 'bg-gray-100 text-gray-600';
+const FALLBACK = 'bg-surface-sunken text-text-muted';
 
 /** Flat chip classes for a sync-run status; safe for unknown values. */
 export function syncRunStatusChipClass(status: string): string {

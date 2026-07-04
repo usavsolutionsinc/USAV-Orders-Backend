@@ -49,18 +49,18 @@ export function ReceivingReturnBanner({
       {returns.map((ret) => (
         <div
           key={ret.id}
-          className="flex items-start gap-2 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5"
+          className="flex items-start gap-2 rounded-lg border border-amber-300 bg-surface-card px-2.5 py-1.5"
         >
           <div className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500" />
           <div className="min-w-0 flex-1">
             <p className="text-eyebrow font-black uppercase tracking-wider text-amber-800">
               Return detected
             </p>
-            <p className="mt-0.5 truncate font-mono text-micro font-bold text-gray-900">
+            <p className="mt-0.5 truncate font-mono text-micro font-bold text-text-default">
               {ret.serial_number}
             </p>
             {ret.sku && (
-              <p className="truncate text-eyebrow font-bold text-gray-600">{ret.sku}</p>
+              <p className="truncate text-eyebrow font-bold text-text-muted">{ret.sku}</p>
             )}
             {ret.order_id && (
               <p className="truncate text-mini font-black uppercase tracking-wider text-emerald-600">
@@ -68,7 +68,7 @@ export function ReceivingReturnBanner({
               </p>
             )}
             {ret.prior_status && (
-              <p className="text-mini font-black uppercase tracking-wider text-gray-400">
+              <p className="text-mini font-black uppercase tracking-wider text-text-faint">
                 prior: {ret.prior_status}
               </p>
             )}

@@ -23,7 +23,7 @@ export function ClaimLinkedStep({ c }: { c: ReceivingClaimController }) {
 
       <ClaimNasBackupCard c={c} canArchive />
 
-      <p className="text-caption font-semibold leading-5 text-gray-500">
+      <p className="text-caption font-semibold leading-5 text-text-soft">
         Continue to draft the seller-facing message — it references this case # for full context.
       </p>
     </div>

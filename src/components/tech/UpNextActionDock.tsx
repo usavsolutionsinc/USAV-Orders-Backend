@@ -57,7 +57,7 @@ export function UpNextActionDock({ order }: UpNextActionDockProps) {
   };
 
   return (
-    <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur-md">
+    <div className="sticky bottom-0 z-10 border-t border-border-soft bg-surface-card/95 backdrop-blur-md">
       {/* OOS editor — opens in the dock when the secondary action is toggled.
           Uses the same primitive the card used to host inline. */}
       <AnimatePresence initial={false}>
@@ -99,7 +99,7 @@ export function UpNextActionDock({ order }: UpNextActionDockProps) {
           className={`h-12 flex-1 rounded-xl border text-label font-black uppercase tracking-widest ${
             hasOutOfStock || showEditor
               ? 'border-red-300 bg-red-50 text-red-700 ring-0 hover:bg-red-100'
-              : 'border-red-200 bg-white text-red-600 ring-0 hover:bg-red-50'
+              : 'border-red-200 bg-surface-card text-red-600 ring-0 hover:bg-red-50'
           }`}
         >
           {hasOutOfStock ? 'Update Out of Stock' : 'Out of Stock'}

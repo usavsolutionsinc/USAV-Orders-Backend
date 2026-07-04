@@ -75,7 +75,7 @@ export function LabelsModeBody() {
                   type="button"
                   onClick={() => { setSort(opt.id); onClose(); }}
                   className={`ds-raw-button flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors ${
-                    active ? 'border-violet-300 bg-violet-50 text-gray-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    active ? 'border-violet-300 bg-violet-50 text-text-default' : 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover'
                   }`}
                 >
                   {opt.label}
@@ -103,7 +103,7 @@ export function LabelsModeBody() {
       }
       bodyClassName="flex min-h-0 flex-1 flex-col"
     >
-      <div className={`${SIDEBAR_GUTTER} text-sm text-gray-500`}>
+      <div className={`${SIDEBAR_GUTTER} text-sm text-text-soft`}>
         Select a row in the queue to attach a carrier label.
       </div>
     </SidebarShell>

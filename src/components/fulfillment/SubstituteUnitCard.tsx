@@ -55,7 +55,7 @@ export function SubstituteUnitCard({
   return (
     <div className={cn('space-y-4', className)}>
       {pickTasks.isLoading ? (
-        <p className="flex items-center gap-2 text-caption text-gray-500">
+        <p className="flex items-center gap-2 text-caption text-text-soft">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading allocations…
         </p>
       ) : active ? (
@@ -74,7 +74,7 @@ export function SubstituteUnitCard({
                       ALLOC_CHIP,
                       sel
                         ? 'bg-blue-50 text-blue-700 ring-blue-400'
-                        : 'bg-gray-50 text-gray-600 ring-gray-200 hover:bg-gray-100',
+                        : 'bg-surface-canvas text-text-muted ring-border-soft hover:bg-surface-sunken',
                     )}
                   >
                     {t.sku}
@@ -109,7 +109,7 @@ export function SubstituteUnitCard({
           />
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-caption text-gray-500">
+        <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-soft">
           No open allocations to substitute on this order.
         </div>
       )}

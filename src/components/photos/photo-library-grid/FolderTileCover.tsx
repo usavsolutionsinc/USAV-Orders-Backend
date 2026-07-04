@@ -12,7 +12,7 @@ export function FolderTileCover({ photo }: { photo?: LibraryPhoto }) {
       className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200/80"
       aria-hidden="true"
     >
-      <Folder className="h-8 w-8 text-gray-300" />
+      <Folder className="h-8 w-8 text-text-faint" />
     </div>
   );
 }

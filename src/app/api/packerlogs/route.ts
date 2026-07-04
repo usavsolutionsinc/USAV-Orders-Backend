@@ -37,6 +37,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     try {
         const { rows, cacheTTL, cacheHit } = await fetchPackerLogRows({
+            organizationId: ctx.organizationId,
             packerId: packerIdNum != null && !Number.isNaN(packerIdNum) ? packerIdNum : null,
             testedBy: testedByNum != null && !Number.isNaN(testedByNum) ? testedByNum : null,
             staffId: staffNum != null && !Number.isNaN(staffNum) ? staffNum : null,

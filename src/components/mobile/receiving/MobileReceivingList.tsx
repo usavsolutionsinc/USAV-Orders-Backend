@@ -169,16 +169,16 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   );
 
   return (
-    <div className="flex h-full w-full max-w-full flex-col overflow-x-hidden bg-white">
+    <div className="flex h-full w-full max-w-full flex-col overflow-x-hidden bg-surface-card">
       <MobileFeed<ReceivingFeedEntry>
         rows={entries}
         isLoading={isLoading}
         scrollRef={scrollRef}
         getId={(entry) => entry.key}
         empty={
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-white px-6 text-center">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">No packages yet</p>
-            <p className="max-w-[260px] text-caption font-semibold text-gray-500">
+          <div className="flex h-full flex-col items-center justify-center gap-2 bg-surface-card px-6 text-center">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-text-muted">No packages yet</p>
+            <p className="max-w-[260px] text-caption font-semibold text-text-soft">
               Scan a tracking number on the desktop to drop one in here.
             </p>
           </div>

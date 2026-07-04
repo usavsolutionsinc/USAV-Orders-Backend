@@ -47,7 +47,7 @@ function GlobalWedgeScannerMount() {
  */
 function SidebarFallback({ reset }: { reset: () => void }) {
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border-soft bg-surface-card">
       <div className="m-3 rounded-lg border border-dashed border-rose-200 bg-rose-50 px-3 py-4 text-center">
         <AlertTriangle className="mx-auto h-5 w-5 text-rose-500" />
         <p className="mt-2 text-caption font-bold text-rose-700">Sidebar unavailable</p>
@@ -59,7 +59,7 @@ function SidebarFallback({ reset }: { reset: () => void }) {
           size="sm"
           onClick={reset}
           icon={<RotateCcw />}
-          className="mt-3 bg-white text-rose-700 ring-rose-200 hover:bg-rose-50"
+          className="mt-3 bg-surface-card text-rose-700 ring-rose-200 hover:bg-rose-50"
         >
           Retry
         </Button>
@@ -189,7 +189,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // deterministically (see `onMobileRoute`), so there's nothing to wait for and
   // the blank would just be an extra refresh flash.
   if (!mounted && !onMobileRoute) {
-    return <div className="flex min-h-0 flex-1 bg-white" aria-hidden="true" />;
+    return <div className="flex min-h-0 flex-1 bg-surface-card" aria-hidden="true" />;
   }
 
   // Drawer overlay is rendered regardless of which branch is active so pages
@@ -226,8 +226,8 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             <IconButton
               onClick={closeDrawer}
               ariaLabel="Close navigation"
-              className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-11 w-11 flex items-center justify-center rounded-xl bg-gray-100 active:scale-95 active:bg-gray-200 transition-transform"
-              icon={<X className="h-5 w-5 text-gray-700" />}
+              className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-11 w-11 flex items-center justify-center rounded-xl bg-surface-sunken active:scale-95 active:bg-surface-strong transition-transform"
+              icon={<X className="h-5 w-5 text-text-muted" />}
             />
             <ErrorBoundary
               label="sidebar-drawer"
@@ -290,7 +290,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute inset-y-0 left-0 w-1 overflow-hidden rounded-r-full bg-gray-300/60"
+                  className="absolute inset-y-0 left-0 w-1 overflow-hidden rounded-r-full bg-surface-strong/60"
                 >
                   {/* Fills top→bottom over the 2s dwell — a progress cue that the
                       sidebar is about to open. */}
@@ -317,7 +317,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   }
 
   if (mobileRouteRestricted) {
-    return <div className="flex min-h-0 flex-1 bg-white" aria-hidden="true" />;
+    return <div className="flex min-h-0 flex-1 bg-surface-card" aria-hidden="true" />;
   }
 
   // ── Mobile layout: content only ──

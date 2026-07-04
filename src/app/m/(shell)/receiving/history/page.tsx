@@ -127,16 +127,16 @@ export default function MobileReceivingPipelinePage() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-white">
-      <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-card">
+      <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-border-hairline bg-surface-card px-3 pt-[env(safe-area-inset-top)]">
         <IconButton
           onClick={openDrawer}
           ariaLabel="Open navigation"
-          icon={<Menu className="h-6 w-6 text-gray-700" />}
-          className="flex h-11 w-11 items-center justify-center rounded-xl active:bg-gray-100 outline-none"
+          icon={<Menu className="h-6 w-6 text-text-muted" />}
+          className="flex h-11 w-11 items-center justify-center rounded-xl active:bg-surface-sunken outline-none"
         />
 
-        <h1 className="flex-1 text-lg font-black tracking-tight text-gray-900">
+        <h1 className="flex-1 text-lg font-black tracking-tight text-text-default">
           Receiving
         </h1>
 
@@ -152,21 +152,21 @@ export default function MobileReceivingPipelinePage() {
 
           <div className="pointer-events-auto flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-faint" />
               <input
                 type="search"
                 inputMode="search"
                 placeholder="Search PO #, SKU, or item"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-11 w-full rounded-full border border-gray-200 bg-white pl-9 pr-9 text-sm font-semibold text-gray-900 placeholder:text-gray-400 shadow-md shadow-black/10 focus:border-blue-500 focus:outline-none"
+                className="h-11 w-full rounded-full border border-border-soft bg-surface-card pl-9 pr-9 text-sm font-semibold text-text-default placeholder:text-text-faint shadow-md shadow-black/10 focus:border-blue-500 focus:outline-none"
               />
               {search && (
                 <IconButton
                   onClick={() => setSearch('')}
                   ariaLabel="Clear search"
-                  icon={<X className="h-4 w-4 text-gray-400" />}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-full active:bg-gray-200"
+                  icon={<X className="h-4 w-4 text-text-faint" />}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-full active:bg-surface-strong"
                 />
               )}
             </div>
@@ -207,7 +207,7 @@ export default function MobileReceivingPipelinePage() {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="h-[72px] animate-pulse rounded-2xl bg-gray-100"
+                className="h-[72px] animate-pulse rounded-2xl bg-surface-sunken"
                 aria-hidden
               />
             ))}
@@ -218,10 +218,10 @@ export default function MobileReceivingPipelinePage() {
           </p>
         ) : rows.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-text-muted">
               No matches
             </p>
-            <p className="mt-1 text-caption font-semibold text-gray-500">
+            <p className="mt-1 text-caption font-semibold text-text-soft">
               Try switching the filter, clearing the search, or scanning a PO label.
             </p>
           </div>

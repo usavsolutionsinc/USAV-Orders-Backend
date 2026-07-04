@@ -3,6 +3,7 @@ import { withTenantTransaction } from '@/lib/tenancy/db';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/items/ready ─────────────────────────────────────────────────
@@ -134,6 +135,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaItemChanged({ action: 'ready', shipmentId: Number(shipment_id || 0), itemId: Number(outcome.item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.ready', organizationId: ctx.organizationId });
 
     return NextResponse.json({

@@ -49,7 +49,7 @@ function describeSource(meta: PhotoMeta): SourceDescriptor {
   if (scope === 'unboxing' || type.includes('RECEIV') || type.includes('UNBOX')) {
     return { kind: 'unboxing', label: 'Unboxing', tone: 'bg-blue-500/15 text-blue-200 ring-blue-400/30', Icon: Package };
   }
-  return { kind: 'unknown', label: 'Photo', tone: 'bg-white/10 text-gray-200 ring-white/20', Icon: ImageIcon };
+  return { kind: 'unknown', label: 'Photo', tone: 'bg-glass/10 text-stage-soft ring-glass/20', Icon: ImageIcon };
 }
 
 /** Reference shown under the badge (PO 123 / Order 123 / Ticket #4821). */
@@ -80,11 +80,11 @@ function sourceHref(source: SourceDescriptor, meta: PhotoMeta): string | null {
 function Field({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="flex items-center gap-1.5 text-micro font-black uppercase tracking-widest text-gray-400">
-        <span className="text-gray-500">{icon}</span>
+      <p className="flex items-center gap-1.5 text-micro font-black uppercase tracking-widest text-text-faint">
+        <span className="text-text-soft">{icon}</span>
         {label}
       </p>
-      <div className="text-sm text-gray-100">{children}</div>
+      <div className="text-sm text-stage-soft">{children}</div>
     </div>
   );
 }
@@ -99,7 +99,7 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
   const source = meta ? describeSource(meta) : {
     kind: 'unknown' as const,
     label: 'Photo',
-    tone: 'bg-white/10 text-gray-200 ring-white/20',
+    tone: 'bg-glass/10 text-stage-soft ring-glass/20',
     Icon: ImageIcon,
   };
   const refLabel = meta ? sourceRefLabel(source, meta) : null;
@@ -110,7 +110,7 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
     ? <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-200 ring-1 ring-inset ring-rose-400/30"><AlertTriangle className="h-3.5 w-3.5" /> Damage detected</span>
     : meta?.hasAnalysis
       ? <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-200 ring-1 ring-inset ring-emerald-400/30"><Sparkles className="h-3.5 w-3.5" /> Analyzed · clear</span>
-      : <span className="text-xs text-gray-400">Not analyzed yet</span>;
+      : <span className="text-xs text-text-faint">Not analyzed yet</span>;
 
   return (
     <motion.aside
@@ -120,7 +120,7 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
       exit={{ x: 24, opacity: 0 }}
       transition={{ type: 'spring', stiffness: 320, damping: 32 }}
       aria-label="Photo details"
-      className="relative z-20 flex h-full w-80 max-w-[85vw] shrink-0 flex-col gap-5 overflow-y-auto border-l border-white/10 bg-black/60 px-5 pb-5 pt-20 backdrop-blur-xl"
+      className="relative z-20 flex h-full w-80 max-w-[85vw] shrink-0 flex-col gap-5 overflow-y-auto border-l border-glass/10 bg-scrim/60 px-5 pb-5 pt-20 backdrop-blur-xl"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Source badge + reference — pt-20 + pr-14 keeps the header below the
@@ -136,13 +136,13 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
               {ticketSubject.data || refLabel || 'Linked claim'}
             </p>
             {ticketSubject.data && refLabel ? (
-              <p className="text-sm font-semibold tabular-nums text-gray-400">{refLabel}</p>
+              <p className="text-sm font-semibold tabular-nums text-text-faint">{refLabel}</p>
             ) : null}
           </div>
         ) : refLabel ? (
           <p data-testid="photo-context-ref" className="text-base font-bold text-white">{refLabel}</p>
         ) : (
-          <p className="text-sm text-gray-400">Not linked to a source</p>
+          <p className="text-sm text-text-faint">Not linked to a source</p>
         )}
       </div>
 
@@ -150,14 +150,14 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
         <a
           data-testid="photo-context-source-link"
           href={href}
-          className="flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-white/20"
+          className="flex items-center justify-center gap-2 rounded-lg border border-glass/15 bg-glass/10 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-glass/20"
         >
           <ExternalLink className="h-4 w-4" />
           View all from this source
         </a>
       ) : null}
 
-      <div className="h-px bg-white/10" />
+      <div className="h-px bg-glass/10" />
 
       {/* Metadata fields */}
       <div className="space-y-4">
@@ -177,7 +177,7 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
           {photo.naturalWidth && photo.naturalHeight ? (
             <span className="tabular-nums">{photo.naturalWidth} × {photo.naturalHeight} px</span>
           ) : (
-            <span className="text-gray-400">—</span>
+            <span className="text-text-faint">—</span>
           )}
         </Field>
 
@@ -187,7 +187,7 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
 
         {meta?.caption ? (
           <Field icon={<FileText className="h-3.5 w-3.5" />} label="Caption">
-            <p className="whitespace-pre-wrap text-sm leading-snug text-gray-200">{meta.caption}</p>
+            <p className="whitespace-pre-wrap text-sm leading-snug text-stage-soft">{meta.caption}</p>
           </Field>
         ) : null}
       </div>

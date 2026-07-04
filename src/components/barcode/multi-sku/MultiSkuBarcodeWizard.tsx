@@ -15,7 +15,7 @@ export function MultiSkuBarcodeWizard({ b }: { b: MultiSkuBarcodeController }) {
   const showPreviewPanel = b.step >= 3;
 
   return (
-    <div className="flex min-w-0 flex-col bg-white text-gray-900">
+    <div className="flex min-w-0 flex-col bg-surface-card text-text-default">
       <ModeSelector mode={mode} onModeChange={b.handleModeChange} />
 
       <div className="min-w-0">

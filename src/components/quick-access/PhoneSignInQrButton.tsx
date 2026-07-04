@@ -46,7 +46,7 @@ export function PhoneSignInQrButton({
           onClick={() => setOpen(true)}
           ariaLabel="Show sign-in QR code"
           className={cn(
-            'flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95',
+            'flex items-center justify-center rounded-full text-text-muted hover:bg-surface-sunken active:scale-95',
             className,
           )}
           icon={<Smartphone className={iconClassName} />}
@@ -63,7 +63,7 @@ export function PhoneSignInQrButton({
             onClick={() => setOpen(false)}
           >
             <div
-              className="relative flex w-[min(20rem,calc(100vw-2rem))] flex-col items-center rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl"
+              className="relative flex w-[min(20rem,calc(100vw-2rem))] flex-col items-center rounded-2xl border border-border-soft bg-surface-card p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <IconButton
@@ -71,22 +71,22 @@ export function PhoneSignInQrButton({
                 onClick={() => setOpen(false)}
                 ariaLabel="Close"
                 icon={<X className="h-4 w-4" />}
-                className="absolute right-3 top-3 text-gray-400 hover:text-gray-700"
+                className="absolute right-3 top-3 text-text-faint hover:text-text-muted"
               />
-              <p className="text-micro font-black uppercase tracking-widest text-gray-500">
+              <p className="text-micro font-black uppercase tracking-widest text-text-soft">
                 Scan to open on your phone
               </p>
-              <p className="mt-1 text-center text-sm font-black text-gray-900">
+              <p className="mt-1 text-center text-sm font-black text-text-default">
                 Point your camera at the code
               </p>
-              <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-inner shadow-gray-900/[0.03]">
+              <div className="mt-4 rounded-2xl border border-border-soft bg-surface-card p-3 shadow-inner shadow-gray-900/[0.03]">
                 {url ? (
                   <QRCode value={url} size={220} level="M" />
                 ) : (
-                  <div className="h-[220px] w-[220px] animate-pulse rounded-lg bg-gray-100" />
+                  <div className="h-[220px] w-[220px] animate-pulse rounded-lg bg-surface-sunken" />
                 )}
               </div>
-              <p className="mt-4 w-full break-all rounded-lg bg-gray-50 px-3 py-2 text-center text-micro font-mono text-gray-500">
+              <p className="mt-4 w-full break-all rounded-lg bg-surface-canvas px-3 py-2 text-center text-micro font-mono text-text-soft">
                 {url || ' '}
               </p>
             </div>

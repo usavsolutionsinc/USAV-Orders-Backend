@@ -16,7 +16,7 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
   }, {});
 
   return (
-    <div className="rounded-xl bg-white border border-gray-200 p-4">
+    <div className="rounded-xl bg-surface-card border border-border-soft p-4">
       <div className="flex items-center justify-between mb-2">
         <h2 className={sectionLabel}>
           <MapPin className="inline h-3 w-3 mr-1" />
@@ -42,7 +42,7 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
           <select
             value={c.selectedLocation}
             onChange={(e) => c.setSelectedLocation(e.target.value)}
-            className="h-10 flex-1 rounded-lg border border-gray-300 px-3 text-sm font-bold focus:border-blue-500"
+            className="h-10 flex-1 rounded-lg border border-border-default px-3 text-sm font-bold focus:border-blue-500"
           >
             <option value="">Select location...</option>
             {Object.entries(locationsByRoom).map(([room, locs]) => (
@@ -58,7 +58,7 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
             value={c.selectedLocation}
             onChange={(e) => c.setSelectedLocation(e.target.value)}
             placeholder="Or type custom..."
-            className="h-10 w-40 rounded-lg border border-gray-300 px-3 text-sm font-bold focus:border-blue-500"
+            className="h-10 w-40 rounded-lg border border-border-default px-3 text-sm font-bold focus:border-blue-500"
           />
           <button
             onClick={c.handleLocationSave}
@@ -70,7 +70,7 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
           </button>
           <IconButton
             onClick={() => c.setEditingLocation(false)}
-            className="h-10 px-3 rounded-lg bg-gray-200 text-gray-600"
+            className="h-10 px-3 rounded-lg bg-surface-strong text-text-muted"
             ariaLabel="Cancel"
             icon={<X className="h-4 w-4" />}
           />
@@ -85,7 +85,7 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
               </span>
             ))
           ) : (
-            <span className="text-xs font-bold text-gray-400">No location set</span>
+            <span className="text-xs font-bold text-text-faint">No location set</span>
           )}
         </div>
       )}

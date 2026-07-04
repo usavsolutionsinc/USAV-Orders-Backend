@@ -29,7 +29,7 @@ export function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
       <div className="space-y-1.5">
         <p className="text-sm font-bold text-black font-mono">{sku.staticSku}</p>
         {sku.productTitle ? (
-          <p className="text-micro font-semibold text-gray-500 truncate">{sku.productTitle}</p>
+          <p className="text-micro font-semibold text-text-soft truncate">{sku.productTitle}</p>
         ) : null}
         {hasPhotos && (
           <PhotoGallery

@@ -51,8 +51,8 @@ export function StaffFilter({
         aria-expanded={open}
         aria-haspopup="dialog"
         className={cn(
-          'flex h-[40px] w-full items-center gap-2.5 bg-white px-3 transition-colors hover:bg-gray-50',
-          active || open ? 'text-blue-600' : 'text-gray-500',
+          'flex h-[40px] w-full items-center gap-2.5 bg-surface-card px-3 transition-colors hover:bg-surface-hover',
+          active || open ? 'text-blue-600' : 'text-text-soft',
         )}
       >
         <User className="h-4 w-4 shrink-0" />
@@ -67,7 +67,7 @@ export function StaffFilter({
         <ChevronDown
           className={cn(
             'h-3.5 w-3.5 shrink-0 transition-transform duration-300',
-            open ? 'rotate-180 text-blue-600' : 'text-gray-400',
+            open ? 'rotate-180 text-blue-600' : 'text-text-faint',
           )}
         />
       </motion.button>
@@ -83,7 +83,7 @@ export function StaffFilter({
           initial={{ opacity: 0, y: 12, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30, mass: 0.8 }}
-          className="overflow-hidden rounded-3xl border border-white/40 bg-white/90 p-4 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.18)] backdrop-blur-xl ring-1 ring-black/[0.08]"
+          className="overflow-hidden rounded-3xl border border-white/40 bg-surface-card/90 p-4 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.18)] backdrop-blur-xl ring-1 ring-black/[0.08]"
         >
           <div className="max-h-[60vh] space-y-3 overflow-y-auto">
             <button
@@ -95,8 +95,8 @@ export function StaffFilter({
               className={cn(
                 'flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors',
                 !active
-                  ? 'border-blue-300 bg-blue-50 text-gray-900'
-                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                  ? 'border-blue-300 bg-blue-50 text-text-default'
+                  : 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover',
               )}
             >
               {allLabel}

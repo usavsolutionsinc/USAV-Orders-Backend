@@ -62,8 +62,8 @@ export function ConditionPill({ grade }: { grade: string | null }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400">{label}</dt>
-      <dd className="mt-0.5 truncate text-caption font-semibold text-gray-900">{children}</dd>
+      <dt className="text-eyebrow font-black uppercase tracking-[0.14em] text-text-faint">{label}</dt>
+      <dd className="mt-0.5 truncate text-caption font-semibold text-text-default">{children}</dd>
     </div>
   );
 }
@@ -74,7 +74,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ChipRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-12 shrink-0 text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400">
+      <span className="w-12 shrink-0 text-eyebrow font-black uppercase tracking-[0.14em] text-text-faint">
         {label}
       </span>
       {children}
@@ -90,11 +90,11 @@ function ChipRow({ label, children }: { label: string; children: React.ReactNode
  */
 export function IdentityCard({ unit }: { unit: UnitDetail }) {
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-border-soft/60">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           {/* PRIMARY — product title */}
-          <p className="text-lg font-bold leading-snug text-gray-900 break-words">
+          <p className="text-lg font-bold leading-snug text-text-default break-words">
             {unit.product_title || unit.sku || unit.serial_number}
           </p>
           {/* SKU on top, serial below — both copy chips. */}
@@ -115,7 +115,7 @@ export function IdentityCard({ unit }: { unit: UnitDetail }) {
         </div>
       </div>
 
-      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-gray-100 pt-4 sm:grid-cols-4">
+      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border-hairline pt-4 sm:grid-cols-4">
         <Field label="Received">
           {unit.received_at ? timeAgo(unit.received_at) : '—'}
         </Field>
@@ -152,21 +152,21 @@ export function LocationCard({
       : 'Scan into a bin from /m/u to stock it';
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">Location</p>
+    <section className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60">
+      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">Location</p>
       <div className="mt-2 flex items-center gap-3">
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-            stocked ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'
+            stocked ? 'bg-blue-600 text-white' : 'bg-surface-sunken text-text-faint'
           }`}
         >
           <MapPin className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-base font-bold text-gray-900">
+          <p className="truncate font-mono text-base font-bold text-text-default">
             {stocked ? location : 'Not stocked'}
           </p>
-          <p className="truncate text-micro font-medium text-gray-500">{sub}</p>
+          <p className="truncate text-micro font-medium text-text-soft">{sub}</p>
         </div>
       </div>
     </section>
@@ -175,21 +175,21 @@ export function LocationCard({
 
 export function OrderCard({ allocation }: { allocation: Allocation | null }) {
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">Order</p>
+    <section className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60">
+      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">Order</p>
       <div className="mt-2 flex items-center gap-3">
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-            allocation ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'
+            allocation ? 'bg-blue-600 text-white' : 'bg-surface-sunken text-text-faint'
           }`}
         >
           <ShoppingCart className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-base font-bold text-gray-900">
+          <p className="truncate font-mono text-base font-bold text-text-default">
             {allocation?.order_id ?? 'Unallocated'}
           </p>
-          <p className="truncate text-micro font-medium text-gray-500">
+          <p className="truncate text-micro font-medium text-text-soft">
             {allocation
               ? `${allocation.state} · ${timeAgo(allocation.allocated_at)}`
               : 'No open allocation'}
@@ -231,21 +231,21 @@ export function TimelineCard({
   }, [photos]);
 
   return (
-    <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60">
       <header className="flex items-center justify-between px-5 py-4">
-        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft">
           Timeline
         </h3>
-        <span className="text-micro font-semibold text-gray-400">
+        <span className="text-micro font-semibold text-text-faint">
           {sorted.length} {sorted.length === 1 ? 'event' : 'events'}
         </span>
       </header>
       {sorted.length === 0 ? (
-        <div className="border-t border-gray-100 px-5 py-8 text-center text-caption font-medium text-gray-400">
+        <div className="border-t border-border-hairline px-5 py-8 text-center text-caption font-medium text-text-faint">
           No events recorded yet.
         </div>
       ) : (
-        <ol className="border-t border-gray-100 divide-y divide-gray-100">
+        <ol className="border-t border-border-hairline divide-y divide-border-hairline">
           {sorted.map((e) => (
             <TimelineRow
               key={e.id}
@@ -286,15 +286,15 @@ function TimelineRow({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-label font-bold text-gray-900">{prettyLabel(event.event_type)}</span>
-          <span className="text-micro text-gray-400">{timeAgo(event.occurred_at)}</span>
+          <span className="text-label font-bold text-text-default">{prettyLabel(event.event_type)}</span>
+          <span className="text-micro text-text-faint">{timeAgo(event.occurred_at)}</span>
           {event.station ? (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-gray-500">
+            <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-text-soft">
               {event.station}
             </span>
           ) : null}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-gray-500">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-text-soft">
           {event.actor_name ? <span>{event.actor_name}</span> : null}
           {statusChanged ? (
             <span className="flex items-center gap-1 font-mono">
@@ -305,7 +305,7 @@ function TimelineRow({
           ) : null}
           {event.bin_name ? <span className="font-mono">@ {event.bin_name}</span> : null}
         </div>
-        {event.notes ? <p className="mt-1 text-caption text-gray-600">{event.notes}</p> : null}
+        {event.notes ? <p className="mt-1 text-caption text-text-muted">{event.notes}</p> : null}
         {eventPhotos.length > 0 ? (
           <div className="mt-2">
             <PhotoGallery
@@ -322,28 +322,28 @@ function TimelineRow({
 
 export function AllocationsCard({ rows }: { rows: Allocation[] }) {
   return (
-    <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60">
       <header className="px-5 py-4">
-        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft">
           Order allocations
         </h3>
       </header>
-      <ul className="border-t border-gray-100 divide-y divide-gray-100">
+      <ul className="border-t border-border-hairline divide-y divide-border-hairline">
         {rows.map((a) => (
           <li key={a.id} className="px-5 py-3">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-mono text-label font-bold text-gray-900">{a.order_id}</span>
+              <span className="font-mono text-label font-bold text-text-default">{a.order_id}</span>
               <span
                 className={`rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${
                   a.state === 'RELEASED'
-                    ? 'bg-gray-100 text-gray-500'
+                    ? 'bg-surface-sunken text-text-soft'
                     : 'bg-emerald-100 text-emerald-700'
                 }`}
               >
                 {a.state}
               </span>
             </div>
-            <div className="mt-0.5 text-micro text-gray-500">
+            <div className="mt-0.5 text-micro text-text-soft">
               Allocated {timeAgo(a.allocated_at)}{a.allocated_by_name ? ` by ${a.allocated_by_name}` : ''}
               {a.released_at ? ` · released ${timeAgo(a.released_at)}` : ''}
               {a.released_reason ? ` (${a.released_reason})` : ''}
@@ -357,25 +357,25 @@ export function AllocationsCard({ rows }: { rows: Allocation[] }) {
 
 export function ConditionsCard({ rows }: { rows: ConditionRow[] }) {
   return (
-    <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60">
       <header className="px-5 py-4">
-        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft">
           Condition history
         </h3>
       </header>
-      <ul className="border-t border-gray-100 divide-y divide-gray-100">
+      <ul className="border-t border-border-hairline divide-y divide-border-hairline">
         {rows.map((c) => (
           <li key={c.id} className="px-5 py-3">
-            <div className="flex items-center gap-2 font-mono text-label font-bold text-gray-900">
+            <div className="flex items-center gap-2 font-mono text-label font-bold text-text-default">
               {c.prev_grade ?? '—'}
-              <ChevronRight className="h-3 w-3 text-gray-400" />
+              <ChevronRight className="h-3 w-3 text-text-faint" />
               {c.new_grade}
             </div>
-            <div className="mt-0.5 text-micro text-gray-500">
+            <div className="mt-0.5 text-micro text-text-soft">
               {timeAgo(c.assessed_at)}{c.assessed_by_name ? ` · ${c.assessed_by_name}` : ''}
             </div>
             {(c.cosmetic_notes || c.functional_notes) && (
-              <p className="mt-1 text-caption text-gray-600">
+              <p className="mt-1 text-caption text-text-muted">
                 {[c.cosmetic_notes, c.functional_notes].filter(Boolean).join(' · ')}
               </p>
             )}
@@ -388,23 +388,23 @@ export function ConditionsCard({ rows }: { rows: ConditionRow[] }) {
 
 export function TsnLinksCard({ rows }: { rows: TsnLink[] }) {
   return (
-    <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60">
       <header className="px-5 py-4">
-        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft">
           Tech / station scans
         </h3>
       </header>
-      <ul className="border-t border-gray-100 divide-y divide-gray-100">
+      <ul className="border-t border-border-hairline divide-y divide-border-hairline">
         {rows.map((t) => (
           <li key={t.id} className="px-5 py-3">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-label font-bold text-gray-900">
+              <span className="text-label font-bold text-text-default">
                 {t.station_source || '—'}
                 {t.serial_type ? ` · ${t.serial_type}` : ''}
               </span>
-              <span className="text-micro text-gray-400">{timeAgo(t.created_at)}</span>
+              <span className="text-micro text-text-faint">{timeAgo(t.created_at)}</span>
             </div>
-            <div className="mt-0.5 text-micro text-gray-500">
+            <div className="mt-0.5 text-micro text-text-soft">
               {t.tested_by_name ?? 'Unknown actor'}
               {t.shipment_id ? ` · shipment ${t.shipment_id}` : ''}
               {t.fnsku ? ` · FNSKU ${t.fnsku}` : ''}
@@ -422,11 +422,11 @@ export function DetailEmptyState({ fromRecent = false }: { fromRecent?: boolean 
   const Icon = fromRecent ? Printer : History;
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
-      <Icon className="mb-3 h-10 w-10 text-gray-300" />
-      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+      <Icon className="mb-3 h-10 w-10 text-text-faint" />
+      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">
         {fromRecent ? 'Recently printed' : 'Unit history'}
       </p>
-      <p className="mt-3 max-w-[420px] text-sm font-medium text-gray-500">
+      <p className="mt-3 max-w-[420px] text-sm font-medium text-text-soft">
         {fromRecent
           ? "Select a recently printed label from the sidebar to view that unit's full detail — SKU, condition, status, location, and lifecycle timeline."
           : "Scan a DataMatrix from the sidebar to load a unit's full audit trail — every receive, move, allocation, and ship event in one timeline."}
@@ -438,7 +438,7 @@ export function DetailEmptyState({ fromRecent = false }: { fromRecent?: boolean 
 export function DetailLoadingState() {
   return (
     <div className="flex h-full items-center justify-center px-6 py-12">
-      <p className="text-caption font-semibold text-gray-400">Loading unit…</p>
+      <p className="text-caption font-semibold text-text-faint">Loading unit…</p>
     </div>
   );
 }
@@ -450,7 +450,7 @@ export function DetailErrorState({ message }: { message: string }) {
       <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-amber-600">
         Couldn't load unit
       </p>
-      <p className="mt-3 max-w-[420px] text-sm font-medium text-gray-500">{message}</p>
+      <p className="mt-3 max-w-[420px] text-sm font-medium text-text-soft">{message}</p>
     </div>
   );
 }
@@ -462,7 +462,7 @@ const ICON_FOR_EVENT: Record<string, { icon: React.ComponentType<{ className?: s
   LABELED:    { icon: Printer,        tone: 'bg-amber-50 text-amber-700' },
   PUTAWAY:    { icon: MapPin,         tone: 'bg-emerald-100 text-emerald-700' },
   MOVED:      { icon: ChevronRight,   tone: 'bg-blue-100 text-blue-700' },
-  TEST_START: { icon: Wrench,         tone: 'bg-slate-100 text-slate-600' },
+  TEST_START: { icon: Wrench,         tone: 'bg-surface-sunken text-text-muted' },
   TEST_PASS:  { icon: Check,          tone: 'bg-emerald-100 text-emerald-700' },
   TEST_FAIL:  { icon: AlertTriangle,  tone: 'bg-rose-100 text-rose-700' },
   PICKED:     { icon: Package,        tone: 'bg-indigo-100 text-indigo-700' },
@@ -471,7 +471,7 @@ const ICON_FOR_EVENT: Record<string, { icon: React.ComponentType<{ className?: s
   RETURNED:   { icon: ChevronRight,   tone: 'bg-rose-100 text-rose-700' },
   SCRAPPED:   { icon: AlertTriangle,  tone: 'bg-red-100 text-red-700' },
   LISTED:     { icon: ClipboardList,  tone: 'bg-blue-100 text-blue-700' },
-  NOTE:       { icon: ClipboardList,  tone: 'bg-slate-100 text-slate-600' },
-  ADJUSTED:   { icon: Wrench,         tone: 'bg-slate-100 text-slate-600' },
-  DEFAULT:    { icon: Clock,          tone: 'bg-slate-100 text-slate-600' },
+  NOTE:       { icon: ClipboardList,  tone: 'bg-surface-sunken text-text-muted' },
+  ADJUSTED:   { icon: Wrench,         tone: 'bg-surface-sunken text-text-muted' },
+  DEFAULT:    { icon: Clock,          tone: 'bg-surface-sunken text-text-muted' },
 };

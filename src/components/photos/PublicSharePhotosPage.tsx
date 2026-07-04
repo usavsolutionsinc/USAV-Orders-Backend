@@ -103,7 +103,7 @@ export default function PublicSharePhotosPage({ token }: { token: string }) {
             </Button>
           </div>
           {pageUrl ? (
-            <div className="rounded-lg border border-border bg-white p-3">
+            <div className="rounded-lg border border-border bg-surface-card p-3">
               <p className="mb-2 text-xs font-medium text-muted-foreground">Scan to open on phone</p>
               <QRCode value={pageUrl} size={96} />
             </div>

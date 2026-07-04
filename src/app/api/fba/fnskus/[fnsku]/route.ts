@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 // ── PATCH /api/fba/fnskus/[fnsku] ────────────────────────────────────────────
@@ -62,6 +63,7 @@ export async function PATCH(
     }
 
     await invalidateCacheTags(['fba-fnskus']);
+    await invalidateCacheTags(gate.ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaCatalogChanged({ action: 'updated', fnsku: fnsku || '', source: 'fba.fnskus.update', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({ success: true, fnsku: result.rows[0] });

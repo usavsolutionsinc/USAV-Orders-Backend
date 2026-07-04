@@ -3,6 +3,7 @@ import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
@@ -239,6 +240,7 @@ export async function PATCH(
     }
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await invalidateCacheTags(gate.ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaItemChanged({ action: 'update', shipmentId: Number(id), itemId: Number(itemId), source: 'fba.shipments.items.update', organizationId: gate.ctx.organizationId });
 
     return NextResponse.json({ success: true, item: outcome.item });
@@ -336,6 +338,7 @@ export async function DELETE(
     }
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await invalidateCacheTags(gate.ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     publishFbaItemChanged({
       action: 'delete',
       shipmentId,

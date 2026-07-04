@@ -175,18 +175,18 @@ function LaneSortMenu<SortId extends string>({
         <button
           type="button"
           aria-label={`Sort: ${activeLabel}`}
-          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-eyebrow font-bold uppercase tracking-widest text-gray-600 transition-colors hover:border-blue-300 hover:bg-blue-50/40"
+          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-border-soft bg-surface-card px-2 text-eyebrow font-bold uppercase tracking-widest text-text-muted transition-colors hover:border-blue-300 hover:bg-blue-50/40"
         >
-          <ArrowUpDown className="h-3 w-3 text-gray-400" />
+          <ArrowUpDown className="h-3 w-3 text-text-faint" />
           {activeLabel}
-          <ChevronDown className="h-3 w-3 text-gray-400" />
+          <ChevronDown className="h-3 w-3 text-text-faint" />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
           align="end"
           sideOffset={6}
-          className="z-dropdown w-36 overflow-hidden rounded-lg border border-gray-200 bg-white p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
+          className="z-dropdown w-36 overflow-hidden rounded-lg border border-border-soft bg-surface-card p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
           {options.map((o) => (
             // ds-raw-button: text-left two-state menu/select row
@@ -198,7 +198,7 @@ function LaneSortMenu<SortId extends string>({
                 setOpen(false);
               }}
               className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
-                o.id === value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                o.id === value ? 'bg-blue-50 text-blue-700' : 'text-text-muted hover:bg-surface-hover'
               }`}
             >
               {o.label}
@@ -332,30 +332,30 @@ function SwimlaneBubble<Row, LaneId extends string, SortId extends string>({
       // scroll container) so the body's sticky DateGroupHeader escapes up to the
       // board scroll region and sticks at the top of the page. Grid lanes keep
       // `overflow-hidden` (their body scrolls internally, sticking within the lane).
-      className={`flex flex-col rounded-xl border border-gray-200 bg-white ${
+      className={`flex flex-col rounded-xl border border-border-soft bg-surface-card ${
         stacked ? 'overflow-clip' : 'overflow-hidden'
       }`}
     >
       {/* Header — ONE row: identity (drag handle + dot + icon + label + count)
           on the left, this lane's controls (sort menu + date filter) pushed to
           the right. The label truncates so the controls never wrap to a 2nd row. */}
-      <div className="flex items-center gap-2 border-b border-gray-100 px-2.5 py-1.5">
+      <div className="flex items-center gap-2 border-b border-border-hairline px-2.5 py-1.5">
         {/* ds-raw-button: dnd-kit drag handle (spreads listeners; active:scale would fight drag) */}
         <button
           type="button"
           {...attributes}
           {...listeners}
           aria-label={`Drag to reorder ${lane.label} lane`}
-          className="-ml-1 flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
+          className="-ml-1 flex-shrink-0 cursor-grab text-text-faint transition hover:text-text-soft active:cursor-grabbing"
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
         <HoverTooltip label={lane.description} focusable={false}>
           <span className={`h-2 w-2 shrink-0 rounded-full ${lane.dot}`} />
         </HoverTooltip>
-        <Icon className={`h-3.5 w-3.5 shrink-0 ${lane.iconClass ?? 'text-gray-400'}`} />
-        <h3 className="truncate text-eyebrow font-black uppercase tracking-widest text-gray-500">{lane.label}</h3>
-        <span className="shrink-0 text-eyebrow font-black uppercase tracking-widest text-gray-400">{rows.length}</span>
+        <Icon className={`h-3.5 w-3.5 shrink-0 ${lane.iconClass ?? 'text-text-faint'}`} />
+        <h3 className="truncate text-eyebrow font-black uppercase tracking-widest text-text-soft">{lane.label}</h3>
+        <span className="shrink-0 text-eyebrow font-black uppercase tracking-widest text-text-faint">{rows.length}</span>
         {showSortMenu || showDateFilter || laneHeaderSlot ? (
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {laneHeaderSlot}
@@ -393,7 +393,7 @@ function SwimlaneBubble<Row, LaneId extends string, SortId extends string>({
             <button
               type="button"
               onClick={onToggleExpanded}
-              className="flex w-full items-center justify-center gap-1 border-t border-gray-100 py-1 text-eyebrow font-black uppercase tracking-widest text-gray-500 transition hover:bg-gray-50"
+              className="flex w-full items-center justify-center gap-1 border-t border-border-hairline py-1 text-eyebrow font-black uppercase tracking-widest text-text-soft transition hover:bg-surface-hover"
             >
               {expanded ? (
                 <>
@@ -416,9 +416,9 @@ function SwimlaneBubble<Row, LaneId extends string, SortId extends string>({
             onPointerDown={onResizeDown}
             onPointerMove={onResizeMove}
             onPointerUp={onResizeUp}
-            className="group flex h-2.5 w-full shrink-0 cursor-ns-resize touch-none items-center justify-center border-t border-gray-100 bg-gray-50/60 transition hover:bg-gray-100"
+            className="group flex h-2.5 w-full shrink-0 cursor-ns-resize touch-none items-center justify-center border-t border-border-hairline bg-surface-canvas/60 transition hover:bg-surface-sunken"
           >
-            <span className="h-1 w-8 rounded-full bg-gray-300 transition group-hover:bg-gray-400" />
+            <span className="h-1 w-8 rounded-full bg-surface-strong transition group-hover:bg-border-emphasis" />
           </div>
           ) : null}
         </>
@@ -577,11 +577,11 @@ export function SwimlaneBoard<Row, LaneId extends string, SortId extends string>
         : 'space-y-4';
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50">
+    <div className="flex flex-1 flex-col overflow-hidden bg-surface-canvas">
       {/* Dedicated 40px right-panel header — matches the sidebar master-nav modes
           band (h-[40px] + border + flush controls). Sits ABOVE the scroll region
           so each bubble's sticky `DateGroupHeader` still docks correctly. */}
-      <div className="flex h-[40px] shrink-0 items-center gap-3 border-b border-gray-300 bg-white/90 px-3 backdrop-blur-md">
+      <div className="flex h-[40px] shrink-0 items-center gap-3 border-b border-border-default bg-surface-card/90 px-3 backdrop-blur-md">
         {headerStartSlot}
         <div className="ml-auto flex items-center gap-2">
           {columnItems.length > 1 ? (

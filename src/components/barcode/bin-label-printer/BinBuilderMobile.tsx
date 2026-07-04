@@ -14,13 +14,13 @@ export function BinBuilderMobile({ c, variant }: { c: BinLabelPrinterController;
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className={variant === 'sidebar'
-            ? 'text-base font-bold tracking-tight text-gray-900'
-            : 'text-2xl font-bold tracking-tight text-gray-900'}
+            ? 'text-base font-bold tracking-tight text-text-default'
+            : 'text-2xl font-bold tracking-tight text-text-default'}
           >
             {variant === 'sidebar' ? 'Build a bin label' : 'Location Label Printer'}
           </h1>
           {variant === 'main' && (
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-text-soft">
               Pick a room, then drill down to the bin. Prints a QR-only GS1 Digital Link label.
             </p>
           )}
@@ -35,7 +35,7 @@ export function BinBuilderMobile({ c, variant }: { c: BinLabelPrinterController;
             icon={<Settings className="h-4 w-4" />}
             ariaLabel="Configure label printer"
             onClick={() => c.setConfigOpen(true)}
-            className="h-9 w-9 rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            className="h-9 w-9 rounded-full border border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover"
           />
         </div>
       </header>
@@ -57,8 +57,8 @@ export function BinBuilderMobile({ c, variant }: { c: BinLabelPrinterController;
             <div className="flex min-w-0 items-center gap-3">
               <ZoneLetterTile letter={c.zoneLetter} />
               <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-gray-900">{c.selectedRoom}</p>
-                <p className="mt-0.5 text-[11.5px] text-gray-500">
+                <p className="truncate text-base font-semibold text-text-default">{c.selectedRoom}</p>
+                <p className="mt-0.5 text-[11.5px] text-text-soft">
                   {c.zoneLetter ? `Zone ${c.zoneLetter}` : 'No zone letter yet — set one in the Rooms tab.'}
                 </p>
               </div>

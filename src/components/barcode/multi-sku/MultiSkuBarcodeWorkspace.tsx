@@ -46,9 +46,9 @@ export function MultiSkuBarcodeWorkspace({ b }: { b: MultiSkuBarcodeController }
   const primaryAction = () => (b.previewIsReady ? b.handleFinalAction() : b.handleNextStepSn());
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-gray-50 text-gray-900">
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-surface-canvas text-text-default">
       {/* Mode switcher pinned to the top of the workspace; writes `?mode=`. */}
-      <div className="shrink-0 border-b border-gray-200 bg-white">
+      <div className="shrink-0 border-b border-border-soft bg-surface-card">
         <div className="mx-auto w-full max-w-[720px] px-6 py-3">
           <ModeDropdown mode={mode} onChange={b.handleModeChange} />
         </div>

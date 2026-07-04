@@ -34,7 +34,7 @@ export function SelectionMark({
         checked
           ? 'border-blue-600 bg-blue-600 text-white opacity-100'
           : cn(
-              'border-white/80 bg-white/90 text-gray-400 backdrop-blur-sm hover:border-blue-200 hover:text-blue-600 focus:opacity-100',
+              'border-white/80 bg-surface-card/90 text-text-faint backdrop-blur-sm hover:border-blue-200 hover:text-blue-600 focus:opacity-100',
               active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             ),
       )}

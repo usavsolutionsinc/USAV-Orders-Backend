@@ -39,6 +39,7 @@ import {
 } from '@/components/Icons';
 import { StationScanBar } from '@/components/station/scan-bar';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { useMotionPresence, useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import { conditionLabel } from '@/lib/conditions';
@@ -219,13 +220,13 @@ function DispositionStationInner() {
         <div>
           <Link
             href="/warehouse/rma"
-            className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700"
+            className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-text-soft hover:text-text-muted"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
             RMA queue
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">Disposition station</h1>
-          <p className="mt-1 text-sm text-slate-500">Scan a returned unit, decide what happens to it.</p>
+          <h1 className="mt-1 text-2xl font-bold text-text-default">Disposition station</h1>
+          <p className="mt-1 text-sm text-text-soft">Scan a returned unit, decide what happens to it.</p>
         </div>
       </header>
 
@@ -241,7 +242,7 @@ function DispositionStationInner() {
           placeholder="Scan serial number"
           autoFocus
           icon={<Barcode className="h-[17px] w-[17px] text-emerald-600" />}
-          rightContent={loading ? <Loader2 className="h-4 w-4 animate-spin text-gray-700" /> : undefined}
+          rightContent={loading ? <Loader2 className="h-4 w-4 animate-spin text-text-muted" /> : undefined}
         />
         {error && (
           <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm font-semibold text-rose-700">
@@ -257,7 +258,7 @@ function DispositionStationInner() {
               key={unit.id}
               {...cardPresence}
               transition={cardTransition}
-              className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+              className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm"
             >
               {result ? (
                 <ResultBanner result={result} onDismiss={() => { setUnit(null); setResult(null); refocus(); }} />
@@ -265,20 +266,20 @@ function DispositionStationInner() {
                 <>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-mono text-lg font-black text-gray-900">{unit.serial_number}</p>
+                      <p className="truncate font-mono text-lg font-black text-text-default">{unit.serial_number}</p>
                       {unit.product_title && (
-                        <p className="truncate text-caption text-gray-500">{unit.product_title}</p>
+                        <p className="truncate text-caption text-text-soft">{unit.product_title}</p>
                       )}
-                      {unit.sku && <p className="truncate font-mono text-eyebrow text-gray-400">{unit.sku}</p>}
+                      {unit.sku && <p className="truncate font-mono text-eyebrow text-text-faint">{unit.sku}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {unit.condition_grade && (
-                        <span className="rounded bg-gray-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-700 ring-1 ring-inset ring-gray-200">
+                        <span className="rounded bg-surface-canvas px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-text-muted ring-1 ring-inset ring-border-soft">
                           {conditionLabel(unit.condition_grade, 'compact')}
                         </span>
                       )}
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${unitStatusBadgeTone(unit.current_status)}`}
+                        className={`rounded-full px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest ${unitStatusBadgeTone(unit.current_status)}`}
                       >
                         {unit.current_status}
                       </span>
@@ -296,7 +297,7 @@ function DispositionStationInner() {
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
                     placeholder="Notes (optional)"
-                    className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-caption text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="mt-3 w-full resize-none rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-caption text-text-default placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
 
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -314,7 +315,7 @@ function DispositionStationInner() {
                           ) : (
                             <d.icon className="h-4 w-4" />
                           )}
-                          <span className="text-[10px] font-black uppercase tracking-wide">{d.label}</span>
+                          <span className="text-micro font-black uppercase tracking-wide">{d.label}</span>
                         </button>
                       </HoverTooltip>
                     ))}
@@ -323,7 +324,7 @@ function DispositionStationInner() {
               )}
             </motion.div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
+            <div className="rounded-2xl border border-dashed border-border-soft bg-surface-canvas px-4 py-10 text-center text-sm text-text-soft">
               Scan a unit to begin.
             </div>
           )}
@@ -338,8 +339,8 @@ export default function RmaDispositionPage() {
     <Suspense
       fallback={
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-          <div className="h-10 w-64 animate-pulse rounded bg-gray-100" />
-          <div className="mt-4 h-14 w-full animate-pulse rounded-xl bg-gray-100" />
+          <div className="h-10 w-64 animate-pulse rounded bg-surface-sunken" />
+          <div className="mt-4 h-14 w-full animate-pulse rounded-xl bg-surface-sunken" />
         </div>
       }
     >
@@ -358,8 +359,8 @@ function ResultBanner({ result, onDismiss }: { result: DispositionResult; onDism
           <Icon className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-bold text-gray-900">{def.label} recorded</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm font-bold text-text-default">{def.label} recorded</p>
+          <p className="text-xs text-text-soft">
             {result.code === 'ACCEPT'
               ? result.restocked
                 ? 'Unit restocked — back in sellable inventory.'
@@ -369,14 +370,12 @@ function ResultBanner({ result, onDismiss }: { result: DispositionResult; onDism
         </div>
       </div>
       <HoverTooltip label="Clear now">
-        <button
-          type="button"
+        <IconButton
           onClick={onDismiss}
-          aria-label="Clear"
-          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          ariaLabel="Clear"
+          className="rounded-md p-1.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+          icon={<X className="h-4 w-4" />}
+        />
       </HoverTooltip>
     </div>
   );

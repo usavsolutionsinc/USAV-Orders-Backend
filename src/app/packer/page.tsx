@@ -39,6 +39,7 @@ export default async function PackerPage() {
       ],
       queryFn: async () => {
         const { rows } = await fetchPackerLogRows({
+          organizationId: user.organizationId,
           packerId,
           limit: 1000,
           weekStart: weekRange.startStr,

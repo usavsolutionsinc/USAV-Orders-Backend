@@ -38,38 +38,38 @@ export function SerialProvenanceHeader({
       {group.ref?.kind === 'serial' && serial ? (
         <SerialChip value={serial} width="w-auto" dense />
       ) : (
-        <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-500">
+        <span className="text-mini font-bold uppercase tracking-[0.12em] text-text-soft">
           {group.label}
         </span>
       )}
 
       {sku ? (
-        <span className="max-w-[180px] truncate text-caption font-semibold text-gray-700">{sku}</span>
+        <span className="max-w-[180px] truncate text-caption font-semibold text-text-muted">{sku}</span>
       ) : null}
 
       {provenance?.grade ? <ConditionGradeChip grade={provenance.grade} dense /> : null}
 
       {provenance?.status ? (
-        <span className="inline-flex items-center gap-1 text-eyebrow font-bold uppercase tracking-widest text-gray-500">
+        <span className="inline-flex items-center gap-1 text-eyebrow font-bold uppercase tracking-widest text-text-soft">
           <span className={`h-2 w-2 shrink-0 rounded-full ${serialStatusDot(provenance.status)}`} />
           {serialStatusLabel(provenance.status)}
         </span>
       ) : null}
 
       {po ? (
-        <span className="inline-flex items-center gap-1 text-micro font-medium text-gray-400">
+        <span className="inline-flex items-center gap-1 text-micro font-medium text-text-faint">
           PO
           <OrderIdChip value={po} display={po} dense />
         </span>
       ) : null}
 
       {siblingCount > 0 ? (
-        <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+        <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
           +{siblingCount} unit{siblingCount === 1 ? '' : 's'}
         </span>
       ) : null}
 
-      <span className="ml-1 shrink-0 text-micro font-medium text-gray-300">
+      <span className="ml-1 shrink-0 text-micro font-medium text-text-faint">
         {count} {count === 1 ? 'event' : 'events'}
       </span>
     </div>

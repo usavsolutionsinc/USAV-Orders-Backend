@@ -80,9 +80,9 @@ const LABEL_TAG_BTN = `${LABEL_OVERLAY_ICON_BTN} text-orange-500 transition hove
 
 const LABEL_DOWNLOAD_INSERT_BTN = `${LABEL_OVERLAY_ICON_BTN} text-blue-600 transition hover:bg-blue-100/60 hover:text-blue-700 hover:shadow-sm hover:ring-1 hover:ring-blue-200/80`;
 
-const LABEL_DOWNLOAD_SYNC_BTN = `${LABEL_OVERLAY_ICON_BTN} text-gray-400 transition hover:bg-blue-100/60 hover:text-blue-600 hover:shadow-sm hover:ring-1 hover:ring-blue-200/80`;
+const LABEL_DOWNLOAD_SYNC_BTN = `${LABEL_OVERLAY_ICON_BTN} text-text-faint transition hover:bg-blue-100/60 hover:text-blue-600 hover:shadow-sm hover:ring-1 hover:ring-blue-200/80`;
 
-const LABEL_SAVE_BTN = `${LABEL_OVERLAY_ICON_BTN} text-gray-400 transition hover:bg-emerald-100/60 hover:text-emerald-600 hover:shadow-sm hover:ring-1 hover:ring-emerald-200/80`;
+const LABEL_SAVE_BTN = `${LABEL_OVERLAY_ICON_BTN} text-text-faint transition hover:bg-emerald-100/60 hover:text-emerald-600 hover:shadow-sm hover:ring-1 hover:ring-emerald-200/80`;
 
 export function LineNotesTabbedCard({
   internalNotes,
@@ -285,7 +285,7 @@ export function LineNotesTabbedCard({
   const hasTicket = Boolean(resolvedTicketId);
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60 space-y-3">
+    <section className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60 space-y-3">
       {/* `overlay` skips the horizontal scroller so the active pill's blue glow
           isn't clipped at the bottom (overflow-x-auto forces overflow-y:auto). */}
       <HorizontalButtonSlider
@@ -307,7 +307,7 @@ export function LineNotesTabbedCard({
             value={labelNotes}
             onChange={(e) => onLabelNotesChange(e.target.value)}
             placeholder="Compose label notes"
-            className={`w-full resize-none rounded-lg border border-gray-200 px-3 pb-11 pt-2 text-caption text-gray-900 placeholder:text-gray-400 ${NOTES_TEXTAREA_FOCUS}`}
+            className={`w-full resize-none rounded-lg border border-border-soft px-3 pb-11 pt-2 text-caption text-text-default placeholder:text-text-faint ${NOTES_TEXTAREA_FOCUS}`}
           />
 
           {/* Top-left repeat-previous; top-right insert rail; bottom-right save actions.
@@ -316,11 +316,12 @@ export function LineNotesTabbedCard({
             <div className="pointer-events-none absolute left-1.5 top-1.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
               <div className="pointer-events-auto">
                 <HoverTooltip label="Repeat the previous line's notes" asChild>
+                  {/* ds-raw-button */}
                   <button
                     type="button"
                     onClick={() => appendToLabelNotes(trimmedPreviousNotes)}
                     aria-label="Repeat the previous line's notes"
-                    className={`${LABEL_OVERLAY_ICON_BTN} bg-white/80 text-gray-400 shadow-sm ring-1 ring-gray-200/60 transition hover:bg-gray-100 hover:text-gray-600`}
+                    className={`${LABEL_OVERLAY_ICON_BTN} bg-surface-card/80 text-text-faint shadow-sm ring-1 ring-border-soft/60 transition hover:bg-surface-sunken hover:text-text-muted`}
                   >
                     <History className={LABEL_OVERLAY_ICON} />
                   </button>
@@ -333,6 +334,7 @@ export function LineNotesTabbedCard({
             {hasTicket && (
               <div className="pointer-events-auto">
                 <HoverTooltip label="Insert the linked Zendesk ticket's subject" asChild>
+                  {/* ds-raw-button */}
                   <button
                     type="button"
                     onClick={() => void handlePrefillTicketSubject()}
@@ -352,11 +354,12 @@ export function LineNotesTabbedCard({
             {trimmedInternalNotes && (
               <div className="pointer-events-auto">
                 <HoverTooltip label="Insert internal notes into the label" asChild>
+                  {/* ds-raw-button */}
                   <button
                     type="button"
                     onClick={() => appendToLabelNotes(trimmedInternalNotes)}
                     aria-label="Insert internal notes into the label"
-                    className={`${LABEL_OVERLAY_ICON_BTN} text-gray-400 transition hover:bg-gray-100/80 hover:text-gray-700 hover:shadow-sm hover:ring-1 hover:ring-gray-200/80`}
+                    className={`${LABEL_OVERLAY_ICON_BTN} text-text-faint transition hover:bg-surface-sunken/80 hover:text-text-muted hover:shadow-sm hover:ring-1 hover:ring-border-soft/80`}
                   >
                     <FileText className={LABEL_OVERLAY_ICON} />
                   </button>
@@ -366,6 +369,7 @@ export function LineNotesTabbedCard({
             {formattedUnitPrice && (
               <div className="pointer-events-auto">
                 <HoverTooltip label={`Insert unit price: ${formattedUnitPrice}`} asChild>
+                  {/* ds-raw-button */}
                   <button
                     type="button"
                     onClick={() => appendToLabelNotes(formattedUnitPrice)}
@@ -380,6 +384,7 @@ export function LineNotesTabbedCard({
             {showZohoTab && trimmedSyncNotes && (
               <div className="pointer-events-auto">
                 <HoverTooltip label="Insert sync (Zoho PO) notes into the label" asChild>
+                  {/* ds-raw-button */}
                   <button
                     type="button"
                     onClick={() => appendToLabelNotes(trimmedSyncNotes)}
@@ -394,6 +399,7 @@ export function LineNotesTabbedCard({
             {trimmedSkuTitle && (
               <div className="pointer-events-auto">
                 <HoverTooltip label={`Insert product title: "${trimmedSkuTitle}"`} asChild>
+                  {/* ds-raw-button */}
                   <button
                     type="button"
                     onClick={() => appendToLabelNotes(trimmedSkuTitle)}
@@ -414,6 +420,7 @@ export function LineNotesTabbedCard({
             {showZohoTab ? (
               <div className="pointer-events-auto">
                 <HoverTooltip label="Sync to the inventory system (Zoho PO note)" asChild>
+                  {/* ds-raw-button */}
                   <button
                     type="button"
                     onClick={() => void handleSyncToInventory()}
@@ -432,6 +439,7 @@ export function LineNotesTabbedCard({
             ) : null}
             <div className="pointer-events-auto">
               <HoverTooltip label="Save to internal notes" asChild>
+                {/* ds-raw-button */}
                 <button
                   type="button"
                   onClick={handleSaveInternal}
@@ -454,7 +462,7 @@ export function LineNotesTabbedCard({
           onChange={(e) => onInternalNotesChange(e.target.value)}
           onBlur={onInternalNotesBlur}
           placeholder="Internal notes for this line"
-          className={`w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-caption text-gray-900 placeholder:text-gray-400 ${NOTES_TEXTAREA_FOCUS}`}
+          className={`w-full resize-none rounded-lg border border-border-soft px-3 py-2 text-caption text-text-default placeholder:text-text-faint ${NOTES_TEXTAREA_FOCUS}`}
         />
       ) : tab === 'po' ? (
         <div className="space-y-1">
@@ -467,10 +475,10 @@ export function LineNotesTabbedCard({
               setOverallDraft(e.target.value);
               onOverallDraftChange?.();
             }}
-            className={`min-h-[8rem] w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-caption text-gray-900 ${NOTES_TEXTAREA_FOCUS}`}
+            className={`min-h-[8rem] w-full resize-y rounded-lg border border-border-soft px-3 py-2 text-caption text-text-default ${NOTES_TEXTAREA_FOCUS}`}
           />
           <div className="flex items-center justify-between gap-2">
-            <span className="text-micro font-semibold uppercase tracking-wide text-gray-400">
+            <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">
               {loadingZoho ? (
                 <span className="inline-flex items-center gap-1 text-blue-500">
                   <Loader2 className="h-3 w-3 animate-spin" /> Syncing from Zoho…
@@ -487,7 +495,7 @@ export function LineNotesTabbedCard({
                     onClick={() => void loadZohoNotes()}
                     disabled={overallDirty}
                     aria-label={overallDirty ? 'Save or discard edits first' : 'Reload the latest notes from Zoho'}
-                    className="h-auto gap-1 px-0 text-micro font-semibold uppercase tracking-wide text-gray-400 hover:bg-transparent hover:text-gray-600"
+                    className="h-auto gap-1 px-0 text-micro font-semibold uppercase tracking-wide text-text-faint hover:bg-transparent hover:text-text-muted"
                   >
                     Sync from Zoho
                   </Button>

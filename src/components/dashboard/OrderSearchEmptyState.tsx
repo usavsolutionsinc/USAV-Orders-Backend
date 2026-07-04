@@ -36,15 +36,15 @@ export function OrderSearchEmptyState({
       >
         <Search className="h-8 w-8 text-red-400" />
       </motion.div>
-      <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">{title}</h3>
-      <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+      <h3 className="text-lg font-black text-text-default uppercase tracking-tight mb-1">{title}</h3>
+      <p className="text-xs text-text-soft font-bold uppercase tracking-widest leading-relaxed">
         No {resultLabel} match &quot;{query}&quot;
       </p>
       <Button
         type="button"
         variant="brand"
         onClick={onClear}
-        className={`mt-6 bg-none bg-gray-900 px-6 ${sectionLabel} text-white hover:bg-gray-800`}
+        className={`mt-6 bg-none bg-surface-inverse px-6 ${sectionLabel} text-white hover:bg-surface-inverse-hover`}
       >
         {clearLabel}
       </Button>

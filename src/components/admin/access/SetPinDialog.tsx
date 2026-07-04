@@ -54,15 +54,15 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) { reset(); onClose(); } }}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-gray-900">Set PIN for {staffName}</h2>
-        <p className="mt-1 text-xs text-gray-500">
+      <div className="w-full max-w-sm rounded-2xl bg-surface-card p-5" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-text-default">Set PIN for {staffName}</h2>
+        <p className="mt-1 text-xs text-text-soft">
           Push a specific PIN to this staff member. They&apos;ll be able to sign in immediately with the new code.
         </p>
 
         <div className="mt-5 space-y-3">
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">New PIN</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">New PIN</span>
             <input
               autoFocus
               type="password"
@@ -70,12 +70,12 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
               maxLength={6}
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="••••"
             />
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Confirm PIN</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Confirm PIN</span>
             <input
               type="password"
               inputMode="numeric"
@@ -83,7 +83,7 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
               value={confirm}
               onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))}
               onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="••••"
             />
           </label>

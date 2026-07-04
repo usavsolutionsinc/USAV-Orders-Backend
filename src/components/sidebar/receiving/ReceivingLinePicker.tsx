@@ -42,8 +42,8 @@ export function ReceivingLinePicker({ rows, onPick, onCancel }: Props) {
               onClick={() => onPick(line)}
               className={`ds-raw-button rounded border px-2 py-1 text-left text-micro font-bold transition-colors ${
                 open
-                  ? 'border-blue-200 bg-white text-blue-900 hover:bg-blue-100'
-                  : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'
+                  ? 'border-blue-200 bg-surface-card text-blue-900 hover:bg-blue-100'
+                  : 'border-border-soft bg-surface-canvas text-text-soft hover:bg-surface-sunken'
               }`}
             >
               <span className="truncate">

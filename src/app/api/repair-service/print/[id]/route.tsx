@@ -261,7 +261,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     // Generate HTML matching Repair Service Paper exactly
     const formHtml = `
-      <div class="bg-white text-gray-900 font-sans p-6">
+      <div class="bg-surface-card text-text-default font-sans p-6">
 
         ${repairPaperLetterheadHtml(letterhead)}
 
@@ -270,15 +270,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         <!-- Information Table -->
         <div class="border-t border-l border-black mb-6">
           <div class="flex border-b border-r border-black">
-            <div class="w-40 p-2 font-bold bg-gray-50 border-r border-black">Product Title:</div>
+            <div class="w-40 p-2 font-bold bg-surface-canvas border-r border-black">Product Title:</div>
             <div class="flex-1 p-2">${productTitle}</div>
           </div>
           <div class="flex border-b border-r border-black">
-            <div class="w-40 p-2 font-bold bg-gray-50 border-r border-black">SN & Issues:</div>
+            <div class="w-40 p-2 font-bold bg-surface-canvas border-r border-black">SN & Issues:</div>
             <div class="flex-1 p-2">${serialNumber}, ${issue}</div>
           </div>
           <div class="flex border-b border-r border-black">
-            <div class="w-40 p-2 font-bold bg-gray-50 border-r border-black">Contact Info:</div>
+            <div class="w-40 p-2 font-bold bg-surface-canvas border-r border-black">Contact Info:</div>
             <div class="flex-1 p-2">${contactDisplay}</div>
           </div>
         </div>
@@ -322,7 +322,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
         <!-- Internal Use Table -->
         <div class="border-t border-l border-black mb-3">
-          <div class="flex border-b border-r border-black bg-gray-50">
+          <div class="flex border-b border-r border-black bg-surface-canvas">
             <div class="flex-1 border-r border-black p-2 font-bold">Part Repaired</div>
             <div class="flex-1 border-r border-black p-2 font-bold">Detail</div>
             <div class="flex-1 border-r border-black p-2 font-bold">Who</div>

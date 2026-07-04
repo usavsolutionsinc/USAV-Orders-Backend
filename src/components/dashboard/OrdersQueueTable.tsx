@@ -139,8 +139,8 @@ export function OrdersQueueTable({
   // `autoHeight`: the body sizes to content, capped by a max-height (px wins over
   // class), so short tables leave no trailing whitespace and tall ones scroll.
   const rootClass = autoHeight
-    ? 'flex min-w-0 w-full bg-white relative'
-    : 'flex h-full min-w-0 flex-1 bg-white relative';
+    ? 'flex min-w-0 w-full bg-surface-card relative'
+    : 'flex h-full min-w-0 flex-1 bg-surface-card relative';
   const columnClass = autoHeight
     ? 'flex flex-col w-full min-w-0'
     : 'flex-1 flex flex-col overflow-hidden';
@@ -248,7 +248,7 @@ export function OrdersQueueTable({
 
   if (loading) {
     return wrapColumnConfig(
-      <div className={autoHeight ? 'flex flex-col bg-gray-50' : 'flex-1 flex flex-col bg-gray-50 overflow-hidden'}>
+      <div className={autoHeight ? 'flex flex-col bg-surface-canvas' : 'flex-1 flex flex-col bg-surface-canvas overflow-hidden'}>
         {hideHeader ? null : bannerTitle ? (
           <QueueTableBanner
             title={bannerTitle}
@@ -256,8 +256,8 @@ export function OrdersQueueTable({
             compact={bannerCompact}
           />
         ) : (
-          <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
-            <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+          <div className="h-10 bg-surface-card border-b border-border-hairline flex items-center px-4">
+            <div className="h-4 w-32 bg-surface-sunken rounded animate-pulse" />
           </div>
         )}
         <div
@@ -311,13 +311,13 @@ export function OrdersQueueTable({
                 <div className="mx-auto animate-in fade-in zoom-in duration-300">{firstRunEmpty}</div>
               ) : (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                  <p className="text-gray-500 font-semibold italic opacity-20">{emptyMessage}</p>
+                  <p className="text-text-soft font-semibold italic opacity-20">{emptyMessage}</p>
                   {showWeekControls && weekOffset > 0 && onResetWeek ? (
                     <Button
                       type="button"
                       variant="brand"
                       onClick={onResetWeek}
-                      className={`mt-4 bg-none bg-gray-900 px-6 ${sectionLabel} text-white hover:bg-gray-800`}
+                      className={`mt-4 bg-none bg-surface-inverse px-6 ${sectionLabel} text-white hover:bg-surface-inverse-hover`}
                     >
                       Go to Current Week
                     </Button>

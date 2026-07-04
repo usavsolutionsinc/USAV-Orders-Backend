@@ -92,11 +92,11 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
           setOpen(false);
         }}
       />
-      <div className="relative z-panelPopover w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+      <div className="relative z-panelPopover w-full max-w-lg overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-2xl shadow-zinc-900/15">
+        <div className="flex items-center justify-between border-b border-border-soft px-4 py-3">
           <div>
             <p className={`text-micro font-black uppercase tracking-[0.16em] ${chrome.sectionLabel}`}>Quick add</p>
-            <h2 className="mt-1 text-sm font-black text-zinc-900">Add FNSKU details</h2>
+            <h2 className="mt-1 text-sm font-black text-text-default">Add FNSKU details</h2>
           </div>
           <IconButton
             type="button"
@@ -104,7 +104,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
             disabled={saving}
             ariaLabel="Close quick add FNSKU popup"
             icon={<X className="h-4 w-4" />}
-            className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
+            className="rounded-full border border-border-soft bg-surface-card p-2 text-text-soft hover:border-border-default hover:bg-surface-hover hover:text-text-default disabled:opacity-40"
           />
         </div>
 
@@ -138,7 +138,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
             label="FNSKU"
             required
             hintBelow={
-              <p className="text-micro leading-snug text-zinc-500">
+              <p className="text-micro leading-snug text-text-soft">
                 Save the FNSKU now and fill in more catalog details later if needed.
               </p>
             }
@@ -175,7 +175,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
           {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-4 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border-soft px-4 py-4">
           <Button
             type="button"
             variant="secondary"

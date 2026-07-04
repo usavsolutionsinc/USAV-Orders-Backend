@@ -42,7 +42,7 @@ function getStatusDotBg(
   if (value === 'AWAITING_TEST' || value === 'IN_TEST') return 'bg-violet-500';
   if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
   if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
-  return 'bg-gray-400';
+  return 'bg-border-emphasis';
 }
 
 /**
@@ -72,7 +72,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
       ? 'text-yellow-600'
       : condGrade === 'PARTS'
         ? 'text-amber-800'
-        : 'text-gray-500';
+        : 'text-text-soft';
   const serialsCsv = (row.serials ?? [])
     .map((s) => (s.serial_number || '').trim())
     .filter(Boolean)
@@ -99,7 +99,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
                 className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
               />
             </HoverTooltip>
-            <div className="line-clamp-2 text-sm font-bold text-gray-900">
+            <div className="line-clamp-2 text-sm font-bold text-text-default">
               {productTitle}
             </div>
           </div>
@@ -112,12 +112,12 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
                     ? 'text-yellow-600'
                     : row.quantity_expected && qtyReceived >= row.quantity_expected
                       ? 'text-emerald-600'
-                      : 'text-gray-700'
+                      : 'text-text-muted'
                 }
               >
                 {quantityText}
               </span>
-              <span className="text-gray-400">•</span>
+              <span className="text-text-faint">•</span>
               <span className={conditionColor}>{conditionLabel}</span>
             </span>
 

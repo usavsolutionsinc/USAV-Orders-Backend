@@ -109,7 +109,7 @@ function BoardStaffFilter() {
           setOpen(false);
         }}
         className={`ds-raw-button flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
-          isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+          isActive ? 'bg-blue-50 text-blue-700' : 'text-text-muted hover:bg-surface-hover'
         }`}
       >
         <span className="truncate">{name}</span>
@@ -127,7 +127,7 @@ function BoardStaffFilter() {
           className={`ds-raw-button inline-flex h-7 max-w-[160px] shrink-0 items-center gap-1.5 rounded-md border px-2 text-eyebrow font-bold uppercase tracking-widest transition-colors ${
             active
               ? 'border-blue-300 bg-blue-50 text-blue-700'
-              : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:bg-blue-50/40'
+              : 'border-border-soft bg-surface-card text-text-muted hover:border-blue-300 hover:bg-blue-50/40'
           }`}
         >
           <User className="h-3.5 w-3.5 shrink-0 opacity-70" />
@@ -139,10 +139,10 @@ function BoardStaffFilter() {
         <Popover.Content
           align="end"
           sideOffset={6}
-          className="z-dropdown max-h-[60vh] w-52 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
+          className="z-dropdown max-h-[60vh] w-52 overflow-y-auto rounded-lg border border-border-soft bg-surface-card p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
           <Row id={null} name="All staff" />
-          {options.length > 0 ? <div className="my-1 h-px bg-gray-100" /> : null}
+          {options.length > 0 ? <div className="my-1 h-px bg-surface-sunken" /> : null}
           {options.map((o) => (
             <Row key={o.id} id={o.id} name={o.name} />
           ))}

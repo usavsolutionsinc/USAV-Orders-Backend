@@ -23,8 +23,8 @@ export function LabelFacePreview({
   embedded?: boolean;
 }) {
   const shell = embedded
-    ? 'w-full bg-white'
-    : 'w-full rounded-lg border border-gray-200/80 bg-white px-3 py-3 shadow-sm';
+    ? 'w-full bg-surface-card'
+    : 'w-full rounded-lg border border-border-soft/80 bg-surface-card px-3 py-3 shadow-sm';
   // quietZone=0 makes the ink fill the box edge-to-edge so the top/bottom rows
   // line up with the matrix's visible edges — preview only; the printed symbol
   // keeps its scanner-safe quiet zone.
@@ -39,7 +39,7 @@ export function LabelFacePreview({
         />
       ) : null}
       {model.hri ? (
-        <span className="font-mono text-[7px] font-extrabold leading-none tracking-wide text-gray-900">
+        <span className="font-mono text-[7px] font-extrabold leading-none tracking-wide text-text-default">
           {model.hri}
         </span>
       ) : null}
@@ -74,19 +74,19 @@ export function LabelFacePreview({
       <div className="flex min-h-[6rem] flex-nowrap items-stretch gap-4">
         <div className="min-w-0 flex flex-1 flex-col justify-between">
           <div className="flex items-baseline justify-between gap-2 text-base leading-none">
-            <span className="truncate font-bold text-gray-900">{model.topLeft}</span>
-            <span className="shrink-0 tabular-nums font-bold text-gray-900">
+            <span className="truncate font-bold text-text-default">{model.topLeft}</span>
+            <span className="shrink-0 tabular-nums font-bold text-text-default">
               {model.topRight}
             </span>
           </div>
           <div className="flex min-h-0 flex-1 min-w-0 items-center justify-center px-0.5">
-            <span className="line-clamp-3 w-full text-center text-caption font-semibold leading-tight tracking-normal text-gray-900 normal-case">
+            <span className="line-clamp-3 w-full text-center text-caption font-semibold leading-tight tracking-normal text-text-default normal-case">
               {model.center}
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-2 text-base leading-none">
-            <span className="font-black text-gray-900">{model.bottomLeft}</span>
-            <span className="shrink-0 tabular-nums font-black text-gray-900">
+            <span className="font-black text-text-default">{model.bottomLeft}</span>
+            <span className="shrink-0 tabular-nums font-black text-text-default">
               {model.bottomRight}
             </span>
           </div>

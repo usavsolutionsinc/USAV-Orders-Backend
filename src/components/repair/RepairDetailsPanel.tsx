@@ -61,10 +61,10 @@ export function RepairDetailsPanel({
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
         <PaneHeader
-          className="border-gray-100 bg-white/90 backdrop-blur-xl"
+          className="border-border-hairline bg-surface-card/90 backdrop-blur-xl"
           rowClassName="px-6"
           leftSlot={
             <>
@@ -88,7 +88,7 @@ export function RepairDetailsPanel({
                           c.setIsEditingTicket(false);
                         }
                       }}
-                      className="w-full border-none bg-transparent p-0 text-sm font-black uppercase tracking-tight text-gray-900 focus:ring-0"
+                      className="w-full border-none bg-transparent p-0 text-sm font-black uppercase tracking-tight text-text-default focus:ring-0"
                       placeholder="TK Number"
                       disabled={c.isSavingTicket}
                     />
@@ -104,7 +104,7 @@ export function RepairDetailsPanel({
                       </a>
                     </HoverTooltip>
                   ) : (
-                    <span className="text-gray-400">TK Number</span>
+                    <span className="text-text-faint">TK Number</span>
                   )
                 }
                 valueTitle={c.ticketNumber || 'TK Number'}
@@ -118,7 +118,7 @@ export function RepairDetailsPanel({
                 onClick={() => c.setIsEditingTicket(true)}
                 ariaLabel="Edit ticket number"
                 disabled={c.isSavingTicket}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-sunken"
               />
               <PaneHeaderCloseButton onClick={onClose} ariaLabel="Close repair details" />
             </>
@@ -171,7 +171,7 @@ export function RepairDetailsPanel({
           {c.activeTab === 'links' ? <RepairLinkageSection c={c} /> : null}
         </div>
 
-        <div className="shrink-0 bg-white pb-8">
+        <div className="shrink-0 bg-surface-card pb-8">
           {(c.isEditingNotes || hasSavedNotes) ? (
             c.isEditingNotes ? (
               <ShippedNotesComposer

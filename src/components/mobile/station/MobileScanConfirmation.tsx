@@ -67,18 +67,18 @@ const TYPE_CONFIG: Record<string, {
   SKU: {
     label: 'SKU',
     Icon: Barcode,
-    badge: 'bg-gray-100 text-gray-700 border-gray-200',
+    badge: 'bg-surface-sunken text-text-muted border-border-soft',
     confirmBtn: 'bg-gray-700 active:bg-gray-800',
     pill: 'bg-white/10 text-white/70 border-white/20',
-    pillActive: 'bg-gray-500/30 text-white border-gray-400/50',
+    pillActive: 'bg-gray-500/30 text-white border-border-emphasis/50',
   },
   COMMAND: {
     label: 'Command',
     Icon: Settings,
-    badge: 'bg-gray-100 text-gray-700 border-gray-200',
+    badge: 'bg-surface-sunken text-text-muted border-border-soft',
     confirmBtn: 'bg-gray-700 active:bg-gray-800',
     pill: 'bg-white/10 text-white/70 border-white/20',
-    pillActive: 'bg-gray-500/30 text-white border-gray-400/50',
+    pillActive: 'bg-gray-500/30 text-white border-border-emphasis/50',
   },
 };
 
@@ -118,10 +118,10 @@ export function MobileScanConfirmation({
       transition={framerTransitionMobile.confirmationSlideUp}
       className="absolute inset-x-0 bottom-0 z-10"
     >
-      <div className="bg-white rounded-t-3xl shadow-2xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="bg-surface-card rounded-t-3xl shadow-2xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         {/* ── Header: "Detected as" + badge ── */}
         <div className="mb-4">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-2">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-text-faint mb-2">
             Detected As
           </p>
           <div className="flex items-center gap-3">
@@ -130,7 +130,7 @@ export function MobileScanConfirmation({
               {config.label}
             </span>
             {carrier && (
-              <span className="text-xs font-black text-gray-500 uppercase tracking-wider">
+              <span className="text-xs font-black text-text-soft uppercase tracking-wider">
                 {carrier.replace(/_/g, ' ')}
               </span>
             )}
@@ -138,18 +138,18 @@ export function MobileScanConfirmation({
         </div>
 
         {/* ── Scanned value ── */}
-        <div className="bg-gray-50 rounded-2xl border border-gray-200 px-4 py-3 mb-4">
-          <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 mb-1">
+        <div className="bg-surface-canvas rounded-2xl border border-border-soft px-4 py-3 mb-4">
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-text-faint mb-1">
             Scanned Value
           </p>
-          <p className="text-base font-mono font-black text-gray-900 break-all leading-snug">
+          <p className="text-base font-mono font-black text-text-default break-all leading-snug">
             {scannedValue}
           </p>
         </div>
 
         {/* ── Override pills ── */}
         <div className="mb-5">
-          <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-500 mb-2">
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-text-soft mb-2">
             Not right? It&apos;s a:
           </p>
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
@@ -164,7 +164,7 @@ export function MobileScanConfirmation({
                   type="button"
                   onClick={() => setCurrentType(type)}
                   className={`ds-raw-button flex items-center gap-1.5 rounded-full border px-3.5 min-h-[44px] text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
-                    isActive ? pillConfig.badge : 'bg-gray-100 text-gray-500 border-gray-200'
+                    isActive ? pillConfig.badge : 'bg-surface-sunken text-text-soft border-border-soft'
                   }`}
                 >
                   <PillIcon className="h-3.5 w-3.5" />

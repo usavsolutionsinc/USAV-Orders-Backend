@@ -61,7 +61,7 @@ export function RoleColorPicker({ value, onChange, disabled }: RoleColorPickerPr
               disabled={disabled}
               aria-label={`${p.label} (${p.hex})${selected ? ' — selected' : ''}`}
               className={`relative h-7 w-7 rounded-full ring-2 transition disabled:cursor-not-allowed ${
-                selected ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-gray-300'
+                selected ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
               }`}
               style={{ backgroundColor: p.hex }}
             />
@@ -78,7 +78,7 @@ export function RoleColorPicker({ value, onChange, disabled }: RoleColorPickerPr
           disabled={disabled}
           aria-label="Pick a custom color"
           className={`relative h-7 w-7 overflow-hidden rounded-full ring-2 transition disabled:cursor-not-allowed ${
-            isCustom ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-gray-300'
+            isCustom ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
           }`}
           style={{
             background: isCustom
@@ -98,7 +98,7 @@ export function RoleColorPicker({ value, onChange, disabled }: RoleColorPickerPr
         </button>
       </HoverTooltip>
 
-      <code className="rounded-md bg-gray-100 px-1.5 py-0.5 text-micro font-mono text-gray-700">{value}</code>
+      <code className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-micro font-mono text-text-muted">{value}</code>
     </div>
   );
 }

@@ -34,13 +34,13 @@ export default function StationFbaInput(props: StationFbaInputProps) {
       {showLabels ? (
         <>
           {fbaScanOnly ? (
-            <p className="text-micro font-black uppercase tracking-widest text-zinc-700">
+            <p className="text-micro font-black uppercase tracking-widest text-text-muted">
               Adding To Today Current Plan
             </p>
           ) : (
-            <p className="text-micro font-semibold uppercase tracking-widest text-zinc-500">Station scan</p>
+            <p className="text-micro font-semibold uppercase tracking-widest text-text-soft">Station scan</p>
           )}
-          <p className="text-caption leading-snug text-zinc-500">{fbaScanOnly ? c.fbaOnlyHint : c.routingHint}</p>
+          <p className="text-caption leading-snug text-text-soft">{fbaScanOnly ? c.fbaOnlyHint : c.routingHint}</p>
         </>
       ) : null}
 
@@ -98,7 +98,7 @@ export default function StationFbaInput(props: StationFbaInputProps) {
           rightContent={
             c.busy ? (
               <Loader2
-                className={`h-4 w-4 shrink-0 animate-spin ${fbaScanOnly ? c.workspaceChrome.savingSpinner : 'text-zinc-600'}`}
+                className={`h-4 w-4 shrink-0 animate-spin ${fbaScanOnly ? c.workspaceChrome.savingSpinner : 'text-text-muted'}`}
               />
             ) : null
           }
@@ -108,7 +108,7 @@ export default function StationFbaInput(props: StationFbaInputProps) {
       {fbaScanOnly && (c.isFbaLoading || c.planHint || c.selectedCount > 0) ? (
         <div className="flex items-center gap-1.5">
           {c.isFbaLoading ? (
-            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-gray-400" />
+            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-text-faint" />
           ) : null}
           <p
             className={`text-micro font-bold uppercase tracking-widest ${
@@ -116,7 +116,7 @@ export default function StationFbaInput(props: StationFbaInputProps) {
                 ? 'text-emerald-600'
                 : c.selectedCount > 0
                   ? 'text-blue-600'
-                  : 'text-gray-500'
+                  : 'text-text-soft'
             }`}
           >
             {c.isFbaLoading

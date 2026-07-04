@@ -11,14 +11,14 @@ import type { WarrantyClockBasis } from '@/lib/warranty/clock';
 
 /** Tone token → slim chip classes (mirrors the receiving display-primitive tone maps). */
 const TONE_CLASSES: Record<string, string> = {
-  slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+  slate: 'bg-surface-sunken text-text-muted ring-border-soft',
   blue: 'bg-blue-100 text-blue-700 ring-blue-200',
   emerald: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
   rose: 'bg-rose-100 text-rose-700 ring-rose-200',
   amber: 'bg-amber-100 text-amber-800 ring-amber-200',
   teal: 'bg-teal-100 text-teal-700 ring-teal-200',
-  gray: 'bg-gray-100 text-gray-600 ring-gray-200',
-  zinc: 'bg-zinc-200 text-zinc-700 ring-zinc-300',
+  gray: 'bg-surface-sunken text-text-muted ring-border-soft',
+  zinc: 'bg-surface-strong text-text-muted ring-border-default',
 };
 
 export function WarrantyStatusBadge({ status, className }: { status: WarrantyClaimStatus; className?: string }) {

@@ -4,10 +4,21 @@ import { tenantQuery } from '@/lib/tenancy/db';
 import { getAllStaffGoalsWithStats } from '@/lib/neon/staff-goals-queries';
 import { SHIPPED_BY_CARRIER_SQL } from '@/lib/sql-fragments';
 import { VELOCITY_ACTIVITY_TYPES, TECH_TEST_ACTIVITY_TYPES, sqlInList } from '@/lib/station-activity';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const orgId = ctx.organizationId;
+    // Polled every 60s per open dashboard tab. Cache 45s org-scoped so N tabs
+    // collapse onto one DB read per window; order/tech writes bust the tags.
+    const payload = await getOrSet<unknown>(
+      CACHE_NS.opsDashboard,
+      orgId,
+      'today',
+      45,
+      [CACHE_TAGS.orders, CACHE_TAGS.techLogs],
+      async () => {
     // $1 carries the tenant org id into every subquery below. The `created_at`
     // column referenced in todayFilter/yesterdayFilter belongs to
     // station_activity_logs in every subquery that uses them, so adding the
@@ -117,7 +128,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     `;
     const feedResult = await tenantQuery(orgId, feedQuery, [orgId]);
 
-    return NextResponse.json({
+    return {
       summary: {
         all: { value: s.all_today, delta: computeDelta(s.all_today, s.all_yesterday) },
         tested: { value: s.tested_today, delta: computeDelta(s.tested_today, s.tested_yesterday) },
@@ -128,7 +139,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       },
       staffProgress,
       activityFeed: feedResult.rows,
-    });
+    };
+      },
+    );
+
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error('Operations Dashboard API Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

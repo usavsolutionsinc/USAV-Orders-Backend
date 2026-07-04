@@ -16,7 +16,7 @@ interface StationScanLeadingIconProps {
 /** Left indicator glyph — always uses the shared icon box geometry. */
 export function StationScanLeadingIcon({
   Icon,
-  tintClassName = 'text-gray-400',
+  tintClassName = 'text-text-faint',
   ariaLabel,
   title,
 }: StationScanLeadingIconProps) {

@@ -58,7 +58,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
       >
         {/* ── Row 1 — FNSKU id · pending group · trailing chevron. ── */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5 text-caption font-semibold text-gray-500">
+          <div className="flex min-w-0 items-center gap-1.5 text-caption font-semibold text-text-soft">
             {canOpenAsin ? (
               <button
                 type="button"
@@ -70,21 +70,21 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                 aria-label="Open FBA item on Amazon"
               >
                 #{card.fnskuLast4}
-                <ExternalLink className="h-3 w-3 text-gray-300 group-hover:text-blue-400" />
+                <ExternalLink className="h-3 w-3 text-text-faint group-hover:text-blue-400" />
               </button>
             ) : (
               <span className="font-mono font-bold text-purple-700">
                 #{card.fnskuLast4}
               </span>
             )}
-            <span className="text-gray-300">·</span>
-            <span className="truncate text-gray-700">
+            <span className="text-text-faint">·</span>
+            <span className="truncate text-text-muted">
               {card.pendingTitle || item.shipment_ref || 'FBA item'}
             </span>
           </div>
           <span
             aria-hidden
-            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-gray-400 transition-transform ${
+            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-text-faint transition-transform ${
               isExpanded ? 'rotate-90 text-purple-600' : ''
             }`}
           >
@@ -93,7 +93,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
         </div>
 
         {/* ── Row 2 — title (clamp-1) with qty + condition inline. ── */}
-        <h4 className="mt-0.5 line-clamp-1 text-sm font-semibold leading-snug tracking-tight text-gray-900">
+        <h4 className="mt-0.5 line-clamp-1 text-sm font-semibold leading-snug tracking-tight text-text-default">
           <InlineQtyPrefix quantity={card.qtyLabel} />
           {card.conditionLabel && (
             <>
@@ -165,7 +165,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                         {item.assigned_tech_name || 'Unassigned'}
                       </span>
                       <IconButton
-                        icon={<Settings className="w-3.5 h-3.5 text-gray-400 group-hover:text-purple-600" />}
+                        icon={<Settings className="w-3.5 h-3.5 text-text-faint group-hover:text-purple-600" />}
                         ariaLabel="Edit assignment"
                         onClick={card.openAssignment}
                         className="group flex-shrink-0"

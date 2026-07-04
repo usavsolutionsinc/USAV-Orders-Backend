@@ -64,11 +64,11 @@ export default function SubstitutionLiveDemoPage() {
 
   return (
     <QueryClientProvider client={qc}>
-      <div className="min-h-screen bg-gray-50 p-10" data-testid="substitution-live-demo">
-        <h1 className="mb-6 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+      <div className="min-h-screen bg-surface-canvas p-10" data-testid="substitution-live-demo">
+        <h1 className="mb-6 text-eyebrow font-black uppercase tracking-widest text-text-soft">
           SubstituteUnitCard — real container + hooks (mocked API)
         </h1>
-        <div className="max-w-xl rounded-xl border border-gray-200 bg-white p-4">
+        <div className="max-w-xl rounded-xl border border-border-soft bg-surface-card p-4">
           <SubstituteUnitCard orderId={ORDER_ID} orderLabel="#A-10472" />
         </div>
       </div>

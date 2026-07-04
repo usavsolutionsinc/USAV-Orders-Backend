@@ -95,7 +95,7 @@ export function ShippingInformationSection({
       ? 'text-micro font-black uppercase tracking-wide text-red-600'
       : daysLate === 1
         ? 'text-micro font-black uppercase tracking-wide text-yellow-600'
-        : 'text-micro font-black uppercase tracking-wide text-gray-500';
+        : 'text-micro font-black uppercase tracking-wide text-text-soft';
 
   return (
     <section className="space-y-6">
@@ -112,7 +112,7 @@ export function ShippingInformationSection({
       {showReturnInformation && shipped.packed_at && shipped.packed_at !== '1' ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Return Info</h3>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-default">Return Info</h3>
             <CopyActionIcon
               value={returnsCopyText}
               ariaLabel="Copy all return details"
@@ -134,24 +134,24 @@ export function ShippingInformationSection({
             <SerialNumbersRow serials={serialNumberRows} />
             <DetailsPanelRow label="Tested By">
               <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-sm font-bold text-gray-900">{techNameDisplay}</p>
+                <p className="truncate text-sm font-bold text-text-default">{techNameDisplay}</p>
                 <DateTimeValue value={shipped.test_date_time} />
               </div>
             </DetailsPanelRow>
             <DetailsPanelRow label="Packed By">
               <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-sm font-bold text-gray-900">{packerNameDisplay}</p>
+                <p className="truncate text-sm font-bold text-text-default">{packerNameDisplay}</p>
                 <DateTimeValue value={packedAtSource} />
               </div>
             </DetailsPanelRow>
             <DetailsPanelRow label="Scanned Out">
               {isScannedOut ? (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="truncate text-sm font-bold text-gray-900">{scannedOutByDisplay}</p>
+                  <p className="truncate text-sm font-bold text-text-default">{scannedOutByDisplay}</p>
                   <DateTimeValue value={shipped.ship_confirmed_at} />
                 </div>
               ) : (
-                <p className="text-sm font-bold text-gray-400">N/A</p>
+                <p className="text-sm font-bold text-text-faint">N/A</p>
               )}
             </DetailsPanelRow>
           </div>
@@ -161,7 +161,7 @@ export function ShippingInformationSection({
       {showShippingInformation ? (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Edit Details</h3>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-default">Edit Details</h3>
           <div className="flex items-center gap-1">
             {onCopyAll ? (
               <HoverTooltip label="Copy all shipped details" asChild>
@@ -169,8 +169,8 @@ export function ShippingInformationSection({
                   onClick={onCopyAll}
                   ariaLabel="Copy all shipped details"
                   icon={copiedAll ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  className={`flex h-6 w-6 items-center justify-center rounded-md hover:bg-gray-100 ${
-                    copiedAll ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-700'
+                  className={`flex h-6 w-6 items-center justify-center rounded-md hover:bg-surface-sunken ${
+                    copiedAll ? 'text-emerald-600' : 'text-text-faint hover:text-text-muted'
                   }`}
                 />
               </HoverTooltip>
@@ -180,7 +180,7 @@ export function ShippingInformationSection({
                 onClick={modal.openEditModal}
                 ariaLabel="Edit shipping information"
                 icon={<Pencil className="h-3.5 w-3.5" />}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-text-faint hover:bg-surface-sunken hover:text-text-muted"
               />
             </HoverTooltip>
           </div>
@@ -189,7 +189,7 @@ export function ShippingInformationSection({
         <div className="space-y-0">
           {showShippingTimestamp && (
             <DetailsPanelRow label="Shipped">
-              <p className="text-sm font-bold text-gray-900">
+              <p className="text-sm font-bold text-text-default">
                 {packedAtSource ? formatDateTimePST(packedAtSource) : 'N/A'}
               </p>
             </DetailsPanelRow>
@@ -267,7 +267,7 @@ export function ShippingInformationSection({
               {metaFields.packedByName ? (
                 <DetailsPanelRow label="Packed By">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
+                    <p className="truncate text-sm font-bold text-text-default">{metaFields.packedByName}</p>
                     <DateTimeValue value={packedAtSource} />
                   </div>
                 </DetailsPanelRow>
@@ -275,7 +275,7 @@ export function ShippingInformationSection({
               {metaFields.testedByName ? (
                 <DetailsPanelRow label="Tested By">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
+                    <p className="truncate text-sm font-bold text-text-default">{metaFields.testedByName}</p>
                     <DateTimeValue value={shipped.test_date_time} />
                   </div>
                 </DetailsPanelRow>

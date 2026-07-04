@@ -69,7 +69,7 @@ export const RedesignedBottomNav = () => {
         w-full h-16 pb-[env(safe-area-inset-bottom)]
         ${TOKENS.colors.surface}
         flex items-center justify-around px-2
-        border-t border-slate-200/70 backdrop-blur-3xl
+        border-t border-border-soft/70 backdrop-blur-3xl
         pointer-events-auto
       `}>
         {tabs.map((tab) => {
@@ -112,13 +112,13 @@ export const RedesignedBottomNav = () => {
                   scale: isActive ? 1.15 : 1,
                   y: isActive ? -2 : 0
                 }}
-                className={isActive ? 'text-blue-600' : 'text-slate-400'}
+                className={isActive ? 'text-blue-600' : 'text-text-faint'}
               >
                 <Icon className={`h-6 w-6 ${isActive ? 'fill-blue-600/10' : ''}`} />
               </motion.div>
               <span className={`
                 text-eyebrow font-black uppercase tracking-[0.1em] truncate w-full px-1 transition-colors
-                ${isActive ? 'text-blue-600' : 'text-slate-400'}
+                ${isActive ? 'text-blue-600' : 'text-text-faint'}
               `}>
                 {tab.label}
               </span>

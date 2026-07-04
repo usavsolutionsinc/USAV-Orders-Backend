@@ -43,15 +43,15 @@ export function WeeklyScheduleTable({
     : 'grid-cols-[minmax(320px,1fr)_repeat(5,minmax(54px,1fr))]';
 
   return (
-    <div className="overflow-x-auto border border-gray-200 bg-white">
+    <div className="overflow-x-auto border border-border-soft bg-surface-card">
       <div className="min-w-[980px]">
-        <div className={`grid ${gridCols} items-center border-b border-gray-200 bg-gray-50 px-4 py-2.5`}>
+        <div className={`grid ${gridCols} items-center border-b border-border-soft bg-surface-canvas px-4 py-2.5`}>
           <span className={tableHeader}>Staff</span>
           {thisWeekDays.map((day) => (
             <span
               key={`header-${day.date}`}
               className={`${tableHeader} text-center ${
-                day.date === todayDateKey ? 'text-gray-900' : ''
+                day.date === todayDateKey ? 'text-text-default' : ''
               }`}
             >
               {day.label} {day.date.slice(5)}
@@ -76,8 +76,8 @@ export function WeeklyScheduleTable({
           return (
             <div
               key={member.id}
-              className={`grid ${gridCols} items-center border-b border-gray-100 px-4 py-2.5 ${
-                !member.active ? 'bg-gray-50 text-gray-500' : 'bg-white'
+              className={`grid ${gridCols} items-center border-b border-border-hairline px-4 py-2.5 ${
+                !member.active ? 'bg-surface-canvas text-text-soft' : 'bg-surface-card'
               }`}
             >
               <div className="flex min-w-0 items-center gap-2.5 pr-3">
@@ -131,9 +131,9 @@ export function WeeklyScheduleTable({
                             ? 'border-red-200 bg-red-50 text-red-700'
                             : isScheduled
                               ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : 'border-gray-200 bg-gray-50 text-gray-500',
+                              : 'border-border-soft bg-surface-canvas text-text-soft',
                         isToday ? 'outline outline-1 outline-gray-900/30' : '',
-                        isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
+                        isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-border-emphasis',
                       ].join(' ')}
                       aria-pressed={isScheduled}
                       aria-label={`${member.name} ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}

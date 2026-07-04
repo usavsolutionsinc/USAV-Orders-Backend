@@ -17,8 +17,8 @@ type Tab = 'details' | 'tags';
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{label}</p>
-      <div className="text-label text-gray-700">{children}</div>
+      <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">{label}</p>
+      <div className="text-label text-text-muted">{children}</div>
     </div>
   );
 }
@@ -54,7 +54,7 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
             'ds-raw-button relative mt-0.5 shrink-0 rounded-lg border p-1.5 transition',
             open
               ? 'border-blue-300 bg-blue-50 text-blue-700'
-              : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700',
+              : 'border-border-soft text-text-soft hover:bg-surface-hover hover:text-text-muted',
           )}
         >
           <Layers className="h-3.5 w-3.5" />
@@ -67,9 +67,9 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
       </HoverTooltip>
 
       <AnchoredLayer open={open} onClose={() => setOpen(false)} anchorRef={anchorRef} placement="bottom-end" gap={4}>
-        <div className="w-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+        <div className="w-72 overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-xl">
           {/* Tab strip */}
-          <div className="flex border-b border-gray-100">
+          <div className="flex border-b border-border-hairline">
             {(['details', 'tags'] as const).map((t) => (
               <button
                 key={t}
@@ -79,7 +79,7 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
                   'ds-raw-button flex-1 px-3 py-2 text-micro font-black uppercase tracking-widest transition',
                   tab === t
                     ? 'border-b-2 border-blue-500 text-blue-700'
-                    : 'text-gray-400 hover:text-gray-600',
+                    : 'text-text-faint hover:text-text-muted',
                 )}
               >
                 {t === 'details' ? 'Details' : `Tags${tagCount ? ` · ${tagCount}` : ''}`}
@@ -91,8 +91,8 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
             {tab === 'details' ? (
               <div className="space-y-3">
                 <Field label="Requester">
-                  <span className="font-semibold text-gray-800">{requester.name || 'Requester'}</span>
-                  {requester.email ? <span className="block text-gray-500">{requester.email}</span> : null}
+                  <span className="font-semibold text-text-default">{requester.name || 'Requester'}</span>
+                  {requester.email ? <span className="block text-text-soft">{requester.email}</span> : null}
                 </Field>
                 <Field label="Ticket">#{ticket.id}</Field>
                 <div className="flex gap-6">
@@ -107,7 +107,7 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
                         {pb.label}
                       </span>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-text-faint">—</span>
                     )}
                   </Field>
                 </div>
@@ -122,7 +122,7 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
                   placeholder="Add a tag…"
                   onChange={(tags) => update.mutate({ id: ticket.id, patch: { tags } })}
                 />
-                <p className="text-micro text-gray-400">Tags sync to Zendesk.</p>
+                <p className="text-micro text-text-faint">Tags sync to Zendesk.</p>
               </div>
             )}
           </div>

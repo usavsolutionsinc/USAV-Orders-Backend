@@ -55,9 +55,9 @@ export function StationWeekTable<T>({
 }: StationWeekTableProps<T>) {
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
-        <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
-          <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+      <div className="flex-1 flex flex-col bg-surface-canvas overflow-hidden">
+        <div className="h-10 bg-surface-card border-b border-border-hairline flex items-center px-4">
+          <div className="h-4 w-32 bg-surface-sunken rounded animate-pulse" />
         </div>
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <SkeletonList count={12} />
@@ -69,7 +69,7 @@ export function StationWeekTable<T>({
   const weekCount = sumDaySectionCounts(daySections);
 
   const body = (
-    <div className="relative flex h-full w-full bg-white">
+    <div className="relative flex h-full w-full bg-surface-card">
       {isRefreshing && (
         <div className="absolute right-2 top-2 z-30">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" />
@@ -87,7 +87,7 @@ export function StationWeekTable<T>({
         <div ref={scrollRef} data-testid="column-table-body" className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {daySections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
-              <p className="font-medium italic text-gray-500 opacity-20">{emptyMessage}</p>
+              <p className="font-medium italic text-text-soft opacity-20">{emptyMessage}</p>
             </div>
           ) : (
             <div className="flex flex-col w-full">

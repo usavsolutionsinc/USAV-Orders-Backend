@@ -2,6 +2,7 @@ import Ably from 'ably';
 import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import pool from '@/lib/db';
 import {
+  getAiAssistChannelName,
   getAiAssistSessionChannelName,
   getDashboardChannelName,
   getFbaChannelName,
@@ -575,6 +576,25 @@ export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
     prompt: payload.prompt,
     answer: payload.answer,
     model: payload.model,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+/** AI write path (universal-feed plan §2.6): apply/propose/revert of an
+ *  agent_mutation, so the assistant dock's AI-edits tray repaints live. */
+export async function publishAssistantMutation(payload: {
+  organizationId: string;
+  mutationId: number;
+  mutationKind: string;
+  action: string;
+  targetRef: string | null;
+}) {
+  await publishEvent(getAiAssistChannelName(payload.organizationId), 'assistant.mutation', {
+    type: 'assistant.mutation',
+    mutationId: payload.mutationId,
+    mutationKind: payload.mutationKind,
+    action: payload.action,
+    targetRef: payload.targetRef,
     timestamp: formatPSTTimestamp(),
   });
 }

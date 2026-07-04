@@ -26,15 +26,15 @@ export function PhotoTicketGrid({
     <div className="space-y-5">
       {groups.map((group) => (
         <section key={group.key}>
-          <header className="mb-2 flex items-center gap-2 border-b border-gray-100 pb-1.5">
-            <Layers className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-            <span className="truncate text-sm font-semibold text-gray-900">
+          <header className="mb-2 flex items-center gap-2 border-b border-border-hairline pb-1.5">
+            <Layers className="h-3.5 w-3.5 shrink-0 text-text-faint" />
+            <span className="truncate text-sm font-semibold text-text-default">
               {group.label}
             </span>
-            <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-bold tabular-nums text-gray-500">
+            <span className="shrink-0 rounded-full bg-surface-sunken px-1.5 py-0.5 text-micro font-bold tabular-nums text-text-soft">
               {group.photos.length}
             </span>
-            <time className="ml-auto shrink-0 text-micro tabular-nums text-gray-400">
+            <time className="ml-auto shrink-0 text-micro tabular-nums text-text-faint">
               {formatDateTimePST(group.latestAt)}
             </time>
           </header>

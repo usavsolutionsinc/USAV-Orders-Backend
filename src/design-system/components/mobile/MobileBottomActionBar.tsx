@@ -117,7 +117,7 @@ export function MobileBottomActionBar({
   const dockChromeClass =
     chrome === 'ghost'
       ? 'px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
-      : 'bg-white border-t border-gray-100 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.03)]';
+      : 'bg-surface-card border-t border-border-hairline px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.03)]';
 
   return (
     <div className={dockChromeClass}>
@@ -138,7 +138,7 @@ export function MobileBottomActionBar({
                 <button
                   type="button"
                   onClick={() => handleSetMode('idle')}
-                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 active:scale-90 transition-all"
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-surface-sunken text-text-muted active:scale-90 transition-all"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -151,9 +151,9 @@ export function MobileBottomActionBar({
                       value={searchValue}
                       onChange={(e) => onSearchChange(e.target.value)}
                       placeholder={searchPlaceholder}
-                      className={`w-full h-12 rounded-2xl bg-gray-50 text-sm font-bold text-gray-900 border border-gray-200 outline-none focus:ring-4 focus:ring-${themeColor}-500/10 ${searchIcon ? 'pl-11' : 'pl-4'} pr-4`}
+                      className={`w-full h-12 rounded-2xl bg-surface-canvas text-sm font-bold text-text-default border border-border-soft outline-none focus:ring-4 focus:ring-${themeColor}-500/10 ${searchIcon ? 'pl-11' : 'pl-4'} pr-4`}
                     />
-                    {isLoading && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-gray-400" />}
+                    {isLoading && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-text-faint" />}
                   </div>
                 </form>
               </motion.div>
@@ -169,7 +169,7 @@ export function MobileBottomActionBar({
                 <button
                   type="button"
                   onClick={() => handleSetMode('idle')}
-                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 text-white active:scale-90 transition-all"
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-surface-inverse text-white active:scale-90 transition-all"
                 >
                   <SlidersHorizontal className="h-5 w-5" />
                 </button>
@@ -193,7 +193,7 @@ export function MobileBottomActionBar({
                     handleSetMode('search');
                   }}
                   aria-label={onQueueFilterPress ? 'Filter list' : 'Search'}
-                  className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-700 shadow-sm active:bg-gray-200 transition-colors"
+                  className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-sunken text-text-muted shadow-sm active:bg-surface-strong transition-colors"
                 >
                   <Search className="h-6 w-6" />
                 </button>
@@ -201,7 +201,7 @@ export function MobileBottomActionBar({
                   <button
                     type="button"
                     onClick={() => handleSetMode('filter')}
-                    className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-700 shadow-sm active:bg-gray-200 transition-colors"
+                    className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-sunken text-text-muted shadow-sm active:bg-surface-strong transition-colors"
                     aria-label="Quick filters"
                   >
                     <SlidersHorizontal className="h-6 w-6" />

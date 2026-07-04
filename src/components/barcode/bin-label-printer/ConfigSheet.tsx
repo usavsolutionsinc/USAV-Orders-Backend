@@ -43,7 +43,7 @@ export function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps)
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Configure counts">
-      <p className="mb-4 text-center text-label text-gray-500">
+      <p className="mb-4 text-center text-label text-text-soft">
         Match these to your warehouse layout. Saved locally — no rebuild required.
       </p>
 
@@ -55,22 +55,22 @@ export function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps)
       </div>
 
       <div className="mt-4">
-        <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+        <label className="text-micro font-semibold uppercase tracking-wider text-text-soft">
           GLN (Global Location Number)
         </label>
         <input
           type="text"
           value={draft.gln}
           onChange={(e) => set('gln')(e.target.value)}
-          className="mt-1 h-11 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 font-mono text-sm font-semibold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
+          className="mt-1 h-11 w-full rounded-2xl border border-border-default bg-surface-canvas px-4 font-mono text-sm font-semibold text-text-default outline-none focus:border-blue-500 focus:bg-surface-card focus:ring-2 focus:ring-blue-200"
         />
-        <p className="mt-1 text-micro text-gray-400">
+        <p className="mt-1 text-micro text-text-faint">
           Default is the GS1 documentation placeholder ({DEFAULT_GLN}). Replace once registered with
           GS1 US.
         </p>
       </div>
 
-      <div className="mt-3 text-micro text-gray-400">
+      <div className="mt-3 text-micro text-text-faint">
         Domain in QR: <span className="font-mono">{QR_BASE_URL}</span>
       </div>
 
@@ -106,7 +106,7 @@ function NumField({
 }) {
   return (
     <div>
-      <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+      <label className="text-micro font-semibold uppercase tracking-wider text-text-soft">
         {label}
       </label>
       <input
@@ -116,7 +116,7 @@ function NumField({
         max={99}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 h-12 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 text-center text-lg font-semibold tabular-nums text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
+        className="mt-1 h-12 w-full rounded-2xl border border-border-default bg-surface-canvas px-4 text-center text-lg font-semibold tabular-nums text-text-default outline-none focus:border-blue-500 focus:bg-surface-card focus:ring-2 focus:ring-blue-200"
       />
     </div>
   );

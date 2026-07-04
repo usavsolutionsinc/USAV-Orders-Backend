@@ -17,9 +17,9 @@ export const TOKENS = {
     primaryDark: 'blue-800',
     primaryGradient: 'from-blue-600 to-blue-800',
     primarySoft: 'bg-blue-50 text-blue-600',
-    background: 'bg-slate-50', // Clean slate-50 as base
-    surface: 'bg-white/80 backdrop-blur-2xl',
-    card: 'bg-white shadow-[0_8px_30px_rgb(59,130,246,0.06)] ring-1 ring-blue-100/50',
+    background: 'bg-surface-canvas', // Clean slate-50 as base
+    surface: 'bg-surface-card/80 backdrop-blur-2xl',
+    card: 'bg-surface-card shadow-[0_8px_30px_rgb(59,130,246,0.06)] ring-1 ring-blue-100/50',
     glass: 'bg-blue-50/50 backdrop-blur-xl border border-blue-100/50 shadow-[0_8px_32px_0_rgba(37,99,235,0.08)]',
     text: {
       primary: 'text-blue-950', // Deepest blue for text
@@ -172,7 +172,7 @@ export const GlassButton = ({
   const variants = {
     primary: "bg-blue-600 text-white shadow-xl shadow-blue-600/20",
     blue: "bg-blue-950 text-white shadow-xl shadow-blue-950/20",
-    secondary: "bg-white border border-blue-100 text-blue-600 shadow-sm",
+    secondary: "bg-surface-card border border-blue-100 text-blue-600 shadow-sm",
     ghost: "bg-transparent text-blue-400"
   };
   const variantToButton: Record<typeof variant, ButtonVariant> = {

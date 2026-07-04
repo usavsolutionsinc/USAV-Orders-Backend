@@ -26,7 +26,7 @@ export function IdentityCard({
   const primaryRole = roles[0];
 
   return (
-    <section className={`rounded-2xl border ${borderClass} bg-white p-5 shadow-sm`}>
+    <section className={`rounded-2xl border ${borderClass} bg-surface-card p-5 shadow-sm`}>
       <div className="flex items-start gap-4">
         <div className={`relative flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full ${avatarBgClass} text-xl font-bold text-white ring-4 ring-white shadow`}>
           {initials(staff.name)}
@@ -47,7 +47,7 @@ export function IdentityCard({
             })}
           />
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-caption text-gray-400">#{staff.id}</span>
+            <span className="text-caption text-text-faint">#{staff.id}</span>
             {isAdmin && (
               <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-amber-900 ring-1 ring-amber-200">
                 All Access
@@ -58,7 +58,7 @@ export function IdentityCard({
             {/* Primary role — selecting REPLACES this staffer's entire role set
                 with the chosen one. staff.role is mirrored server-side. */}
             <label className="inline-flex items-center gap-2">
-              <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Primary</span>
+              <span className="text-micro font-semibold uppercase tracking-wider text-text-soft">Primary</span>
               <HoverTooltip label="Replaces this staffer's roles with the selected one." asChild>
                 <select
                   value={primaryRole?.id ?? ''}
@@ -67,7 +67,7 @@ export function IdentityCard({
                     if (Number.isFinite(id) && id > 0) onSetRoles([id]);
                   }}
                   disabled={busyRoles}
-                  className="h-7 rounded-full bg-gray-100 px-2.5 text-micro font-bold uppercase tracking-wider text-gray-700 outline-none ring-1 ring-gray-200 transition disabled:opacity-60"
+                  className="h-7 rounded-full bg-surface-sunken px-2.5 text-micro font-bold uppercase tracking-wider text-text-muted outline-none ring-1 ring-border-soft transition disabled:opacity-60"
                   style={primaryRole ? { color: primaryRole.color } : undefined}
                 >
                   {!primaryRole && <option value="">no roles</option>}
@@ -81,12 +81,12 @@ export function IdentityCard({
               </HoverTooltip>
             </label>
             <label className="inline-flex items-center gap-2">
-              <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Status</span>
+              <span className="text-micro font-semibold uppercase tracking-wider text-text-soft">Status</span>
               <select
                 value={STATUS_OPTIONS.includes(staff.status as typeof STATUS_OPTIONS[number]) ? staff.status : 'active'}
                 onChange={(e) => onPatchBasic({ status: e.target.value })}
                 disabled={busyBasic}
-                className="h-7 rounded-full bg-gray-100 px-2.5 text-micro font-bold uppercase tracking-wider text-gray-700 outline-none ring-1 ring-gray-200 transition"
+                className="h-7 rounded-full bg-surface-sunken px-2.5 text-micro font-bold uppercase tracking-wider text-text-muted outline-none ring-1 ring-border-soft transition"
               >
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -115,8 +115,8 @@ function InlineNameAndCode({ name, code, onSave }: {
     return (
       // ds-raw-button
       <button type="button" onClick={() => setEditing(true)} className="group flex flex-wrap items-baseline gap-2 text-left">
-        <span className="truncate text-2xl font-semibold tracking-tight text-gray-900 group-hover:underline">{name}</span>
-        {code && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-gray-600">{code}</span>}
+        <span className="truncate text-2xl font-semibold tracking-tight text-text-default group-hover:underline">{name}</span>
+        {code && <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-text-muted">{code}</span>}
         <span className="text-micro text-blue-600 opacity-0 transition group-hover:opacity-100">Edit</span>
       </button>
     );
@@ -125,9 +125,9 @@ function InlineNameAndCode({ name, code, onSave }: {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <input autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
-        className="h-9 min-w-[180px] flex-1 rounded-md border border-gray-300 px-2 text-base font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15" />
+        className="h-9 min-w-[180px] flex-1 rounded-md border border-border-default px-2 text-base font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15" />
       <input value={draftCode} onChange={(e) => setDraftCode(e.target.value)} placeholder="Employee code"
-        className="h-9 w-36 rounded-md border border-gray-300 px-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15" />
+        className="h-9 w-36 rounded-md border border-border-default px-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15" />
       <Button variant="brand" size="md" onClick={() => { onSave(draftName.trim() || name, draftCode.trim()); setEditing(false); }}>
         Save
       </Button>

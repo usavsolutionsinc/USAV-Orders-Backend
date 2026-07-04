@@ -78,7 +78,7 @@ export function ShippedLaneTable({
   if (daySections.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center">
-        <p className="text-gray-500 font-semibold italic opacity-20">{emptyMessage}</p>
+        <p className="text-text-soft font-semibold italic opacity-20">{emptyMessage}</p>
       </div>
     );
   }

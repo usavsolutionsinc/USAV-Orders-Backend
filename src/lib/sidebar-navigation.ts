@@ -49,6 +49,7 @@ import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 export type SidebarRouteKey =
   | 'dashboard'
   | 'operations'
+  | 'signals'
   | 'ops-photos'
   | 'studio'
   | 'fba'
@@ -118,6 +119,7 @@ export function isMobileAllowedPath(pathname: string | null | undefined): boolea
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'operations',        label: 'Operations',  href: '/operations',         icon: Monitor,         kind: 'main',    requires: 'operations.view' },
+  { id: 'signals',           label: 'Signals',     href: '/signals',            icon: Activity,        kind: 'main',    requires: 'operations.view' },
   { id: 'dashboard',         label: 'Orders / Shipping', href: '/dashboard',    icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
   { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
   { id: 'sourcing',          label: 'Sourcing',    href: '/sourcing',           icon: Search,          kind: 'main',    requires: 'sourcing.view' },
@@ -177,6 +179,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'dashboard';
   if (pathname === '/operations' || pathname.startsWith('/operations/')) return 'operations';
+  if (pathname === '/signals' || pathname.startsWith('/signals/')) return 'signals';
   if (pathname === '/ops/photos' || pathname.startsWith('/ops/photos/')) return 'ops-photos';
   if (pathname === '/studio' || pathname.startsWith('/studio/')) return 'studio';
   if (pathname === '/fba' || pathname.startsWith('/fba/')) return 'fba';
@@ -234,6 +237,7 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/admin',              permission: 'admin.view' },
   { prefix: '/ops/photos',           permission: 'photos.view' },
   { prefix: '/operations',         permission: 'operations.view' },
+  { prefix: '/signals',            permission: 'operations.view' },
   { prefix: '/dashboard',          permission: 'dashboard.view' },
   { prefix: '/fba',                permission: 'fba.view' },
   { prefix: '/walk-in',            permission: 'walk_in.view' },

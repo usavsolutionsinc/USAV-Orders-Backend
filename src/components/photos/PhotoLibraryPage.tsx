@@ -552,7 +552,7 @@ export function PhotoLibraryPage() {
 
   return (
     <RightPaneOverlayHost className="flex h-full min-h-0 flex-col">
-    <div className="relative flex h-full min-h-0 flex-col bg-white">
+    <div className="relative flex h-full min-h-0 flex-col bg-surface-card">
       <PhotoLibraryHeader
         title={title}
         metaLine={metaLine}
@@ -585,7 +585,7 @@ export function PhotoLibraryPage() {
           onClear={exitSelectMode}
         />
       ) : (
-        <div className="flex h-[40px] shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white px-4">
+        <div className="flex h-[40px] shrink-0 items-center justify-between gap-2 border-b border-border-soft bg-surface-card px-4">
           <PhotoDateBreadcrumb
             filters={displayFilters}
             today={today}
@@ -633,7 +633,7 @@ export function PhotoLibraryPage() {
         {query.hasNextPage ? (
           <div
             ref={sentinelRef}
-            className="flex items-center justify-center py-6 text-micro font-bold uppercase tracking-widest text-gray-400"
+            className="flex items-center justify-center py-6 text-micro font-bold uppercase tracking-widest text-text-faint"
           >
             {query.isFetchingNextPage ? (
               <>
@@ -642,7 +642,7 @@ export function PhotoLibraryPage() {
             ) : null}
           </div>
         ) : !query.isLoading && photos.length > 0 ? (
-          <p className="mt-6 text-center text-micro font-bold uppercase tracking-widest text-gray-400">
+          <p className="mt-6 text-center text-micro font-bold uppercase tracking-widest text-text-faint">
             {`Showing all ${photos.length} photo${photos.length === 1 ? '' : 's'}`}
           </p>
         ) : null}

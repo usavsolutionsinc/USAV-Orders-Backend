@@ -81,7 +81,7 @@ export function TriageScanBand({
         inputBorderClassName={inputBorderClassName}
         hasRightContent={isResolving}
         rightContent={
-          isResolving ? <Loader2 className="h-4 w-4 animate-spin text-gray-700" /> : null
+          isResolving ? <Loader2 className="h-4 w-4 animate-spin text-text-muted" /> : null
         }
       />
     </ScanBandShell>

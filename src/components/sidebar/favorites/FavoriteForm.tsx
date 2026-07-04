@@ -11,22 +11,22 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
   const { draft, setDraft, selectedProduct, setSelectedProduct, searchValue, setSearchValue, searchingProducts, searchResults, editingFavoriteId, isSaving } = f;
 
   return (
-    <div className="space-y-2 border-y border-gray-200 py-3">
+    <div className="space-y-2 border-y border-border-soft py-3">
       {/* Ecwid product search */}
-      <div className="rounded-xl border border-gray-200 bg-white">
+      <div className="rounded-xl border border-border-soft bg-surface-card">
         <input
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           placeholder="Search Ecwid product by name or SKU"
-          className="w-full rounded-xl border-0 bg-transparent px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none placeholder:text-gray-500"
+          className="w-full rounded-xl border-0 bg-transparent px-3 py-2.5 text-caption font-semibold text-text-default outline-none placeholder:text-text-soft"
         />
         {searchingProducts ? (
-          <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5 text-gray-500">
+          <div className="flex items-center gap-2 border-t border-border-hairline px-3 py-2.5 text-text-soft">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             <p className={tableHeader}>Searching…</p>
           </div>
         ) : searchResults.length > 0 ? (
-          <div className={`${searchResultsMaxHeightClass} divide-y divide-gray-100 overflow-y-auto border-t border-gray-100`}>
+          <div className={`${searchResultsMaxHeightClass} divide-y divide-border-hairline overflow-y-auto border-t border-border-hairline`}>
             {searchResults.map((product) => {
               const isSelected = selectedProduct?.id === product.id;
               return (
@@ -38,18 +38,18 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
                     if (!draft.label.trim()) setDraft((prev) => ({ ...prev, label: product.name }));
                   }}
                   /* ds-raw-button: multi-line text-left product result row (name + price + sku, selection bg) — not a Button shape */
-                  className={`ds-raw-button flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                  className={`ds-raw-button flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-surface-hover'}`}
                 >
                   {isSelected && <Check className="mt-0.5 h-3 w-3 shrink-0 text-blue-600" />}
                   <div className="min-w-0 flex-1">
-                    <p className={`text-caption font-black leading-snug tracking-tight ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>
+                    <p className={`text-caption font-black leading-snug tracking-tight ${isSelected ? 'text-blue-700' : 'text-text-default'}`}>
                       {product.name}
                     </p>
                     <div className="mt-0.5 flex w-full min-w-0 items-center justify-start gap-2">
                       <span className="shrink-0 text-micro font-bold tabular-nums text-emerald-600">
                         {product.price != null ? `$${product.price.toFixed(2)}` : ''}
                       </span>
-                      <span className={`min-w-0 truncate text-micro font-bold uppercase tracking-[0.14em] ${isSelected ? 'text-blue-500' : 'text-gray-500'}`}>
+                      <span className={`min-w-0 truncate text-micro font-bold uppercase tracking-[0.14em] ${isSelected ? 'text-blue-500' : 'text-text-soft'}`}>
                         {product.sku || 'No SKU'}
                       </span>
                     </div>
@@ -59,7 +59,7 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
             })}
           </div>
         ) : searchValue.trim() ? (
-          <div className={`border-t border-gray-100 px-3 py-2.5 ${tableHeader}`}>
+          <div className={`border-t border-border-hairline px-3 py-2.5 ${tableHeader}`}>
             {searchSkuSuffixFilter ? `No ${searchSkuSuffixFilter.toUpperCase()} SKUs found` : 'No products found'}
           </div>
         ) : null}
@@ -67,7 +67,7 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
 
       {/* Selected product — two rows */}
       {selectedProduct && (
-        <div className="rounded-xl border border-blue-200 bg-white px-3 py-2">
+        <div className="rounded-xl border border-blue-200 bg-surface-card px-3 py-2">
           <p className="text-caption font-black leading-snug text-blue-900">{selectedProduct.name}</p>
           <div className="mt-0.5 flex w-full min-w-0 items-center justify-start gap-2">
             <span className="shrink-0 text-micro font-bold tabular-nums text-emerald-600">
@@ -84,7 +84,7 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
         value={draft.label}
         onChange={(e) => setDraft((prev) => ({ ...prev, label: e.target.value }))}
         placeholder="Label"
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none focus:border-blue-300"
+        className="w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2.5 text-caption font-semibold text-text-default outline-none focus:border-blue-300"
       />
 
       {allowRepairDefaults && (
@@ -92,7 +92,7 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
           value={draft.issueTemplate}
           onChange={(e) => setDraft((prev) => ({ ...prev, issueTemplate: e.target.value }))}
           placeholder="Issue template"
-          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none focus:border-blue-300"
+          className="w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2.5 text-caption font-semibold text-text-default outline-none focus:border-blue-300"
         />
       )}
 
@@ -101,7 +101,7 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
         onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))}
         placeholder="Notes"
         rows={2}
-        className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none focus:border-blue-300"
+        className="w-full resize-none rounded-xl border border-border-soft bg-surface-card px-3 py-2.5 text-caption font-semibold text-text-default outline-none focus:border-blue-300"
       />
 
       {/* Footer */}

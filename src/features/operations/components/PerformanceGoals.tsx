@@ -69,7 +69,7 @@ function RadialRing({ percentage, label, countLabel, color, ringBgColor }: Radia
 
 export function PerformanceGoals() {
   return (
-    <section className="bg-white rounded-3xl shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-8 select-none">
+    <section className="bg-surface-card rounded-3xl shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-8 select-none">
       {/* ── Section Header ─────────────────────────────────────── */}
       <div className="mb-8">
         <span className={`${sectionLabel} !text-text-muted`}>PERFORMANCE TRACKER</span>

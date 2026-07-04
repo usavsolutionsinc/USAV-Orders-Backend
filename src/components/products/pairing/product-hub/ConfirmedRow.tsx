@@ -38,21 +38,21 @@ export function ConfirmedRow({
     >
       <Check className={`h-3.5 w-3.5 shrink-0 ${willUnpair ? 'text-orange-500' : 'text-emerald-600'}`} />
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-bold text-gray-900">
+        <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-bold text-text-default">
           <CopyableId value={value} />
           {secondary ? (
             <>
-              <span className="shrink-0 text-gray-400">·</span>
+              <span className="shrink-0 text-text-faint">·</span>
               <CopyableId value={secondary} />
             </>
           ) : null}
           {confirmed.accountName && (
-            <span className="shrink-0 truncate text-micro font-medium uppercase tracking-wider text-gray-500">
+            <span className="shrink-0 truncate text-micro font-medium uppercase tracking-wider text-text-soft">
               {confirmed.accountName}
             </span>
           )}
         </div>
-        {rowTitle && <p className="truncate text-micro text-gray-500">{rowTitle}</p>}
+        {rowTitle && <p className="truncate text-micro text-text-soft">{rowTitle}</p>}
       </div>
       {confirmed.listingUrl && (
         <HoverTooltip label={isPreviewing ? 'Showing in preview pane' : 'Preview listing below'} asChild>
@@ -63,7 +63,7 @@ export function ConfirmedRow({
             tone="accent"
             onClick={() => onPreview(confirmed.listingUrl!, confirmed.listingTitle || value)}
             className={`shrink-0 rounded p-1 ${
-              isPreviewing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:bg-white'
+              isPreviewing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:bg-surface-card'
             }`}
           />
         </HoverTooltip>
@@ -74,7 +74,7 @@ export function ConfirmedRow({
           ariaLabel={willUnpair ? 'Cancel unpair' : 'Unpair'}
           onClick={() => onUnpair(confirmed)}
           className={`shrink-0 rounded p-1 ${
-            willUnpair ? 'bg-orange-500 text-white hover:bg-orange-600' : 'text-gray-400 hover:bg-white hover:text-orange-600'
+            willUnpair ? 'bg-orange-500 text-white hover:bg-orange-600' : 'text-text-faint hover:bg-surface-card hover:text-orange-600'
           }`}
         />
       </HoverTooltip>

@@ -18,6 +18,14 @@ import type { Pool, PoolClient } from 'pg';
  *
  * Best-effort + idempotent: an UPSERT keyed on sal_id, safe to call repeatedly.
  * Callers fire it via `after()` so it never blocks a mutation's response.
+ *
+ * Tenant scope (2026-07-01): every SKU-string lateral is org-scoped by
+ * `sal.organization_id` (sku_platform_ids / sku_catalog / sku_stock / orders),
+ * so a SKU string that collides across orgs can no longer bleed a foreign
+ * tenant's title into a row. RESIDUAL: the `v_sku` compat view (a projection of
+ * serial_units that drops organization_id) can't be predicate-filtered here; its
+ * SKU-string branch remains cross-org until v_sku exposes org (tracked with the
+ * tech_serial_numbers / serial-spine strangle).
  */
 
 type Queryable = Pool | PoolClient;
@@ -101,7 +109,7 @@ const ENRICHMENT_SELECT = /* sql */ `
           ord.id DESC
       LIMIT 1
   ) order_match ON TRUE
-  LEFT JOIN orders o ON o.id = order_match.id
+  LEFT JOIN orders o ON o.id = order_match.id AND o.organization_id = sal.organization_id
   LEFT JOIN LATERAL (
       SELECT COALESCE(
           NULLIF(BTRIM(sc_e.product_title), ''),
@@ -109,8 +117,10 @@ const ENRICHMENT_SELECT = /* sql */ `
       ) AS ecwid_product_title
       FROM sku_platform_ids sp_e
       LEFT JOIN sku_catalog sc_e ON sc_e.id = sp_e.sku_catalog_id
+        AND sc_e.organization_id = sal.organization_id
       WHERE sp_e.platform = 'ecwid'
         AND sp_e.is_active = true
+        AND sp_e.organization_id = sal.organization_id
         AND EXISTS (
           SELECT 1
           FROM UNNEST(ARRAY[
@@ -144,7 +154,8 @@ const ENRICHMENT_SELECT = /* sql */ `
   LEFT JOIN LATERAL (
       SELECT sc.product_title AS catalog_product_title
       FROM sku_catalog sc
-      WHERE EXISTS (
+      WHERE sc.organization_id = sal.organization_id
+        AND EXISTS (
           SELECT 1
           FROM UNNEST(ARRAY[
               NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
@@ -179,7 +190,8 @@ const ENRICHMENT_SELECT = /* sql */ `
   LEFT JOIN LATERAL (
       SELECT ss.product_title AS stock_product_title
       FROM sku_stock ss
-      WHERE EXISTS (
+      WHERE ss.organization_id = sal.organization_id
+        AND EXISTS (
           SELECT 1
           FROM UNNEST(ARRAY[
               NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),

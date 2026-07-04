@@ -6,11 +6,11 @@ import { copyValue } from './incoming-details-shared';
 // ── Tab subcomponents ──────────────────────────────────────────────────────
 export function Row({ label, value, copyValue: cv }: { label: string; value: React.ReactNode; copyValue?: string | null }) {
   return (
-    <div className="flex items-start gap-3 border-b border-gray-100 py-2 last:border-b-0">
-      <span className="w-36 shrink-0 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+    <div className="flex items-start gap-3 border-b border-border-hairline py-2 last:border-b-0">
+      <span className="w-36 shrink-0 text-eyebrow font-black uppercase tracking-wider text-text-soft">
         {label}
       </span>
-      <div className="min-w-0 flex-1 break-words text-caption font-semibold text-gray-900">
+      <div className="min-w-0 flex-1 break-words text-caption font-semibold text-text-default">
         {value}
       </div>
       {cv ? (
@@ -29,7 +29,7 @@ export function Row({ label, value, copyValue: cv }: { label: string; value: Rea
 
 export function Empty({ msg }: { msg: string }) {
   return (
-    <div className="flex h-32 items-center justify-center px-4 text-center text-caption font-medium text-gray-400">
+    <div className="flex h-32 items-center justify-center px-4 text-center text-caption font-medium text-text-faint">
       {msg}
     </div>
   );

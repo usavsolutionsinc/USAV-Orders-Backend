@@ -11,7 +11,7 @@ export function PhotoGridSkeleton() {
       aria-label="Loading photos"
     >
       {Array.from({ length: 24 }).map((_, i) => (
-        <div key={i} className="aspect-square animate-pulse rounded-lg bg-gray-100" />
+        <div key={i} className="aspect-square animate-pulse rounded-lg bg-surface-sunken" />
       ))}
     </div>
   );
@@ -20,10 +20,10 @@ export function PhotoGridSkeleton() {
 /** Teaching empty state — explains the filter, doesn't just say "nothing here". */
 export function PhotoEmptyState() {
   return (
-    <div className="mx-auto mt-6 flex max-w-sm flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center">
-      <ImageIcon className="h-6 w-6 text-gray-400" />
-      <p className="text-sm font-semibold text-gray-900">No photos in this view</p>
-      <p className="text-xs leading-relaxed text-gray-500">
+    <div className="mx-auto mt-6 flex max-w-sm flex-col items-center gap-2 rounded-xl border border-dashed border-border-soft bg-surface-canvas px-6 py-10 text-center">
+      <ImageIcon className="h-6 w-6 text-text-faint" />
+      <p className="text-sm font-semibold text-text-default">No photos in this view</p>
+      <p className="text-xs leading-relaxed text-text-soft">
         Unboxing, packing, and claim photos land here as staff capture them. Widen the
         source or date range in the sidebar to see more.
       </p>

@@ -42,28 +42,28 @@ export function MatchCard({ candidate, onLink, linking, anyLinking }: MatchCardP
       className={`group rounded-xl border px-3 py-2.5 transition-colors ${
         linked
           ? 'border-emerald-300 bg-emerald-50 ring-1 ring-inset ring-emerald-400'
-          : 'border-gray-200 bg-white hover:bg-gray-50'
+          : 'border-border-soft bg-surface-card hover:bg-surface-hover'
       }`}
     >
       <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-sunken text-text-soft">
           <ZendeskMark className="h-4 w-4" />
         </span>
 
         <div className="min-w-0 flex-1">
           {/* Eyebrow: source + ticket id */}
           <div className="flex items-center gap-1.5">
-            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
               Zendesk
             </span>
-            <span className="font-mono text-caption font-bold text-gray-700">#{candidate.id}</span>
+            <span className="font-mono text-caption font-bold text-text-muted">#{candidate.id}</span>
             {candidate.url ? (
               <HoverTooltip label="Open ticket in Zendesk" focusable={false}>
                 <a
                   href={candidate.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-gray-300 hover:text-blue-500"
+                  className="text-text-faint hover:text-blue-500"
                   aria-label={`Open Zendesk ticket ${candidate.id}`}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -74,7 +74,7 @@ export function MatchCard({ candidate, onLink, linking, anyLinking }: MatchCardP
           </div>
 
           {/* Title: ticket subject */}
-          <p className="mt-0.5 truncate text-caption font-bold text-gray-900">
+          <p className="mt-0.5 truncate text-caption font-bold text-text-default">
             {candidate.subject || 'Untitled ticket'}
           </p>
 
@@ -86,7 +86,7 @@ export function MatchCard({ candidate, onLink, linking, anyLinking }: MatchCardP
               {tone.label}
             </span>
             {age ? (
-              <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+              <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
                 {age}
               </span>
             ) : null}

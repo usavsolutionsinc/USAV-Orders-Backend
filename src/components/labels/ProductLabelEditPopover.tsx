@@ -21,9 +21,9 @@ export interface ProductLabelDraft {
   color: string;
 }
 
-const FIELD_LABEL = `${microBadge} mb-1.5 block text-gray-500 tracking-wider`;
+const FIELD_LABEL = `${microBadge} mb-1.5 block text-text-soft tracking-wider`;
 const TEXT_INPUT =
-  'w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-label text-gray-900 outline-none transition-colors focus:border-blue-500';
+  'w-full rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5 text-label text-text-default outline-none transition-colors focus:border-blue-500';
 
 /**
  * Custom-print editor for the product/unit (testing + products page) label.
@@ -71,26 +71,26 @@ export function ProductLabelEditPopover({
       onClose={onClose}
       align="center"
       aria-label="Edit label"
-      className="w-[min(94%,38rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
+      className="w-[min(94%,38rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-border-soft"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
-        <span className={`${microBadge} flex items-center gap-1.5 text-gray-700`}>
-          <Pencil className="h-3.5 w-3.5 text-gray-500" />
+      <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-5 py-3">
+        <span className={`${microBadge} flex items-center gap-1.5 text-text-muted`}>
+          <Pencil className="h-3.5 w-3.5 text-text-soft" />
           Edit label
         </span>
         <IconButton
           icon={<X className="h-4 w-4" />}
           ariaLabel="Close"
           onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          className="rounded-lg p-1.5 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
         />
       </div>
 
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {/* Live preview — identical to the printed face. */}
-        <div className="mb-4 rounded-xl border border-gray-200/80 bg-white px-3 py-3 shadow-sm">
+        <div className="mb-4 rounded-xl border border-border-soft/80 bg-surface-card px-3 py-3 shadow-sm">
           <LabelFacePreview model={face} embedded />
         </div>
 
@@ -123,7 +123,7 @@ export function ProductLabelEditPopover({
       </div>
 
       {/* Footer */}
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-hairline bg-surface-canvas px-5 py-3">
         <Button
           variant="ghost"
           size="sm"

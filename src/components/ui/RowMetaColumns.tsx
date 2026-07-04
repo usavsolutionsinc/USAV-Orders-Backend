@@ -26,8 +26,8 @@ import { useIsColumnHidden } from '@/components/ui/table-column-config/TableColu
  *     never drift the way a content-width flow does.
  *
  * Typography matches the /design-demo "good example":
- *     title → text-[13px] font-bold text-gray-900   (text-[12px] when `small`)
- *     meta  → text-[9px] font-bold uppercase tracking-widest text-gray-500
+ *     title → text-[13px] font-bold text-text-default   (text-[12px] when `small`)
+ *     meta  → text-[9px] font-bold uppercase tracking-widest text-text-soft
  *
  * INVARIANTS:
  *   • RowMetaColumns `indent` MUST equal the RowTitle `dotTrack` width
@@ -90,12 +90,13 @@ export function RowTitle({
             <span className={cn('h-2 w-2 rounded-full', dot)} />
           </HoverTooltip>
         ) : (
+          /* ds-allow-title */
           <span className={cn('h-2 w-2 rounded-full', dot)} title={dotTitle} />
         )}
       </span>
       <div
         className={cn(
-          'truncate font-bold text-gray-900',
+          'truncate font-bold text-text-default',
           small ? 'text-label' : 'text-[13px]',
           titleClassName,
         )}
@@ -146,7 +147,7 @@ export function RowMetaColumns({
   return (
     <div
       className={cn(
-        'mt-0.5 grid min-w-0 items-center gap-x-1 text-eyebrow font-bold uppercase tracking-widest text-gray-500',
+        'mt-0.5 grid min-w-0 items-center gap-x-1 text-eyebrow font-bold uppercase tracking-widest text-text-soft',
         className,
       )}
       style={{ paddingLeft: indent, gridTemplateColumns: tracks.join(' ') }}

@@ -43,10 +43,10 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
   return (
     <section className="flex h-full min-h-0 flex-col">
       {/* ─── Header ─── */}
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2">
+      <header className="flex shrink-0 items-center justify-between border-b border-border-hairline px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-          <span className="text-micro font-bold uppercase tracking-wider text-slate-500">Simulate</span>
+          <span className="text-micro font-bold uppercase tracking-wider text-text-soft">Simulate</span>
         </div>
         <HoverTooltip label="Close Simulate" asChild>
           <IconButton
@@ -54,13 +54,13 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
             onClick={onClose}
             ariaLabel="Close Simulate"
             icon={<X className="h-3.5 w-3.5" />}
-            className="-my-1 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            className="-my-1 rounded p-1 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
           />
         </HoverTooltip>
       </header>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
-        <p className="text-caption leading-snug text-slate-500">
+        <p className="text-caption leading-snug text-text-soft">
           Walk a hypothetical unit through {editing ? 'this draft' : 'the graph'} — no real unit moves and
           nothing is saved.
         </p>
@@ -69,7 +69,7 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
         {!sim.running ? (
           <div className="space-y-2">
             <PaneHeading text="Intake node" />
-            <p className="text-caption text-slate-400">
+            <p className="text-caption text-text-faint">
               Start the ghost at the entry node, or pick any node to start from.
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -95,7 +95,7 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
               </Button>
             </div>
             <div className="space-y-1">
-              <p className="text-micro font-semibold uppercase tracking-wide text-slate-400">Or start from</p>
+              <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">Or start from</p>
               <div className="flex flex-wrap gap-1">
                 {nodes.map((n) => (
                   <HoverTooltip key={n.id} label={`Start the ghost at ${labelOf(n.id)}`} asChild>
@@ -105,7 +105,7 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
                       size="sm"
                       onClick={() => sim.start(n.id)}
                       ariaLabel={`Start the ghost at ${labelOf(n.id)}`}
-                      className="h-auto truncate rounded border border-slate-200 bg-white px-1.5 py-0.5 text-micro font-semibold text-slate-600 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700"
+                      className="h-auto truncate rounded border border-border-soft bg-surface-card px-1.5 py-0.5 text-micro font-semibold text-text-muted hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700"
                     >
                       {labelOf(n.id)}
                     </Button>
@@ -133,13 +133,13 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
                   </p>
                 </div>
               ) : sim.currentPorts.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 text-center">
-                  <p className="text-xs font-semibold text-slate-600">No output ports</p>
-                  <p className="mt-0.5 text-caption text-slate-400">This node type declares no ports to fire.</p>
+                <div className="rounded-lg border border-dashed border-border-soft bg-surface-canvas px-3 py-2.5 text-center">
+                  <p className="text-xs font-semibold text-text-muted">No output ports</p>
+                  <p className="mt-0.5 text-caption text-text-faint">This node type declares no ports to fire.</p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <p className="text-micro font-semibold uppercase tracking-wide text-slate-400">Fire a port</p>
+                  <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">Fire a port</p>
                   <div className="flex flex-wrap gap-1.5">
                     {sim.currentPorts.map((port) => {
                       const target = sim.currentNodeId
@@ -157,9 +157,9 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
                           size="sm"
                           onClick={() => sim.fire(port.id)}
                           ariaLabel={target ? `Fire ${port.label} → ${labelOf(target)}` : `Fire ${port.label} → terminal`}
-                          className="h-auto gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 shadow-sm hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700"
+                          className="h-auto gap-1 rounded-md border border-border-soft bg-surface-card px-2 py-1 text-xs font-semibold text-text-muted shadow-sm hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700"
                         >
-                          <span className="rounded bg-slate-100 px-1 font-mono text-eyebrow text-slate-500">
+                          <span className="rounded bg-surface-sunken px-1 font-mono text-eyebrow text-text-soft">
                             {port.id}
                           </span>
                           {port.label}
@@ -181,7 +181,7 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
                 onClick={() => sim.stepBack()}
                 disabled={sim.history.length === 0}
                 icon={<ChevronLeft className="h-3.5 w-3.5" />}
-                className="h-auto gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                className="h-auto gap-1 rounded-md border border-border-soft bg-surface-card px-2 py-1 text-xs font-semibold text-text-muted hover:bg-surface-hover"
               >
                 Step back
               </Button>
@@ -203,7 +203,7 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
                 size="sm"
                 onClick={() => sim.reset()}
                 icon={<RotateCcw className="h-3.5 w-3.5" />}
-                className="h-auto gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                className="h-auto gap-1 rounded-md border border-border-soft bg-surface-card px-2 py-1 text-xs font-semibold text-text-muted hover:bg-surface-hover"
               >
                 Reset
               </Button>
@@ -213,7 +213,7 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
             <section className="space-y-1.5">
               <PaneHeading text={`Path · ${sim.history.length} step${sim.history.length === 1 ? '' : 's'}`} />
               {sim.history.length === 0 ? (
-                <p className="text-caption text-slate-400">Fire a port to begin walking the graph.</p>
+                <p className="text-caption text-text-faint">Fire a port to begin walking the graph.</p>
               ) : (
                 <ol className="space-y-1">
                   {sim.history.map((step, i) => (
@@ -221,12 +221,12 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
                       <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-eyebrow font-bold text-violet-700">
                         {i + 1}
                       </span>
-                      <span className="truncate font-semibold text-slate-700">{labelOf(step.fromNodeId)}</span>
-                      <span className="rounded bg-slate-100 px-1 font-mono text-eyebrow text-slate-500">
+                      <span className="truncate font-semibold text-text-muted">{labelOf(step.fromNodeId)}</span>
+                      <span className="rounded bg-surface-sunken px-1 font-mono text-eyebrow text-text-soft">
                         {step.port}
                       </span>
                       {step.toNodeId ? (
-                        <span className="truncate text-slate-500">→ {labelOf(step.toNodeId)}</span>
+                        <span className="truncate text-text-soft">→ {labelOf(step.toNodeId)}</span>
                       ) : (
                         <span className="inline-flex items-center gap-0.5 text-emerald-600">
                           <Flag className="h-3 w-3" /> terminal
@@ -245,5 +245,5 @@ export function StudioSimulatePanel({ sim, nodes, edges, editing, onClose }: Pro
 }
 
 function PaneHeading({ text }: { text: string }) {
-  return <h3 className="text-micro font-bold uppercase tracking-wider text-slate-400">{text}</h3>;
+  return <h3 className="text-micro font-bold uppercase tracking-wider text-text-faint">{text}</h3>;
 }

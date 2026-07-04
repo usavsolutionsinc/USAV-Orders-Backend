@@ -25,17 +25,17 @@ export function PairedReviewPanelLayout({
   onToggleExpanded?: () => void;
 }) {
   return (
-    <div className="border-b border-gray-100">
+    <div className="border-b border-border-hairline">
       {onToggleExpanded ? (
         <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
-          <p className="text-micro font-black uppercase tracking-widest text-gray-500">Combine review</p>
+          <p className="text-micro font-black uppercase tracking-widest text-text-soft">Combine review</p>
           <HoverTooltip label="Collapse" asChild>
             <IconButton
               type="button"
               onClick={onToggleExpanded}
               ariaLabel="Collapse combine review"
               icon={<ChevronUp className="h-4 w-4" />}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-gray-100"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-surface-sunken"
             />
           </HoverTooltip>
         </div>
@@ -45,7 +45,7 @@ export function PairedReviewPanelLayout({
         {/* FBA Shipment ID — parent card header */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">FBA Shipment ID</p>
+            <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">FBA Shipment ID</p>
             {c.lockedFbaId && (
               <HoverTooltip label="Done with this FBA Shipment ID" asChild>
                 <IconButton
@@ -111,7 +111,7 @@ export function PairedReviewPanelLayout({
 
               <DragOverlay>
                 {c.activeItem ? (
-                  <div className="rounded-lg border border-blue-300 bg-white/95 shadow-lg">
+                  <div className="rounded-lg border border-blue-300 bg-surface-card/95 shadow-lg">
                     <FbaSelectedLineRow
                       displayTitle={c.activeItem.display_title || 'No title'}
                       fnsku={String(c.activeItem.fnsku || '').toUpperCase()}
@@ -153,7 +153,7 @@ export function PairedReviewPanelLayout({
             onClick={c.addBucket}
             disabled={c.saving}
             icon={<Plus />}
-            className="w-full border border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-40"
+            className="w-full border border-dashed border-border-default text-text-soft hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-40"
           >
             Add UPS Tracking Box
           </Button>
@@ -176,7 +176,7 @@ export function PairedReviewPanelLayout({
             {c.lockedFbaId ? 'Save UPS Tracking' : 'Save Shipment + UPS'}
           </button>
         ) : c.hasItems && c.allocations.buckets.length === 0 ? (
-          <p className={`${microBadge} text-center tracking-wider text-gray-400`}>
+          <p className={`${microBadge} text-center tracking-wider text-text-faint`}>
             Add a UPS tracking box, then drag items into it
           </p>
         ) : null}

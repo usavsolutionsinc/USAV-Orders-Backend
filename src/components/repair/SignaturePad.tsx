@@ -122,11 +122,11 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
     <div className={fillHeight ? 'flex h-full flex-col gap-2 px-3 pt-3' : 'space-y-2'}>
       {/* Label row */}
       <div className="flex items-center justify-between">
-        <label className={`block font-black uppercase tracking-[0.15em] text-gray-500 ${isDropoff ? 'text-micro' : 'text-eyebrow'}`}>
+        <label className={`block font-black uppercase tracking-[0.15em] text-text-soft ${isDropoff ? 'text-micro' : 'text-eyebrow'}`}>
           {label}
         </label>
         <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1.5 font-black uppercase tracking-wide border transition-opacity ${isDropoff ? 'rounded-none px-2 py-1 text-micro' : 'text-eyebrow px-2 py-1'} ${signed ? 'text-gray-900 bg-gray-100 border-gray-200' : 'opacity-0 border-transparent'}`}>
+            <span className={`flex items-center gap-1.5 font-black uppercase tracking-wide border transition-opacity ${isDropoff ? 'rounded-none px-2 py-1 text-micro' : 'text-eyebrow px-2 py-1'} ${signed ? 'text-text-default bg-surface-sunken border-border-soft' : 'opacity-0 border-transparent'}`}>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
@@ -146,7 +146,7 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
       {/* Canvas area */}
       <div
         ref={containerRef}
-        className={`relative overflow-hidden bg-white ${fillHeight ? 'min-h-0 flex-1' : 'border border-gray-300'}`}
+        className={`relative overflow-hidden bg-surface-card ${fillHeight ? 'min-h-0 flex-1' : 'border border-border-default'}`}
         style={fillHeight ? undefined : { height: PAD_HEIGHT }}
       >
         <canvas
@@ -159,13 +159,13 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
           }}
         />
         {/* Baseline */}
-        <div className="absolute bottom-10 left-6 right-6 border-b-2 border-dashed border-gray-200 pointer-events-none" />
-        <span className="absolute bottom-3 left-6 text-mini text-gray-400 font-black uppercase tracking-[0.2em] pointer-events-none">
+        <div className="absolute bottom-10 left-6 right-6 border-b-2 border-dashed border-border-soft pointer-events-none" />
+        <span className="absolute bottom-3 left-6 text-mini text-text-faint font-black uppercase tracking-[0.2em] pointer-events-none">
           Sign above
         </span>
         {/* Corner accent */}
         {!signed && (
-          <span className="absolute top-3 right-3 text-mini font-black text-gray-300 uppercase tracking-wide pointer-events-none">
+          <span className="absolute top-3 right-3 text-mini font-black text-text-faint uppercase tracking-wide pointer-events-none">
             Touch to sign
           </span>
         )}

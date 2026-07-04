@@ -62,7 +62,7 @@ export function CompatibilityManagementTab() {
 
   const rows = useMemo(() => data?.items ?? [], [data]);
 
-  if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading edges…</div>;
+  if (isLoading) return <div className="p-6 text-sm text-text-faint">Loading edges…</div>;
   if (rows.length === 0) {
     return (
       <AdminEmptyDetail
@@ -76,12 +76,12 @@ export function CompatibilityManagementTab() {
   return (
     <div className="flex h-full flex-col overflow-y-auto p-6">
       <div className="mx-auto w-full max-w-4xl">
-        <h2 className="mb-4 text-lg font-bold text-gray-900">
-          Compatibility edges <span className="text-gray-400">({rows.length})</span>
+        <h2 className="mb-4 text-lg font-bold text-text-default">
+          Compatibility edges <span className="text-text-faint">({rows.length})</span>
         </h2>
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-card">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-caption uppercase tracking-wide text-gray-500">
+            <thead className="bg-surface-canvas text-caption uppercase tracking-wide text-text-soft">
               <tr>
                 <th className="px-4 py-2 text-left font-semibold">Model</th>
                 <th className="px-4 py-2 text-left font-semibold">Part</th>
@@ -91,24 +91,24 @@ export function CompatibilityManagementTab() {
                 <th className="px-4 py-2" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border-hairline">
               {rows.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
+                <tr key={r.id} className="hover:bg-surface-hover">
                   <td className="px-4 py-2">
-                    <div className="font-semibold text-gray-900">{r.model_name}</div>
-                    <div className="text-caption text-gray-500">{r.model_number}</div>
+                    <div className="font-semibold text-text-default">{r.model_name}</div>
+                    <div className="text-caption text-text-soft">{r.model_number}</div>
                   </td>
                   <td className="px-4 py-2">
-                    <div className="font-semibold text-gray-900">{r.product_title}</div>
-                    <div className="text-caption text-gray-500">{r.sku}</div>
+                    <div className="font-semibold text-text-default">{r.product_title}</div>
+                    <div className="text-caption text-text-soft">{r.sku}</div>
                   </td>
-                  <td className="px-4 py-2 text-gray-700">{r.part_role}</td>
+                  <td className="px-4 py-2 text-text-muted">{r.part_role}</td>
                   <td className="px-4 py-2">
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-micro font-semibold text-slate-600">
+                    <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-semibold text-text-muted">
                       {r.is_oem ? 'OEM ' : ''}{r.fit}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-caption text-gray-500">{r.source}</td>
+                  <td className="px-4 py-2 text-caption text-text-soft">{r.source}</td>
                   <td className="px-4 py-2 text-right">
                     <Button
                       variant="ghost"

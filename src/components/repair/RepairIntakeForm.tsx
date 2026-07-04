@@ -64,7 +64,7 @@ export interface RepairFormData {
 
 const REPAIR_INTAKE_MAX_WIDTH = 'max-w-[720px]';
 const REPAIR_INTAKE_COLUMN_CLASS = `mx-auto w-full ${REPAIR_INTAKE_MAX_WIDTH}`;
-const SECTION_LABEL = 'text-micro font-black uppercase tracking-[0.16em] text-gray-500';
+const SECTION_LABEL = 'text-micro font-black uppercase tracking-[0.16em] text-text-soft';
 
 export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId }: RepairIntakeFormProps) {
     const [currentStep, setCurrentStep] = useState<RepairIntakeStepKey>('product');
@@ -313,32 +313,32 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         );
 
         return (
-            <div className="relative flex h-full w-full flex-col bg-white text-gray-900">
-                <header className="shrink-0 border-b border-gray-100">
+            <div className="relative flex h-full w-full flex-col bg-surface-card text-text-default">
+                <header className="shrink-0 border-b border-border-hairline">
                     <div className={`${REPAIR_INTAKE_COLUMN_CLASS} flex items-center justify-between gap-3 px-6 py-3`}>
                         <div className="flex min-w-0 items-center gap-2.5">
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-inverse text-white">
                                 <Check className="h-4 w-4" />
                             </span>
                             <div className="min-w-0">
-                                <p className="truncate text-eyebrow font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-micro">
+                                <p className="truncate text-eyebrow font-bold uppercase tracking-[0.18em] text-text-faint sm:text-micro">
                                     Repair submitted
                                 </p>
-                                <h1 className="truncate text-sm font-black tracking-tight text-gray-900 sm:text-[15px]">
+                                <h1 className="truncate text-sm font-black tracking-tight text-text-default sm:text-[15px]">
                                     {chromeLabel}
                                 </h1>
                             </div>
                         </div>
                         <IconButton
                             onClick={onClose}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-gray-900"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-soft transition-colors hover:border-border-strong"
                             ariaLabel="Done"
                             icon={<X className="h-4 w-4" />}
                         />
                     </div>
                 </header>
 
-                <main className="min-h-0 flex-1 overflow-y-auto bg-gray-100">
+                <main className="min-h-0 flex-1 overflow-y-auto bg-surface-sunken">
                     <div className="px-4 py-4 sm:px-6 sm:py-5">
                         <RepairPaperworkCanvas>
                             <RepairServiceForm {...submittedReceiptProps} surface="screen" />
@@ -346,14 +346,14 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     </div>
                 </main>
 
-                <div className="shrink-0 border-t border-gray-100 bg-white">
+                <div className="shrink-0 border-t border-border-hairline bg-surface-card">
                     <div className={`${REPAIR_INTAKE_COLUMN_CLASS} flex items-center gap-3 px-6 py-3`}>
                         {submitted.zendeskTicketUrl ? (
                             <a
                                 href={submitted.zendeskTicketUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="truncate text-micro font-black uppercase tracking-[0.14em] text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+                                className="truncate text-micro font-black uppercase tracking-[0.14em] text-text-soft underline-offset-2 hover:text-text-default hover:underline"
                             >
                                 {submitted.zendeskTicketNumber ? `Ticket ${submitted.zendeskTicketNumber}` : 'View ticket'}
                             </a>
@@ -382,34 +382,34 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     }
 
     return (
-        <div className="relative flex h-full w-full flex-col bg-white text-gray-900">
+        <div className="relative flex h-full w-full flex-col bg-surface-card text-text-default">
             {/* Header — title row + stepper aligned to the 720px content column */}
-            <header className="shrink-0 border-b border-gray-100">
+            <header className="shrink-0 border-b border-border-hairline">
                 <div className={`${REPAIR_INTAKE_COLUMN_CLASS} px-6 py-3`}>
                     <div className="relative flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
                             {currentStep !== 'product' ? (
                                 <IconButton
                                     onClick={handleBack}
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-gray-900"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-soft transition-colors hover:border-border-strong"
                                     ariaLabel="Go back"
                                     icon={<ChevronLeft className="h-4 w-4" />}
                                 />
                             ) : (
                                 <div
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-900"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-soft text-text-default"
                                     aria-hidden
                                 >
                                     <Wrench className="h-4 w-4" />
                                 </div>
                             )}
                             <div className="min-w-0">
-                                <p className="truncate text-eyebrow font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-micro">
+                                <p className="truncate text-eyebrow font-bold uppercase tracking-[0.18em] text-text-faint sm:text-micro">
                                     Repair Intake
                                 </p>
                                 <h1
                                     id="repair-intake-step-title"
-                                    className="truncate text-sm font-black tracking-tight text-gray-900 sm:text-[15px]"
+                                    className="truncate text-sm font-black tracking-tight text-text-default sm:text-[15px]"
                                 >
                                     {stepTitle}
                                 </h1>
@@ -425,7 +425,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             />
                             <IconButton
                                 onClick={onClose}
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-gray-900"
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-soft transition-colors hover:border-border-strong"
                                 ariaLabel="Close"
                                 icon={<X className="h-4 w-4" />}
                             />
@@ -451,10 +451,10 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
             {/* Step body — single centered column, no sidebar split */}
             <main
                 aria-labelledby="repair-intake-step-title"
-                className={`min-h-0 flex-1 overflow-y-auto ${showPaperwork ? 'bg-gray-100' : 'pb-28'}`}
+                className={`min-h-0 flex-1 overflow-y-auto ${showPaperwork ? 'bg-surface-sunken' : 'pb-28'}`}
             >
                 {showPaperwork ? (
-                    <div className="bg-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+                    <div className="bg-surface-sunken px-4 py-4 sm:px-6 sm:py-5">
                         <RepairPaperworkCanvas>
                             <RepairServiceForm {...receiptProps} surface="screen" />
                         </RepairPaperworkCanvas>
@@ -470,8 +470,8 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     {currentStep === 'product' && (
                         <div className="relative space-y-8">
                             {isFetchingFavorite && (
-                                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
-                                    <div className="flex items-center gap-2 text-gray-700">
+                                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-surface-card/80 backdrop-blur-sm">
+                                    <div className="flex items-center gap-2 text-text-muted">
                                         <Loader2 className="h-5 w-5 animate-spin" />
                                         <span className={SECTION_LABEL}>Loading product…</span>
                                     </div>
@@ -510,7 +510,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             {productSelected && (
                                 <div className="space-y-1">
                                     <p className={SECTION_LABEL}>Selected product</p>
-                                    <p className="text-sm font-bold text-gray-900">{formData.product.model}</p>
+                                    <p className="text-sm font-bold text-text-default">{formData.product.model}</p>
                                 </div>
                             )}
 
@@ -527,7 +527,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     htmlFor="repair-tech-select"
                                     className={`block ${SECTION_LABEL}`}
                                 >
-                                    Assign technician <span className="font-bold lowercase text-gray-300">(optional)</span>
+                                    Assign technician <span className="font-bold lowercase text-text-faint">(optional)</span>
                                 </label>
                                 <select
                                     id="repair-tech-select"
@@ -546,7 +546,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                         }));
                                     }}
                                     disabled={loadingTechs}
-                                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 text-sm font-semibold text-gray-900 outline-none transition-all focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 disabled:opacity-50"
+                                    className="h-11 w-full rounded-xl border border-border-soft bg-surface-card px-3.5 text-sm font-semibold text-text-default outline-none transition-all focus:border-border-strong focus:ring-2 focus:ring-gray-900/10 disabled:opacity-50"
                                 >
                                     <option value="">Unassigned</option>
                                     {techs.map(tech => (
@@ -559,7 +559,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
 
                     {currentStep === 'contact' && (
                         <div className="w-full space-y-6">
-                            <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 p-1">
+                            <div className="grid grid-cols-2 gap-2 rounded-xl border border-border-soft p-1">
                                 <Button
                                     variant={customerMode === 'existing' ? 'brand' : 'ghost'}
                                     size="md"
@@ -586,31 +586,31 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                         onChange={setCustomerQuery}
                                         tone="neutral"
                                     />
-                                    <div className="overflow-hidden rounded-xl border border-gray-200">
-                                        <div className="grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2 text-eyebrow font-black uppercase tracking-[0.12em] text-gray-500">
+                                    <div className="overflow-hidden rounded-xl border border-border-soft">
+                                        <div className="grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-border-hairline bg-surface-canvas px-3 py-2 text-eyebrow font-black uppercase tracking-[0.12em] text-text-soft">
                                             <span>Name</span>
                                             <span>Phone</span>
                                             <span className="text-right">Action</span>
                                         </div>
                                         <div className="max-h-40 overflow-y-auto">
                                             {loadingCustomers && (
-                                                <div className="px-3 py-3 text-xs font-semibold text-gray-400">Loading…</div>
+                                                <div className="px-3 py-3 text-xs font-semibold text-text-faint">Loading…</div>
                                             )}
                                             {!loadingCustomers && customerSearchError && (
                                                 <div className="px-3 py-3 text-xs font-semibold text-red-600">{customerSearchError}</div>
                                             )}
                                             {!loadingCustomers && !customerSearchError && customerResults.length === 0 && (
-                                                <div className="px-3 py-3 text-xs font-semibold text-gray-400">No customers found.</div>
+                                                <div className="px-3 py-3 text-xs font-semibold text-text-faint">No customers found.</div>
                                             )}
                                             {!loadingCustomers && !customerSearchError && customerResults.map((customer) => (
                                                 <div
                                                     key={customer.id}
-                                                    className={`grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-gray-50 px-3 py-2.5 text-xs ${
-                                                        selectedCustomerId === customer.id ? 'bg-gray-50' : 'bg-white'
+                                                    className={`grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-border-hairline px-3 py-2.5 text-xs ${
+                                                        selectedCustomerId === customer.id ? 'bg-surface-canvas' : 'bg-surface-card'
                                                     }`}
                                                 >
-                                                    <span className="truncate font-bold text-gray-900">{customer.name}</span>
-                                                    <span className="truncate text-gray-600">{customer.phone || '—'}</span>
+                                                    <span className="truncate font-bold text-text-default">{customer.name}</span>
+                                                    <span className="truncate text-text-muted">{customer.phone || '—'}</span>
                                                     <div className="text-right">
                                                         <Button
                                                             variant="brand"
@@ -647,11 +647,11 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
 
                     {currentStep === 'review' && (
                         <div className="w-full">
-                            <div className="w-full border border-black bg-white">
+                            <div className="w-full border border-black bg-surface-card">
                                 <RepairServiceForm {...receiptProps} density="compact" />
 
                                 <div className="border-t border-black px-4 py-3">
-                                    <p className="text-xs leading-relaxed text-gray-500">
+                                    <p className="text-xs leading-relaxed text-text-soft">
                                         By signing below, the customer consents to conduct this transaction electronically
                                         and agrees to the listed repair price, terms, and any unexpected delays.
                                     </p>
@@ -666,7 +666,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     )}
                                 </div>
 
-                                <div className="h-[200px] overflow-hidden border-t border-black bg-white">
+                                <div className="h-[200px] overflow-hidden border-t border-black bg-surface-card">
                                     <SignaturePad
                                         onSignatureChange={(data) => {
                                             setSignatureData(data);
@@ -679,8 +679,8 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             </div>
 
                             {signatureData && (
-                                <div className="mt-3 flex items-center gap-2 text-micro font-black uppercase tracking-[0.14em] text-gray-700">
-                                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-900">
+                                <div className="mt-3 flex items-center gap-2 text-micro font-black uppercase tracking-[0.14em] text-text-muted">
+                                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-surface-inverse">
                                         <Check className="h-2.5 w-2.5 text-white" />
                                     </span>
                                     Signature captured

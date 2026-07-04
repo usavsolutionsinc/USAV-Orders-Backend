@@ -81,24 +81,24 @@ export function PhotoLibraryHeader({
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {folderBrowse ? (
             <>
-              <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <Folder className="h-3.5 w-3.5 shrink-0 text-text-faint" />
               <span
                 data-testid="folder-level"
-                className="truncate text-eyebrow font-black uppercase tracking-widest text-gray-500"
+                className="truncate text-eyebrow font-black uppercase tracking-widest text-text-soft"
               >
                 {folderBrowse.title}
               </span>
-              <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-bold tabular-nums text-gray-500">
+              <span className="shrink-0 rounded-full bg-surface-sunken px-1.5 py-0.5 text-micro font-bold tabular-nums text-text-soft">
                 {folderBrowse.count}
               </span>
               {folderBrowse.isLeaf && metaLine ? (
-                <span className={`${microBadge} hidden truncate text-gray-500 sm:inline`}>{metaLine}</span>
+                <span className={`${microBadge} hidden truncate text-text-soft sm:inline`}>{metaLine}</span>
               ) : null}
             </>
           ) : (
             <>
-              <span className="truncate text-sm font-semibold text-gray-900">{title}</span>
-              <span className={`${microBadge} hidden truncate text-gray-500 sm:inline`}>{metaLine}</span>
+              <span className="truncate text-sm font-semibold text-text-default">{title}</span>
+              <span className={`${microBadge} hidden truncate text-text-soft sm:inline`}>{metaLine}</span>
             </>
           )}
         </div>

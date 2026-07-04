@@ -202,8 +202,8 @@ export function CartonContextCard({
       value: 'auto',
       label: 'Auto',
       title: `Auto — follows platform (${derivedTone.label})`,
-      activeClass: 'border-slate-300 bg-white text-slate-600',
-      inactiveClass: 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50',
+      activeClass: 'border-border-default bg-surface-card text-text-muted',
+      inactiveClass: 'border-border-soft bg-surface-card text-text-soft hover:border-border-default hover:bg-surface-hover',
     },
     ...PRIORITY_OVERRIDE_TIERS.map((t) => ({
       value: String(t.value),
@@ -325,8 +325,8 @@ export function CartonContextCard({
               // Platform tone ONLY when there's an actual listing to open. With
               // no link the chip isn't a live link, so it reads gray rather than
               // painting a platform color it can't act on.
-              underlineClass={listingHasTarget && platformValue ? platformMeta.border : 'border-slate-300'}
-              iconClass={listingHasTarget && platformValue ? platformMeta.text : 'text-slate-400'}
+              underlineClass={listingHasTarget && platformValue ? platformMeta.border : 'border-border-default'}
+              iconClass={listingHasTarget && platformValue ? platformMeta.text : 'text-text-faint'}
               disableCopy={!(listingLink.trim() || listingOpenHref)}
               onEdit={() => {
                 setListingEditorOpen((v) => {
@@ -388,7 +388,7 @@ export function CartonContextCard({
                 actionsInMenu
               />
               {filledExtraTrackingsCount > 0 ? (
-                <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
+                <span className="shrink-0 rounded bg-surface-strong/90 px-1 py-px text-eyebrow font-black tabular-nums text-text-muted">
                   +{filledExtraTrackingsCount}
                 </span>
               ) : null}
@@ -488,7 +488,7 @@ export function CartonContextCard({
 
           {/* Below-row inline editors for PO# / tracking / listing URL. */}
           {anyBelow ? (
-            <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
+            <div className="mt-2 space-y-2.5 border-t border-border-hairline pt-2">
               {poEditorOpen && !isReturn ? (
                 <div className="relative">
                   <div className="mb-1 flex items-start justify-between gap-2">
@@ -621,7 +621,7 @@ export function CartonContextCard({
                             }}
                             disabled={listingOpenHref == null}
                             ariaLabel="Open listing URL in new tab"
-                            className="-m-0.5 rounded p-0.5 text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:opacity-60"
+                            className="-m-0.5 rounded p-0.5 text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-text-faint disabled:opacity-60"
                             icon={<ExternalLink className="h-[14px] w-[14px]" />}
                           />
                         </HoverTooltip>

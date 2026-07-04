@@ -76,9 +76,12 @@ async function firstScannedCatalogId(
   if (orgId) {
     const res = await tenantQuery<{ sku_catalog_id: number | null }>(
       orgId,
+      // Phase 3: filter-by-origin via indexed provenance reverse lookup.
       `SELECT sku_catalog_id
          FROM serial_units
-        WHERE origin_receiving_line_id = $1 AND sku_catalog_id IS NOT NULL
+        WHERE id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                      WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1 AND p.organization_id = $2)
+          AND sku_catalog_id IS NOT NULL
           AND organization_id = $2
         ORDER BY created_at ASC, id ASC
         LIMIT 1`,
@@ -89,7 +92,9 @@ async function firstScannedCatalogId(
   const res = await pool.query<{ sku_catalog_id: number | null }>(
     `SELECT sku_catalog_id
        FROM serial_units
-      WHERE origin_receiving_line_id = $1 AND sku_catalog_id IS NOT NULL
+      WHERE id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                    WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1)
+        AND sku_catalog_id IS NOT NULL
       ORDER BY created_at ASC, id ASC
       LIMIT 1`,
     [lineId],

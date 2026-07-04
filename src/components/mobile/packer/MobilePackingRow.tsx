@@ -40,7 +40,7 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
       ? 'text-yellow-600'
       : conditionLabel === 'PARTS'
         ? 'text-amber-800'
-        : 'text-gray-500';
+        : 'text-text-soft';
   const photoCount = Array.isArray(row.packer_photos_url) ? row.packer_photos_url.length : 0;
   const isExpanded = variant === 'expanded';
 
@@ -53,7 +53,7 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
           className="!mt-0 shrink-0"
           indent={META_COL.indentWide}
           qtyCol={META_COL.qtyColWide}
-          qty={<span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-900'}>{quantity}</span>}
+          qty={<span className={quantity > 1 ? 'text-yellow-600' : 'text-text-default'}>{quantity}</span>}
           condition={<span className={condColor}>{conditionLabel}</span>}
         />
         <div className="ml-auto min-w-0">

@@ -49,7 +49,7 @@ export default function NasPhotosPreviewPage() {
   const files = entries.filter((e) => e.type === 'file');
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-stage text-white">
       <div className="border-b border-amber-500/30 bg-amber-950/40 px-4 py-2 text-center text-sm text-amber-100">
         NAS preview only — photos here are not attached to POs. For searchable attached photos, use{' '}
         <Link href="/ops/photos" className="font-semibold underline underline-offset-2">
@@ -58,7 +58,7 @@ export default function NasPhotosPreviewPage() {
         .
       </div>
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-black/90 px-4 py-3 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-glass/10 bg-scrim/90 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-micro font-black uppercase tracking-[0.22em] text-amber-400">
@@ -66,7 +66,7 @@ export default function NasPhotosPreviewPage() {
             </p>
             <p className="truncate text-sm font-black">/{dir || 'Photos'}</p>
           </div>
-          <code className="hidden shrink-0 rounded bg-white/10 px-2 py-1 text-caption text-white/70 sm:block">
+          <code className="hidden shrink-0 rounded bg-glass/10 px-2 py-1 text-caption text-white/70 sm:block">
             {base}
           </code>
         </div>
@@ -83,27 +83,27 @@ export default function NasPhotosPreviewPage() {
           <p className="text-lg font-black">NAS base URL not set</p>
           <p className="mx-auto mt-2 max-w-md text-sm text-white/60">
             Add{' '}
-            <code className="rounded bg-white/10 px-1.5 py-0.5">
+            <code className="rounded bg-glass/10 px-1.5 py-0.5">
               NEXT_PUBLIC_NAS_PHOTOS_BASE_URL
             </code>{' '}
-            to <code className="rounded bg-white/10 px-1.5 py-0.5">.env.local</code> and restart the
+            to <code className="rounded bg-glass/10 px-1.5 py-0.5">.env.local</code> and restart the
             dev server.
           </p>
         </div>
       ) : loading ? (
         <div className="grid grid-cols-3 gap-1 p-1 sm:grid-cols-4 md:grid-cols-6">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="aspect-square animate-pulse rounded bg-white/5" />
+            <div key={i} className="aspect-square animate-pulse rounded bg-glass/5" />
           ))}
         </div>
       ) : error ? (
         <div className="px-6 py-16 text-center">
           <p className="text-label font-bold text-rose-400">{error}</p>
-          {/* ds-raw-button: dark-theme translucent pill on hardcoded bg-black — light-surface DS variants don't fit */}
+          {/* ds-raw-button: dark-theme translucent pill on the fixed stage backdrop — light-surface DS variants don't fit */}
           <button
             type="button"
             onClick={() => void load(dir)}
-            className="mt-4 rounded-full bg-white/10 px-4 py-2 text-caption font-black uppercase tracking-widest active:bg-white/20"
+            className="mt-4 rounded-full bg-glass/10 px-4 py-2 text-caption font-black uppercase tracking-widest active:bg-glass/20"
           >
             Retry
           </button>
@@ -135,7 +135,7 @@ export default function NasPhotosPreviewPage() {
                   <button
                     type="button"
                     onClick={() => setZoom(f)}
-                    className="group relative aspect-square overflow-hidden rounded bg-white/5"
+                    className="group relative aspect-square overflow-hidden rounded bg-glass/5"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -144,7 +144,7 @@ export default function NasPhotosPreviewPage() {
                       loading="lazy"
                       className="absolute inset-0 h-full w-full object-cover transition group-active:scale-95"
                     />
-                    <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-0.5 text-micro text-white/80">
+                    <span className="absolute inset-x-0 bottom-0 truncate bg-scrim/60 px-1.5 py-0.5 text-micro text-white/80">
                       {f.name}
                     </span>
                   </button>
@@ -162,11 +162,11 @@ export default function NasPhotosPreviewPage() {
           role="dialog"
           aria-modal="true"
           onClick={() => setZoom(null)}
-          className="fixed inset-0 z-modal grid place-items-center bg-black/95 p-4"
+          className="fixed inset-0 z-modal grid place-items-center bg-scrim/95 p-4"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={zoom.url} alt={zoom.name} className="max-h-full max-w-full object-contain" />
-          <p className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-1.5 text-caption font-bold">
+          <p className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-glass/10 px-4 py-1.5 text-caption font-bold">
             {zoom.name}
           </p>
         </div>

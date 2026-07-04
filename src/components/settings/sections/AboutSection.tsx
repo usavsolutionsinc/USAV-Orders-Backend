@@ -53,7 +53,7 @@ export function AboutSection() {
 
       {/* Migrated to the design-system <Panel> + <Button> primitives (P0-DS-01).
           Surface/border/radius now come from semantic tokens (theme-aware),
-          replacing the hand-rolled `rounded-2xl border border-gray-200 bg-white`. */}
+          replacing the hand-rolled `rounded-2xl border border-border-soft bg-surface-card`. */}
       <Panel padding="lg">
         <div className="mb-5">
           <div className="text-xl font-bold text-text-default">{PRODUCT_NAME}</div>

@@ -97,9 +97,9 @@ export function statusPillClass(status: string) {
     case 'fulfilled':
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'cancelled':
-      return 'bg-gray-100 text-gray-500 border-gray-200';
+      return 'bg-surface-sunken text-text-soft border-border-soft';
     default:
-      return 'bg-gray-100 text-gray-600 border-gray-200';
+      return 'bg-surface-sunken text-text-muted border-border-soft';
   }
 }
 
@@ -109,10 +109,10 @@ export function workflowStatusColor(status: string) {
     case 'PASSED': return 'bg-green-100 text-green-700 border-green-200';
     case 'UNBOXED': case 'MATCHED': return 'bg-blue-100 text-blue-700 border-blue-200';
     case 'ARRIVED': return 'bg-cyan-100 text-cyan-700 border-cyan-200';
-    case 'EXPECTED': return 'bg-gray-100 text-gray-600 border-gray-200';
+    case 'EXPECTED': return 'bg-surface-sunken text-text-muted border-border-soft';
     case 'AWAITING_TEST': case 'IN_TEST': return 'bg-amber-100 text-amber-700 border-amber-200';
     case 'FAILED': case 'RTV': case 'SCRAP': return 'bg-red-100 text-red-700 border-red-200';
-    default: return 'bg-gray-100 text-gray-500 border-gray-200';
+    default: return 'bg-surface-sunken text-text-soft border-border-soft';
   }
 }
 

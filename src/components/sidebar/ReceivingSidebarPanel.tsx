@@ -214,11 +214,11 @@ export function ReceivingSidebarPanel() {
     railEditMode,
     railSelectedIds,
     railSelectedIdList,
-    railBulkDeleting,
+    railBulkDismissing,
     toggleRailEditMode,
     toggleRailSelected,
     setManyRailSelected,
-    handleRailBulkDelete,
+    handleRailBulkDismiss,
   } = useRailEditMode({ isScanSurface, mode, unboxView, triageView });
 
   // External focus trigger — Quick Access chips dispatch `receiving-focus-scan`
@@ -368,8 +368,8 @@ export function ReceivingSidebarPanel() {
         {isScanSurface && railEditMode ? (
           <ReceivingBulkActionBar
             selectedIds={railSelectedIdList}
-            onDelete={handleRailBulkDelete}
-            busy={railBulkDeleting}
+            onDismiss={handleRailBulkDismiss}
+            busy={railBulkDismissing}
           />
         ) : null}
       </RailEditModeProvider>

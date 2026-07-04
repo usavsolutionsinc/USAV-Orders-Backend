@@ -13,26 +13,26 @@ export function LibraryBreadcrumb({
   onRenameCurrent: () => void;
 }) {
   return (
-    <div className={`flex shrink-0 items-center gap-1 overflow-x-auto border-b border-gray-100 bg-white/80 ${SIDEBAR_GUTTER} py-2 backdrop-blur-sm`}>
+    <div className={`flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border-hairline bg-surface-card/80 ${SIDEBAR_GUTTER} py-2 backdrop-blur-sm`}>
       <Button
         variant="ghost"
         icon={<ChevronLeft className="h-3 w-3" />}
         onClick={() => onCrumb(0)}
-        className="shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+        className="shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider text-text-soft hover:bg-surface-sunken hover:text-text-muted"
       >
         All
       </Button>
       {currentPath.map((seg, i) => (
         <span key={i} className="flex shrink-0 items-center gap-1">
-          <ChevronRightTiny className="h-2.5 w-2.5 text-gray-300" />
+          <ChevronRightTiny className="h-2.5 w-2.5 text-text-faint" />
           {/* ds-raw-button: breadcrumb segment with custom active fill (bg-gray-900) — segmented-toggle case */}
           <button
             type="button"
             onClick={() => onCrumb(i + 1)}
             className={`shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider transition-colors ${
               i === currentPath.length - 1
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                ? 'bg-surface-inverse text-white'
+                : 'text-text-soft hover:bg-surface-sunken hover:text-text-muted'
             }`}
           >
             {seg}
@@ -46,7 +46,7 @@ export function LibraryBreadcrumb({
           icon={<Pencil className="h-3 w-3" />}
           onClick={onRenameCurrent}
           ariaLabel="Rename or move this folder"
-          className="ml-auto shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider text-zinc-500 hover:text-zinc-700"
+          className="ml-auto shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider text-text-soft hover:text-text-muted"
         >
           Rename
         </Button>
@@ -66,9 +66,9 @@ export function BulkActionsBar({
   onClear: () => void;
 }) {
   return (
-    <div className="absolute inset-x-3 bottom-3 z-20 flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-white shadow-xl shadow-zinc-900/30">
+    <div className="absolute inset-x-3 bottom-3 z-20 flex items-center gap-2 rounded-2xl border border-border-inverse bg-surface-inverse px-3 py-2 text-white shadow-xl shadow-zinc-900/30">
       <span className="text-micro font-black uppercase tracking-[0.16em]">{count} selected</span>
-      <span className="mx-1 h-4 w-px bg-zinc-700" />
+      <span className="mx-1 h-4 w-px bg-border-inverse" />
       <Button
         variant="ghost"
         icon={<Pencil className="h-3 w-3" />}
@@ -92,7 +92,7 @@ export function BulkActionsBar({
           icon={<X className="h-3 w-3" />}
           ariaLabel="Clear selection"
           onClick={onClear}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          className="ml-auto inline-flex items-center gap-1 rounded-lg p-1 text-text-faint hover:bg-surface-inverse-hover hover:text-white"
         />
       </HoverTooltip>
     </div>

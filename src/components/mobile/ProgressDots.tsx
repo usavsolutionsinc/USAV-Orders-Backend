@@ -70,7 +70,7 @@ export function ProgressDots({
       {rail.map((state, i) => {
         if (state === 'ellipsis') {
           return (
-            <span key={`gap-${i}`} aria-hidden="true" className="text-gray-300 text-xs leading-none">
+            <span key={`gap-${i}`} aria-hidden="true" className="text-text-faint text-xs leading-none">
               ···
             </span>
           );
@@ -88,7 +88,7 @@ export function ProgressDots({
             />
           );
         }
-        return <span key={i} aria-hidden="true" className={`${base} h-2 w-2 bg-gray-300`} />;
+        return <span key={i} aria-hidden="true" className={`${base} h-2 w-2 bg-surface-strong`} />;
       })}
     </div>
   );

@@ -114,20 +114,20 @@ export function DesktopAppDownload() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-16">
-      <div className="w-full rounded-3xl bg-white/80 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur-sm sm:p-12">
+      <div className="w-full rounded-3xl bg-surface-card/80 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur-sm sm:p-12">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
             <Download className="h-7 w-7" />
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
+          <h1 className="text-3xl font-black tracking-tight text-text-default sm:text-4xl">
             Install {PRODUCT_NAME} desktop app
           </h1>
-          <p className="mt-3 max-w-xl text-sm text-gray-600 sm:text-base">
+          <p className="mt-3 max-w-xl text-sm text-text-muted sm:text-base">
             Get full access — silent label printing, ring scanner support, sidecar server, and
             offline-friendly workflows.
           </p>
           {release?.ok && release.version && (
-            <p className="mt-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+            <p className="mt-2 text-xs font-semibold uppercase tracking-widest text-text-faint">
               Version {release.version}
             </p>
           )}
@@ -153,7 +153,7 @@ export function DesktopAppDownload() {
               href={macUrl}
               extra={
                 hasBothMacArches ? (
-                  <div className="mt-3 inline-flex rounded-lg bg-gray-100 p-0.5 text-caption">
+                  <div className="mt-3 inline-flex rounded-lg bg-surface-sunken p-0.5 text-caption">
                     <ArchToggle
                       active={macArchPick === 'arm64'}
                       onClick={() => setMacArchPick('arm64')}
@@ -203,7 +203,7 @@ export function DesktopAppDownload() {
               href={releaseUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-gray-700 hover:underline"
+              className="text-xs font-medium text-text-soft underline-offset-2 hover:text-text-muted hover:underline"
             >
               View release notes
             </a>
@@ -234,7 +234,7 @@ function PlatformCard({
     'group relative flex flex-col rounded-2xl border p-6 text-left transition-all';
   const ring = highlighted
     ? 'border-transparent bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 ring-1 ring-white/20'
-    : 'border-gray-200 bg-white text-gray-900 hover:border-gray-300 hover:shadow-md';
+    : 'border-border-soft bg-surface-card text-text-default hover:border-border-default hover:shadow-md';
   const hover = disabled
     ? 'cursor-not-allowed opacity-60'
     : highlighted
@@ -246,7 +246,7 @@ function PlatformCard({
       <div className="flex items-center justify-between">
         <div
           className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-            highlighted ? 'bg-white/20 ring-1 ring-white/30' : 'bg-gray-100'
+            highlighted ? 'bg-white/20 ring-1 ring-white/30' : 'bg-surface-sunken'
           }`}
         >
           {icon}
@@ -258,10 +258,10 @@ function PlatformCard({
         )}
       </div>
       <div className="mt-4">
-        <div className={`text-xl font-bold ${highlighted ? 'text-white' : 'text-gray-900'}`}>
+        <div className={`text-xl font-bold ${highlighted ? 'text-white' : 'text-text-default'}`}>
           {label}
         </div>
-        <div className={`mt-0.5 text-xs ${highlighted ? 'text-white/80' : 'text-gray-500'}`}>
+        <div className={`mt-0.5 text-xs ${highlighted ? 'text-white/80' : 'text-text-soft'}`}>
           {subLabel}
         </div>
       </div>
@@ -318,7 +318,7 @@ function ArchToggle({
         onClick();
       }}
       className={`ds-raw-button rounded-md px-2.5 py-1 font-semibold transition-colors ${
-        active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+        active ? 'bg-surface-card text-text-default shadow-sm' : 'text-text-soft hover:text-text-muted'
       }`}
     >
       {label}

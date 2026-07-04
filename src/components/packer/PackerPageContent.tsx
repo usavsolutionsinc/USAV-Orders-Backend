@@ -38,17 +38,17 @@ export function PackerPageContent({ packerId }: PackerPageContentProps) {
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-        className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden"
+        className="flex h-full w-full flex-col overflow-hidden bg-surface-card md:hidden"
       >
-        <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
+        <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-border-hairline bg-surface-card px-3 pt-[env(safe-area-inset-top)]">
           <IconButton
             icon={<Menu className="h-6 w-6" />}
             ariaLabel="Open navigation"
             onClick={openDrawer}
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-700 active:bg-gray-100"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-text-muted active:bg-surface-sunken"
           />
 
-          <h1 className="flex-1 text-lg font-black tracking-tight text-gray-900">
+          <h1 className="flex-1 text-lg font-black tracking-tight text-text-default">
             Packing
           </h1>
 

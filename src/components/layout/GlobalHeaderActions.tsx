@@ -103,8 +103,8 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
             aria-pressed={selection.active}
             aria-label={selection.active ? 'Done selecting' : 'Select'}
             className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
-              selection.active && 'bg-gray-900 text-white hover:bg-gray-800',
+              'flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-sunken active:scale-95',
+              selection.active && 'bg-surface-inverse text-white hover:bg-surface-inverse-hover',
             )}
           >
             <Pencil className="h-4 w-4" />
@@ -120,7 +120,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent('usav-command-bar-open'))}
             ariaLabel="Open command bar"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-surface-sunken active:scale-95"
             icon={<Search className="h-4 w-4" />}
           />
         </HoverTooltip>
@@ -136,9 +136,9 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
             ariaLabel="Clipboard history"
             aria-expanded={clipboardOpen}
             className={cn(
-              'flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95',
+              'flex items-center justify-center rounded-full text-text-muted hover:bg-surface-sunken active:scale-95',
               ctrlSize,
-              clipboardOpen && 'bg-gray-100',
+              clipboardOpen && 'bg-surface-sunken',
             )}
             icon={<Clipboard className={iconSize} />}
           />
@@ -166,9 +166,9 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
             ariaLabel="Notifications"
             aria-expanded={inboxOpen}
             className={cn(
-              'relative flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95',
+              'relative flex items-center justify-center rounded-full text-text-muted hover:bg-surface-sunken active:scale-95',
               ctrlSize,
-              inboxOpen && 'bg-gray-100',
+              inboxOpen && 'bg-surface-sunken',
             )}
             icon={
               <span className="relative inline-flex shrink-0">
@@ -214,7 +214,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
               // classes, so an earlier `text-white` gets stripped and the initial
               // falls back to the dark inherited body color.
               'text-white',
-              accountOpen && 'ring-2 ring-gray-300 ring-offset-1',
+              accountOpen && 'ring-2 ring-border-default ring-offset-1',
             )}
           >
             {accountInitial}

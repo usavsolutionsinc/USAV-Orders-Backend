@@ -66,7 +66,7 @@ export function SidebarSectionList<TId extends string = string>({
           return (
             <div
               key={`group:${item.group}:${idx}`}
-              className={`border-b border-gray-100 bg-gray-50 ${gutterClassName} py-1.5 text-micro font-semibold uppercase tracking-wide text-gray-500`}
+              className={`border-b border-border-hairline bg-surface-canvas ${gutterClassName} py-1.5 text-micro font-semibold uppercase tracking-wide text-text-soft`}
             >
               {item.group}
             </div>
@@ -80,21 +80,21 @@ export function SidebarSectionList<TId extends string = string>({
             type="button"
             onClick={() => onSelect(s.id)}
             aria-current={isActive ? 'page' : undefined}
-            className={`ds-raw-button group flex w-full items-start gap-3 border-b border-gray-100 ${gutterClassName} py-3 text-left transition ${
-              isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-900 hover:bg-gray-50'
+            className={`ds-raw-button group flex w-full items-start gap-3 border-b border-border-hairline ${gutterClassName} py-3 text-left transition ${
+              isActive ? 'bg-blue-50 text-blue-700' : 'text-text-default hover:bg-surface-hover'
             }`}
           >
             {s.icon && (
               // w-5 box (= the MasterNavHeader icon width) with the glyph centered
               // so the row icon's center lines up under the header icon, not its left edge.
-              <span className={`mt-0.5 flex w-5 shrink-0 justify-center ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>
+              <span className={`mt-0.5 flex w-5 shrink-0 justify-center ${isActive ? 'text-blue-600' : 'text-text-faint'}`}>
                 {s.icon}
               </span>
             )}
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold">{s.label}</span>
               {s.description && (
-                <span className="block truncate text-caption font-medium text-gray-500">
+                <span className="block truncate text-caption font-medium text-text-soft">
                   {s.description}
                 </span>
               )}

@@ -111,7 +111,7 @@ function CreateModelForm() {
 
   return (
     <div className="mx-auto flex h-full max-w-lg flex-col gap-4 overflow-y-auto p-6">
-      <h2 className="text-lg font-bold text-gray-900">New Bose model</h2>
+      <h2 className="text-lg font-bold text-text-default">New Bose model</h2>
       <Field label="Model number" required>
         <input className={inputCls} value={modelNumber} onChange={(e) => setModelNumber(e.target.value)} placeholder="e.g. 423816" />
       </Field>
@@ -153,7 +153,7 @@ function ModelDetail({ id }: { id: number }) {
     queryClient.invalidateQueries({ queryKey: qk.partCompatibility.all });
   };
 
-  if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading…</div>;
+  if (isLoading) return <div className="p-6 text-sm text-text-faint">Loading…</div>;
   if (!data?.model) return <AdminEmptyDetail title="Model not found" />;
 
   return (
@@ -199,11 +199,11 @@ function ModelEditCard({ model, onSaved, onDeleted }: { model: BoseModel; onSave
   });
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5">
+    <section className="rounded-xl border border-border-soft bg-surface-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">{model.model_name}</h2>
-          <p className="text-caption text-gray-500">Model #{model.model_number}</p>
+          <h2 className="text-lg font-bold text-text-default">{model.model_name}</h2>
+          <p className="text-caption text-text-soft">Model #{model.model_number}</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -249,18 +249,18 @@ function CompatibilityManager({ modelId, parts, onChanged }: { modelId: number; 
   });
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 text-sm font-bold text-gray-900">Compatible parts ({parts.length})</h3>
+    <section className="rounded-xl border border-border-soft bg-surface-card p-5">
+      <h3 className="mb-3 text-sm font-bold text-text-default">Compatible parts ({parts.length})</h3>
 
       {parts.length === 0 ? (
-        <p className="mb-4 text-caption text-gray-400">No compatible parts linked yet.</p>
+        <p className="mb-4 text-caption text-text-faint">No compatible parts linked yet.</p>
       ) : (
-        <ul className="mb-4 divide-y divide-gray-100">
+        <ul className="mb-4 divide-y divide-border-hairline">
           {parts.map((p) => (
             <li key={p.compatibility_id} className="flex items-center gap-3 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-gray-900">{p.product_title}</p>
-                <p className="truncate text-caption text-gray-500">{p.sku}</p>
+                <p className="truncate text-sm font-semibold text-text-default">{p.product_title}</p>
+                <p className="truncate text-caption text-text-soft">{p.sku}</p>
               </div>
               <RoleChip role={p.part_role} />
               <FitChip fit={p.fit} oem={p.is_oem} />
@@ -280,8 +280,8 @@ function CompatibilityManager({ modelId, parts, onChanged }: { modelId: number; 
       )}
 
       {/* Add a part */}
-      <div className="rounded-lg border border-dashed border-gray-300 p-3">
-        <p className="mb-2 text-caption font-semibold text-gray-600">Add a compatible part</p>
+      <div className="rounded-lg border border-dashed border-border-default p-3">
+        <p className="mb-2 text-caption font-semibold text-text-muted">Add a compatible part</p>
         <SkuSearchField
           value={skuLabel}
           onSelect={(s) => { setSkuId(s.id); setSkuLabel(`${s.product_title} (${s.sku})`); }}
@@ -294,7 +294,7 @@ function CompatibilityManager({ modelId, parts, onChanged }: { modelId: number; 
           <select className={selectCls} value={fit} onChange={(e) => setFit(e.target.value as typeof fit)}>
             {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
-          <label className="flex items-center gap-1 text-caption text-gray-600">
+          <label className="flex items-center gap-1 text-caption text-text-muted">
             <input type="checkbox" checked={isOem} onChange={(e) => setIsOem(e.target.checked)} /> OEM
           </label>
           <Button variant="primary" size="sm" loading={add.isPending} disabled={!skuId} onClick={() => add.mutate()}>
@@ -323,8 +323,8 @@ function SkuSearchField({ value, onSelect, onClear }: { value: string; onSelect:
 
   if (value) {
     return (
-      <div className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-        <span className="truncate text-sm text-gray-800">{value}</span>
+      <div className="flex items-center justify-between rounded-md border border-border-soft bg-surface-canvas px-3 py-2">
+        <span className="truncate text-sm text-text-default">{value}</span>
         <Button variant="ghost" size="sm" type="button" onClick={onClear}>Change</Button>
       </div>
     );
@@ -340,7 +340,7 @@ function SkuSearchField({ value, onSelect, onClear }: { value: string; onSelect:
         placeholder="Search a SKU by sku or title…"
       />
       {open && (data?.items?.length ?? 0) > 0 ? (
-        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border-soft bg-surface-card shadow-lg">
           {data!.items.map((s) => (
             <li key={s.id}>
               {/* ds-raw-button: full-width left-aligned dropdown menu row (composite content) */}
@@ -349,8 +349,8 @@ function SkuSearchField({ value, onSelect, onClear }: { value: string; onSelect:
                 onClick={() => { onSelect(s); setOpen(false); setTerm(''); }}
                 className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
               >
-                <span className="font-semibold text-gray-900">{s.product_title}</span>
-                <span className="ml-1 text-caption text-gray-500">{s.sku}</span>
+                <span className="font-semibold text-text-default">{s.product_title}</span>
+                <span className="ml-1 text-caption text-text-soft">{s.sku}</span>
               </button>
             </li>
           ))}
@@ -362,20 +362,20 @@ function SkuSearchField({ value, onSelect, onClear }: { value: string; onSelect:
 
 // ─── Small presentational bits ──────────────────────────────────────────────
 
-const inputCls = 'w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-const selectCls = 'rounded-md border border-gray-300 px-2 py-1.5 text-caption focus:border-blue-500 focus:outline-none';
+const inputCls = 'w-full rounded-md border border-border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+const selectCls = 'rounded-md border border-border-default px-2 py-1.5 text-caption focus:border-blue-500 focus:outline-none';
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-caption font-semibold text-gray-600">{label}{required ? <span className="text-red-500"> *</span> : null}</span>
+      <span className="mb-1 block text-caption font-semibold text-text-muted">{label}{required ? <span className="text-red-500"> *</span> : null}</span>
       {children}
     </label>
   );
 }
 
 function RoleChip({ role }: { role: string }) {
-  return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-slate-600">{role}</span>;
+  return <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-text-muted">{role}</span>;
 }
 
 function FitChip({ fit, oem }: { fit: string; oem: boolean }) {
@@ -386,7 +386,7 @@ function FitChip({ fit, oem }: { fit: string; oem: boolean }) {
 function StockBadge({ onHand, lifecycle, alerts }: { onHand: number; lifecycle: string; alerts: number }) {
   const eol = lifecycle !== 'active';
   const out = onHand <= 0;
-  const tone = out || (eol && onHand < 2) ? 'bg-red-50 text-red-700' : eol ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600';
+  const tone = out || (eol && onHand < 2) ? 'bg-red-50 text-red-700' : eol ? 'bg-amber-50 text-amber-700' : 'bg-surface-sunken text-text-muted';
   const label = out ? '0 in stock' : `${onHand} in stock`;
   const badge = (
     <span className={`rounded-full px-2 py-0.5 text-micro font-semibold ${tone}`}>

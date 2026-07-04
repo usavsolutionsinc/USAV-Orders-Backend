@@ -10,7 +10,7 @@ export function NasPhotosSidebarPanel() {
   return (
     <AdminSidebarShell
       stats={
-        <p className="text-micro font-bold uppercase tracking-wider text-gray-500">
+        <p className="text-micro font-bold uppercase tracking-wider text-text-soft">
           Endpoint · workflows · stations · platform
         </p>
       }
@@ -30,7 +30,7 @@ export function NasPhotosSidebarPanel() {
             leading={
               <span
                 className={`block h-2.5 w-2.5 rounded-full ${
-                  active === item.id ? "bg-blue-600" : "bg-gray-300"
+                  active === item.id ? "bg-blue-600" : "bg-surface-strong"
                 }`}
                 aria-hidden="true"
               />

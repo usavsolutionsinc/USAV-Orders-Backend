@@ -92,7 +92,7 @@ export function PhotoLibrarySidebarPanel() {
 
   return (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       search={{
         value: searchInput,
         onChange: setSearchInput,
@@ -117,7 +117,7 @@ export function PhotoLibrarySidebarPanel() {
       }}
       bodyClassName="scrollbar-hide pb-2 pt-2"
       footer={
-        <div className="space-y-1 border-t border-gray-100 px-3 py-2">
+        <div className="space-y-1 border-t border-border-hairline px-3 py-2">
           <PhotoLibraryNasBackup />
         </div>
       }

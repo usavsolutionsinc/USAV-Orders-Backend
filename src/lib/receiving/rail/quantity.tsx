@@ -34,7 +34,7 @@ function renderReceivedQty(row: ReceivingLineRow): ReactNode {
       className={
         expected != null && row.quantity_received >= expected
           ? 'text-emerald-600'
-          : 'text-gray-600'
+          : 'text-text-muted'
       }
     >
       {row.quantity_received}/{expected ?? '?'}
@@ -51,7 +51,7 @@ function renderReceivedQty(row: ReceivingLineRow): ReactNode {
 function renderScannedQty(row: ReceivingLineRow): ReactNode {
   const expected = row.quantity_expected;
   return (
-    <span className="text-gray-600">
+    <span className="text-text-muted">
       {expected ?? 1}/{expected ?? '?'}
     </span>
   );
@@ -60,7 +60,7 @@ function renderScannedQty(row: ReceivingLineRow): ReactNode {
 /** Unfound stubs carry 0/? (nothing received yet). */
 function renderUnfoundQty(row: ReceivingLineRow): ReactNode {
   return (
-    <span className="text-gray-600">
+    <span className="text-text-muted">
       {row.quantity_received}/{row.quantity_expected ?? '?'}
     </span>
   );

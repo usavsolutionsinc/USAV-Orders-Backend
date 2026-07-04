@@ -119,14 +119,14 @@ export function RailRow<TRow>({
         } ${
           (editActive ? isChecked : isSelected)
             ? 'items-center rounded-md bg-blue-50 ring-1 ring-inset ring-blue-400 py-1.5'
-            : `items-center rounded-md py-1.5 ${isFocused ? 'bg-gray-50 ring-1 ring-inset ring-gray-200' : 'hover:bg-gray-50'}`
+            : `items-center rounded-md py-1.5 ${isFocused ? 'bg-surface-canvas ring-1 ring-inset ring-border-soft' : 'hover:bg-surface-hover'}`
         }`}
       >
         {editActive ? (
           <span
             aria-hidden
             className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
-              isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+              isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-border-default bg-surface-card'
             }`}
           >
             {isChecked ? <Check className="h-2.5 w-2.5" /> : null}
@@ -146,7 +146,7 @@ export function RailRow<TRow>({
           {renderRowMain(row, { isSelected, isFocused, pkgChip })}
         </div>
         {activityAt != null ? (
-          <span className="shrink-0 self-center tabular-nums text-micro font-medium text-gray-400">
+          <span className="shrink-0 self-center tabular-nums text-micro font-medium text-text-faint">
             {railRelativeTime(activityAt)}
           </span>
         ) : null}

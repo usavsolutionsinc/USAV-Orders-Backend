@@ -66,9 +66,9 @@ export function ShippedTableHeader({
     return (
       <PaneHeader
         className="border-b-0"
-        rowClassName="border-b border-gray-300"
+        rowClassName="border-b border-border-default"
         leftSlot={
-          <p className={`${sectionLabel} text-gray-700`}>{totalCount} result{totalCount !== 1 ? 's' : ''}</p>
+          <p className={`${sectionLabel} text-text-muted`}>{totalCount} result{totalCount !== 1 ? 's' : ''}</p>
         }
         rightSlot={<BusySpinner isBusy={isBusy} />}
       />

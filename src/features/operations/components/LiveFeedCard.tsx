@@ -68,7 +68,7 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
             What’s happening on the floor
           </h2>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-border-soft shrink-0">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-card border border-border-soft shrink-0">
           <span className="relative flex h-1.5 w-1.5">
             <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${
               ablyStatus === 'connected' ? 'bg-emerald-500' :
@@ -85,7 +85,7 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
         </div>
       </div>
 
-      <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-3 sm:p-4">
+      <div className="bg-surface-card rounded-[28px] shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-3 sm:p-4">
         {isLoading && rows.length === 0 ? (
           <ul className="divide-y divide-border-soft">
             {Array.from({ length: 5 }).map((_, i) => (

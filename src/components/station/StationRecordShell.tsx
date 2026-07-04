@@ -37,7 +37,7 @@ export function StationRecordShell({
   onClick,
   animated = false,
 }: StationRecordShellProps) {
-  const zebra = index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10';
+  const zebra = index % 2 === 0 ? 'bg-surface-card' : 'bg-surface-canvas/10';
   const body = (
     <>
       <div className="flex min-w-0 flex-col">
@@ -59,7 +59,7 @@ export function StationRecordShell({
         whileHover={{ x: 2 }}
         whileTap={{ scale: 0.998 }}
         onClick={onClick}
-        className={`grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-gray-300 px-3 py-1.5 transition-all hover:bg-blue-50/40 ${zebra}`}
+        className={`grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border-default px-3 py-1.5 transition-all hover:bg-blue-50/40 ${zebra}`}
       >
         {body}
       </motion.div>
@@ -69,7 +69,7 @@ export function StationRecordShell({
   return (
     <div
       onClick={onClick}
-      className={`grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-gray-300 px-3 py-1.5 transition-colors hover:bg-blue-50/40 ${zebra}`}
+      className={`grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border-default px-3 py-1.5 transition-colors hover:bg-blue-50/40 ${zebra}`}
     >
       {body}
     </div>

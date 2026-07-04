@@ -76,12 +76,12 @@ export function FbaTrackingBundleCard({
         isOver
           ? 'border-dashed border-blue-400 bg-blue-50/40'
           : bundle.allocations.length > 0
-            ? 'border-gray-200 bg-white'
-            : 'border-gray-200 bg-gray-50/30'
+            ? 'border-border-soft bg-surface-card'
+            : 'border-border-soft bg-surface-canvas/30'
       }`}
     >
       {/* Header — grid matches FbaSelectedLineRow so checkboxes align with item rows below */}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 bg-gray-50/80 px-3 py-1.5">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 bg-surface-canvas/80 px-3 py-1.5">
         {/* Col 1: checkbox — always reserves slot for alignment */}
         <div className="flex h-5 w-5 items-center justify-center">
           {bundle.allocations.length > 0 ? (
@@ -103,7 +103,7 @@ export function FbaTrackingBundleCard({
               <IconButton
                 type="button"
                 onClick={() => setEditingTracking(true)}
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-faint hover:bg-surface-sunken hover:text-text-muted"
                 ariaLabel="Edit tracking number"
                 icon={<Pencil className="h-2.5 w-2.5" />}
               />
@@ -118,13 +118,13 @@ export function FbaTrackingBundleCard({
             onKeyDown={(e) => { if (e.key === 'Enter' && bundle.tracking_number.trim()) setEditingTracking(false); }}
             autoFocus={editingTracking}
             placeholder="1Z..."
-            className="min-w-0 rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-micro font-bold text-gray-900 outline-none transition-all placeholder:text-gray-300 focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+            className="min-w-0 rounded-md border border-border-soft bg-surface-card px-2 py-1 font-mono text-micro font-bold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
           />
         )}
 
         {/* Col 3: actions */}
         <div className="flex shrink-0 items-center gap-1">
-          <span className="text-mini font-black uppercase tracking-widest text-gray-400">
+          <span className="text-mini font-black uppercase tracking-widest text-text-faint">
             {bundle.allocations.length > 0
               ? `${bundle.allocations.length} · ${totalUnits}`
               : ''}
@@ -132,16 +132,16 @@ export function FbaTrackingBundleCard({
           <IconButton
             type="button"
             onClick={() => onToggleCollapse(bundleIndex)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-600"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-faint hover:text-text-muted"
             ariaLabel={bundle.collapsed ? 'Expand box' : 'Collapse box'}
             icon={bundle.collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
           />
           {/* Divider + extra padding so the destructive trash button is harder to mis-tap next to the chevron */}
-          <span aria-hidden className="mx-0.5 h-3 w-px bg-gray-200" />
+          <span aria-hidden className="mx-0.5 h-3 w-px bg-surface-strong" />
           <IconButton
             type="button"
             onClick={() => onRemoveBundle(bundleIndex)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-300 hover:bg-red-50 hover:text-red-500"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-faint hover:bg-red-50 hover:text-red-500"
             ariaLabel="Remove this box"
             icon={<Trash2 className="h-3 w-3" />}
           />
@@ -159,13 +159,13 @@ export function FbaTrackingBundleCard({
             className="overflow-hidden"
           >
             {bundle.allocations.length === 0 ? (
-              <div className="border-t border-gray-100 px-3 py-2">
-                <p className="text-center text-eyebrow font-bold uppercase tracking-wider text-gray-400">
+              <div className="border-t border-border-hairline px-3 py-2">
+                <p className="text-center text-eyebrow font-bold uppercase tracking-wider text-text-faint">
                   Drag items here
                 </p>
               </div>
             ) : (
-              <div className="border-t border-gray-100">
+              <div className="border-t border-border-hairline">
                 {bundle.allocations.map((alloc) => (
                   <FbaDraggableLineRow
                     key={alloc.item_id}

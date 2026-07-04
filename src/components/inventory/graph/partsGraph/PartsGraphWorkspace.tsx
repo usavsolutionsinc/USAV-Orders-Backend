@@ -27,12 +27,12 @@ export function PartsGraphWorkspace() {
   const summary = data?.summary;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-gray-50">
+    <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
       {/* Summary strip */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-gray-200 bg-white px-4 py-2.5 text-label">
-        <span className="font-semibold text-gray-900">Parts (Zoho items · derived from “-P”)</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border-soft bg-surface-card px-4 py-2.5 text-label">
+        <span className="font-semibold text-text-default">Parts (Zoho items · derived from “-P”)</span>
         {summary && (
-          <span className="text-gray-500">
+          <span className="text-text-soft">
             {summary.baseCount} base units · {summary.logicalPartCount} logical parts ·{' '}
             {summary.partSkuCount} part SKUs
           </span>
@@ -42,7 +42,7 @@ export function PartsGraphWorkspace() {
             {summary.reviewedCount}/{summary.logicalPartCount} reviewed
           </span>
         )}
-        <span className="ml-auto text-caption text-gray-400">
+        <span className="ml-auto text-caption text-text-faint">
           Parent pairing is a later manual phase — links here are not asserted.
         </span>
       </div>
@@ -58,7 +58,7 @@ export function PartsGraphWorkspace() {
             </div>
           ) : !isLoading && elements.length === 0 ? (
             <div className="flex h-full items-center justify-center text-center">
-              <p className="max-w-xs text-[13px] text-gray-400">
+              <p className="max-w-xs text-[13px] text-text-faint">
                 No “-P” part SKUs found in the Zoho items mirror for this org. Run an items sync,
                 or confirm parts use the <span className="font-mono">{'<base>-P-<n>'}</span> convention.
               </p>
@@ -73,7 +73,7 @@ export function PartsGraphWorkspace() {
                 onNodeRecenter={noop}
               />
               {isLoading && (
-                <div className="pointer-events-none absolute right-3 top-3 rounded-md bg-white/90 px-2 py-1 text-caption text-gray-400 shadow-sm">
+                <div className="pointer-events-none absolute right-3 top-3 rounded-md bg-surface-card/90 px-2 py-1 text-caption text-text-faint shadow-sm">
                   Loading…
                 </div>
               )}

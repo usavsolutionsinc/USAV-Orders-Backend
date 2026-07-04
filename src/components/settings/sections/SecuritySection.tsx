@@ -130,42 +130,42 @@ export function SecuritySection() {
   }, [loadAcctPasskeys]);
 
   if (!user) {
-    return <div className="text-sm text-gray-500">Sign in to manage your security.</div>;
+    return <div className="text-sm text-text-soft">Sign in to manage your security.</div>;
   }
 
   return (
     <section className="space-y-8">
       <header>
         <h1 className="sr-only">Security</h1>
-        <p className="text-sm text-gray-500">Manage your PIN and passkeys.</p>
+        <p className="text-sm text-text-soft">Manage your PIN and passkeys.</p>
       </header>
 
       {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
       {ok && <div className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{ok}</div>}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <div className="rounded-xl border border-border-soft bg-surface-card p-5 space-y-4">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Change your PIN</h2>
-          <p className="text-xs text-gray-500">4–6 digit number. Used at shared stations.</p>
+          <h2 className="text-sm font-semibold text-text-default">Change your PIN</h2>
+          <p className="text-xs text-text-soft">4–6 digit number. Used at shared stations.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="block">
-            <span className="block text-xs text-gray-500 mb-1">Current PIN</span>
+            <span className="block text-xs text-text-soft mb-1">Current PIN</span>
             <input type="password" inputMode="numeric" maxLength={6}
               value={currentPin} onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
-              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              className="w-full rounded-md border border-border-default px-2 py-1.5 text-sm" />
           </label>
           <label className="block">
-            <span className="block text-xs text-gray-500 mb-1">New PIN</span>
+            <span className="block text-xs text-text-soft mb-1">New PIN</span>
             <input type="password" inputMode="numeric" maxLength={6}
               value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              className="w-full rounded-md border border-border-default px-2 py-1.5 text-sm" />
           </label>
           <label className="block">
-            <span className="block text-xs text-gray-500 mb-1">Confirm new PIN</span>
+            <span className="block text-xs text-text-soft mb-1">Confirm new PIN</span>
             <input type="password" inputMode="numeric" maxLength={6}
               value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              className="w-full rounded-md border border-border-default px-2 py-1.5 text-sm" />
           </label>
         </div>
         <div className="flex justify-end">
@@ -175,20 +175,20 @@ export function SecuritySection() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+      <div className="rounded-xl border border-border-soft bg-surface-card p-5 space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Passkeys</h2>
-          <p className="text-xs text-gray-500">One-tap sign-in via Touch ID, Face ID, Windows Hello, or your device PIN.</p>
+          <h2 className="text-sm font-semibold text-text-default">Passkeys</h2>
+          <p className="text-xs text-text-soft">One-tap sign-in via Touch ID, Face ID, Windows Hello, or your device PIN.</p>
         </div>
         <Button variant="primary" size="sm" disabled={addingPasskey} onClick={addPasskey}>
           {addingPasskey ? 'Adding…' : 'Add a passkey on this device'}
         </Button>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+      <div className="rounded-xl border border-border-soft bg-surface-card p-5 space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Account passkey (cross-workspace)</h2>
-          <p className="text-xs text-gray-500">
+          <h2 className="text-sm font-semibold text-text-default">Account passkey (cross-workspace)</h2>
+          <p className="text-xs text-text-soft">
             Sign in by passkey at <code>/account/signin</code> — resolves your account and lands you in your
             workspace (switch from Settings if you belong to more than one).
           </p>
@@ -198,12 +198,12 @@ export function SecuritySection() {
         </Button>
 
         {acctPasskeys.length > 0 && (
-          <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
+          <div className="divide-y divide-border-hairline overflow-hidden rounded-lg border border-border-soft">
             {acctPasskeys.map((p) => (
               <div key={p.id} className="flex items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-gray-900">{p.label || 'Passkey'}</div>
-                  <div className="truncate text-xs text-gray-500">
+                  <div className="truncate text-sm font-medium text-text-default">{p.label || 'Passkey'}</div>
+                  <div className="truncate text-xs text-text-soft">
                     Added {new Date(p.createdAt).toLocaleDateString()}
                     {p.lastUsedAt ? ` · last used ${new Date(p.lastUsedAt).toLocaleDateString()}` : ' · never used'}
                   </div>

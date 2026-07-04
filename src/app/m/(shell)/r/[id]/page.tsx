@@ -197,18 +197,18 @@ function CartonPageInner() {
   const [actionsOpen, setActionsOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
+    <div className="min-h-screen bg-surface-canvas flex flex-col">
+      <header className="sticky top-0 z-10 bg-surface-card border-b border-border-soft px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-text-soft">
               Package
             </p>
-            <h1 className="truncate text-lg font-black text-slate-900">
+            <h1 className="truncate text-lg font-black text-text-default">
               RCV-{receivingId}
             </h1>
             {data?.purchase_orders && data.purchase_orders.length > 0 ? (
-              <p className="mt-0.5 truncate font-mono text-caption font-bold text-slate-600">
+              <p className="mt-0.5 truncate font-mono text-caption font-bold text-text-muted">
                 PO{' '}
                 {data.purchase_orders
                   .map((p) => p.zoho_purchaseorder_number || p.zoho_purchaseorder_id)
@@ -220,7 +220,7 @@ function CartonPageInner() {
             <ScanAgainBar />
             <NetworkChip compact />
             {carton ? (
-              <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+              <span className="inline-flex items-center rounded-full bg-surface-inverse px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
                 {platformLabel(carton)}
               </span>
             ) : null}
@@ -238,7 +238,7 @@ function CartonPageInner() {
 
       <main className="flex-1 px-4 py-3 space-y-3 pb-24">
         {loading && (
-          <p className="text-center text-sm font-semibold text-slate-500 py-10">
+          <p className="text-center text-sm font-semibold text-text-soft py-10">
             Loading…
           </p>
         )}
@@ -251,14 +251,14 @@ function CartonPageInner() {
 
         {/* ─── Carton metadata block ─── */}
         {!loading && carton && (
-          <section className="rounded-lg border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
+          <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm divide-y divide-border-hairline">
             <Row
               label="Tracking"
               value={
                 carton.tracking ? (
                   <span className="font-mono">{carton.tracking}</span>
                 ) : (
-                  <span className="text-slate-400">—</span>
+                  <span className="text-text-faint">—</span>
                 )
               }
               hint={carton.carrier}
@@ -280,9 +280,9 @@ function CartonPageInner() {
                     <span className="font-mono font-black">
                       {data.totals.received}
                     </span>
-                    <span className="text-slate-400"> / </span>
+                    <span className="text-text-faint"> / </span>
                     <span className="font-mono">{data.totals.expected || '?'}</span>
-                    <span className="ml-1 text-slate-500">units</span>
+                    <span className="ml-1 text-text-soft">units</span>
                   </span>
                 }
                 hint={`${data.totals.lines_complete}/${data.totals.lines} lines complete`}
@@ -311,7 +311,7 @@ function CartonPageInner() {
         {/* ─── Lines (the bundle split — one card per part) ─── */}
         {!loading && lines.length > 0 && (
           <section>
-            <p className="px-1 mb-2 text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            <p className="px-1 mb-2 text-xs font-black uppercase tracking-[0.16em] text-text-soft">
               Lines ({lines.length})
             </p>
             <div className="space-y-2">
@@ -325,7 +325,7 @@ function CartonPageInner() {
                     key={line.id}
                     type="button"
                     onClick={() => router.push(`/m/l/${line.id}`)}
-                    className="block w-full text-left rounded-lg border border-slate-200 bg-white px-4 py-2.5 shadow-sm active:bg-slate-50"
+                    className="block w-full text-left rounded-lg border border-border-soft bg-surface-card px-4 py-2.5 shadow-sm active:bg-surface-hover"
                   >
                     {/* Slim identity row — status dot + product title. */}
                     <div className="flex min-w-0 items-center gap-2">
@@ -338,7 +338,7 @@ function CartonPageInner() {
                           className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(line.workflow_status, received, expected)}`}
                         />
                       </HoverTooltip>
-                      <p className="truncate text-sm font-bold text-slate-900">
+                      <p className="truncate text-sm font-bold text-text-default">
                         {line.item_name || line.sku || `Line #${line.id}`}
                       </p>
                     </div>
@@ -350,7 +350,7 @@ function CartonPageInner() {
                           {conditionGradeTableLabel(line.condition_grade)}
                         </span>
                       )}
-                      <span className={`text-caption font-black uppercase tracking-widest ${isComplete ? 'text-emerald-600' : 'text-slate-600'}`}>
+                      <span className={`text-caption font-black uppercase tracking-widest ${isComplete ? 'text-emerald-600' : 'text-text-muted'}`}>
                         {received}/{expected ?? '?'}
                       </span>
                     </div>
@@ -379,7 +379,7 @@ function CartonPageInner() {
                           </span>
                         ))}
                         {line.serials.length > 4 && (
-                          <span className="text-xs font-bold text-slate-500">
+                          <span className="text-xs font-bold text-text-soft">
                             +{line.serials.length - 4} more
                           </span>
                         )}
@@ -393,41 +393,41 @@ function CartonPageInner() {
         )}
 
         {!loading && lines.length === 0 && (
-          <p className="text-center text-sm font-semibold text-slate-500 py-10">
+          <p className="text-center text-sm font-semibold text-text-soft py-10">
             No lines on this package yet.
           </p>
         )}
 
         {/* ─── Recent activity timeline ─── */}
         {!loading && events.length > 0 && (
-          <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+          <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-text-soft">
               Recent activity ({events.length})
             </p>
             <ul className="space-y-2">
               {events.slice(0, 15).map((ev) => (
                 <li key={ev.id} className="flex items-start gap-2 text-caption">
-                  <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+                  <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-border-emphasis shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-slate-900">
+                    <p className="font-bold text-text-default">
                       {ev.event_type.replace(/_/g, ' ')}
                       {ev.sku ? (
-                        <span className="ml-1 font-mono text-slate-600">
+                        <span className="ml-1 font-mono text-text-muted">
                           · {ev.sku}
                         </span>
                       ) : null}
                       {ev.serial_number ? (
-                        <span className="ml-1 font-mono text-slate-500">
+                        <span className="ml-1 font-mono text-text-soft">
                           · {ev.serial_number}
                         </span>
                       ) : null}
                       {ev.bin_name ? (
-                        <span className="ml-1 font-semibold text-slate-600">
+                        <span className="ml-1 font-semibold text-text-muted">
                           → {ev.bin_name}
                         </span>
                       ) : null}
                     </p>
-                    <p className="text-slate-500">
+                    <p className="text-text-soft">
                       {ev.actor_name || 'Unknown'} · {formatAgo(ev.occurred_at)} ago
                       {ev.station ? ` · ${ev.station}` : ''}
                     </p>
@@ -440,7 +440,7 @@ function CartonPageInner() {
       </main>
 
       <footer
-        className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md"
+        className="sticky bottom-0 z-20 border-t border-border-soft bg-surface-card/95 px-4 py-3 backdrop-blur-md"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <Button
@@ -452,7 +452,7 @@ function CartonPageInner() {
         >
           {lines.length === 0 ? 'No lines to update' : `Update ${lines.length} line${lines.length === 1 ? '' : 's'}`}
         </Button>
-        <p className="mt-2 text-center text-caption font-semibold text-slate-500">
+        <p className="mt-2 text-center text-caption font-semibold text-text-soft">
           Or tap a line above to update one at a time.
         </p>
       </footer>
@@ -484,13 +484,13 @@ function Row({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3 px-4 py-2.5">
-      <span className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+      <span className="text-xs font-black uppercase tracking-[0.16em] text-text-soft">
         {label}
       </span>
       <div className="text-right min-w-0">
-        <p className="truncate text-sm font-bold text-slate-900">{value}</p>
+        <p className="truncate text-sm font-bold text-text-default">{value}</p>
         {hint ? (
-          <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
+          <p className="mt-0.5 truncate text-xs font-semibold text-text-soft">
             {hint}
           </p>
         ) : null}
@@ -501,7 +501,7 @@ function Row({
 
 export default function CartonPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+    <Suspense fallback={<div className="min-h-screen bg-surface-canvas" />}>
       <CartonPageInner />
     </Suspense>
   );

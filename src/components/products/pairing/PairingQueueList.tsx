@@ -39,9 +39,9 @@ export function PairingQueueList({ query, sort, selectedSku, onSelect }: Pairing
   const { items, total, loading, error } = usePairingQueue(debouncedQuery, sort);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       {/* Count bar */}
-      <div className={`flex items-center justify-between gap-2 border-b border-gray-100 ${SIDEBAR_GUTTER} py-1.5 text-micro font-black uppercase tracking-wider text-gray-500`}>
+      <div className={`flex items-center justify-between gap-2 border-b border-border-hairline ${SIDEBAR_GUTTER} py-1.5 text-micro font-black uppercase tracking-wider text-text-soft`}>
         <span>
           {loading ? 'Loading…' : total === null ? '' : `${total} need review`}
         </span>
@@ -52,9 +52,9 @@ export function PairingQueueList({ query, sort, selectedSku, onSelect }: Pairing
         {loading && items.length === 0 ? (
           <div className="space-y-0">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className={`border-b border-gray-50 ${SIDEBAR_GUTTER} py-3`}>
-                <div className="h-3 w-32 rounded bg-gray-100 animate-pulse" />
-                <div className="mt-1.5 h-2.5 w-48 rounded bg-gray-50 animate-pulse" />
+              <div key={i} className={`border-b border-border-hairline ${SIDEBAR_GUTTER} py-3`}>
+                <div className="h-3 w-32 rounded bg-surface-sunken animate-pulse" />
+                <div className="mt-1.5 h-2.5 w-48 rounded bg-surface-canvas animate-pulse" />
               </div>
             ))}
           </div>
@@ -65,17 +65,17 @@ export function PairingQueueList({ query, sort, selectedSku, onSelect }: Pairing
           </div>
         ) : items.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-xs font-bold text-gray-500">
+            <p className="text-xs font-bold text-text-soft">
               {debouncedQuery ? 'No matches' : 'All caught up'}
             </p>
-            <p className="mt-1 text-micro text-gray-400">
+            <p className="mt-1 text-micro text-text-faint">
               {debouncedQuery
                 ? 'Try a different search term.'
                 : 'No pairing suggestions to review right now.'}
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border-hairline">
             {items.map((item) => (
               <PairingQueueRow
                 key={item.skuCatalogId}
@@ -106,23 +106,23 @@ function PairingQueueRow({
         type="button"
         onClick={() => onSelect(item)}
         className={`ds-raw-button flex w-full items-start gap-2.5 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors ${
-          selected ? 'bg-blue-50 border-l-2 border-l-blue-600' : 'hover:bg-gray-50'
+          selected ? 'bg-blue-50 border-l-2 border-l-blue-600' : 'hover:bg-surface-hover'
         }`}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-100 ring-1 ring-gray-200">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-sunken ring-1 ring-border-soft">
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="text-micro font-bold text-gray-300">{item.sku.slice(0, 3)}</span>
+            <span className="text-micro font-bold text-text-faint">{item.sku.slice(0, 3)}</span>
           )}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate font-mono text-xs font-bold text-gray-900">{item.sku}</span>
+            <span className="truncate font-mono text-xs font-bold text-text-default">{item.sku}</span>
             {item.isActive === false && (
               <HoverTooltip label="This canonical SKU is inactive in the catalog" asChild focusable={false}>
-                <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1 text-eyebrow font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200">
+                <span className="inline-flex shrink-0 items-center rounded bg-surface-sunken px-1 text-eyebrow font-bold uppercase tracking-wider text-text-soft ring-1 ring-border-soft">
                   inactive
                 </span>
               </HoverTooltip>
@@ -139,17 +139,17 @@ function PairingQueueRow({
                 </span>
               </HoverTooltip>
             )}
-            <span className="text-micro font-semibold text-gray-400">
+            <span className="text-micro font-semibold text-text-faint">
               {item.suggestionCount} suggested
             </span>
           </div>
-          <p className="mt-0.5 line-clamp-2 text-caption leading-tight text-gray-600">
+          <p className="mt-0.5 line-clamp-2 text-caption leading-tight text-text-muted">
             {item.productTitle || '—'}
           </p>
           {item.matchedVia && (
             <p className="mt-0.5 truncate text-eyebrow font-semibold uppercase tracking-wider text-blue-600">
               matched {platformStyle(item.matchedVia.platform).label}:{' '}
-              <span className="font-mono normal-case tracking-normal text-gray-700">
+              <span className="font-mono normal-case tracking-normal text-text-muted">
                 {item.matchedVia.platform === 'ecwid'
                   ? item.matchedVia.platformSku || item.matchedVia.platformItemId
                   : item.matchedVia.platformItemId || item.matchedVia.platformSku}
@@ -185,7 +185,7 @@ function ConfidenceDot({ value }: { value: number }) {
   const color =
     value >= 80 ? 'bg-emerald-500'
     : value >= 60 ? 'bg-amber-500'
-    : 'bg-slate-400';
+    : 'bg-border-emphasis';
   return (
     <HoverTooltip label={`Top confidence: ${value}`} asChild focusable={false}>
       <span

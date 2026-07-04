@@ -112,13 +112,13 @@ export function PhotoLabelEditor({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-black/5"
+        className="w-full max-w-md rounded-2xl bg-surface-card shadow-xl ring-1 ring-black/5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border-hairline px-4 py-3">
           <div className="flex items-center gap-2">
-            <Tag className="h-4 w-4 text-gray-500" />
-            <h2 className="text-sm font-bold text-gray-900">
+            <Tag className="h-4 w-4 text-text-soft" />
+            <h2 className="text-sm font-bold text-text-default">
               {single ? 'Edit labels' : `Label ${photos.length} photos`}
             </h2>
           </div>
@@ -126,17 +126,17 @@ export function PhotoLabelEditor({
             icon={<X className="h-4 w-4" />}
             onClick={onClose}
             ariaLabel="Close"
-            className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100"
+            className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-surface-sunken"
           />
         </div>
 
         <div className="max-h-[50vh] overflow-y-auto px-4 py-3">
           {isLoading && labels.length === 0 ? (
-            <div className="flex items-center gap-2 py-4 text-caption text-gray-400">
+            <div className="flex items-center gap-2 py-4 text-caption text-text-faint">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading labels…
             </div>
           ) : labels.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-caption text-gray-500">
+            <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-soft">
               No labels yet. Create one to get started.
             </div>
           ) : (
@@ -170,7 +170,7 @@ export function PhotoLabelEditor({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-4 py-3">
+        <div className="flex items-center justify-between gap-2 border-t border-border-hairline px-4 py-3">
           <Button
             variant="ghost"
             size="sm"

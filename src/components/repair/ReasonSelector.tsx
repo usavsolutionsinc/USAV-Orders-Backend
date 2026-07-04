@@ -54,16 +54,16 @@ export function ReasonSelector({
                                 onClick={() => toggleReason(reason)}
                                 className={`ds-raw-button flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
                                     isSelected
-                                        ? 'bg-gray-900 text-white'
-                                        : 'border border-gray-200 bg-gray-50 text-gray-900 hover:border-gray-300 hover:bg-gray-100'
+                                        ? 'bg-surface-inverse text-white'
+                                        : 'border border-border-soft bg-surface-canvas text-text-default hover:border-border-default hover:bg-surface-sunken'
                                 }`}
                             >
                                 <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md ${
                                     isSelected
-                                        ? 'bg-white'
-                                        : 'border border-gray-300 bg-white'
+                                        ? 'bg-surface-card'
+                                        : 'border border-border-default bg-surface-card'
                                 }`}>
-                                    {isSelected && <Check className="h-3 w-3 text-gray-900" />}
+                                    {isSelected && <Check className="h-3 w-3 text-text-default" />}
                                 </div>
                                 <span className="text-xs font-bold uppercase tracking-wide">
                                     {reason}
@@ -77,7 +77,7 @@ export function ReasonSelector({
             {/* Repair Notes */}
             <div className="space-y-2">
                 <label className={SIDEBAR_INTAKE_LABEL_CLASS}>
-                    Repair Notes <span className="text-gray-400">-- Optional</span>
+                    Repair Notes <span className="text-text-faint">-- Optional</span>
                 </label>
                 <textarea
                     value={notes}

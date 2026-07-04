@@ -48,11 +48,11 @@ export function LabelRoomSidebar({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-gray-100 bg-gradient-to-b from-white to-gray-50/50 px-4 pb-3 pt-4">
-        <h2 className="text-base font-bold tracking-tight text-gray-900">
+      <div className="border-b border-border-hairline bg-gradient-to-b from-white to-gray-50/50 px-4 pb-3 pt-4">
+        <h2 className="text-base font-bold tracking-tight text-text-default">
           Pick a room
         </h2>
-        <p className="mt-0.5 text-caption text-gray-500">
+        <p className="mt-0.5 text-caption text-text-soft">
           {selectedRoom
             ? (zoneLetter ?? '?')
             : emptySubtitle}
@@ -76,15 +76,15 @@ export function LabelRoomSidebar({
                   key={room}
                   type="button"
                   onClick={() => onSelect(room)}
-                  className={`ds-raw-button flex items-center gap-3 rounded-2xl border bg-white p-3 text-left transition-all active:scale-[0.99] ${
+                  className={`ds-raw-button flex items-center gap-3 rounded-2xl border bg-surface-card p-3 text-left transition-all active:scale-[0.99] ${
                     isSelected
                       ? 'border-blue-300 bg-blue-50/50 ring-2 ring-blue-200'
-                      : 'border-gray-200 hover:border-blue-200 hover:bg-blue-50/30'
+                      : 'border-border-soft hover:border-blue-200 hover:bg-blue-50/30'
                   }`}
                 >
                   <ZoneLetterTile letter={letter} active={isSelected} />
                   <div className="min-w-0 flex-1">
-                    <p className="break-words text-sm font-semibold leading-snug text-gray-900">
+                    <p className="break-words text-sm font-semibold leading-snug text-text-default">
                       {room}
                     </p>
                     {!letter && (
@@ -105,9 +105,9 @@ export function LabelRoomSidebar({
 
 function EmptyRooms() {
   return (
-    <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-10 text-center">
-      <p className="text-sm font-semibold text-gray-700">No rooms yet</p>
-      <p className="mt-1 text-[11.5px] text-gray-500">
+    <div className="rounded-2xl border border-dashed border-border-soft px-5 py-10 text-center">
+      <p className="text-sm font-semibold text-text-muted">No rooms yet</p>
+      <p className="mt-1 text-[11.5px] text-text-soft">
         Open the <span className="font-semibold">Rooms</span> tab and add one — it'll show up here.
       </p>
     </div>
@@ -116,11 +116,11 @@ function EmptyRooms() {
 
 function NoMatches({ query }: { query: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-10 text-center">
-      <p className="text-sm font-semibold text-gray-700">
+    <div className="rounded-2xl border border-dashed border-border-soft px-5 py-10 text-center">
+      <p className="text-sm font-semibold text-text-muted">
         No rooms match “{query.trim()}”
       </p>
-      <p className="mt-1 text-[11.5px] text-gray-500">
+      <p className="mt-1 text-[11.5px] text-text-soft">
         Try a different name or zone letter.
       </p>
     </div>

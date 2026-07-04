@@ -121,7 +121,7 @@ export function InventoryTriageSidebar() {
             ]}
             bodyClassName="scrollbar-hide pb-5 space-y-2"
         >
-            <p className={`${microBadge} px-1 text-gray-500`}>
+            <p className={`${microBadge} px-1 text-text-soft`}>
                 {rows.length > 0
                     ? `${rows.length} ${status === 'open' ? 'open ' : ''}issue${rows.length !== 1 ? 's' : ''}`
                     : 'Triage queue — unmatched / flagged tracking'}
@@ -136,8 +136,8 @@ export function InventoryTriageSidebar() {
             ) : null}
 
             {!isError && rows.length === 0 && !isFetching ? (
-                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
-                    <p className={`${microBadge} text-gray-500`}>No {status === 'all' ? '' : status} issues.</p>
+                <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center">
+                    <p className={`${microBadge} text-text-soft`}>No {status === 'all' ? '' : status} issues.</p>
                 </div>
             ) : null}
 
@@ -151,14 +151,14 @@ export function InventoryTriageSidebar() {
                                 onClick={() => select(row.id)}
                                 className={cn(
                                     'ds-raw-button flex w-full flex-col items-start gap-1 rounded-lg px-2.5 py-2 text-left transition-colors',
-                                    active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50',
+                                    active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-surface-hover',
                                 )}
                             >
                                 <div className="flex w-full items-center justify-between gap-2">
                                     <span
                                         className={cn(
                                             'truncate font-mono text-label font-semibold',
-                                            active ? 'text-blue-900' : 'text-gray-900',
+                                            active ? 'text-blue-900' : 'text-text-default',
                                         )}
                                     >
                                         {row.tracking_number}
@@ -172,7 +172,7 @@ export function InventoryTriageSidebar() {
                                         {row.status}
                                     </span>
                                 </div>
-                                <div className="flex w-full items-center justify-between gap-2 text-caption text-gray-500">
+                                <div className="flex w-full items-center justify-between gap-2 text-caption text-text-soft">
                                     <span className="truncate">
                                         {row.exception_reason || 'Exception'}
                                         {row.source_station ? ` · ${row.source_station}` : ''}

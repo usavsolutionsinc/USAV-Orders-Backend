@@ -20,7 +20,7 @@ function statusBadgeClass(tone: 'gray' | 'emerald' | 'amber' | 'red' | 'blue'): 
         case 'amber':   return 'bg-amber-100 text-amber-700';
         case 'red':     return 'bg-red-100 text-red-700';
         case 'blue':    return 'bg-blue-100 text-blue-700';
-        default:        return 'bg-gray-100 text-gray-700';
+        default:        return 'bg-surface-sunken text-text-muted';
     }
 }
 
@@ -154,12 +154,12 @@ export function InventoryResultCard({
                     'ds-raw-button w-full text-left p-3 rounded-xl border transition-all group',
                     isActive
                         ? 'border-blue-400 bg-blue-50'
-                        : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50',
+                        : 'border-border-soft bg-surface-canvas hover:border-blue-300 hover:bg-blue-50',
                 ].join(' ')}
             >
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2">
-                        <span className={`${sectionLabel} text-gray-900 group-hover:text-blue-600 truncate pr-8`}>
+                        <span className={`${sectionLabel} text-text-default group-hover:text-blue-600 truncate pr-8`}>
                             {body.title}
                         </span>
                         {body.badge ? (
@@ -168,8 +168,8 @@ export function InventoryResultCard({
                             </span>
                         ) : null}
                     </div>
-                    <p className="text-eyebrow text-gray-500 font-semibold truncate">{body.subtitle}</p>
-                    <p className={`${microBadge} font-mono text-gray-500 truncate`}>{body.meta}</p>
+                    <p className="text-eyebrow text-text-soft font-semibold truncate">{body.subtitle}</p>
+                    <p className={`${microBadge} font-mono text-text-soft truncate`}>{body.meta}</p>
                 </div>
             </button>
             <HoverTooltip label="Copy identifier" asChild>
@@ -185,7 +185,7 @@ export function InventoryResultCard({
                         'absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 flex items-center justify-center',
                         copied
                             ? 'bg-emerald-50 border-emerald-200'
-                            : 'bg-white border-gray-100 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm',
+                            : 'bg-surface-card border-border-hairline hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm',
                     ].join(' ')}
                 />
             </HoverTooltip>

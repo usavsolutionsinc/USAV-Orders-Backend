@@ -99,7 +99,7 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
 
     if (!selectedId) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+            <div className="flex h-full w-full items-center justify-center bg-surface-canvas text-text-faint">
                 <div className="space-y-2 text-center">
                     <AlertTriangle className="mx-auto h-12 w-12 opacity-20" />
                     <p className="text-sm font-medium">Select an issue from the sidebar to begin triage</p>
@@ -110,7 +110,7 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
 
     if (isLoading) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+            <div className="flex h-full w-full items-center justify-center bg-surface-canvas text-text-faint">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="ml-2 text-sm">Loading issue…</span>
             </div>
@@ -119,7 +119,7 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
 
     if (isError || !data) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-gray-50">
+            <div className="flex h-full w-full items-center justify-center bg-surface-canvas">
                 <div className="mx-6 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                     {error instanceof Error ? error.message : 'Failed to load this issue.'}
                 </div>
@@ -131,9 +131,9 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
     const isOpen = data.status === 'open';
 
     return (
-        <div className="flex h-full w-full min-w-0 flex-col bg-white">
+        <div className="flex h-full w-full min-w-0 flex-col bg-surface-card">
             {/* Header */}
-            <header className="flex h-14 shrink-0 items-center justify-between border-b border-gray-100 bg-white/50 px-6 backdrop-blur-sm">
+            <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-hairline bg-surface-card/50 px-6 backdrop-blur-sm">
                 <div className="flex items-center gap-3">
                     <span
                         className={cn(
@@ -143,9 +143,9 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
                     >
                         {data.status}
                     </span>
-                    <div className="mx-1 h-4 w-px bg-gray-200" />
-                    <div className="flex items-center gap-2 text-caption font-bold text-gray-500">
-                        <Clock className="h-3.5 w-3.5 text-gray-400" />
+                    <div className="mx-1 h-4 w-px bg-surface-strong" />
+                    <div className="flex items-center gap-2 text-caption font-bold text-text-soft">
+                        <Clock className="h-3.5 w-3.5 text-text-faint" />
                         Opened {formatWhen(data.created_at)}
                     </div>
                 </div>
@@ -188,10 +188,10 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
                 <div className="mx-auto max-w-4xl space-y-8">
                     {/* Summary */}
                     <div className="space-y-1">
-                        <h1 className="font-mono text-3xl font-black tracking-tight text-gray-900">
+                        <h1 className="font-mono text-3xl font-black tracking-tight text-text-default">
                             {data.tracking_number}
                         </h1>
-                        <p className="text-lg font-bold text-gray-500">
+                        <p className="text-lg font-bold text-text-soft">
                             {data.exception_reason || 'Exception'}
                         </p>
                     </div>
@@ -228,12 +228,12 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
 
                     {/* Notes */}
                     <div className="space-y-3">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Notes</h3>
+                        <h3 className="text-xs font-black uppercase tracking-widest text-text-faint">Notes</h3>
                         <textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Add triage notes…"
-                            className="min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                            className="min-h-[120px] w-full rounded-2xl border border-border-soft bg-surface-card p-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                         />
                         <div className="flex items-center gap-3">
                             <Button
@@ -266,10 +266,10 @@ function Field({
 }) {
     return (
         <div className="space-y-1">
-            <p className="text-micro font-black uppercase tracking-widest text-gray-400">{label}</p>
+            <p className="text-micro font-black uppercase tracking-widest text-text-faint">{label}</p>
             <div className="flex items-center gap-2">
                 {icon}
-                <span className="text-sm font-black text-gray-900">{children}</span>
+                <span className="text-sm font-black text-text-default">{children}</span>
             </div>
         </div>
     );

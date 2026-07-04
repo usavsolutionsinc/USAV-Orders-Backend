@@ -34,8 +34,8 @@ export function RepairPaperworkSheet({ active, onToggle }: RepairPaperworkSheetP
         ariaLabel={active ? 'Hide repair paperwork' : 'View repair paperwork'}
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
           active
-            ? 'border-gray-900 bg-gray-900 text-white'
-            : 'border-gray-200 text-gray-500 hover:border-gray-900 hover:text-gray-900'
+            ? 'border-border-strong bg-surface-inverse text-white'
+            : 'border-border-soft text-text-soft hover:border-border-strong hover:text-text-default'
         }`}
       />
     </HoverTooltip>

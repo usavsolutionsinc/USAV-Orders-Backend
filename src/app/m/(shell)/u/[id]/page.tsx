@@ -235,7 +235,7 @@ export default function MobileUnitPage() {
 
   if (!isLoaded || !user) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-gray-50 text-label text-gray-400">
+      <div className="flex min-h-dvh items-center justify-center bg-surface-canvas text-label text-text-faint">
         Loading…
       </div>
     );
@@ -243,7 +243,7 @@ export default function MobileUnitPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-white text-caption text-gray-400">
+      <div className="flex min-h-dvh items-center justify-center bg-surface-card text-caption text-text-faint">
         Loading unit…
       </div>
     );
@@ -251,12 +251,12 @@ export default function MobileUnitPage() {
 
   if (isError || !data) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-white px-6 text-center">
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-surface-card px-6 text-center">
         <AlertTriangle className="mb-3 h-8 w-8 text-amber-400" />
         <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-amber-600">
           Couldn't load unit
         </p>
-        <p className="mt-2 text-caption text-gray-500">
+        <p className="mt-2 text-caption text-text-soft">
           {error instanceof Error ? error.message : 'Try scanning again.'}
         </p>
         <Button variant="secondary" onClick={() => router.back()} className="mt-6">
@@ -269,20 +269,20 @@ export default function MobileUnitPage() {
   const unit = data.serial_unit;
 
   return (
-    <div className="min-h-dvh bg-gray-50 pb-10">
+    <div className="min-h-dvh bg-surface-canvas pb-10">
       {/* Header */}
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-100 bg-white px-3 py-3">
+      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border-hairline bg-surface-card px-3 py-3">
         <IconButton
           icon={<ChevronLeft className="h-5 w-5" />}
           onClick={() => router.back()}
           ariaLabel="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-gray-100"
+          className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-surface-sunken"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+          <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">
             Unit
           </p>
-          <p className="truncate font-mono text-label font-bold text-gray-900">
+          <p className="truncate font-mono text-label font-bold text-text-default">
             {unit.serial_number}
           </p>
         </div>
@@ -291,22 +291,22 @@ export default function MobileUnitPage() {
 
       <main className="mx-auto w-full max-w-md space-y-3 px-3 pt-3">
         {/* Identity card */}
-        <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
+        <section className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60">
           {unit.product_title ? (
-            <p className="line-clamp-3 text-sm font-semibold leading-snug text-gray-900">
+            <p className="line-clamp-3 text-sm font-semibold leading-snug text-text-default">
               {unit.product_title}
             </p>
           ) : (
-            <p className="text-sm font-semibold text-gray-400">No product title</p>
+            <p className="text-sm font-semibold text-text-faint">No product title</p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {unit.sku ? (
-              <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-micro font-bold text-gray-700">
+              <span className="rounded bg-surface-sunken px-2 py-0.5 font-mono text-micro font-bold text-text-muted">
                 {unit.sku}
               </span>
             ) : null}
             {unit.condition_grade ? (
-              <span className="rounded bg-gray-100 px-2 py-0.5 text-micro font-bold uppercase tracking-wider text-gray-600">
+              <span className="rounded bg-surface-sunken px-2 py-0.5 text-micro font-bold uppercase tracking-wider text-text-muted">
                 {unit.condition_grade.replace(/_/g, ' ')}
               </span>
             ) : null}
@@ -415,7 +415,7 @@ function ActionButton({
       className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-label font-bold shadow-sm transition-colors ${
         active
           ? 'bg-blue-600 text-white'
-          : 'bg-white text-gray-900 ring-1 ring-gray-200 hover:bg-gray-50'
+          : 'bg-surface-card text-text-default ring-1 ring-border-soft hover:bg-surface-hover'
       }`}
     >
       <Icon className="h-4 w-4" />
@@ -445,21 +445,21 @@ function ActionPanel({
 }) {
   return (
     <form
-      className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60"
+      className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
       }}
     >
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-soft">
           {heading}
         </p>
         <IconButton
           icon={<X className="h-3.5 w-3.5" />}
           onClick={onCancel}
           ariaLabel="Cancel"
-          className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100"
+          className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-surface-sunken"
         />
       </div>
       <input
@@ -470,7 +470,7 @@ function ActionPanel({
         autoFocus
         autoComplete="off"
         spellCheck={false}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-label font-mono text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        className="w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2.5 text-label font-mono text-text-default placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
       />
       <Button
         type="submit"
@@ -493,45 +493,45 @@ function Timeline({ events }: { events: TimelineEvent[] }) {
     [events],
   );
   return (
-    <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60">
       <header className="flex items-center gap-2 px-4 py-3">
-        <HistoryIcon className="h-4 w-4 text-gray-400" />
-        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
+        <HistoryIcon className="h-4 w-4 text-text-faint" />
+        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-soft">
           Timeline
         </p>
-        <span className="ml-auto text-micro font-semibold text-gray-400">
+        <span className="ml-auto text-micro font-semibold text-text-faint">
           {sorted.length} {sorted.length === 1 ? 'event' : 'events'}
         </span>
       </header>
       {sorted.length === 0 ? (
-        <div className="border-t border-gray-100 px-4 py-6 text-center text-caption font-medium text-gray-400">
+        <div className="border-t border-border-hairline px-4 py-6 text-center text-caption font-medium text-text-faint">
           No events yet — pair an order or move into a bin to get started.
         </div>
       ) : (
-        <ol className="border-t border-gray-100 divide-y divide-gray-100">
+        <ol className="border-t border-border-hairline divide-y divide-border-hairline">
           {sorted.map((e) => (
             <li key={e.id} className="px-4 py-2.5">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-label font-bold text-gray-900">
+                <span className="text-label font-bold text-text-default">
                   {e.event_type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
                 </span>
-                <span className="text-micro text-gray-400">{timeAgo(e.occurred_at)} ago</span>
+                <span className="text-micro text-text-faint">{timeAgo(e.occurred_at)} ago</span>
                 {e.actor_name ? (
-                  <span className="text-micro font-medium text-gray-500">{e.actor_name}</span>
+                  <span className="text-micro font-medium text-text-soft">{e.actor_name}</span>
                 ) : null}
                 {e.station ? (
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-gray-500">
+                  <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-text-soft">
                     {e.station}
                   </span>
                 ) : null}
               </div>
               {e.prev_status && e.next_status && e.prev_status !== e.next_status ? (
-                <p className="mt-0.5 font-mono text-micro text-gray-500">
+                <p className="mt-0.5 font-mono text-micro text-text-soft">
                   {e.prev_status} → {e.next_status}
                 </p>
               ) : null}
               {e.notes ? (
-                <p className="mt-0.5 text-caption text-gray-600">{e.notes}</p>
+                <p className="mt-0.5 text-caption text-text-muted">{e.notes}</p>
               ) : null}
             </li>
           ))}

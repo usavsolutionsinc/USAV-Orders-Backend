@@ -29,13 +29,13 @@ export function SuppliersPane() {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <h1 className="mb-4 text-xl font-bold text-gray-900">Suppliers <span className="text-gray-400">({rows.length})</span></h1>
+      <h1 className="mb-4 text-xl font-bold text-text-default">Suppliers <span className="text-text-faint">({rows.length})</span></h1>
       <ul className="space-y-2">
         {rows.map((s) => (
-          <li key={s.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+          <li key={s.id} className="flex items-center gap-3 rounded-xl border border-border-soft bg-surface-card p-3">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
-              <p className="truncate text-caption text-gray-500">
+              <p className="truncate text-sm font-semibold text-text-default">{s.name}</p>
+              <p className="truncate text-caption text-text-soft">
                 {SUPPLIER_TYPE_LABEL[s.supplier_type] ?? s.supplier_type}
                 {s.lead_time_days != null ? ` · ${s.lead_time_days}d lead` : ''}
                 {s.rating != null ? ` · ${s.rating}★` : ''}
@@ -46,8 +46,8 @@ export function SuppliersPane() {
               <Stat label="watch" value={s.candidate_count} />
               <Stat label="acq" value={s.acquisition_count} />
               <div className="w-20">
-                <p className="text-sm font-bold text-gray-900">{formatCents(s.spend_cents)}</p>
-                <p className="text-micro font-semibold uppercase tracking-wide text-gray-400">spend</p>
+                <p className="text-sm font-bold text-text-default">{formatCents(s.spend_cents)}</p>
+                <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">spend</p>
               </div>
             </div>
           </li>
@@ -60,8 +60,8 @@ export function SuppliersPane() {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="w-12">
-      <p className="text-sm font-bold text-gray-900">{value}</p>
-      <p className="text-micro font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-sm font-bold text-text-default">{value}</p>
+      <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">{label}</p>
     </div>
   );
 }

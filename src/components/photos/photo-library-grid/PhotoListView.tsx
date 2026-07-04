@@ -19,7 +19,7 @@ export function PhotoListView({
   openAt,
 }: PhotoGridViewProps) {
   return (
-    <ul className="divide-y divide-gray-100 rounded-lg border border-border bg-card">
+    <ul className="divide-y divide-border-hairline rounded-lg border border-border bg-card">
       {photos.map((photo) => {
         const isSelected = selected.has(photo.id);
         const takenAt = formatDateTimePST(photo.createdAt);
@@ -38,7 +38,7 @@ export function PhotoListView({
               }}
               onContextMenu={(e) => onPhotoContextMenu?.(photo, e)}
               className={cn(
-                'ds-raw-button flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50',
+                'ds-raw-button flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-hover',
                 isSelected && 'bg-blue-50/50',
               )}
             >

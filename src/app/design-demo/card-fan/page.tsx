@@ -25,8 +25,8 @@ export default function CardFanDemoPage() {
     <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-slate-200">
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center gap-8 px-6 py-12">
         <header className="text-center">
-          <h1 className="text-2xl font-black text-slate-800">Card Fan Carousel</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-black text-text-default">Card Fan Carousel</h1>
+          <p className="mt-1 text-sm text-text-soft">
             Hover a card to spread the fan · use the arrows to page through · this is the
             same display the live unbox photo peek renders.
           </p>

@@ -20,7 +20,7 @@ export function isLabelTone(v: unknown): v is LabelTone {
 
 /** Tone token → { pill, dot } classes. The customizable palette (safelisted). */
 export const TONE_CLASSES: Record<LabelTone, { pill: string; dot: string }> = {
-  slate: { pill: 'bg-slate-50 text-slate-600 ring-slate-200', dot: 'bg-slate-400' },
+  slate: { pill: 'bg-surface-canvas text-text-muted ring-border-soft', dot: 'bg-border-emphasis' },
   yellow: { pill: 'bg-yellow-50 text-yellow-700 ring-yellow-200', dot: 'bg-yellow-500' },
   teal: { pill: 'bg-teal-50 text-teal-700 ring-teal-200', dot: 'bg-teal-500' },
   amber: { pill: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-400' },

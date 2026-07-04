@@ -15,7 +15,7 @@ interface PaneHeaderProps {
   rightSlot?: ReactNode;
   /** Optional second row below the main 44px row (e.g. search input + filter chips). */
   belowSlot?: ReactNode;
-  /** Extra shell classes. Merged with the default `mainStickyHeaderClass` via tailwind-merge — pass conflicting utilities (e.g. `bg-white`, `border-gray-200`) to override defaults. */
+  /** Extra shell classes. Merged with the default `mainStickyHeaderClass` via tailwind-merge — pass conflicting utilities (e.g. `bg-surface-card`, `border-border-soft`) to override defaults. */
   className?: string;
   /** Extra row classes. Merged with the default `paneHeaderRowClass` — pass `px-4 sm:px-6` etc. to override padding. */
   rowClassName?: string;

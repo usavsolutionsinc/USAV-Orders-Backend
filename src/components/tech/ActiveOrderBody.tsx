@@ -120,7 +120,7 @@ export function ActiveOrderBody({ activeOrder, onRemoveSerial }: ActiveOrderBody
                         exit={{ opacity: 0, x: -24, height: 0 }}
                         transition={framerTransition.stationSerialRow}
                         className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors duration-500 ${
-                          isNew ? 'border-emerald-400 bg-emerald-200 shadow-sm' : 'border-emerald-100 bg-white'
+                          isNew ? 'border-emerald-400 bg-emerald-200 shadow-sm' : 'border-emerald-100 bg-surface-card'
                         }`}
                       >
                         <Check className="h-3 w-3 flex-shrink-0 text-emerald-600" />

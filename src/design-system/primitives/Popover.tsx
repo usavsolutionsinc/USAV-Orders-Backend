@@ -13,7 +13,7 @@ import { useMotionPresence, useMotionTransition } from '../foundations/motion-fr
 // part (portal, rect-tracking, dismissal) but no visual chrome; <Popover> adds
 // the token-driven surface (rounded card, border, elevation) and the shared
 // dropdown enter/exit motion — so callers stop re-rolling the same
-// `rounded-xl border bg-white shadow-lg` + AnimatePresence boilerplate.
+// `rounded-xl border bg-surface-card shadow-lg` + AnimatePresence boilerplate.
 //
 // Motion comes from the SHARED presets (`framerPresence.dropdownPanel` +
 // `framerTransition.dropdownOpen`), run through the reduced-motion-aware hooks.

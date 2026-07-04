@@ -52,7 +52,7 @@ export function ProductDetail({ sku }: ProductDetailProps) {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-20 text-gray-400">
+            <div className="flex items-center justify-center py-20 text-text-faint">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="ml-2 text-sm">Loading {sku}…</span>
             </div>
@@ -65,7 +65,7 @@ export function ProductDetail({ sku }: ProductDetailProps) {
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {error || 'Product not found'}
                 </div>
-                <p className="mt-4 text-sm text-gray-500">
+                <p className="mt-4 text-sm text-text-soft">
                     <Link href="/products" className="text-blue-600 underline">
                         Back to Products
                     </Link>
@@ -78,16 +78,16 @@ export function ProductDetail({ sku }: ProductDetailProps) {
 
     return (
         <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
-            <nav className="mb-4 text-xs text-gray-500">
-                <Link href="/products" className="hover:text-gray-900">
+            <nav className="mb-4 text-xs text-text-soft">
+                <Link href="/products" className="hover:text-text-default">
                     Products
                 </Link>
                 <span className="mx-1.5">/</span>
-                <span className="font-mono text-gray-700">{product.sku}</span>
+                <span className="font-mono text-text-muted">{product.sku}</span>
             </nav>
 
             <header className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-border-soft bg-surface-canvas">
                     {product.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -96,20 +96,20 @@ export function ProductDetail({ sku }: ProductDetailProps) {
                             className="h-full w-full object-cover"
                         />
                     ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                        <div className="flex h-full w-full items-center justify-center text-xs text-text-faint">
                             No image
                         </div>
                     )}
                 </div>
                 <div className="min-w-0 flex-1">
-                    <h1 className="truncate text-2xl font-semibold text-gray-900">
+                    <h1 className="truncate text-2xl font-semibold text-text-default">
                         {product.product_title || product.sku}
                     </h1>
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-text-soft">
                         <span className="font-mono">{product.sku}</span>
                         {product.category ? <span>· {product.category}</span> : null}
                         {!product.is_active ? (
-                            <span className="rounded bg-gray-100 px-1.5 py-0.5 font-medium uppercase tracking-wide text-gray-500">
+                            <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-medium uppercase tracking-wide text-text-soft">
                                 Inactive
                             </span>
                         ) : null}
@@ -139,15 +139,15 @@ export function ProductDetail({ sku }: ProductDetailProps) {
                 >
                     <DetailRow label="Warehouse qty" value={String(stock.warehouse_qty)} />
                     {stock.units_by_status.length > 0 ? (
-                        <div className="border-t border-gray-100 pt-2">
-                            <div className="mb-1 text-micro font-medium uppercase tracking-wide text-gray-500">
+                        <div className="border-t border-border-hairline pt-2">
+                            <div className="mb-1 text-micro font-medium uppercase tracking-wide text-text-soft">
                                 Serial units by status
                             </div>
                             <div className="flex flex-wrap gap-1">
                                 {stock.units_by_status.map((s) => (
                                     <span
                                         key={s.status}
-                                        className="rounded bg-gray-100 px-1.5 py-0.5 text-caption text-gray-700"
+                                        className="rounded bg-surface-sunken px-1.5 py-0.5 text-caption text-text-muted"
                                     >
                                         {s.status.toLowerCase()}: {s.count}
                                     </span>
@@ -155,7 +155,7 @@ export function ProductDetail({ sku }: ProductDetailProps) {
                             </div>
                         </div>
                     ) : (
-                        <div className="text-xs text-gray-400">No serial units tracked.</div>
+                        <div className="text-xs text-text-faint">No serial units tracked.</div>
                     )}
                 </DetailCard>
 
@@ -164,9 +164,9 @@ export function ProductDetail({ sku }: ProductDetailProps) {
                     className="sm:col-span-2"
                 >
                     {platforms.length === 0 ? (
-                        <div className="text-xs text-gray-400">No platform links yet.</div>
+                        <div className="text-xs text-text-faint">No platform links yet.</div>
                     ) : (
-                        <ul className="divide-y divide-gray-100">
+                        <ul className="divide-y divide-border-hairline">
                             {platforms.map((p) => (
                                 <li
                                     key={p.id}
@@ -177,14 +177,14 @@ export function ProductDetail({ sku }: ProductDetailProps) {
                                             {p.platform}
                                         </span>
                                         {p.account_name ? (
-                                            <span className="text-xs text-gray-500">{p.account_name}</span>
+                                            <span className="text-xs text-text-soft">{p.account_name}</span>
                                         ) : null}
-                                        <span className="font-mono text-xs text-gray-700">
+                                        <span className="font-mono text-xs text-text-muted">
                                             {p.platform_sku || p.platform_item_id || '—'}
                                         </span>
                                     </div>
                                     {p.display_name ? (
-                                        <span className="text-xs text-gray-500">{p.display_name}</span>
+                                        <span className="text-xs text-text-soft">{p.display_name}</span>
                                     ) : null}
                                 </li>
                             ))}
@@ -193,7 +193,7 @@ export function ProductDetail({ sku }: ProductDetailProps) {
                 </DetailCard>
             </div>
 
-            <div className="mt-6 text-xs text-gray-500">
+            <div className="mt-6 text-xs text-text-soft">
                 Looking for ops controls?{' '}
                 <Link
                     href={`/admin/inventory/sku/${encodeURIComponent(product.sku)}`}
@@ -216,10 +216,10 @@ interface DetailCardProps {
 function DetailCard({ title, action, className, children }: DetailCardProps) {
     return (
         <section
-            className={`rounded-lg border border-gray-200 bg-white p-4 ${className ?? ''}`}
+            className={`rounded-lg border border-border-soft bg-surface-card p-4 ${className ?? ''}`}
         >
             <header className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+                <h2 className="text-sm font-semibold text-text-default">{title}</h2>
                 {action}
             </header>
             <div className="space-y-1.5 text-sm">{children}</div>
@@ -236,8 +236,8 @@ interface DetailRowProps {
 function DetailRow({ label, value, mono }: DetailRowProps) {
     return (
         <div className="flex items-baseline gap-2 text-xs">
-            <span className="w-28 shrink-0 text-gray-500">{label}</span>
-            <span className={`flex-1 truncate ${mono ? 'font-mono' : ''} ${value ? 'text-gray-900' : 'text-gray-400'}`}>
+            <span className="w-28 shrink-0 text-text-soft">{label}</span>
+            <span className={`flex-1 truncate ${mono ? 'font-mono' : ''} ${value ? 'text-text-default' : 'text-text-faint'}`}>
                 {value || '—'}
             </span>
         </div>

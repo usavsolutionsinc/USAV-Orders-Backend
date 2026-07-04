@@ -267,7 +267,7 @@ export function UnshippedTable({
 
   if (isFirstRunEmpty) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white p-6">
+      <div className="flex h-full w-full items-center justify-center bg-surface-card p-6">
         <OrdersFirstRunEmptyState />
       </div>
     );

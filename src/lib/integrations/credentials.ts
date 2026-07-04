@@ -42,7 +42,12 @@ export type IntegrationProvider =
   | 'ollama'
   | 'stripe'
   | 'nextiva'
-  | 'shipstation';
+  | 'shipstation'
+  // AI search providers (per-org BYOK — docs/ai-search-modernization-plan.md).
+  // 'ollama' above doubles as the self-hosted/custom OpenAI-compatible slot.
+  | 'ai_gateway'
+  | 'openai'
+  | 'anthropic';
 
 export interface EbayCredentials {
   appId: string;
@@ -117,7 +122,26 @@ export interface GoogleDriveCredentials {
   scope?: string;
 }
 export interface AblyCredentials { apiKey: string }
-export interface OllamaCredentials { baseUrl: string; tunnelUrl?: string; model: string }
+export interface OllamaCredentials {
+  baseUrl: string;
+  tunnelUrl?: string;
+  model: string;
+  /** Embedding model served by the same endpoint (e.g. nomic-embed-text). */
+  embedModel?: string;
+  /** Optional bearer for secured self-hosted endpoints. */
+  apiKey?: string;
+}
+
+/**
+ * Per-org AI search providers (BYOK). All speak the OpenAI wire format:
+ * ai_gateway → https://ai-gateway.vercel.sh/v1 (any model string),
+ * openai → https://api.openai.com/v1,
+ * anthropic → https://api.anthropic.com/v1 (OpenAI-compat layer; CHAT ONLY —
+ * Anthropic has no embeddings API, so embeds fall back to the next source).
+ */
+export interface AiGatewayCredentials { apiKey: string; chatModel?: string; embedModel?: string }
+export interface OpenAiCredentials { apiKey: string; chatModel?: string; embedModel?: string }
+export interface AnthropicCredentials { apiKey: string; chatModel?: string }
 export interface StripeCredentials { secretKey: string; publishableKey: string; webhookSecret: string }
 
 /**

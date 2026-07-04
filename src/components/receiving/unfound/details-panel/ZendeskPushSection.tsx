@@ -113,25 +113,25 @@ export function ZendeskPushSection({
   return (
     <div className="space-y-2">
       <div>
-        <label className="mb-1 block text-eyebrow font-black uppercase tracking-widest text-gray-400">
+        <label className="mb-1 block text-eyebrow font-black uppercase tracking-widest text-text-faint">
           Subject
         </label>
         <input
           type="text"
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          className="block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-label font-semibold text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          className="block w-full rounded-md border border-border-soft bg-surface-card px-2.5 py-1.5 text-label font-semibold text-text-default outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
         />
       </div>
       <div>
-        <label className="mb-1 block text-eyebrow font-black uppercase tracking-widest text-gray-400">
+        <label className="mb-1 block text-eyebrow font-black uppercase tracking-widest text-text-faint">
           Body
         </label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={8}
-          className="block w-full resize-y rounded-md border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-micro leading-snug text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          className="block w-full resize-y rounded-md border border-border-soft bg-surface-card px-2.5 py-1.5 font-mono text-micro leading-snug text-text-default outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
         />
       </div>
       <div className="flex flex-wrap items-center gap-2">

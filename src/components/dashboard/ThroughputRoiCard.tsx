@@ -40,8 +40,8 @@ import {
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
 
-const BAND = 'shrink-0 border-b border-gray-100 bg-white px-4 py-3';
-const EYEBROW = 'text-eyebrow font-black uppercase tracking-widest text-gray-500';
+const BAND = 'shrink-0 border-b border-border-hairline bg-surface-card px-4 py-3';
+const EYEBROW = 'text-eyebrow font-black uppercase tracking-widest text-text-soft';
 
 /**
  * Permission gate. Rendering the data-owning inner component conditionally keeps
@@ -61,7 +61,7 @@ function ThroughputRoiCardInner({ variant }: { variant: 'band' | 'sidebar' }) {
     return (
       <section className={shellClass(variant)} aria-busy="true">
         <RoiEyebrow />
-        <div className="mt-1.5 flex items-center gap-2 text-caption font-semibold text-gray-400">
+        <div className="mt-1.5 flex items-center gap-2 text-caption font-semibold text-text-faint">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading throughput…
         </div>
       </section>
@@ -83,7 +83,7 @@ function ThroughputRoiCardInner({ variant }: { variant: 'band' | 'sidebar' }) {
 }
 
 const shellClass = (variant: 'band' | 'sidebar') =>
-  variant === 'sidebar' ? cn('bg-white', SIDEBAR_GUTTER) : BAND;
+  variant === 'sidebar' ? cn('bg-surface-card', SIDEBAR_GUTTER) : BAND;
 
 function RoiHero({ data, variant }: { data: OperationsRoiData; variant: 'band' | 'sidebar' }) {
   const { unitsThisWeek, unitsLastWeek, pctChange, unitsPerLaborHour, unitsStuck } = data;
@@ -95,10 +95,10 @@ function RoiHero({ data, variant }: { data: OperationsRoiData; variant: 'band' |
         <div className="min-w-0">
           <RoiEyebrow />
           <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className={`font-black leading-none tabular-nums text-gray-900 ${sidebar ? 'text-2xl' : 'text-3xl'}`}>
+            <span className={`font-black leading-none tabular-nums text-text-default ${sidebar ? 'text-2xl' : 'text-3xl'}`}>
               {unitsThisWeek.toLocaleString()}
             </span>
-            <span className="text-caption font-semibold uppercase tracking-wide text-gray-400">
+            <span className="text-caption font-semibold uppercase tracking-wide text-text-faint">
               units
             </span>
             <DeltaChip pct={pctChange} lastWeek={unitsLastWeek} />
@@ -109,8 +109,8 @@ function RoiHero({ data, variant }: { data: OperationsRoiData; variant: 'band' |
         <div
           className={
             sidebar
-              ? 'grid grid-cols-2 gap-2 border-t border-gray-100 pt-3'
-              : 'flex shrink-0 items-center divide-x divide-gray-100'
+              ? 'grid grid-cols-2 gap-2 border-t border-border-hairline pt-3'
+              : 'flex shrink-0 items-center divide-x divide-border-hairline'
           }
         >
           <SecondaryStat
@@ -148,7 +148,7 @@ function DeltaChip({ pct, lastWeek }: { pct: number; lastWeek: number }) {
       ? { chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200', Icon: ChevronUp }
       : pct < 0
         ? { chip: 'bg-rose-50 text-rose-700 ring-rose-200', Icon: ChevronDown }
-        : { chip: 'bg-gray-50 text-gray-600 ring-gray-200', Icon: Minus };
+        : { chip: 'bg-surface-canvas text-text-muted ring-border-soft', Icon: Minus };
   const Icon = tone.Icon;
   const label = `${pct > 0 ? '+' : ''}${pct}%`;
   return (
@@ -178,7 +178,7 @@ function SecondaryStat({
     <HoverTooltip asChild label={tooltip} focusable={false}>
       <div className={compact ? 'min-w-0' : 'px-3'}>
         <p className={EYEBROW}>{label}</p>
-        <p className={`mt-0.5 font-bold tabular-nums text-gray-900 ${compact ? 'text-sm' : 'text-base'}`}>{value}</p>
+        <p className={`mt-0.5 font-bold tabular-nums text-text-default ${compact ? 'text-sm' : 'text-base'}`}>{value}</p>
       </div>
     </HoverTooltip>
   );
@@ -198,7 +198,7 @@ function StuckStat({ value, compact = false }: { value: number; compact?: boolea
         <div className="mt-0.5 flex items-center gap-1">
           {attention ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> : null}
           <p
-            className={`font-bold tabular-nums ${compact ? 'text-sm' : 'text-base'} ${attention ? 'text-amber-700' : 'text-gray-900'}`}
+            className={`font-bold tabular-nums ${compact ? 'text-sm' : 'text-base'} ${attention ? 'text-amber-700' : 'text-text-default'}`}
           >
             {value}
           </p>

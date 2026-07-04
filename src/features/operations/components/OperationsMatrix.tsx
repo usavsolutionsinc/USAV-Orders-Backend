@@ -98,7 +98,7 @@ const DOMAINS: Domain[] = [
 
 export const OperationsMatrix: React.FC = () => {
   return (
-    <section className="bg-white rounded-3xl shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-8">
+    <section className="bg-surface-card rounded-3xl shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-8">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border-soft pb-6 mb-6">
         <div>

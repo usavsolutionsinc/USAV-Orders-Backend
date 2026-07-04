@@ -51,7 +51,7 @@ function getConditionBadgeClasses(condition: string | null | undefined): string 
   if (!c) return null;
   if (c.includes('new')) return 'bg-yellow-100 text-yellow-800';
   if (c.includes('part')) return 'bg-amber-200 text-amber-900';
-  return 'bg-slate-100 text-slate-700';
+  return 'bg-surface-sunken text-text-muted';
 }
 
 /**
@@ -60,7 +60,7 @@ function getConditionBadgeClasses(condition: string | null | undefined): string 
  */
 function getQtyBadgeClasses(quantity: number): string {
   if (quantity >= 2) return 'bg-amber-100 text-amber-700';
-  return 'bg-gray-100 text-gray-600';
+  return 'bg-surface-sunken text-text-muted';
 }
 
 /**
@@ -69,7 +69,7 @@ function getQtyBadgeClasses(quantity: number): string {
  * row dot and the section header agree.
  */
 export function getOrderUrgencyDot(daysLate: number | null): string {
-  if (daysLate === null) return 'bg-gray-300';
+  if (daysLate === null) return 'bg-surface-strong';
   if (daysLate > 1) return 'bg-red-500';
   if (daysLate >= 0) return 'bg-amber-400'; // due today / due tomorrow
   return 'bg-emerald-500'; // ahead of schedule
@@ -101,13 +101,13 @@ export function orderToRailVM(order: Order, facts: OrderRailFacts): RailRowVM {
   return {
     eyebrow: (
       <>
-        <span className="font-mono font-bold text-gray-700">#{shortId}</span>
-        <span className="text-gray-300">·</span>
+        <span className="font-mono font-bold text-text-muted">#{shortId}</span>
+        <span className="text-text-faint">·</span>
         <span className="truncate">{channel}</span>
         {assigneeLabel ? (
           <>
-            <span className="text-gray-300">·</span>
-            <span className="truncate text-gray-700">{assigneeLabel}</span>
+            <span className="text-text-faint">·</span>
+            <span className="truncate text-text-muted">{assigneeLabel}</span>
           </>
         ) : null}
       </>
@@ -116,7 +116,7 @@ export function orderToRailVM(order: Order, facts: OrderRailFacts): RailRowVM {
     // No native `title=` tooltip — the rich hover popover is the preview.
     meta: (
       <span className="flex items-center gap-1.5">
-        <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 font-bold text-gray-700">
+        <span className="inline-flex items-center rounded-md bg-surface-sunken px-1.5 py-0.5 font-bold text-text-muted">
           {shipByMonthDay}
         </span>
         <span className={`font-bold tracking-tight ${daysLateTextTone}`}>{urgencyText}</span>

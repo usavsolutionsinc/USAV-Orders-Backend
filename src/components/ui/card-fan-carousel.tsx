@@ -296,7 +296,7 @@ export default function SocialCards({ cards, onCardClick, cardTestId }: SocialCa
           </button>
           <div className="flex items-center gap-2">
             {cards.map((_, i) => (
-              <span key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${i === centerIndex ? "bg-black/70 dark:bg-white/80 scale-[1.3]" : "bg-black/15 dark:bg-white/15"}`} />
+              <span key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${i === centerIndex ? "bg-black/70 dark:bg-surface-card/80 scale-[1.3]" : "bg-black/15 dark:bg-white/15"}`} />
             ))}
           </div>
           <button className={`ds-raw-button ${ARROW_CLASSES} w-10 h-10 md:w-12 md:h-12`} onClick={() => cycle("right")} aria-label="Next">

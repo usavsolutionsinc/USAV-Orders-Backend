@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { detectCarrier } from '@/lib/tracking-format';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { AUDIT_ENTITY } from '@/lib/audit-logs';
@@ -230,6 +231,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaShipmentChanged({ action: 'mark-shipped', shipmentId: 0, source: 'fba.shipments.mark-shipped', organizationId: ctx.organizationId });
 
     return NextResponse.json(

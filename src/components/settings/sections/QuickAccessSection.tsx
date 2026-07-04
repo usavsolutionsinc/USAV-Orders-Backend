@@ -7,8 +7,8 @@ import { Button } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 const FIELD_CLS =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
-  'placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 ' +
+  'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2 text-sm text-text-default ' +
+  'placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 ' +
   'focus:ring-blue-500/20';
 
 interface ToggleRowProps {
@@ -22,8 +22,8 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
   return (
     <label className="flex cursor-pointer items-start justify-between gap-4 py-3">
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-gray-900">{label}</span>
-        {description && <span className="mt-0.5 block text-caption text-gray-500">{description}</span>}
+        <span className="block text-sm font-semibold text-text-default">{label}</span>
+        {description && <span className="mt-0.5 block text-caption text-text-soft">{description}</span>}
       </span>
       <button
         type="button"
@@ -31,11 +31,11 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={`ds-raw-button relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-          checked ? 'bg-blue-600' : 'bg-gray-300'
+          checked ? 'bg-blue-600' : 'bg-surface-strong'
         }`}
       >
         <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+          className={`inline-block h-4 w-4 transform rounded-full bg-surface-card shadow transition-transform ${
             checked ? 'translate-x-6' : 'translate-x-1'
           }`}
         />
@@ -88,13 +88,13 @@ export function QuickAccessSection() {
     <div className="space-y-6">
       <header>
         <h2 className="sr-only">Quick access</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-text-soft">
           The bottom-right floating button. Pin pages for one-click navigation and toggle which built-in
           actions appear.
         </p>
       </header>
 
-      <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white px-5 shadow-sm">
+      <div className="divide-y divide-border-hairline rounded-2xl border border-border-soft bg-surface-card px-5 shadow-sm">
         <ToggleRow
           label="Show quick access button"
           description="The ⚡ floating button in the bottom-right corner."
@@ -115,10 +115,10 @@ export function QuickAccessSection() {
         />
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900">Built-in actions</h3>
-        <p className="mb-2 text-caption text-gray-500">Choose which actions appear at the top of the popover.</p>
-        <div className="divide-y divide-gray-100">
+      <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="mb-2 text-sm font-semibold text-text-default">Built-in actions</h3>
+        <p className="mb-2 text-caption text-text-soft">Choose which actions appear at the top of the popover.</p>
+        <div className="divide-y divide-border-hairline">
           <ToggleRow
             label="Phone history"
             description="Resume your recent packed orders from the FAB."
@@ -139,9 +139,9 @@ export function QuickAccessSection() {
           />
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white">
-          <div className="border-b border-gray-100 px-4 pb-1 pt-3">
-            <h3 className="text-caption font-bold uppercase tracking-wider text-gray-500">FAB appearance</h3>
+        <div className="rounded-2xl border border-border-soft bg-surface-card">
+          <div className="border-b border-border-hairline px-4 pb-1 pt-3">
+            <h3 className="text-caption font-bold uppercase tracking-wider text-text-soft">FAB appearance</h3>
           </div>
           <div className="px-4">
             <ToggleRow
@@ -154,16 +154,16 @@ export function QuickAccessSection() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
         <div className="mb-3 flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold text-gray-900">Pinned pages</h3>
-          <span className="text-caption font-medium text-gray-500">
+          <h3 className="text-sm font-semibold text-text-default">Pinned pages</h3>
+          <span className="text-caption font-medium text-text-soft">
             {settings.pinned.length} / {MAX_PINS}
           </span>
         </div>
 
         {settings.pinned.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-xs text-gray-500">
+          <p className="rounded-xl border border-dashed border-border-default bg-surface-canvas px-4 py-6 text-center text-xs text-text-soft">
             No pinned pages. Open Quick Access from any page and tap <span className="font-semibold text-blue-600">+ Pin page</span>.
           </p>
         ) : (
@@ -171,9 +171,9 @@ export function QuickAccessSection() {
             {settings.pinned.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center gap-3 rounded-xl border border-gray-200 px-3 py-2"
+                className="flex items-center gap-3 rounded-xl border border-border-soft px-3 py-2"
               >
-                <span className="text-gray-400" aria-hidden>
+                <span className="text-text-faint" aria-hidden>
                   ⠿
                 </span>
                 <div className="min-w-0 flex-1">
@@ -196,19 +196,19 @@ export function QuickAccessSection() {
                         variant="ghost"
                         size="sm"
                         onClick={() => startEdit(p.id, p.label)}
-                        className="w-full justify-start text-left text-sm font-semibold text-gray-900 hover:text-blue-600"
+                        className="w-full justify-start text-left text-sm font-semibold text-text-default hover:text-blue-600"
                       >
                         {p.label}
                       </Button>
                     </HoverTooltip>
                   )}
-                  <p className="truncate font-mono text-caption text-gray-500">{p.href}</p>
+                  <p className="truncate font-mono text-caption text-text-soft">{p.href}</p>
                 </div>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => unpin(p.id)}
-                  className="text-gray-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  className="text-text-muted hover:border-red-300 hover:bg-red-50 hover:text-red-600"
                 >
                   Unpin
                 </Button>
@@ -217,8 +217,8 @@ export function QuickAccessSection() {
           </ul>
         )}
 
-        <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
-          <p className="text-caption font-semibold uppercase tracking-widest text-gray-400">Add manually</p>
+        <div className="mt-4 space-y-2 border-t border-border-hairline pt-4">
+          <p className="text-caption font-semibold uppercase tracking-widest text-text-faint">Add manually</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
             <input
               type="text"
@@ -246,11 +246,11 @@ export function QuickAccessSection() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Recent pages</h3>
-            <p className="text-caption text-gray-500">{recents.length} stored on this device</p>
+            <h3 className="text-sm font-semibold text-text-default">Recent pages</h3>
+            <p className="text-caption text-text-soft">{recents.length} stored on this device</p>
           </div>
           <Button
             variant="secondary"

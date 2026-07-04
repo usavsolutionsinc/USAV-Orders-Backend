@@ -104,7 +104,7 @@ export function ScanInput({
               className={`ds-raw-button flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 ${
                 cameraActive
                   ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  : 'text-text-soft hover:bg-surface-sunken hover:text-text-muted'
               }`}
             >
               <Camera className="h-3.5 w-3.5" />

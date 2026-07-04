@@ -39,7 +39,10 @@ export function useStudioViewState(): StudioViewState {
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
-      const next = new URLSearchParams(searchParams.toString());
+      // Seed from the current query string only when already on /studio —
+      // hard-routing in from another page (assistant canvas tools) must not
+      // drag that page's params (?mode=, ?q=, …) into the Studio URL.
+      const next = new URLSearchParams(active ? searchParams.toString() : '');
       for (const [key, value] of Object.entries(patch)) {
         if (value === null) next.delete(key);
         else next.set(key, value);
@@ -47,7 +50,7 @@ export function useStudioViewState(): StudioViewState {
       const qs = next.toString();
       router.replace(qs ? `/studio?${qs}` : '/studio', { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParams, active],
   );
 
   return { active, v, focus, zParam, lens, setParams };

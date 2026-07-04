@@ -23,7 +23,7 @@ export function useConditionGradeStyle(
   return useMemo(() => {
     const code = normalizeConditionGrade(grade);
     const isPending = !code || code === 'PENDING';
-    const textTone = isPending ? 'text-gray-400' : conditionGradeTextClass(code);
+    const textTone = isPending ? 'text-text-faint' : conditionGradeTextClass(code);
     return {
       code,
       isPending,

@@ -21,7 +21,7 @@ import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { Button } from '@/design-system/primitives';
 
 const fieldBaseClass =
-  'mt-1 w-full rounded-xl border-2 border-gray-400 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 disabled:opacity-50';
+  'mt-1 w-full rounded-xl border-2 border-border-emphasis bg-surface-card px-3 py-2.5 text-sm font-bold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 disabled:opacity-50';
 
 const TRACKING_PANEL_VARIANTS = {
   hidden: { opacity: 0 },
@@ -236,8 +236,8 @@ export function FbaWorkspaceScanField({
                   <div className="flex items-start gap-2">
                     <AlertCircle className={`mt-0.5 h-4 w-4 shrink-0 ${themeColors.text}`} />
                     <div>
-                      <p className="text-micro font-black uppercase tracking-[0.16em] text-gray-800">Apply to selected plans</p>
-                      <p className="mt-1 text-caption leading-5 text-gray-900">
+                      <p className="text-micro font-black uppercase tracking-[0.16em] text-text-default">Apply to selected plans</p>
+                      <p className="mt-1 text-caption leading-5 text-text-default">
                         Changes here will apply to all {trackingTargetPlanIds.length} selected plans.
                       </p>
                     </div>
@@ -253,7 +253,7 @@ export function FbaWorkspaceScanField({
                   placeholder="FBA17XXXXXXXX"
                   className={`${fieldClass} font-mono text-xs ${
                     activeTracking.amazon && !amazonOk ? 'border-amber-400' : ''
-                  } ${!activeTracking.amazon ? 'text-gray-500' : ''}`}
+                  } ${!activeTracking.amazon ? 'text-text-soft' : ''}`}
                 />
               </label>
               <label className="block">
@@ -264,7 +264,7 @@ export function FbaWorkspaceScanField({
                   disabled={saving || trackingTargetPlanIds.length === 0}
                   placeholder="1Z999AA10123456784"
                   className={`${fieldClass} font-mono text-xs ${activeTracking.ups && !upsOk ? 'border-amber-400' : ''} ${
-                    !activeTracking.ups ? 'text-gray-500' : ''
+                    !activeTracking.ups ? 'text-text-soft' : ''
                   }`}
                 />
               </label>
@@ -276,8 +276,8 @@ export function FbaWorkspaceScanField({
                 disabled={saving || !trackingReady}
                 className={`h-auto w-full rounded-xl border-2 px-3 py-2.5 text-caption font-black uppercase tracking-[0.12em] ring-0 ${
                   trackingReady && !saving
-                    ? `${themeColors.border} ${themeColors.light} text-gray-900 hover:opacity-95`
-                    : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                    ? `${themeColors.border} ${themeColors.light} text-text-default hover:opacity-95`
+                    : 'cursor-not-allowed border-border-soft bg-surface-sunken text-text-faint'
                 }`}
               >
                 {trackingReady ? 'Save tracking' : 'Enter valid FBA ID and UPS to save'}
@@ -292,14 +292,14 @@ export function FbaWorkspaceScanField({
 
             {/* Selection summary + clear */}
             <div className={`${scanChrome.trackingSectionBorder} flex items-center justify-between gap-2 pt-3`}>
-              <span className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
+              <span className="text-micro font-black uppercase tracking-[0.14em] text-text-soft">
                 {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
               </span>
               <Button
                 variant="secondary"
                 type="button"
                 onClick={() => clearSelection()}
-                className="h-auto rounded-full border border-gray-200 px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500 ring-0 hover:bg-gray-50 hover:text-gray-800"
+                className="h-auto rounded-full border border-border-soft px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft ring-0 hover:bg-surface-hover hover:text-text-default"
               >
                 Clear
               </Button>

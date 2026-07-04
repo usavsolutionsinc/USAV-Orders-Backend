@@ -228,12 +228,12 @@ export function ScanTestingPanel({ query }: { query: string }) {
           const qty = `${line.quantity_received}/${line.quantity_expected ?? '?'}`;
           const cond = conditionGradeTableLabel(line.condition_grade);
           return (
-            <div key={line.id} className="rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]">
+            <div key={line.id} className="rounded-2xl border border-blue-100 bg-surface-card p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]">
               <p className="text-base font-black leading-snug tracking-tight text-blue-950">{title}</p>
               <div className="mt-2 flex items-center gap-2">
-                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-caption font-black uppercase tracking-widest text-gray-500">
-                  <span className="text-gray-900">{qty}</span>
-                  <span className="text-gray-400">·</span>
+                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-caption font-black uppercase tracking-widest text-text-soft">
+                  <span className="text-text-default">{qty}</span>
+                  <span className="text-text-faint">·</span>
                   <span>{cond}</span>
                 </span>
                 <ChipColumns

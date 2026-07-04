@@ -33,7 +33,7 @@ function StagedOrderDetail({
 
   if (isLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-surface-card">
         <LoadingSpinner size="lg" className="text-emerald-600" />
       </div>
     );

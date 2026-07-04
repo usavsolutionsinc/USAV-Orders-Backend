@@ -21,18 +21,18 @@ export function WarrantyQuotesSection({ claimId, quotes }: { claimId: number; qu
   return (
     <ul className="space-y-2">
       {quotes.map((q) => (
-        <li key={q.id} className="rounded-lg border border-gray-100 p-3">
+        <li key={q.id} className="rounded-lg border border-border-hairline p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-label text-gray-700">{q.quoteNumber}</span>
+            <span className="font-mono text-label text-text-muted">{q.quoteNumber}</span>
             <span className={cn('rounded-full px-2 py-0.5 text-caption font-medium', warrantyQuoteToneClass(q.status))}>
               {q.status}
             </span>
           </div>
-          <div className="mt-1 text-sm text-gray-900">{fmt(q.total)}</div>
+          <div className="mt-1 text-sm text-text-default">{fmt(q.total)}</div>
           {q.lineItems.length > 0 && (
             <ul className="mt-1 space-y-0.5">
               {q.lineItems.map((li, i) => (
-                <li key={i} className="flex justify-between text-caption text-gray-500">
+                <li key={i} className="flex justify-between text-caption text-text-soft">
                   <span className="truncate">{li.label} × {li.qty}</span>
                   <span className="tabular-nums">${(Number(li.unitPrice) || 0).toFixed(2)}</span>
                 </li>

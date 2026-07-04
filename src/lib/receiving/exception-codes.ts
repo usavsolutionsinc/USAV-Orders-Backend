@@ -31,7 +31,7 @@ interface ExceptionMeta {
 export const RECEIVING_EXCEPTION_META: Record<ReceivingExceptionCode, ExceptionMeta> = {
   NO_PO: {
     label: 'No PO',
-    tone: 'bg-slate-100 text-slate-600 ring-slate-200',
+    tone: 'bg-surface-sunken text-text-muted ring-border-soft',
     description: 'Scanned carton with no matching Zoho purchase order.',
   },
   CARRIER_MISMATCH: {

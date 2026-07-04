@@ -46,8 +46,10 @@ export function ReceivingPhotosSection({
       }
       return [];
     },
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    // 30s poll is the pickup path for photos uploaded elsewhere (e.g. mobile
+    // packer). React Query pauses this while the tab is hidden by default.
+    refetchInterval: 30_000,
+    staleTime: 20_000,
   });
 
   // Defensive — `photos` should always be an array per the queryFn, but a
@@ -79,21 +81,21 @@ export function ReceivingPhotosSection({
             </svg>
           </div>
           <div className="flex items-center gap-2">
-            <h3 className="text-caption font-black uppercase tracking-[0.2em] text-gray-900">{sectionTitle}</h3>
-            {isFetching ? <Loader2 className="h-3 w-3 animate-spin text-gray-400" aria-hidden /> : null}
+            <h3 className="text-caption font-black uppercase tracking-[0.2em] text-text-default">{sectionTitle}</h3>
+            {isFetching ? <Loader2 className="h-3 w-3 animate-spin text-text-faint" aria-hidden /> : null}
           </div>
         </div>
       </div>
 
       {loadingEmpty ? (
-        <div className="flex h-24 items-center justify-center rounded-xl border border-gray-100 bg-gray-50">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" aria-label="Loading photos" />
+        <div className="flex h-24 items-center justify-center rounded-xl border border-border-hairline bg-surface-canvas">
+          <Loader2 className="h-6 w-6 animate-spin text-text-faint" aria-label="Loading photos" />
         </div>
       ) : galleryPhotos.length === 0 ? (
-        <div className="flex min-h-[5.5rem] items-center justify-center rounded-xl border-2 border-dashed border-gray-100 bg-gray-50 px-4">
+        <div className="flex min-h-[5.5rem] items-center justify-center rounded-xl border-2 border-dashed border-border-hairline bg-surface-canvas px-4">
           <div className="text-center">
-            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">No photos yet</p>
-            <p className="mt-1 text-eyebrow font-medium text-gray-400">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">No photos yet</p>
+            <p className="mt-1 text-eyebrow font-medium text-text-faint">
               Mobile app → Receiving → ID <span className="font-mono font-black">#{receivingId}</span>
             </p>
           </div>

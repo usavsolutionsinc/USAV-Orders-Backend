@@ -139,13 +139,13 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
       {/* Header — receiving ID identity, primary "Edit PO" action in the
           right slot, and segmented tabs in the dual-sticky belowSlot. Matches
           the 2026 ops convention (Vercel/Front/Stripe pattern). */}
       <PaneHeader
-        className="shrink-0 border-gray-100 bg-white/90 backdrop-blur-xl"
+        className="shrink-0 border-border-hairline bg-surface-card/90 backdrop-blur-xl"
         rowClassName="px-6"
         leftSlot={
           <>
@@ -175,7 +175,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               disabled={form.isSaving || form.isDeleting}
               ariaLabel="Close"
               icon={<X className="h-5 w-5" />}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl hover:bg-gray-100"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl hover:bg-surface-sunken"
             />
           </>
         }
@@ -320,7 +320,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
       </div>
 
       {/* Footer — destructive action pinned to panel bottom (unfound / shipped pattern). */}
-      <div className="shrink-0 border-t border-gray-100 px-6 py-3">
+      <div className="shrink-0 border-t border-border-hairline px-6 py-3">
         {form.saveState === 'error' && (
           <p className="mb-2 text-center text-micro font-black uppercase tracking-wider text-red-500">
             Save failed — check connection

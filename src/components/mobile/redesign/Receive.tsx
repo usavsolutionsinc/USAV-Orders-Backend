@@ -52,7 +52,7 @@ function intakeToneClass(tone: IntakeTone, active: boolean): string {
     emerald: 'bg-emerald-600 text-white border-emerald-600',
   };
   const I: Record<IntakeTone, string> = {
-    slate: 'bg-white text-slate-600 border-slate-200',
+    slate: 'bg-surface-card text-text-muted border-border-soft',
     blue: 'bg-blue-50 text-blue-700 border-blue-100',
     rose: 'bg-rose-50 text-rose-700 border-rose-100',
     amber: 'bg-amber-50 text-amber-700 border-amber-100',
@@ -299,7 +299,7 @@ export default function RedesignedMobileReceive() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && lookup(input)}
               placeholder="Scan or enter tracking..."
-              className="w-full bg-white border border-blue-100 rounded-[24px] pl-11 pr-14 py-5 text-base font-bold text-blue-950 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-blue-300"
+              className="w-full bg-surface-card border border-blue-100 rounded-[24px] pl-11 pr-14 py-5 text-base font-bold text-blue-950 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-blue-300"
             />
             <IconButton
               ariaLabel="Look up tracking"
@@ -350,7 +350,7 @@ export default function RedesignedMobileReceive() {
       </AnimatePresence>
 
       {/* History Tray — shared feed, newest at the top. */}
-      <div className="flex min-h-0 flex-1 flex-col bg-slate-50 pt-6">
+      <div className="flex min-h-0 flex-1 flex-col bg-surface-canvas pt-6">
         <div className="px-6">
           <SectionHeader title="Recent Receipts" />
         </div>
@@ -371,7 +371,7 @@ export default function RedesignedMobileReceive() {
                     : 'bg-rose-50 text-rose-700 border-rose-100'
                   : active
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-blue-600 border-blue-100';
+                    : 'bg-surface-card text-blue-600 border-blue-100';
             return (
               // ds-raw-button: segmented triage filter toggle pill (with count) — not a DS Button
               <button

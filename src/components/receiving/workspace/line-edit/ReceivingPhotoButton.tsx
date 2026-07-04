@@ -159,7 +159,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
         // `pt-1.5` bridges the gap so the pointer stays inside the hover target
         // while moving from the pill to the gallery card.
         <div className="absolute right-0 top-full z-30 pt-1.5">
-          <div className="w-fit max-w-[80vw] rounded-xl border border-gray-200 bg-white p-1 shadow-xl">
+          <div className="w-fit max-w-[80vw] rounded-xl border border-border-soft bg-surface-card p-1 shadow-xl">
             <PhotoGallery
               photos={photos}
               orderId={`RCV-${receivingId}`}

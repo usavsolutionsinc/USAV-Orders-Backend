@@ -180,8 +180,8 @@ export function DashboardDetailsStack({
        <>
       <section className="mx-8 space-y-2">
         {mode === 'tech' ? (
-          <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
-            <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
+          <div className="flex items-center gap-2 rounded-xl border border-border-soft bg-surface-card p-2">
+            <span className="text-eyebrow font-black uppercase tracking-wider text-text-soft whitespace-nowrap">Undo</span>
             <Button
               type="button"
               variant="primary"

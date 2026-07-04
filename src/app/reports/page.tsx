@@ -47,7 +47,7 @@ function ReportsPageInner() {
   }, [load]);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-white">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface-card">
       <PageHeader
         title="Reports"
         rightSlot={
@@ -56,7 +56,7 @@ function ReportsPageInner() {
           </Button>
         }
         belowSlot={
-          <div className="flex gap-2 border-t border-slate-100 px-3 py-2">
+          <div className="flex gap-2 border-t border-border-hairline px-3 py-2">
             {TABS.map((t) => (
               // ds-raw-button: segmented tab toggle (aria-pressed, conditional active fill), not a single DS variant
               <button
@@ -66,8 +66,8 @@ function ReportsPageInner() {
                 aria-pressed={tab === t.id}
                 className={`rounded-md px-3 py-1.5 text-xs font-bold ${
                   tab === t.id
-                    ? 'bg-slate-900 text-white'
-                    : 'border border-slate-300 bg-white text-slate-700'
+                    ? 'bg-surface-inverse text-white'
+                    : 'border border-border-default bg-surface-card text-text-muted'
                 }`}
               >
                 {t.label}
@@ -87,7 +87,7 @@ function ReportsPageInner() {
           <p className="px-3 py-6 text-center text-sm font-bold text-rose-600">{error}</p>
         )}
         {!loading && !error && rows.length === 0 && (
-          <p className="px-3 py-10 text-center text-sm font-semibold text-slate-500">
+          <p className="px-3 py-10 text-center text-sm font-semibold text-text-soft">
             No data — try the daily refresh cron, or write some movement.
           </p>
         )}
@@ -103,7 +103,7 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
   if (tab === 'utilization') {
     return (
       <table className="w-full text-left text-label">
-        <thead className="sticky top-0 bg-slate-50 text-micro font-black uppercase tracking-widest text-slate-600">
+        <thead className="sticky top-0 bg-surface-canvas text-micro font-black uppercase tracking-widest text-text-muted">
           <tr>
             <th className="px-3 py-2">Bin</th>
             <th className="px-3 py-2">Room</th>
@@ -115,21 +115,21 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={String(r.bin_id)} className={i % 2 ? 'bg-slate-50/40' : ''}>
+            <tr key={String(r.bin_id)} className={i % 2 ? 'bg-surface-canvas/40' : ''}>
               <td className="px-3 py-1.5 font-mono font-bold">
                 {String(r.barcode ?? r.bin_name ?? '')}
               </td>
-              <td className="px-3 py-1.5 text-slate-600">{String(r.room ?? '—')}</td>
+              <td className="px-3 py-1.5 text-text-muted">{String(r.room ?? '—')}</td>
               <td className="px-3 py-1.5 text-right font-mono">
                 {r.fill_ratio != null
                   ? `${(Number(r.fill_ratio) * 100).toFixed(0)}%`
                   : '—'}
               </td>
               <td className="px-3 py-1.5 text-right font-mono font-black">{Number(r.in_bin)}</td>
-              <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+              <td className="px-3 py-1.5 text-right font-mono text-text-muted">
                 {r.capacity != null ? Number(r.capacity) : '—'}
               </td>
-              <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+              <td className="px-3 py-1.5 text-right font-mono text-text-muted">
                 {Number(r.sku_count)}
               </td>
             </tr>
@@ -141,7 +141,7 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
   if (tab === 'velocity') {
     return (
       <table className="w-full text-left text-label">
-        <thead className="sticky top-0 bg-slate-50 text-micro font-black uppercase tracking-widest text-slate-600">
+        <thead className="sticky top-0 bg-surface-canvas text-micro font-black uppercase tracking-widest text-text-muted">
           <tr>
             <th className="px-3 py-2">Tier</th>
             <th className="px-3 py-2">SKU</th>
@@ -153,10 +153,10 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={String(r.sku)} className={i % 2 ? 'bg-slate-50/40' : ''}>
+            <tr key={String(r.sku)} className={i % 2 ? 'bg-surface-canvas/40' : ''}>
               <td className="px-3 py-1.5 font-black">{String(r.velocity_tier)}</td>
               <td className="px-3 py-1.5 font-mono font-bold">{String(r.sku)}</td>
-              <td className="px-3 py-1.5 text-slate-700 truncate max-w-md">
+              <td className="px-3 py-1.5 text-text-muted truncate max-w-md">
                 {String(r.product_title ?? '—')}
               </td>
               <td className="px-3 py-1.5 text-right font-mono font-black text-rose-600">
@@ -165,7 +165,7 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
               <td className="px-3 py-1.5 text-right font-mono text-emerald-600">
                 {Number(r.in_qty)}
               </td>
-              <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+              <td className="px-3 py-1.5 text-right font-mono text-text-muted">
                 {Number(r.current_stock ?? 0)}
               </td>
             </tr>
@@ -176,7 +176,7 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
   }
   return (
     <table className="w-full text-left text-label">
-      <thead className="sticky top-0 bg-slate-50 text-micro font-black uppercase tracking-widest text-slate-600">
+      <thead className="sticky top-0 bg-surface-canvas text-micro font-black uppercase tracking-widest text-text-muted">
         <tr>
           <th className="px-3 py-2">SKU</th>
           <th className="px-3 py-2">Product</th>
@@ -186,9 +186,9 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
       </thead>
       <tbody>
         {rows.map((r, i) => (
-          <tr key={String(r.sku)} className={i % 2 ? 'bg-slate-50/40' : ''}>
+          <tr key={String(r.sku)} className={i % 2 ? 'bg-surface-canvas/40' : ''}>
             <td className="px-3 py-1.5 font-mono font-bold">{String(r.sku)}</td>
-            <td className="px-3 py-1.5 text-slate-700 truncate max-w-md">
+            <td className="px-3 py-1.5 text-text-muted truncate max-w-md">
               {String(r.product_title ?? '—')}
             </td>
             <td className="px-3 py-1.5 text-right font-mono font-black">{Number(r.stock)}</td>
@@ -206,7 +206,7 @@ export default function ReportsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full w-full items-center justify-center bg-gray-50">
+        <div className="flex h-full w-full items-center justify-center bg-surface-canvas">
           <LoadingSpinner size="lg" className="text-blue-600" />
         </div>
       }

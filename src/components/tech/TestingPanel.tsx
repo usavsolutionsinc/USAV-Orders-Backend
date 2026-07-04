@@ -36,7 +36,7 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
 
   return (
     <>
-      <div className="relative flex h-full min-h-0 flex-col bg-gray-50">
+      <div className="relative flex h-full min-h-0 flex-col bg-surface-canvas">
         <LineEditToolbar
           mode="testing"
           receivingId={row.receiving_id ?? null}

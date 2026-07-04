@@ -36,13 +36,13 @@ const TRIAGE_STATUS_TONES: Record<TriageExceptionStatus, TriageStatusTone> = {
   },
   discarded: {
     label: 'Discarded',
-    badge: 'bg-gray-100 text-gray-500',
-    chip: 'bg-gray-100 text-gray-500 ring-gray-200',
+    badge: 'bg-surface-sunken text-text-soft',
+    chip: 'bg-surface-sunken text-text-soft ring-border-soft',
   },
 };
 
-const FALLBACK_BADGE = 'bg-gray-100 text-gray-500';
-const FALLBACK_CHIP = 'bg-gray-100 text-gray-500 ring-gray-200';
+const FALLBACK_BADGE = 'bg-surface-sunken text-text-soft';
+const FALLBACK_CHIP = 'bg-surface-sunken text-text-soft ring-border-soft';
 
 /** Badge classes (no ring) for a triage status; safe for unknown values. */
 export function triageStatusBadgeClass(status: string): string {

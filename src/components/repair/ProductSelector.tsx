@@ -287,7 +287,7 @@ export function ProductSelector({
             );
           }}
           disabled={loading || (isAtRoot && !showAllProducts)}
-          className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border border-border-soft bg-surface-canvas transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-40"
           ariaLabel="Go back"
           icon={<ChevronLeft className="h-4 w-4" />}
         />
@@ -309,7 +309,7 @@ export function ProductSelector({
           className={`w-full rounded-xl p-3.5 text-left transition-all ${
             selectedProduct?.type === 'Other'
               ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-              : 'border border-gray-200 bg-gray-50 text-gray-900 hover:border-blue-300 hover:bg-blue-50'
+              : 'border border-border-soft bg-surface-canvas text-text-default hover:border-blue-300 hover:bg-blue-50'
           }`}
         >
           <div className="text-xs font-bold uppercase tracking-wide">Other -- Manual Entry</div>
@@ -343,7 +343,7 @@ export function ProductSelector({
 
       {/* Breadcrumbs */}
       {(breadcrumbs.length > 0 || showAllProducts) && (
-        <div className="flex flex-wrap items-center gap-1 text-eyebrow font-black uppercase tracking-wide text-gray-500">
+        <div className="flex flex-wrap items-center gap-1 text-eyebrow font-black uppercase tracking-wide text-text-soft">
           {/* ds-raw-button: inline breadcrumb text link (no chrome) — Button would add height/padding */}
           <button
             type="button"
@@ -354,18 +354,18 @@ export function ProductSelector({
           </button>
           {showAllProducts && (
             <>
-              <ChevronRight className="h-3 w-3 flex-shrink-0 text-gray-300" />
-              <span className="text-gray-900">All Repairs</span>
+              <ChevronRight className="h-3 w-3 flex-shrink-0 text-text-faint" />
+              <span className="text-text-default">All Repairs</span>
             </>
           )}
           {!showAllProducts && breadcrumbs.map((b, i) => (
             <React.Fragment key={b.id}>
-              <ChevronRight className="h-3 w-3 flex-shrink-0 text-gray-300" />
+              <ChevronRight className="h-3 w-3 flex-shrink-0 text-text-faint" />
               {/* ds-raw-button: inline breadcrumb text link (no chrome) */}
               <button
                 type="button"
                 onClick={() => void fetchCategoryLevel(b.id)}
-                className={`transition-colors hover:text-blue-600 ${i === breadcrumbs.length - 1 ? 'text-gray-900' : ''}`}
+                className={`transition-colors hover:text-blue-600 ${i === breadcrumbs.length - 1 ? 'text-text-default' : ''}`}
               >
                 {b.name}
               </button>
@@ -376,7 +376,7 @@ export function ProductSelector({
 
       {/* Loading */}
       {loading && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs font-bold text-gray-400 uppercase tracking-wide">
+        <div className="rounded-xl border border-border-soft bg-surface-canvas p-4 text-xs font-bold text-text-faint uppercase tracking-wide">
           Loading...
         </div>
       )}
@@ -395,7 +395,7 @@ export function ProductSelector({
           {/* Sub-categories */}
           {!showAllProducts && filteredCategories.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-eyebrow font-black uppercase tracking-[0.15em] text-gray-400">
+              <p className="text-eyebrow font-black uppercase tracking-[0.15em] text-text-faint">
                 {isAtRoot ? 'Categories' : 'Sub-categories'}
               </p>
               <div className="space-y-1.5">
@@ -405,12 +405,12 @@ export function ProductSelector({
                     key={cat.id}
                     type="button"
                     onClick={() => void fetchCategoryLevel(cat.id)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3.5 text-left transition-all hover:border-blue-300 hover:bg-blue-50 active:bg-blue-100"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border-soft bg-surface-card p-3.5 text-left transition-all hover:border-blue-300 hover:bg-blue-50 active:bg-blue-100"
                   >
-                    <span className="truncate text-xs font-bold text-gray-900">
+                    <span className="truncate text-xs font-bold text-text-default">
                       {cat.name}
                     </span>
-                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-text-faint" />
                   </button>
                 ))}
                 {isAtRoot && (
@@ -418,12 +418,12 @@ export function ProductSelector({
                   <button
                     type="button"
                     onClick={() => void fetchAllProducts()}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3.5 text-left transition-all hover:border-blue-300 hover:bg-blue-50 active:bg-blue-100"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border-soft bg-surface-card p-3.5 text-left transition-all hover:border-blue-300 hover:bg-blue-50 active:bg-blue-100"
                   >
-                    <span className="truncate text-xs font-bold text-gray-900">
+                    <span className="truncate text-xs font-bold text-text-default">
                       Pick Your Repair - All Repairs
                     </span>
-                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-text-faint" />
                   </button>
                 )}
               </div>
@@ -433,7 +433,7 @@ export function ProductSelector({
           {/* Products grid */}
           {(loadingProducts || filteredProducts.length > 0) && (
             <div className="space-y-2">
-              <p className="text-eyebrow font-black uppercase tracking-[0.15em] text-gray-400">
+              <p className="text-eyebrow font-black uppercase tracking-[0.15em] text-text-faint">
                 {loadingProducts ? 'Loading products...' : 'Products'}
               </p>
               {!loadingProducts && (
@@ -452,11 +452,11 @@ export function ProductSelector({
                         className={`relative flex flex-col overflow-hidden rounded-xl border-2 text-left transition-all ${
                           selected
                             ? 'border-blue-500 shadow-md shadow-blue-500/20'
-                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                            : 'border-border-soft hover:border-blue-300 hover:shadow-sm'
                         }`}
                       >
                         {/* Square image */}
-                        <div className="relative aspect-square w-full flex-shrink-0 overflow-hidden bg-gray-100">
+                        <div className="relative aspect-square w-full flex-shrink-0 overflow-hidden bg-surface-sunken">
                           {product.thumbnailUrl ? (
                             <img
                               src={product.thumbnailUrl}
@@ -466,7 +466,7 @@ export function ProductSelector({
                               decoding="async"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-eyebrow font-black uppercase tracking-widest text-gray-300">
+                            <div className="flex h-full w-full items-center justify-center text-eyebrow font-black uppercase tracking-widest text-text-faint">
                               No Image
                             </div>
                           )}
@@ -482,18 +482,18 @@ export function ProductSelector({
                         </div>
 
                         {/* Info */}
-                        <div className={`flex flex-1 flex-col justify-between gap-1.5 p-2.5 ${selected ? 'bg-blue-600' : 'bg-white'}`}>
-                          <p className={`text-xs font-bold leading-tight ${selected ? 'text-white' : 'text-gray-900'}`}>
+                        <div className={`flex flex-1 flex-col justify-between gap-1.5 p-2.5 ${selected ? 'bg-blue-600' : 'bg-surface-card'}`}>
+                          <p className={`text-xs font-bold leading-tight ${selected ? 'text-white' : 'text-text-default'}`}>
                             {product.name}
                           </p>
                           <div className="flex items-end justify-between gap-1">
                             <span className={`text-sm font-black ${
-                              selected ? 'text-blue-100' : product.price !== null ? 'text-emerald-600' : 'text-gray-300'
+                              selected ? 'text-blue-100' : product.price !== null ? 'text-emerald-600' : 'text-text-faint'
                             }`}>
                               {product.price !== null ? `$${product.price.toFixed(2)}` : '--'}
                             </span>
                             {product.sku && (
-                              <span className={`max-w-[55%] truncate text-right text-eyebrow font-bold ${selected ? 'text-blue-200' : 'text-gray-400'}`}>
+                              <span className={`max-w-[55%] truncate text-right text-eyebrow font-bold ${selected ? 'text-blue-200' : 'text-text-faint'}`}>
                                 {product.sku}
                               </span>
                             )}
@@ -533,10 +533,10 @@ export function ProductSelector({
         <div className="overflow-hidden rounded-xl bg-blue-600 p-3 shadow-lg shadow-blue-500/20">
           <div className="space-y-1.5">
             {selectedItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
+              <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-card px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-micro font-bold text-gray-900">{item.name}</p>
-                  {item.sku && <p className="text-eyebrow font-semibold text-gray-400">{item.sku}</p>}
+                  <p className="truncate text-micro font-bold text-text-default">{item.name}</p>
+                  {item.sku && <p className="text-eyebrow font-semibold text-text-faint">{item.sku}</p>}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
                   {item.price !== null && (
@@ -545,10 +545,10 @@ export function ProductSelector({
                   <IconButton
                     type="button"
                     onClick={() => removeItem(item.id)}
-                    className="flex h-5 w-5 items-center justify-center rounded-md bg-gray-100 transition-colors hover:bg-red-100"
+                    className="flex h-5 w-5 items-center justify-center rounded-md bg-surface-sunken transition-colors hover:bg-red-100"
                     ariaLabel="Remove item"
                     icon={
-                      <svg className="h-3 w-3 text-gray-500 hover:text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <svg className="h-3 w-3 text-text-soft hover:text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     }

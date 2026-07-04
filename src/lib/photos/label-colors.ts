@@ -44,7 +44,7 @@ export function normalizeLabelColor(color: string | null | undefined): LabelColo
 
 /** Full literal chip classes per token (3-layer: bg / text / ring). */
 export const LABEL_CHIP_CLASSES: Record<LabelColorToken, string> = {
-  slate: 'bg-slate-50 text-slate-700 ring-1 ring-inset ring-slate-200',
+  slate: 'bg-surface-canvas text-text-muted ring-1 ring-inset ring-border-soft',
   blue: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200',
   violet: 'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200',
   indigo: 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200',

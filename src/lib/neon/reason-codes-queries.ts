@@ -1,5 +1,7 @@
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { getOrSet, invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 export interface ReasonCodeRow {
   id: number;
@@ -54,12 +56,24 @@ export async function getActiveReasonCodes(
     params.push(JSON.stringify([filters.workflowNodeId]));
     clauses.push(`(applies_to IS NULL OR applies_to @> $${params.length}::jsonb)`);
   }
-  const r = await tenantQuery<ReasonCodeRow>(
+  // Reason pickers open on every station panel; the vocabulary changes only on
+  // reason-code CRUD. Cache per (org, filter combo); busted by the mutations below.
+  const key = `${filters.flowContext ?? ''}:${filters.category ?? ''}:${filters.direction ?? ''}:${filters.workflowNodeId ?? ''}`;
+  return getOrSet<ReasonCodeRow[]>(
+    CACHE_NS.reasons,
     orgId,
-    `SELECT ${COLS} FROM reason_codes WHERE ${clauses.join(' AND ')} ORDER BY sort_order ASC, label ASC`,
-    params,
+    key,
+    600, // 10 min; writes invalidate the tag
+    [CACHE_TAGS.reasonCodes],
+    async () => {
+      const r = await tenantQuery<ReasonCodeRow>(
+        orgId,
+        `SELECT ${COLS} FROM reason_codes WHERE ${clauses.join(' AND ')} ORDER BY sort_order ASC, label ASC`,
+        params,
+      );
+      return r.rows;
+    },
   );
-  return r.rows;
 }
 
 export async function getReasonCodeById(id: number, orgId: OrgId): Promise<ReasonCodeRow | null> {
@@ -100,6 +114,7 @@ export async function createReasonCode(
       orgId,
     ],
   );
+  await invalidateCacheTags(orgId, [CACHE_TAGS.reasonCodes]);
   return r.rows[0];
 }
 
@@ -154,6 +169,7 @@ export async function updateReasonCode(
       orgId,
     ],
   );
+  await invalidateCacheTags(orgId, [CACHE_TAGS.reasonCodes]);
   return r.rows[0] ?? null;
 }
 
@@ -171,5 +187,6 @@ export async function softDeleteReasonCode(id: number, orgId: OrgId): Promise<Re
       RETURNING ${COLS}`,
     [id, orgId],
   );
+  await invalidateCacheTags(orgId, [CACHE_TAGS.reasonCodes]);
   return r.rows[0] ?? null;
 }

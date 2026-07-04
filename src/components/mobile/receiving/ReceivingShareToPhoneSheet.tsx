@@ -77,7 +77,7 @@ export function ReceivingShareToPhoneSheet() {
     const id = shared.receivingId;
     const poLabel = shared.poLabel;
     setShared(null);
-    // Carry the PO label through so the camera header shows it (not "RCV-<id>")
+    // Carry the PO label through so the camera header shows it (not "RCV-[id]")
     // and the saved NAS file is named by PO#. Skipped when no real PO was sent.
     const qs = poLabel
       ? `?title=${encodeURIComponent(poLabel)}&poRef=${encodeURIComponent(poLabel)}`
@@ -92,8 +92,8 @@ export function ReceivingShareToPhoneSheet() {
           <Monitor className="h-7 w-7" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-900">{shared?.label}</p>
-          <p className="mt-1 text-caption font-medium leading-snug text-gray-500">
+          <p className="text-sm font-semibold text-text-default">{shared?.label}</p>
+          <p className="mt-1 text-caption font-medium leading-snug text-text-soft">
             Sent from the receiving workstation. Take photos for this package on your phone.
           </p>
         </div>

@@ -48,28 +48,28 @@ export function DuplicateRoleDialog({ open, sourceRoleId, sourceLabel, onClose, 
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) onClose(); }}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-gray-900">Duplicate role</h2>
-        <p className="mt-0.5 text-xs text-gray-500">Copies permissions and color from <b>{sourceLabel}</b>.</p>
+      <div className="w-full max-w-md rounded-2xl bg-surface-card p-5" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-text-default">Duplicate role</h2>
+        <p className="mt-0.5 text-xs text-text-soft">Copies permissions and color from <b>{sourceLabel}</b>.</p>
 
         <div className="mt-5 space-y-3">
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">New label</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">New label</span>
             <input
               autoFocus
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
             />
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">New key</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">New key</span>
             <input
               value={key}
               onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 40))}
               placeholder="shift_lead"
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-mono outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm font-mono outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
             />
           </label>
         </div>

@@ -53,7 +53,7 @@ export const CADENCE_LABEL: Record<string, string> = {
 export const cadenceTone: Record<string, string> = {
   daily: 'bg-emerald-50 text-emerald-700',
   weekly: 'bg-blue-50 text-blue-700',
-  off: 'bg-slate-100 text-slate-500',
+  off: 'bg-surface-sunken text-text-soft',
 };
 
 export async function jsonFetch(url: string, init?: RequestInit) {
@@ -81,7 +81,7 @@ export const conditionTone: Record<string, string> = {
 export const severityTone: Record<string, string> = {
   critical: 'bg-red-50 text-red-700 ring-red-200',
   warn: 'bg-amber-50 text-amber-700 ring-amber-200',
-  info: 'bg-slate-50 text-slate-600 ring-slate-200',
+  info: 'bg-surface-canvas text-text-muted ring-border-soft',
 };
 
 export const ALERT_TYPE_LABEL: Record<string, string> = {
@@ -117,5 +117,5 @@ export const demandSourceTone: Record<string, string> = {
   warranty: 'bg-rose-50 text-rose-700',
   missing_part: 'bg-amber-50 text-amber-700',
   fba: 'bg-orange-50 text-orange-700',
-  scan: 'bg-slate-100 text-slate-600',
+  scan: 'bg-surface-sunken text-text-muted',
 };

@@ -25,28 +25,28 @@ export function RoleIdentityCard({
   onDuplicate: () => void;
 }) {
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <section className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
       <div className="flex items-start gap-4">
         <div className="h-14 w-14 flex-shrink-0 rounded-full ring-4 ring-white shadow" style={{ backgroundColor: role.color }} aria-hidden />
         <div className="min-w-0 flex-1">
           <InlineEdit
             value={role.label}
             onSave={(next) => { if (next !== role.label) onPatch({ label: next }, 'label'); }}
-            displayClassName="truncate text-2xl font-semibold tracking-tight text-gray-900"
+            displayClassName="truncate text-2xl font-semibold tracking-tight text-text-default"
           />
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <code className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-mono text-gray-600">{role.key}</code>
+            <code className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-mono text-text-muted">{role.key}</code>
             {role.is_system && (
-              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-gray-500">System</span>
+              <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-text-soft">System</span>
             )}
             {isAdminRole && (
               <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-amber-900 ring-1 ring-amber-200">All Access</span>
             )}
-            <span className="text-caption text-gray-400">position {role.position}</span>
-            <span className="text-caption text-gray-400">· {role.member_count} member{role.member_count === 1 ? '' : 's'}</span>
+            <span className="text-caption text-text-faint">position {role.position}</span>
+            <span className="text-caption text-text-faint">· {role.member_count} member{role.member_count === 1 ? '' : 's'}</span>
           </div>
           <div className="mt-3">
-            <div className="mb-1.5 text-micro font-semibold uppercase tracking-wider text-gray-500">Color</div>
+            <div className="mb-1.5 text-micro font-semibold uppercase tracking-wider text-text-soft">Color</div>
             <RoleColorPicker
               value={role.color}
               onChange={(hex) => onPatch({ color: hex }, 'color')}

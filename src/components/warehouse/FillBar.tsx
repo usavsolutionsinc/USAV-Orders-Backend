@@ -23,8 +23,8 @@ export function FillBar({ pct, current, max, className }: Props) {
   if (pct == null) {
     return (
       <div className={`flex items-center gap-1 ${className ?? ''}`}>
-        <div className="h-1.5 flex-1 rounded-full bg-slate-100" />
-        <span className="text-micro tabular-nums text-slate-400">—</span>
+        <div className="h-1.5 flex-1 rounded-full bg-surface-sunken" />
+        <span className="text-micro tabular-nums text-text-faint">—</span>
       </div>
     );
   }
@@ -32,7 +32,7 @@ export function FillBar({ pct, current, max, className }: Props) {
   const clamped = Math.max(0, Math.min(pct, 1.5));
   const widthPct = Math.min(clamped, 1) * 100;
   const tone =
-    pct === 0     ? 'bg-slate-300' :
+    pct === 0     ? 'bg-surface-strong' :
     pct <= 0.95   ? 'bg-emerald-500' :
     pct <= 1.0    ? 'bg-amber-500' :
                     'bg-red-500';
@@ -47,7 +47,7 @@ export function FillBar({ pct, current, max, className }: Props) {
       asChild
     >
       <div className={`flex items-center gap-1.5 ${className ?? ''}`}>
-        <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
           <div
             className={`absolute inset-y-0 left-0 ${tone} transition-[width] duration-300`}
             style={{ width: `${widthPct}%` }}
@@ -59,7 +59,7 @@ export function FillBar({ pct, current, max, className }: Props) {
             />
           )}
         </div>
-        <span className="w-12 shrink-0 text-right text-micro tabular-nums text-slate-500">
+        <span className="w-12 shrink-0 text-right text-micro tabular-nums text-text-soft">
           {labelText}
         </span>
       </div>

@@ -31,7 +31,7 @@ export function EcwidResultsList({ c }: { c: EcwidProductSearchController }) {
         !manualTitleMode &&
         query.trim() &&
         items.length === 0 && (
-        <li className="px-3 py-3 text-label text-gray-500">
+        <li className="px-3 py-3 text-label text-text-soft">
           No matches. Try the other mode, refine the query, or use &ldquo;Product not added yet?&rdquo; for a
           manual title.
         </li>
@@ -41,7 +41,7 @@ export function EcwidResultsList({ c }: { c: EcwidProductSearchController }) {
         !isLoading &&
         popoverMode === 'repair_service' &&
         items.length === 0 && (
-        <li className="px-3 py-3 text-label text-gray-500">
+        <li className="px-3 py-3 text-label text-text-soft">
           {orderScope === 'all'
             ? 'No recent Ecwid orders found.'
             : 'No recent repair-service line items (-RS SKU) found.'}
@@ -53,7 +53,7 @@ export function EcwidResultsList({ c }: { c: EcwidProductSearchController }) {
         popoverMode === 'repair_service' &&
         items.length > 0 &&
         visibleItems.length === 0 && (
-        <li className="px-3 py-3 text-label text-gray-500">
+        <li className="px-3 py-3 text-label text-text-soft">
           No recent orders match that filter.
         </li>
       )}
@@ -62,7 +62,7 @@ export function EcwidResultsList({ c }: { c: EcwidProductSearchController }) {
         popoverMode === 'repair_service' &&
         isLoading &&
         items.length === 0 && (
-          <li className="px-3 py-4 text-micro font-semibold text-gray-400">
+          <li className="px-3 py-4 text-micro font-semibold text-text-faint">
             Loading recent Ecwid orders…
           </li>
         )}

@@ -144,10 +144,10 @@ export function WorkOrderAssignPopover({
     >
       <div className="space-y-3">
         <div>
-          <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-500">
+          <p className="text-micro font-black uppercase tracking-[0.18em] text-text-soft">
             Assign · {row.queueLabel}
           </p>
-          <p className="mt-0.5 truncate text-label font-semibold text-gray-800">{row.title}</p>
+          <p className="mt-0.5 truncate text-label font-semibold text-text-default">{row.title}</p>
         </div>
 
         <StaffButtonGrid
@@ -171,7 +171,7 @@ export function WorkOrderAssignPopover({
         ) : null}
 
         {error ? <p className="text-caption font-medium text-red-600">{error}</p> : null}
-        {saving ? <p className="text-micro text-gray-400">Saving…</p> : null}
+        {saving ? <p className="text-micro text-text-faint">Saving…</p> : null}
       </div>
     </Popover>
   );

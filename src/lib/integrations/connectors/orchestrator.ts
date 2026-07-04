@@ -11,13 +11,27 @@ import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntegrationProvider } from '@/lib/integrations/credentials';
 import { connectorsWithCapability, getConnector, listConnectors } from './registry';
 import type { ReconcileOutcome, SyncOutcome } from './types';
+import { tapBuyerNoteDerivation } from '@/lib/surfaces/buyer-note-derivation';
+
+/** Post-sync mirror-derivation taps (plan §2.3 fresh path) — tapWorkflow
+ *  semantics: best-effort, NEVER throws (tapBuyerNoteDerivation swallows all
+ *  errors), so awaiting it cannot fail a sync — and awaiting is required on
+ *  serverless, where un-awaited work is frozen once the response returns.
+ *  Signals derive from the LOCAL mirror the sync just updated, so provider
+ *  errors can't reach this layer. eBay only today (Amazon is a fast-follow). */
+async function tapPostSyncDerivations(provider: IntegrationProvider, orgId: OrgId): Promise<void> {
+  if (provider !== 'ebay') return;
+  await tapBuyerNoteDerivation(orgId);
+}
 
 /** Run one org's sync for one provider (the "Sync now" action). */
 export async function syncConnection(orgId: OrgId, provider: IntegrationProvider): Promise<SyncOutcome> {
   const connector = getConnector(provider);
   if (!connector) return { ok: false, error: `Unknown provider: ${provider}` };
   if (!connector.sync) return { ok: false, error: `${provider} has no sync capability yet` };
-  return connector.sync(orgId);
+  const outcome = await connector.sync(orgId);
+  await tapPostSyncDerivations(provider, orgId);
+  return outcome;
 }
 
 /** Which orgs have this provider connected. eBay/Amazon track connections in
@@ -58,6 +72,7 @@ export async function runOrdersSyncAllOrgs(only?: IntegrationProvider[]): Promis
     for (const orgId of orgs) {
       try {
         out.push({ provider: connector.provider, orgId, outcome: await connector.sync(orgId) });
+        await tapPostSyncDerivations(connector.provider, orgId);
       } catch (e) {
         out.push({
           provider: connector.provider,

@@ -33,6 +33,8 @@ import { OutboundStatusLegend } from '@/components/shipped/OutboundStatusLegend'
 import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
 import { FirstScanOnboardingCard } from '@/components/dashboard/FirstScanOnboardingCard';
 import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
+import { useAiQuickJump } from '@/hooks/useAiQuickJump';
+import { AiQuickJumpResults } from '@/components/search/AiQuickJumpResults';
 
 interface SearchHistory {
     query: string;
@@ -109,6 +111,13 @@ export default function ShippedSidebar({
         searchField: shippedSearchField,
     });
     const results: ShippedOrder[] = searchResult.data?.records ?? [];
+
+    // AI quick-jump (AI search Phase 2): cross-entity hybrid hits ride along
+    // the same input. Flag-gated inside the hook — off/no-permission/failed
+    // means zero hits and this sidebar is byte-identical to the classic
+    // shipped search. pageContext soft-boosts ORDER hits; no hard scope, so
+    // a serial/tracking typed here can still jump to a unit or carton.
+    const aiQuickJump = useAiQuickJump(trimmedQuery, { pageContext: pathname, limit: 5 });
     const isSearching = searchResult.isFetching;
     const hasSearched = trimmedQuery.length > 0;
 
@@ -294,7 +303,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     {filterControl ? <motion.div variants={itemVariants} className="relative z-20">{filterControl}</motion.div> : null}
                     {!hideSectionHeader ? (
                         <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
-                            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+                            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-text-default">
                                 Shipped Orders
                             </h2>
                             <p className={`${microBadge} text-blue-600 mt-1`}>
@@ -320,7 +329,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 const nextSearch = params.toString();
                                 router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
                             }}
-                            className="rounded-xl bg-emerald-500 p-2.5 transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+                            className="rounded-xl bg-emerald-500 p-2.5 transition-colors hover:bg-emerald-600 disabled:bg-surface-strong"
                             ariaLabel="Open new order entry form"
                             icon={<Plus className="h-5 w-5 text-white" />}
                         />
@@ -345,7 +354,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             headerBelow={
                 <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
                     <div className="flex items-center justify-between">
-                        <span className="text-micro font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
+                        <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
                         <SavedViewsControl storageKey="shipped_saved_views" paramKeys={SHIPPED_VIEW_PARAMS} />
                     </div>
                     <OutboundStatusLegend />
@@ -356,16 +365,25 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                 <motion.div variants={itemVariants} className="space-y-4">
                         {/* Combined Zoho sync + daily pickup report (tabbed) */}
                         <ShippedActionsButton />
-                        <div className="space-y-3 border-t border-gray-100 pt-3">
+                        <div className="space-y-3 border-t border-border-hairline pt-3">
                             <FirstScanOnboardingCard variant="sidebar" />
                             <ThroughputRoiCard variant="sidebar" />
                         </div>
+
+                        {/* AI quick-jump — cross-entity hybrid hits for the same
+                            query (renders nothing when the flag is off or empty) */}
+                        {aiQuickJump.hits.length > 0 && (
+                            <AiQuickJumpResults
+                                hits={aiQuickJump.hits}
+                                className="rounded-xl border border-border-hairline bg-surface-card"
+                            />
+                        )}
 
                         {/* Search Results */}
                         {results.length > 0 && (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <p className={`${microBadge} text-gray-500`}>
+                                    <p className={`${microBadge} text-text-soft`}>
                                         {results.length} Result{results.length !== 1 ? 's' : ''}
                                     </p>
                                     {/* ds-raw-button: inline text link (microBadge + hover:underline, no chrome) — Button would add height/padding */}
@@ -383,19 +401,19 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                             {/* ds-raw-button: multi-line text-left master-detail result row (order id + product + tracking) — not a Button shape */}
                                             <button
                                                 onClick={() => openDetails(result)}
-                                                className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                                                className="w-full text-left p-3 bg-surface-canvas border border-border-soft rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
                                             >
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center justify-between">
-                                                        <span className={`${sectionLabel} text-gray-900 group-hover:text-blue-600 truncate pr-8`}>
+                                                        <span className={`${sectionLabel} text-text-default group-hover:text-blue-600 truncate pr-8`}>
                                                             {result.order_id}
                                                         </span>
                                                         <span className={`${microBadge} px-1.5 py-0.5 rounded ${result.is_shipped ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                             {result.is_shipped ? 'Shipped' : 'Pending'}
                                                         </span>
                                                     </div>
-                                                    <p className="text-eyebrow text-gray-500 font-semibold truncate">{result.product_title}</p>
-                                                    <p className={`${microBadge} font-mono text-gray-500 truncate`}>{result.shipping_tracking_number}</p>
+                                                    <p className="text-eyebrow text-text-soft font-semibold truncate">{result.product_title}</p>
+                                                    <p className={`${microBadge} font-mono text-text-soft truncate`}>{result.shipping_tracking_number}</p>
                                                 </div>
                                             </button>
                                             
@@ -407,7 +425,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                                     className={`absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 ${
                                                         copiedId === result.id
                                                             ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                                                            : 'bg-white border-gray-100 text-gray-400 hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm'
+                                                            : 'bg-surface-card border-border-hairline text-text-faint hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm'
                                                     }`}
                                                     ariaLabel="Copy all details"
                                                     icon={copiedId === result.id ? (
@@ -448,7 +466,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                         variant="secondary"
                                         size="md"
                                         onClick={() => setInputValue('')}
-                                        className="border border-blue-200 bg-white text-blue-700 hover:border-blue-300 hover:bg-blue-100"
+                                        className="border border-blue-200 bg-surface-card text-blue-700 hover:border-blue-300 hover:bg-blue-100"
                                     >
                                         Clear Search
                                     </Button>
@@ -484,7 +502,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
     const sidebarShell = embedded ? (
         panelContent
     ) : (
-        <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[300px]">
+        <aside className="bg-surface-card text-text-default flex-shrink-0 h-full overflow-hidden border-r border-border-soft relative group w-[300px]">
             {panelContent}
         </aside>
     );

@@ -54,7 +54,7 @@ function IdentifierToggle({
   ];
   return (
     <div
-      className="inline-flex items-center gap-0.5 rounded-md bg-gray-100 p-0.5"
+      className="inline-flex items-center gap-0.5 rounded-md bg-surface-sunken p-0.5"
       role="tablist"
       aria-label="Timeline grouping"
     >
@@ -68,7 +68,7 @@ function IdentifierToggle({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={`ds-raw-button rounded px-2 py-0.5 text-eyebrow font-bold uppercase tracking-[0.1em] transition-colors ${
-              active ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+              active ? 'bg-surface-card text-text-muted shadow-sm' : 'text-text-faint hover:text-text-muted'
             }`}
           >
             {o.label}
@@ -91,15 +91,15 @@ function FactCard({
   sub?: string | null;
 }) {
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">{label}</p>
+    <section className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60">
+      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">{label}</p>
       <div className="mt-2 flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-base font-bold text-gray-900">{value}</div>
-          {sub ? <p className="truncate text-micro font-medium text-gray-500">{sub}</p> : null}
+          <div className="truncate text-base font-bold text-text-default">{value}</div>
+          {sub ? <p className="truncate text-micro font-medium text-text-soft">{sub}</p> : null}
         </div>
       </div>
     </section>
@@ -161,11 +161,11 @@ export function AuditLogTraceClient() {
   if (!serial) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
-        <Search className="mb-3 h-10 w-10 text-gray-300" />
-        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+        <Search className="mb-3 h-10 w-10 text-text-faint" />
+        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">
           First Trace
         </p>
-        <p className="mt-3 max-w-[420px] text-sm font-medium text-gray-500">
+        <p className="mt-3 max-w-[420px] text-sm font-medium text-text-soft">
           Scan or enter a serial in the sidebar to trace one unit from origin through every
           station — receiving, testing, putaway, pick, pack, ship, and return — with who and
           when at each step.
@@ -183,17 +183,17 @@ export function AuditLogTraceClient() {
   const order = data.order;
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <div className="border-b border-border-soft bg-surface-card px-6 py-4">
         <p className="text-micro font-bold uppercase tracking-widest text-emerald-700">First Trace</p>
-        <h2 className="mt-0.5 break-words text-base font-bold text-gray-900">
+        <h2 className="mt-0.5 break-words text-base font-bold text-text-default">
           {unit.product_title || unit.sku || unit.serial_number}
         </h2>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <SerialChip value={unit.serial_number} width="w-fit" />
           {unit.sku ? <SkuSerialChip value={unit.sku} display={unit.sku} width="w-fit" /> : null}
           {unit.current_status ? (
-            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-gray-600">
+            <span className="inline-flex items-center rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-text-muted">
               {unit.current_status}
             </span>
           ) : null}
@@ -229,8 +229,8 @@ export function AuditLogTraceClient() {
           </div>
 
           {order ? (
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-              <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+            <section className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60">
+              <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">
                 Shipped on order
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -241,7 +241,7 @@ export function AuditLogTraceClient() {
                   {order.order_id ? (
                     <OrderIdChip value={order.order_id} display={order.order_id} dense />
                   ) : (
-                    <span className="text-base font-bold text-gray-900">Order</span>
+                    <span className="text-base font-bold text-text-default">Order</span>
                   )}
                   {order.tracking_number ? (
                     <TrackingChip
@@ -251,7 +251,7 @@ export function AuditLogTraceClient() {
                       fitDisplayWidth
                     />
                   ) : null}
-                  <span className="text-micro font-medium text-gray-500">
+                  <span className="text-micro font-medium text-text-soft">
                     {order.allocation_state}
                     {order.allocated_at ? ` · ${timeAgo(order.allocated_at)}` : ''}
                   </span>
@@ -260,12 +260,12 @@ export function AuditLogTraceClient() {
             </section>
           ) : null}
 
-          <section className="rounded-xl border border-gray-100 bg-white p-4">
+          <section className="rounded-xl border border-border-hairline bg-surface-card p-4">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <h3 className="text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Lifecycle trail
               </h3>
-              <div className="flex items-center gap-3 text-micro font-medium text-gray-400">
+              <div className="flex items-center gap-3 text-micro font-medium text-text-faint">
                 {items.some((it) => it.ref) ? (
                   <IdentifierToggle mode={groupMode} onChange={setGroupMode} />
                 ) : null}

@@ -65,40 +65,40 @@ export function AddStaffDialog({ open, onClose, onCreated }: AddStaffDialogProps
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-gray-900">Add staff</h2>
-        <p className="mt-0.5 text-xs text-gray-500">
+      <div className="w-full max-w-md rounded-2xl bg-surface-card p-5" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-text-default">Add staff</h2>
+        <p className="mt-0.5 text-xs text-text-soft">
           Creates an invited account. Generate an enrollment QR to let them set a PIN.
         </p>
 
         <div className="mt-5 space-y-3">
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Name</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Name</span>
             <input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="Jane Doe"
             />
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Role</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Role</span>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as typeof ALL_ROLES[number])}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
             >
               {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Employee code (optional)</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Employee code (optional)</span>
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="EMP-001"
             />
           </label>

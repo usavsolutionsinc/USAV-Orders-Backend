@@ -227,7 +227,7 @@ export function KpiDetailsModal({ kind, value, activityFeed, onClose }: KpiDetai
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 4 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="relative flex w-full max-w-[520px] flex-col overflow-hidden rounded-3xl border border-border-soft bg-white shadow-[0_24px_60px_rgba(45,42,38,0.18)]"
+            className="relative flex w-full max-w-[520px] flex-col overflow-hidden rounded-3xl border border-border-soft bg-surface-card shadow-[0_24px_60px_rgba(45,42,38,0.18)]"
             style={{ maxHeight: 'min(600px, 88vh)' }}
           >
             <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">

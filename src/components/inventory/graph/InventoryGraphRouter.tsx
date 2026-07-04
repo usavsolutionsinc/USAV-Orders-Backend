@@ -35,8 +35,8 @@ export function InventoryGraphRouter() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
-        <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-0.5">
+      <div className="flex items-center gap-2 border-b border-border-soft bg-surface-card px-4 py-2">
+        <div className="inline-flex rounded-xl border border-border-soft bg-surface-canvas p-0.5">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -44,7 +44,7 @@ export function InventoryGraphRouter() {
               onClick={() => switchTo(t.id)}
               className={cn(
                 'ds-raw-button rounded-lg px-3 py-1.5 text-label font-medium transition-colors',
-                t.active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
+                t.active ? 'bg-surface-card text-text-default shadow-sm' : 'text-text-soft hover:text-text-default',
               )}
             >
               {t.label}

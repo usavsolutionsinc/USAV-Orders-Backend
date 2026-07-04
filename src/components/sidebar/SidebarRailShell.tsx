@@ -82,9 +82,9 @@ export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
   const staggerContainerVariants = staggerRevealContainer(reduceMotion ? 0 : STAGGER_REVEAL_STEP);
 
   return (
-    <section className="min-w-0 border-t border-gray-100 bg-white">
+    <section className="min-w-0 border-t border-border-hairline bg-surface-card">
       <div className={`flex items-center justify-between ${SIDEBAR_GUTTER} py-1`}>
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
           {eyebrowTitle} · {topCount}
         </p>
         <div className="flex items-center gap-2">
@@ -96,7 +96,7 @@ export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
                 // title — which made the suffixed rail (Unfound) ~2px taller than
                 // the action-button rail (Found). Tight leading lets the title
                 // govern the row height so both eyebrows align.
-                <p className="text-[8.5px] font-bold uppercase leading-none tracking-widest text-gray-300">{eyebrowSuffix}</p>
+                <p className="text-[8.5px] font-bold uppercase leading-none tracking-widest text-text-faint">{eyebrowSuffix}</p>
               )}
           {editMode.enabled ? (
             <RailEditPencil active={editMode.active} onToggle={editMode.toggleActive} />
@@ -105,10 +105,10 @@ export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
       </div>
       {showSkeleton ? (
         <div className={`space-y-1 ${SIDEBAR_GUTTER} py-2`}>
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-9 w-full animate-pulse rounded-md bg-gray-100" />)}
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-9 w-full animate-pulse rounded-md bg-surface-sunken" />)}
         </div>
       ) : rows.length === 0 ? (
-        <p className={`${SIDEBAR_GUTTER} py-3 text-micro font-semibold text-gray-400`}>{emptyText}</p>
+        <p className={`${SIDEBAR_GUTTER} py-3 text-micro font-semibold text-text-faint`}>{emptyText}</p>
       ) : (
         <motion.ul
           ref={listRef}

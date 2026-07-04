@@ -55,7 +55,7 @@ export function FbaBoardRegion({
   if (activeMode === 'shipped') {
     return (
       <div className="flex h-full flex-1 items-center justify-center px-5 text-center">
-        <p className="max-w-sm text-caption font-black uppercase tracking-widest text-gray-400">
+        <p className="max-w-sm text-caption font-black uppercase tracking-widest text-text-faint">
           Shipped mode is managed from the sidebar table.
         </p>
       </div>
@@ -101,7 +101,7 @@ export function FbaBoardRegion({
             <StickyActionBar
               maxWidth="max-w-none"
               leading={
-                <span className="text-micro font-black uppercase tracking-widest tabular-nums text-gray-500">
+                <span className="text-micro font-black uppercase tracking-widest tabular-nums text-text-soft">
                   {boardSelection.length} item{boardSelection.length === 1 ? '' : 's'} · {selectedUnits} unit{selectedUnits === 1 ? '' : 's'} selected
                 </span>
               }
@@ -129,7 +129,7 @@ export function FbaBoardRegion({
           FbaActiveShipments keeps listening for open-editor. */}
       {activeMode === 'combine' && (
         <motion.div
-          className="absolute inset-0 z-10 bg-white"
+          className="absolute inset-0 z-10 bg-surface-card"
           initial={false}
           animate={
             prefersReducedMotion

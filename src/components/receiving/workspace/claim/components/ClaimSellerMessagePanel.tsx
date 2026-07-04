@@ -32,7 +32,7 @@ export function ClaimSellerMessagePanel({ seller, filedTicket }: Props) {
             onClick={() => filedTicket && void draftSellerMessage(filedTicket)}
             disabled={draftDisabled}
             icon={aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            className="h-7 border border-blue-200 bg-white text-blue-700 hover:bg-blue-100"
+            className="h-7 border border-blue-200 bg-surface-card text-blue-700 hover:bg-blue-100"
           >
             {aiLoading ? 'Drafting…' : 'Redraft'}
           </Button>
@@ -46,7 +46,7 @@ export function ClaimSellerMessagePanel({ seller, filedTicket }: Props) {
           onChange={(e) => setSellerMessage(e.target.value)}
           rows={12}
           placeholder="Seller-facing message will appear here…"
-          className="block w-full resize-y rounded-lg border border-blue-100 bg-white px-3 py-2 text-caption font-medium leading-snug text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+          className="block w-full resize-y rounded-lg border border-blue-100 bg-surface-card px-3 py-2 text-caption font-medium leading-snug text-text-default outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
         />
       )}
       <p className="mt-1.5 text-micro font-medium text-blue-700/70">

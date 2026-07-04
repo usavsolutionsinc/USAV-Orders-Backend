@@ -18,14 +18,14 @@ export function SidebarSection({
   children: ReactNode;
 }) {
   return (
-    <section className="border-b border-gray-200 last:border-b-0">
+    <section className="border-b border-border-soft last:border-b-0">
       <button
         type="button"
         onClick={onToggle}
-        className="ds-raw-button flex w-full items-center justify-between border-b border-gray-200 px-0 py-0 text-left hover:bg-gray-50"
+        className="ds-raw-button flex w-full items-center justify-between border-b border-border-soft px-0 py-0 text-left hover:bg-surface-hover"
       >
         <span className={`px-4 py-3 ${sectionLabel}`}>{title}</span>
-        <span className="inline-flex h-full w-12 items-center justify-center border-l border-gray-200 text-gray-600">
+        <span className="inline-flex h-full w-12 items-center justify-center border-l border-border-soft text-text-muted">
           <span className="relative h-3.5 w-3.5">
             <span className="absolute left-0 top-1/2 h-px w-3.5 -translate-y-1/2 bg-current" />
             <motion.span
@@ -37,7 +37,7 @@ export function SidebarSection({
           </span>
         </span>
       </button>
-      {expanded && <div className="bg-white">{children}</div>}
+      {expanded && <div className="bg-surface-card">{children}</div>}
     </section>
   );
 }
@@ -52,10 +52,10 @@ export function LineItem({
   right: ReactNode;
 }) {
   return (
-    <div className="flex items-stretch justify-between gap-3 border-b border-gray-200 bg-white">
+    <div className="flex items-stretch justify-between gap-3 border-b border-border-soft bg-surface-card">
       <div className="min-w-0 px-4 py-3">
         <p className={dataValue}>{label}</p>
-        {detail ? <p className={`mt-0.5 ${fieldLabel} leading-relaxed text-gray-500`}>{detail}</p> : null}
+        {detail ? <p className={`mt-0.5 ${fieldLabel} leading-relaxed text-text-soft`}>{detail}</p> : null}
       </div>
       <div className="flex shrink-0 items-stretch gap-0">{right}</div>
     </div>
@@ -82,7 +82,7 @@ export function ActionButton({
         ? 'border-green-300 bg-green-50'
         : tone === 'indigo'
           ? 'border-indigo-300 bg-indigo-50'
-          : 'border-gray-200 bg-white hover:bg-gray-100';
+          : 'border-border-soft bg-surface-card hover:bg-surface-sunken';
   const iconToneClass =
     tone === 'blue'
       ? 'text-blue-700'
@@ -90,7 +90,7 @@ export function ActionButton({
         ? 'text-green-700'
         : tone === 'indigo'
           ? 'text-indigo-700'
-          : 'text-gray-600';
+          : 'text-text-muted';
 
   return (
     <HoverTooltip label={title} focusable={false} asChild>

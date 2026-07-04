@@ -13,7 +13,7 @@ import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
  */
 const DELIVERY_STATE_ICON = {
   STALLED: { Icon: AlertTriangle, tone: 'text-orange-600', label: 'Stalled — no carrier movement, needs attention' },
-  AWAITING_TRACKING: { Icon: Hash, tone: 'text-gray-400', label: 'No tracking number on file' },
+  AWAITING_TRACKING: { Icon: Hash, tone: 'text-text-faint', label: 'No tracking number on file' },
   PENDING_CARRIER: { Icon: Clock, tone: 'text-sky-500', label: 'Pending carrier pickup' },
   DELIVERED_UNOPENED: { Icon: Inbox, tone: 'text-rose-600', label: 'Delivered but not scanned in yet' },
   ARRIVING_TODAY: { Icon: Truck, tone: 'text-amber-600', label: 'Arriving today' },

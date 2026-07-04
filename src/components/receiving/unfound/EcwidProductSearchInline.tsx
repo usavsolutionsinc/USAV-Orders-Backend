@@ -42,7 +42,7 @@ export function EcwidProductSearchInline({
 
   return (
     <div
-      className={`flex max-h-[60vh] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white ${
+      className={`flex max-h-[60vh] flex-col overflow-hidden rounded-xl border border-border-soft bg-surface-card ${
         className ?? ''
       }`}
     >

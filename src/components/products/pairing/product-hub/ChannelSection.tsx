@@ -45,7 +45,7 @@ export function ChannelSection({
           <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${style.chip}`}>
             {style.label}
           </span>
-          <span className="text-micro text-gray-400">empty</span>
+          <span className="text-micro text-text-faint">empty</span>
         </div>
         <ChannelManualAdd platform={platform} skuCatalogId={skuCatalogId} onAdded={onAdded} />
       </section>

@@ -43,7 +43,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 flex bg-black/95 backdrop-blur-md"
+      className="fixed inset-0 flex bg-scrim/95 backdrop-blur-md"
       style={{ zIndex: zLayer.modal }}
     >
       {/* Stage — image + all floating controls. flex-1 so it yields width to the
@@ -55,7 +55,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           the right group reserves room (pr-20) so it clears that pinned X. */}
       <div className={`absolute top-0 left-0 right-0 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent py-6 pl-6 z-10 ${panelVisible ? 'pr-6' : 'pr-20'}`}>
         <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20">
+          <div className="px-4 py-2 bg-glass/10 backdrop-blur-md rounded-full border border-glass/20">
             <span className="text-white text-sm font-black">
               {currentIndex + 1} / {photoItems.length}
             </span>
@@ -63,12 +63,12 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
+          <div className="flex items-center gap-1 rounded-full border border-glass/20 bg-glass/10 p-1 backdrop-blur-md">
             <HoverTooltip label="Zoom out (-)" asChild>
               <IconButton
                 onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
                 disabled={zoomLevel <= 1}
-                className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                className="rounded-full p-2 text-white transition-all hover:bg-glass/10 disabled:cursor-not-allowed disabled:opacity-30"
                 ariaLabel="Zoom out"
                 icon={<ZoomOut className="h-4 w-4 text-white" />}
               />
@@ -80,16 +80,16 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               <IconButton
                 onClick={(e) => { e.stopPropagation(); g.zoomIn(); }}
                 disabled={zoomLevel >= 3}
-                className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                className="rounded-full p-2 text-white transition-all hover:bg-glass/10 disabled:cursor-not-allowed disabled:opacity-30"
                 ariaLabel="Zoom in"
                 icon={<ZoomIn className="h-4 w-4 text-white" />}
               />
             </HoverTooltip>
-            <div className="mx-0.5 h-5 w-px bg-white/20" aria-hidden="true" />
+            <div className="mx-0.5 h-5 w-px bg-glass/20" aria-hidden="true" />
             <HoverTooltip label="Rotate (r)" asChild>
               <IconButton
                 onClick={(e) => { e.stopPropagation(); g.rotateCw(); }}
-                className="rounded-full p-2 text-white transition-all hover:bg-white/10"
+                className="rounded-full p-2 text-white transition-all hover:bg-glass/10"
                 ariaLabel="Rotate 90 degrees"
                 icon={<RotateCcw className="h-4 w-4 text-white" />}
               />
@@ -99,7 +99,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                 onClick={(e) => { e.stopPropagation(); g.resetZoom(); }}
                 disabled={!canReset}
                 className={`ml-0.5 rounded-full p-2 transition-all ${
-                  canReset ? 'bg-white/20 text-white hover:bg-white/30' : 'text-white/30'
+                  canReset ? 'bg-glass/20 text-white hover:bg-glass/30' : 'text-white/30'
                 }`}
                 ariaLabel="Reset view"
                 icon={<RefreshCw className="h-4 w-4" />}
@@ -107,7 +107,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             </HoverTooltip>
           </div>
 
-          <div className="mx-1 h-6 w-px bg-white/20" aria-hidden="true" />
+          <div className="mx-1 h-6 w-px bg-glass/20" aria-hidden="true" />
 
           <HoverTooltip
             label={g.downloading ? 'Downloading…' : `Download photo ${currentIndex + 1}`}
@@ -116,7 +116,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             <IconButton
               onClick={(e) => { e.stopPropagation(); void g.handleDownloadCurrent(); }}
               disabled={g.downloading || photoItems[currentIndex]?.status === 'error'}
-              className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
+              className="p-3 bg-glass/10 hover:bg-glass/20 rounded-full transition-all text-white backdrop-blur-md border border-glass/20 hover:border-glass/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
               ariaLabel={`Download photo ${currentIndex + 1}`}
               icon={<Download className="h-5 w-5 text-white" />}
             />
@@ -129,7 +129,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110"
+                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-glass/20 border-glass/20 hover:border-glass/30 hover:scale-110"
                 aria-label="Open in media library"
               >
                 <ExternalLink className="h-5 w-5 text-white" />
@@ -144,7 +144,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               className={
                 g.panelOpen
                   ? 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-blue-500/30 border-blue-300/40 hover:bg-blue-500/40 hover:scale-110'
-                  : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110'
+                  : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-glass/20 border-glass/20 hover:border-glass/30 hover:scale-110'
               }
               ariaLabel={g.panelOpen ? 'Hide photo details' : 'Show photo details'}
               icon={<Info className="h-5 w-5 text-white" />}
@@ -156,7 +156,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               <IconButton
                 onClick={(e) => { e.stopPropagation(); g.setReassignOpen(true); }}
                 disabled={g.reassigning}
-                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50"
+                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-glass/20 border-glass/20 hover:border-glass/30 hover:scale-110 disabled:opacity-50"
                 ariaLabel="Move photo to another PO"
                 icon={<Package className="h-5 w-5 text-white" />}
               />
@@ -172,7 +172,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                 className={
                   g.deleteArmed
                     ? 'flex items-center gap-2 px-4 py-3 rounded-full transition-all text-white backdrop-blur-md border bg-red-500/80 border-red-300 hover:bg-red-500 disabled:opacity-60'
-                    : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-red-500/30 border-white/20 hover:border-red-300 hover:scale-110 disabled:opacity-60'
+                    : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-red-500/30 border-glass/20 hover:border-red-300 hover:scale-110 disabled:opacity-60'
                 }
                 aria-label={g.deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
               >
@@ -259,7 +259,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             draggable={false}
           />
         ) : (
-          <div className="w-full max-w-2xl h-96 flex items-center justify-center bg-gray-800/50 rounded-2xl">
+          <div className="w-full max-w-2xl h-96 flex items-center justify-center bg-stage-raised/50 rounded-2xl">
             <div className="h-12 w-12 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
           </div>
         )}
@@ -271,7 +271,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           <HoverTooltip label="Previous (←)" asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); g.handlePrevious(); }}
-              className="absolute left-8 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 z-10"
+              className="absolute left-8 top-1/2 -translate-y-1/2 p-4 bg-glass/10 hover:bg-glass/20 rounded-full transition-all text-white backdrop-blur-md border border-glass/20 hover:border-glass/30 hover:scale-110 z-10"
               ariaLabel="Previous photo"
               icon={<ChevronLeft className="h-6 w-6 text-white" />}
             />
@@ -279,7 +279,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           <HoverTooltip label="Next (→)" asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); g.handleNext(); }}
-              className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 z-10"
+              className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-glass/10 hover:bg-glass/20 rounded-full transition-all text-white backdrop-blur-md border border-glass/20 hover:border-glass/30 hover:scale-110 z-10"
               ariaLabel="Next photo"
               icon={<ChevronRight className="h-6 w-6 text-white" />}
             />
@@ -292,7 +292,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           and scrolls internally once they exceed the available width. */}
       {photoItems.length > 1 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 max-w-4xl w-full px-8 z-10">
-          <div className="mx-auto w-fit max-w-full overflow-x-auto no-scrollbar rounded-2xl border border-white/20 bg-black/50 p-3 backdrop-blur-md">
+          <div className="mx-auto w-fit max-w-full overflow-x-auto no-scrollbar rounded-2xl border border-glass/20 bg-scrim/50 p-3 backdrop-blur-md">
             <div className="flex items-center gap-2">
               {photoItems.map((photo, index) => (
                 // ds-raw-button: image thumbnail tile (selectable), not an icon/label button
@@ -308,7 +308,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                       <AlertCircle className="h-6 w-6 text-red-400" />
                     </div>
                   ) : (
-                    <img src={photo.thumbUrl ?? photo.url} alt={`Thumbnail ${index + 1}`} loading="lazy" className="w-full h-full bg-gray-700 object-cover" />
+                    <img src={photo.thumbUrl ?? photo.url} alt={`Thumbnail ${index + 1}`} loading="lazy" className="w-full h-full bg-stage-raised object-cover" />
                   )}
                 </button>
               ))}
@@ -328,7 +328,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
       <HoverTooltip label="Close (Esc)" asChild>
         <IconButton
           onClick={(e) => { e.stopPropagation(); g.closeViewer(); }}
-          className="absolute right-6 top-6 z-50 rounded-full border border-white/20 bg-white/10 p-3 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-white/30 hover:bg-white/20"
+          className="absolute right-6 top-6 z-50 rounded-full border border-glass/20 bg-glass/10 p-3 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-glass/30 hover:bg-glass/20"
           ariaLabel="Close photo viewer"
           icon={<X className="h-5 w-5 text-white" />}
         />

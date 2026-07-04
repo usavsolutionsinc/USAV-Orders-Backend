@@ -47,7 +47,7 @@ export function GlobalHeader({
   if (!user || isClientPublicPath(pathname)) return null;
 
   return (
-    <header className="sticky top-0 z-header flex h-[40px] w-full shrink-0 select-none items-center gap-3 border-b border-gray-300 bg-white/90 px-3 backdrop-blur-md sm:px-4">
+    <header className="sticky top-0 z-header flex h-[40px] w-full shrink-0 select-none items-center gap-3 border-b border-border-default bg-surface-card/90 px-3 backdrop-blur-md sm:px-4">
       {/* Top-left sidebar toggle — collapses / restores the permanent sidebar. */}
       {canCollapseSidebar && onToggleSidebar && (
         <>
@@ -57,7 +57,7 @@ export function GlobalHeader({
               ariaLabel={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
               aria-pressed={!sidebarCollapsed}
               /* Nudged slightly right of the flush content edge. */
-              className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 active:bg-gray-200 sm:-ml-1.5"
+              className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-surface-sunken active:bg-surface-strong sm:-ml-1.5"
               icon={
                 <svg
                   viewBox="0 0 24 24"
@@ -76,7 +76,7 @@ export function GlobalHeader({
             />
           </HoverTooltip>
           {/* Hairline divider between the sidebar toggle and the goal chip. */}
-          <span aria-hidden className="h-5 w-px shrink-0 bg-gray-200" />
+          <span aria-hidden className="h-5 w-px shrink-0 bg-surface-strong" />
         </>
       )}
 

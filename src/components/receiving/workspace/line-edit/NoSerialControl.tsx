@@ -62,11 +62,11 @@ const TONE: Record<
   { token: string; icon: string; clear: string; rowSel: string; tick: string }
 > = {
   routine: {
-    token: 'bg-slate-50 text-slate-700 ring-slate-200',
-    icon: 'text-slate-500',
-    clear: 'text-slate-400 hover:bg-slate-200 hover:text-slate-600',
-    rowSel: 'bg-slate-50 text-slate-800',
-    tick: 'text-slate-500',
+    token: 'bg-surface-canvas text-text-muted ring-border-soft',
+    icon: 'text-text-soft',
+    clear: 'text-text-faint hover:bg-surface-strong hover:text-text-muted',
+    rowSel: 'bg-surface-canvas text-text-default',
+    tick: 'text-text-soft',
   },
   anomaly: {
     token: 'bg-amber-50 text-amber-800 ring-amber-200',
@@ -155,7 +155,7 @@ export function NoSerialControl({
           className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-dashed px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
             required
               ? 'border-amber-300 text-amber-600 hover:bg-amber-50 hover:text-amber-700'
-              : 'border-gray-300 text-gray-400 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-600'
+              : 'border-border-default text-text-faint hover:border-border-default hover:bg-surface-hover hover:text-text-muted'
           }`}
         >
           <Barcode className="h-4 w-4" />
@@ -176,9 +176,9 @@ export function NoSerialControl({
   // check (the affirmation), no inline label (the reason lives in the tooltip +
   // dropdown), on a calm neutral bar so the check is the only color. The compact
   // (multi-qty) token keeps the reason icon + severity tone.
-  const containerTone = fullWidth ? 'bg-gray-50 text-gray-500 ring-gray-200' : tone.token;
+  const containerTone = fullWidth ? 'bg-surface-canvas text-text-soft ring-border-soft' : tone.token;
   const clearTone = fullWidth
-    ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+    ? 'text-text-faint hover:bg-surface-strong hover:text-text-muted'
     : tone.clear;
 
   return (
@@ -212,7 +212,7 @@ export function NoSerialControl({
             {fullWidth ? (
               <>
                 <Icon className={`h-4 w-4 shrink-0 ${tone.icon}`} />
-                <span className="truncate text-label font-semibold text-gray-700">{label}</span>
+                <span className="truncate text-label font-semibold text-text-muted">{label}</span>
                 <ChevronGlyph className="ml-auto mr-0.5 shrink-0" />
               </>
             ) : (
@@ -257,10 +257,10 @@ export function NoSerialControl({
                 aria-checked={selected}
                 onClick={() => pick(r.code)}
                 className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-label font-semibold transition-colors ${
-                  selected ? rowTone.rowSel : 'text-gray-700 hover:bg-gray-50'
+                  selected ? rowTone.rowSel : 'text-text-muted hover:bg-surface-hover'
                 }`}
               >
-                <RowIcon className={`h-4 w-4 shrink-0 ${selected ? rowTone.icon : 'text-gray-400'}`} />
+                <RowIcon className={`h-4 w-4 shrink-0 ${selected ? rowTone.icon : 'text-text-faint'}`} />
                 <span className="flex-1 truncate">{r.label}</span>
                 {selected ? <Check className={`h-4 w-4 shrink-0 ${rowTone.tick}`} /> : null}
               </button>

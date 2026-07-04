@@ -97,10 +97,10 @@ export function WorkspaceSwitcher() {
   };
 
   return (
-    <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="space-y-3 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-gray-900">Switch workspace</h3>
-        <p className="text-xs text-gray-500">
+        <h3 className="text-sm font-semibold text-text-default">Switch workspace</h3>
+        <p className="text-xs text-text-soft">
           This account can act in {memberships.length} workspaces. Switching closes
           your current view and reloads into the selected workspace.
         </p>
@@ -112,20 +112,20 @@ export function WorkspaceSwitcher() {
         </div>
       )}
 
-      <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+      <div className="divide-y divide-border-hairline overflow-hidden rounded-xl border border-border-soft">
         {others.map((m) => (
           <div
             key={m.organizationId}
             className="flex items-center gap-3 px-3 py-2.5"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-200 text-xs font-bold text-gray-700">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-strong text-xs font-bold text-text-muted">
               {orgInitials(m.organizationName)}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-gray-900">
+              <div className="truncate text-sm font-semibold text-text-default">
                 {m.organizationName}
               </div>
-              <div className="truncate text-xs text-gray-500">
+              <div className="truncate text-xs text-text-soft">
                 {m.organizationSlug ?? '—'}
                 {m.role ? ` · ${m.role.replace(/_/g, ' ')}` : ''}
               </div>

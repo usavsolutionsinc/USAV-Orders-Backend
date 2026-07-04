@@ -53,7 +53,7 @@ export function MobileNavBar({
       role="navigation"
       aria-label="Main navigation"
       className={`
-        flex-shrink-0 bg-white border-t border-gray-200
+        flex-shrink-0 bg-surface-card border-t border-border-soft
         pb-[max(0.5rem,env(safe-area-inset-bottom))]
         ${className}
       `.trim()}
@@ -73,7 +73,7 @@ export function MobileNavBar({
                 transition-colors duration-100
                 ${isActive
                   ? 'text-blue-600'
-                  : 'text-gray-400 active:text-gray-600'
+                  : 'text-text-faint active:text-text-muted'
                 }
               `.trim()}
             >
@@ -94,7 +94,7 @@ export function MobileNavBar({
               {/* Label — always visible */}
               <span className={`
                 text-eyebrow font-black uppercase tracking-[0.12em] leading-none
-                ${isActive ? 'text-blue-600' : 'text-gray-400'}
+                ${isActive ? 'text-blue-600' : 'text-text-faint'}
               `.trim()}>
                 {item.label}
               </span>

@@ -59,9 +59,9 @@ export function LabelPreviewCard({
   const face = unitLabelToFace({ sku, title: productTitle, condition, color, matrix });
 
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-border-soft/60">
       <div className="mb-3 flex items-start justify-between gap-2">
-        <h3 className="text-left text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-soft">
           {heading}
         </h3>
         {onApplyAndPrint ? (
@@ -74,7 +74,7 @@ export function LabelPreviewCard({
           />
         ) : null}
       </div>
-      <div className="rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
+      <div className="rounded border border-border-soft bg-surface-card px-2 py-2 shadow-sm">
         <LabelFacePreview model={face} embedded />
       </div>
 

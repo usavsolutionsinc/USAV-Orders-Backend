@@ -120,12 +120,12 @@ function DateFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () => 
       data-testid="photo-folder"
       onClick={onOpen}
       aria-label={ariaLabel}
-      className="ds-raw-button group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors hover:border-primary/70 hover:bg-slate-50"
+      className="ds-raw-button group flex flex-col overflow-hidden rounded-lg border border-border bg-surface-card text-left transition-colors hover:border-primary/70 hover:bg-surface-hover"
     >
       <div className="relative h-32 w-full p-1.5">
         {/* Folder-tab peek behind the cover so the tile reads as a folder. */}
-        <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-gray-200" aria-hidden="true" />
-        <div className="relative h-full w-full overflow-hidden rounded-md border border-gray-200">
+        <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-surface-strong" aria-hidden="true" />
+        <div className="relative h-full w-full overflow-hidden rounded-md border border-border-soft">
           <FolderTileCover photo={tile.previewPhoto} />
           <span className="absolute right-2 top-2 rounded-full bg-black/70 px-1.5 py-0.5 text-micro font-bold tabular-nums text-white">
             {tile.count}
@@ -134,11 +134,11 @@ function DateFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () => 
       </div>
       <div className="flex flex-col gap-0.5 px-2.5 py-2">
         <div className="flex items-center gap-1.5">
-          <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span className="truncate text-caption font-semibold text-gray-900">{tile.label}</span>
+          <Folder className="h-3.5 w-3.5 shrink-0 text-text-faint" />
+          <span className="truncate text-caption font-semibold text-text-default">{tile.label}</span>
         </div>
         {tile.latestAt ? (
-          <span className="truncate pl-5 text-micro tabular-nums text-gray-400">
+          <span className="truncate pl-5 text-micro tabular-nums text-text-faint">
             {formatDateTimePST(tile.latestAt)}
           </span>
         ) : null}

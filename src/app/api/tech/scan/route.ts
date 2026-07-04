@@ -6,6 +6,7 @@ import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-f
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishActivityLogged, publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -374,6 +375,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         await client.query('COMMIT');
         await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+      await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
+        await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
         if (!isFbaSource) {
           await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: fnskuLogId!, source: ROUTE });
         }
@@ -465,6 +468,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         await client.query('COMMIT');
         await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+      await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
+        await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
         if (salId && !isFbaSource) await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
         if (salId) publishActivityLogged({ organizationId: ctx.organizationId, id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
 
@@ -522,6 +527,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
       await client.query('COMMIT');
       await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+      await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
       if (salId && !isFbaSource) await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
       if (salId) publishActivityLogged({ organizationId: ctx.organizationId, id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
       if (!isFbaSource) {

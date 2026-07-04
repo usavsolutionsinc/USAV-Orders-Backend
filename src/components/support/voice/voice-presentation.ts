@@ -69,7 +69,7 @@ export const VOICEMAIL_STATUS_TONE: Record<VoicemailStatus, ToneClasses> = {
   open: { dot: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700 ring-amber-200', fg: 'text-amber-600' },
   snoozed: { dot: 'bg-blue-400', chip: 'bg-blue-50 text-blue-700 ring-blue-200', fg: 'text-blue-600' },
   done: { dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200', fg: 'text-emerald-600' },
-  no_action: { dot: 'bg-gray-300', chip: 'bg-gray-100 text-gray-600 ring-gray-200', fg: 'text-gray-400' },
+  no_action: { dot: 'bg-surface-strong', chip: 'bg-surface-sunken text-text-muted ring-border-soft', fg: 'text-text-faint' },
 };
 
 export const VOICEMAIL_STATUS_LABEL: Record<VoicemailStatus, string> = {
@@ -81,7 +81,7 @@ export const VOICEMAIL_STATUS_LABEL: Record<VoicemailStatus, string> = {
 
 export const CALL_DIRECTION_TONE: Record<CallDirection, ToneClasses> = {
   inbound: { dot: 'bg-blue-500', chip: 'bg-blue-50 text-blue-700 ring-blue-200', fg: 'text-blue-600' },
-  outbound: { dot: 'bg-slate-400', chip: 'bg-slate-100 text-slate-600 ring-slate-200', fg: 'text-slate-500' },
+  outbound: { dot: 'bg-border-emphasis', chip: 'bg-surface-sunken text-text-muted ring-border-soft', fg: 'text-text-soft' },
   missed: { dot: 'bg-rose-500', chip: 'bg-rose-50 text-rose-700 ring-rose-200', fg: 'text-rose-600' },
 };
 

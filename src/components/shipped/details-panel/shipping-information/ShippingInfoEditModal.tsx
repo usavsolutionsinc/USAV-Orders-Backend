@@ -45,18 +45,18 @@ export function ShippingInfoEditModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.985 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="w-full max-w-2xl rounded-3xl border border-gray-200 bg-white shadow-2xl"
+            className="w-full max-w-2xl rounded-3xl border border-border-soft bg-surface-card shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-border-hairline px-5 py-4">
               <div>
-                <p className="text-micro font-black uppercase tracking-[0.24em] text-gray-500">Shipping Info</p>
-                <h3 className="mt-1 text-lg font-black tracking-tight text-gray-900">Edit Order Details</h3>
+                <p className="text-micro font-black uppercase tracking-[0.24em] text-text-soft">Shipping Info</p>
+                <h3 className="mt-1 text-lg font-black tracking-tight text-text-default">Edit Order Details</h3>
               </div>
               <HoverTooltip label="Close shipping editor" asChild>
                 <IconButton
                   onClick={onClose}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 hover:text-gray-700"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-sunken hover:text-text-muted"
                   ariaLabel="Close shipping editor"
                   icon={<X className="h-4 w-4" />}
                 />
@@ -66,30 +66,30 @@ export function ShippingInfoEditModal({
             <div className="space-y-4 px-5 py-5">
               <div className="space-y-4">
                 <label className="block">
-                  <span className="mb-1.5 block text-micro font-black uppercase tracking-[0.18em] text-gray-500">Ship By Date</span>
+                  <span className="mb-1.5 block text-micro font-black uppercase tracking-[0.18em] text-text-soft">Ship By Date</span>
                   <input
                     type="text"
                     value={draft.shipByDate}
                     onChange={(e) => setDraft((current) => ({ ...current, shipByDate: e.target.value }))}
                     placeholder="MM-DD-YY"
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-blue-400"
+                    className="h-10 w-full rounded-xl border border-border-soft bg-surface-card px-3 text-sm font-bold text-text-default outline-none transition-colors focus:border-blue-400"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-micro font-black uppercase tracking-[0.18em] text-gray-500">Order ID</span>
+                  <span className="mb-1.5 block text-micro font-black uppercase tracking-[0.18em] text-text-soft">Order ID</span>
                   <input
                     type="text"
                     value={draft.orderNumber}
                     onChange={(e) => setDraft((current) => ({ ...current, orderNumber: e.target.value }))}
                     placeholder="Enter order ID"
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-blue-400"
+                    className="h-10 w-full rounded-xl border border-border-soft bg-surface-card px-3 text-sm font-bold text-text-default outline-none transition-colors focus:border-blue-400"
                   />
                 </label>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-500">Tracking Numbers</p>
+                  <p className="text-micro font-black uppercase tracking-[0.18em] text-text-soft">Tracking Numbers</p>
                 </div>
                 <div className="space-y-2">
                   {draft.trackingRows.map((row, index) => (
@@ -134,7 +134,7 @@ export function ShippingInfoEditModal({
                               };
                             });
                           }}
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border-soft hover:border-red-300 hover:bg-red-50 hover:text-red-600"
                           ariaLabel={`Delete tracking number ${index + 1}`}
                           icon={<Trash2 className="h-4 w-4" />}
                         />
@@ -152,7 +152,7 @@ export function ShippingInfoEditModal({
                         }));
                       }}
                       icon={<Plus className="h-3.5 w-3.5" />}
-                      className="w-full rounded-xl border border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"
+                      className="w-full rounded-xl border border-dashed border-border-default text-text-soft hover:border-blue-400 hover:text-blue-600"
                       ariaLabel="Add tracking number"
                     >
                       Add Tracking Number
@@ -163,7 +163,7 @@ export function ShippingInfoEditModal({
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-500">Serial Numbers</p>
+                  <p className="text-micro font-black uppercase tracking-[0.18em] text-text-soft">Serial Numbers</p>
                 </div>
                 <div className="space-y-2">
                   {(draft.serialRows.length > 0 ? draft.serialRows : ['']).map((row, index) => {
@@ -227,7 +227,7 @@ export function ShippingInfoEditModal({
               {error ? <p className="text-sm font-bold text-red-600">{error}</p> : null}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
+            <div className="flex items-center justify-end gap-2 border-t border-border-hairline px-5 py-4">
               <Button
                 variant="secondary"
                 size="md"

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 type Params = Promise<{ id: string }>;
@@ -161,6 +162,7 @@ export async function DELETE(
     if (!txResult.ok) return txResult.error;
 
     await invalidateCacheTags(['fba-logs']);
+    await invalidateCacheTags(gate.ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaItemChanged({ action: 'delete', shipmentId: 0, source: 'fba.logs.void', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({

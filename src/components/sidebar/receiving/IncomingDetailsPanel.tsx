@@ -40,10 +40,10 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
       {/* Header — PO chip (last-4 copy) + vendor + close. */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-2.5">
+      <div className="shrink-0 border-b border-border-soft bg-surface-card px-4 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {headerPo ? (
@@ -51,10 +51,10 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
             ) : headerTracking ? (
               <TrackingChip value={headerTracking} display={getLast4(headerTracking)} />
             ) : (
-              <span className="font-mono text-sm font-bold text-gray-400">—</span>
+              <span className="font-mono text-sm font-bold text-text-faint">—</span>
             )}
             {data?.po?.vendor_name ? (
-              <span className="truncate text-caption font-semibold text-gray-500">
+              <span className="truncate text-caption font-semibold text-text-soft">
                 · {data.po.vendor_name}
               </span>
             ) : null}
@@ -81,7 +81,7 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
             onClick={onClose}
             ariaLabel="Close details panel"
             icon={<X className="h-4 w-4" />}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-soft hover:bg-surface-sunken hover:text-text-default"
           />
         </div>
 
@@ -89,7 +89,7 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
 
       {/* Tab nav — reuses PaneHeaderTabs (active tab = bg-gray-900 + white
           text) so this panel matches the shipped + work-order detail panes. */}
-      <div className="shrink-0 border-b border-gray-200">
+      <div className="shrink-0 border-b border-border-soft">
         <PaneHeaderTabs<TabId>
           tabs={TABS}
           value={tab}
@@ -99,7 +99,7 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-caption font-semibold text-gray-400">
+          <div className="flex h-full items-center justify-center text-caption font-semibold text-text-faint">
             Loading details…
           </div>
         ) : isError || !data?.success ? (
@@ -126,7 +126,7 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
           match the shipped panel's DeleteOrderControl (solid red, Trash2,
           two-step confirm). Removes every receiving_line for this PO (the
           Incoming row); Zoho is untouched. */}
-      <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5">
+      <div className="shrink-0 border-t border-border-soft bg-surface-card px-4 py-2.5">
         <DeleteButton
           onConfirm={handleDelete}
           onDeleted={onClose}

@@ -88,7 +88,7 @@ export function PhotoThumb({
       onLayoutAnimationComplete={() => setIsMorphing(false)}
       style={{ zIndex: isMorphing ? zIndex.raised : undefined }}
       className={cn(
-        'relative overflow-hidden bg-gray-100',
+        'relative overflow-hidden bg-surface-sunken',
         ratio === 'square' ? 'aspect-square'
           : ratio === 'portrait' ? 'aspect-[9/16]'
           : ratio === 'fill' ? 'h-full w-full'
@@ -109,7 +109,7 @@ export function PhotoThumb({
       ) : null}
 
       {status === 'error' ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-50 text-gray-400">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-surface-canvas text-text-faint">
           <ImageIcon className="h-5 w-5" />
           <span className="text-[8.5px] font-bold uppercase tracking-widest">Unavailable</span>
         </div>

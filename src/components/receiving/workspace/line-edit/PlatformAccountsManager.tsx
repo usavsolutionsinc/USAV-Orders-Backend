@@ -20,7 +20,7 @@ import type { PlatformAccountRow } from '@/lib/neon/catalog-queries';
 import { usePlatformAccountCatalog, usePlatformCatalog, useInvalidateCatalog } from '@/hooks/useCatalog';
 
 const TEXT_INPUT =
-  'w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-label text-gray-900 outline-none transition-colors focus:border-blue-500';
+  'w-full rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5 text-label text-text-default outline-none transition-colors focus:border-blue-500';
 
 const BASE = '/api/catalog/platform-accounts';
 
@@ -82,7 +82,7 @@ export function PlatformAccountsManager() {
 
   if (platformsLoading || accountsLoading) {
     return (
-      <div className="flex items-center gap-2 px-1 py-3 text-label text-gray-400">
+      <div className="flex items-center gap-2 px-1 py-3 text-label text-text-faint">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading accounts…
       </div>
     );
@@ -106,7 +106,7 @@ export function PlatformAccountsManager() {
         return (
           <div key={p.id}>
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{p.label}</span>
+              <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">{p.label}</span>
               <Button
                 variant="ghost"
                 size="sm"
@@ -123,7 +123,7 @@ export function PlatformAccountsManager() {
 
             <ul className="space-y-1.5">
               {activeList.length === 0 && !isAdding ? (
-                <li className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-2.5 py-1.5 text-label text-gray-400">
+                <li className="rounded-lg border border-dashed border-border-soft bg-surface-canvas px-2.5 py-1.5 text-label text-text-faint">
                   No accounts yet.
                 </li>
               ) : null}
@@ -134,7 +134,7 @@ export function PlatformAccountsManager() {
                 return (
                   <li
                     key={a.id}
-                    className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5"
+                    className="flex items-center gap-2 rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5"
                   >
                     {isEditing ? (
                       <input
@@ -148,16 +148,16 @@ export function PlatformAccountsManager() {
                         className={`${TEXT_INPUT} flex-1`}
                       />
                     ) : (
-                      <span className="flex flex-1 items-center gap-2 truncate text-label font-semibold text-gray-900">
+                      <span className="flex flex-1 items-center gap-2 truncate text-label font-semibold text-text-default">
                         {a.label}
-                        <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-eyebrow text-gray-500">
+                        <span className="shrink-0 rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-eyebrow text-text-soft">
                           {a.slug}
                         </span>
                       </span>
                     )}
 
                     {rowBusy ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
                     ) : isEditing ? (
                       <>
                         <IconButton
@@ -169,7 +169,7 @@ export function PlatformAccountsManager() {
                         <IconButton
                           onClick={() => setEditingId(null)}
                           ariaLabel="Cancel"
-                          className="rounded p-1 text-gray-400 hover:bg-gray-100"
+                          className="rounded p-1 text-text-faint hover:bg-surface-sunken"
                           icon={<X className="h-4 w-4" />}
                         />
                       </>
@@ -181,13 +181,13 @@ export function PlatformAccountsManager() {
                             setEditLabel(a.label);
                           }}
                           ariaLabel={`Rename ${a.label}`}
-                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                          className="rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
                           icon={<Pencil className="h-3.5 w-3.5" />}
                         />
                         <IconButton
                           onClick={() => void setActive(a, false)}
                           ariaLabel={`Remove ${a.label}`}
-                          className="rounded p-1 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                          className="rounded p-1 text-text-faint hover:bg-rose-50 hover:text-rose-600"
                           icon={<Trash2 className="h-3.5 w-3.5" />}
                         />
                       </>
@@ -228,11 +228,11 @@ export function PlatformAccountsManager() {
                 {hiddenList.map((a) => (
                   <li
                     key={a.id}
-                    className="flex items-center gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-2.5 py-1.5"
+                    className="flex items-center gap-2 rounded-lg border border-dashed border-border-soft bg-surface-canvas px-2.5 py-1.5"
                   >
-                    <span className="flex-1 truncate text-label font-semibold text-gray-400 line-through">{a.label}</span>
+                    <span className="flex-1 truncate text-label font-semibold text-text-faint line-through">{a.label}</span>
                     {busyId === a.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
                     ) : (
                       <Button
                         variant="ghost"

@@ -48,7 +48,7 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
 
     if (!unitId) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+            <div className="flex h-full w-full items-center justify-center bg-surface-canvas text-text-faint">
                 <div className="space-y-2 text-center">
                     <History className="mx-auto h-12 w-12 opacity-20" />
                     <p className="text-sm font-medium">Select a unit from the sidebar to see its trace history</p>
@@ -59,7 +59,7 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
 
     if (isLoading) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+            <div className="flex h-full w-full items-center justify-center bg-surface-canvas text-text-faint">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="ml-2 text-sm">Loading chain of custody…</span>
             </div>
@@ -68,7 +68,7 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
 
     if (isError) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-gray-50">
+            <div className="flex h-full w-full items-center justify-center bg-surface-canvas">
                 <div className="mx-6 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                     {error instanceof Error ? error.message : 'Failed to load unit history.'}
                 </div>
@@ -77,10 +77,10 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
     }
 
     return (
-        <div className="flex h-full w-full flex-col overflow-y-auto bg-white">
+        <div className="flex h-full w-full flex-col overflow-y-auto bg-surface-card">
             <div className="mx-auto w-full max-w-4xl p-8">
                 {/* Identity */}
-                <div className="mb-8 flex items-end justify-between border-b border-gray-100 pb-6">
+                <div className="mb-8 flex items-end justify-between border-b border-border-hairline pb-6">
                     <div className="flex items-center gap-4">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
                             <Package className="h-7 w-7" />
@@ -88,7 +88,7 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
                         <div className="min-w-0 space-y-2">
                             {/* Product title on top; serial + SKU are copy chips
                                 (last-4, click to copy the full value) below. */}
-                            <h1 className="truncate text-2xl font-black tracking-tight text-gray-900">
+                            <h1 className="truncate text-2xl font-black tracking-tight text-text-default">
                                 {heroTitle}
                             </h1>
                             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -113,7 +113,7 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
                     </div>
                     {currentLocation ? (
                         <div className="flex flex-col items-end gap-1">
-                            <p className="text-micro font-black uppercase tracking-[0.2em] text-gray-400">
+                            <p className="text-micro font-black uppercase tracking-[0.2em] text-text-faint">
                                 Last known location
                             </p>
                             <div className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-2">
@@ -127,17 +127,17 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
                 </div>
 
                 {/* Chain of custody */}
-                <h2 className="mb-3 flex items-center gap-2 text-caption font-black uppercase tracking-[0.2em] text-gray-400">
+                <h2 className="mb-3 flex items-center gap-2 text-caption font-black uppercase tracking-[0.2em] text-text-faint">
                     <History className="h-4 w-4" /> Chain of custody
-                    <span className="font-bold text-gray-300">· {events.length} events</span>
+                    <span className="font-bold text-text-faint">· {events.length} events</span>
                 </h2>
 
                 {events.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-12 text-center text-sm text-gray-400">
+                    <div className="rounded-2xl border border-dashed border-border-soft bg-surface-canvas px-4 py-12 text-center text-sm text-text-faint">
                         No recorded events for this unit yet.
                     </div>
                 ) : (
-                    <ul role="list" className="overflow-hidden rounded-2xl border border-gray-100">
+                    <ul role="list" className="overflow-hidden rounded-2xl border border-border-hairline">
                         {events.map((event) => (
                             <EventRow key={event.id} event={event} />
                         ))}

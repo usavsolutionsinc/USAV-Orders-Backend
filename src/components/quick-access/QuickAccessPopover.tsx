@@ -83,7 +83,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
     <div
       role="dialog"
       aria-label="Quick access"
-      className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
+      className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-xl"
     >
       {/* Mobile: staff card only, plus report-an-issue when available. */}
       {compact && onOpenFeedbackPopover ? (
@@ -100,7 +100,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
           the only relevant content. */}
       {!compact && (
         <>
-          <div className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto overscroll-contain">
+          <div className="min-h-0 flex-1 divide-y divide-border-hairline overflow-y-auto overscroll-contain">
             <ActionsSection
               actions={{
                 ...settings.actions,
@@ -124,7 +124,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
 
       {/* Staff sign-in section — moved to the bottom, just above the footer. */}
       {user ? (
-        <div className="flex shrink-0 items-center gap-3 border-t border-gray-100 bg-gray-50/60 px-4 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-t border-border-hairline bg-surface-canvas/60 px-4 py-3">
           <SelfColorWheel
             value={staffColorHex}
             initials={staffName ? initials(staffName) : '·'}
@@ -135,14 +135,14 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
             {/* Passive tenant-identity signal: which workspace this session is
                 scoped to. Switching is a deliberate action in Settings →
                 Organization, never from here. */}
-            <div className="truncate text-eyebrow font-bold uppercase tracking-[0.14em] text-gray-400">{user.organizationName}</div>
-            <div className="truncate text-sm font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
-            <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-gray-500">{user.role.replace(/_/g, ' ')}</div>
+            <div className="truncate text-eyebrow font-bold uppercase tracking-[0.14em] text-text-faint">{user.organizationName}</div>
+            <div className="truncate text-sm font-semibold text-text-default">{staffName || `Staff #${user.staffId}`}</div>
+            <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-text-soft">{user.role.replace(/_/g, ' ')}</div>
           </div>
           <Link
             href="/settings?section=quick-access"
             onClick={onClose}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-white hover:text-gray-900"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-faint transition hover:bg-surface-card hover:text-text-default"
             aria-label="Manage in Settings"
             title="Manage in Settings"
           >
@@ -152,7 +152,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
             <IconButton
               onClick={() => { void signOut(); }}
               ariaLabel="Sign out"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-white hover:text-gray-900"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-faint hover:bg-surface-card hover:text-text-default"
               icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
             />
           </HoverTooltip>
@@ -162,10 +162,10 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
           type="button"
           onClick={() => { onClose(); router.push('/signin'); }}
           /* ds-raw-button — full-width text-left identity row, not a Button/IconButton shape. */
-          className="ds-raw-button flex shrink-0 items-center justify-between border-t border-gray-100 bg-gray-50/60 px-4 py-3 text-left transition hover:bg-gray-100"
+          className="ds-raw-button flex shrink-0 items-center justify-between border-t border-border-hairline bg-surface-canvas/60 px-4 py-3 text-left transition hover:bg-surface-sunken"
         >
-          <span className="text-sm font-semibold text-gray-900">Sign in</span>
-          <span className="text-caption text-gray-500">Pick a staff →</span>
+          <span className="text-sm font-semibold text-text-default">Sign in</span>
+          <span className="text-caption text-text-soft">Pick a staff →</span>
         </button>
       )}
     </div>
@@ -213,7 +213,7 @@ function SelfColorWheel({
           {initials}
           {/* Tiny pencil hint in the corner — appears on hover, hints "editable" */}
           <span
-            className="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-gray-700 shadow ring-1 ring-gray-200 transition group-hover:scale-110"
+            className="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-surface-card text-text-muted shadow ring-1 ring-border-soft transition group-hover:scale-110"
             aria-hidden
           >
             <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

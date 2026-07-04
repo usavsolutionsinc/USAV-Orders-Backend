@@ -105,16 +105,16 @@ export function EmailPoLinkTab({
     <div className="space-y-3">
       {/* Search the Gmail-ingested PO worklist (PO # / subject / sender). */}
       <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search PO email by PO # / subject / sender…"
-          className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-8 text-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-border-soft py-2 pl-8 pr-8 text-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         {isFetching ? (
-          <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-gray-400" />
+          <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-text-faint" />
         ) : null}
       </div>
 
@@ -125,11 +125,11 @@ export function EmailPoLinkTab({
           Couldn’t load PO emails. The PO-Gmail inbox may be unconfigured.
         </p>
       ) : isFetching && candidates.length === 0 ? (
-        <p className="flex items-center justify-center gap-2 py-5 text-xs text-gray-500">
+        <p className="flex items-center justify-center gap-2 py-5 text-xs text-text-soft">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading PO emails…
         </p>
       ) : candidates.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
+        <p className="rounded-lg border border-dashed border-border-soft bg-surface-canvas px-4 py-5 text-center text-xs text-text-soft">
           {trimmed ? `No pending PO emails match “${trimmed}”.` : 'No pending PO emails in the inbox.'}
         </p>
       ) : (
@@ -137,15 +137,15 @@ export function EmailPoLinkTab({
           {candidates.map((em) => (
             <div
               key={em.id}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+              className="rounded-lg border border-border-soft bg-surface-card px-3 py-2"
             >
-              <div className="flex items-center gap-1.5 text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
-                <Mail className="h-3 w-3 shrink-0 text-gray-400" />
+              <div className="flex items-center gap-1.5 text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
+                <Mail className="h-3 w-3 shrink-0 text-text-faint" />
                 <span className="truncate">{em.email_from || 'Unknown sender'}</span>
               </div>
               {em.email_subject ? (
                 // ds-allow-title: truncation-only native title on a clipped, non-interactive <p>
-                <p className="mt-0.5 truncate text-caption font-bold text-gray-900" title={em.email_subject}>
+                <p className="mt-0.5 truncate text-caption font-bold text-text-default" title={em.email_subject}>
                   {em.email_subject}
                 </p>
               ) : null}
@@ -153,14 +153,14 @@ export function EmailPoLinkTab({
                   Link action (right) — same component the other pairing tabs use. */}
               <div className="mt-1.5 space-y-1">
                 {em.po_numbers.length === 0 ? (
-                  <span className="text-xs text-gray-400">No PO number parsed from this email.</span>
+                  <span className="text-xs text-text-faint">No PO number parsed from this email.</span>
                 ) : (
                   em.po_numbers.map((po) => {
                     const key = `${em.id}:${po}`;
                     const isLinking = linkingKey === key;
                     return (
                       <div key={key} className="flex items-center justify-between gap-2">
-                        <span className="truncate font-mono text-caption font-bold text-gray-900">
+                        <span className="truncate font-mono text-caption font-bold text-text-default">
                           {po}
                         </span>
                         <PairingLinkButton

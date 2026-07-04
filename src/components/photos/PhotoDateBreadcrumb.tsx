@@ -80,16 +80,16 @@ export function PhotoDateBreadcrumb({
           // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
           // pl-0: align calendar icon with the folder icon in PhotoLibraryHeader (same px-4 gutter).
           'ds-raw-button flex shrink-0 items-center gap-1 rounded-md py-1 pl-0 pr-1.5 font-bold transition',
-          canReset ? 'text-gray-500 hover:bg-gray-50 hover:text-gray-900' : 'text-gray-900',
+          canReset ? 'text-text-soft hover:bg-surface-hover hover:text-text-default' : 'text-text-default',
         )}
       >
-        <Calendar className="h-3.5 w-3.5 text-gray-400" />
+        <Calendar className="h-3.5 w-3.5 text-text-faint" />
         <span>All dates</span>
       </button>
 
       {dateCrumbsRendered.map((crumb) => (
         <Fragment key={crumb.key}>
-          <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
+          <ChevronRight className="h-3 w-3 shrink-0 text-text-faint" />
           <button
             type="button"
             disabled={crumb.current}
@@ -98,8 +98,8 @@ export function PhotoDateBreadcrumb({
               // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
               'ds-raw-button shrink-0 truncate rounded-md px-1.5 py-1 transition',
               crumb.current
-                ? 'font-bold text-gray-900'
-                : 'font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                ? 'font-bold text-text-default'
+                : 'font-semibold text-text-soft hover:bg-surface-hover hover:text-text-default',
             )}
           >
             {crumb.label}
@@ -109,8 +109,8 @@ export function PhotoDateBreadcrumb({
 
       {showFolderLeaf ? (
         <Fragment key="folder-leaf">
-          <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
-          <span className="shrink-0 truncate rounded-md px-1.5 py-1 font-bold text-gray-900">
+          <ChevronRight className="h-3 w-3 shrink-0 text-text-faint" />
+          <span className="shrink-0 truncate rounded-md px-1.5 py-1 font-bold text-text-default">
             {resolvedFolderLeaf}
           </span>
         </Fragment>
@@ -137,12 +137,12 @@ export function PhotoDateBreadcrumb({
 function DateQuickChip({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <>
-      <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
+      <ChevronRight className="h-3 w-3 shrink-0 text-text-faint" />
       {/* ds-raw-button: breadcrumb quick-jump nav crumb — not a DS Button */}
       <button
         type="button"
         onClick={onClick}
-        className="ds-raw-button shrink-0 truncate rounded-md px-1.5 py-1 font-semibold text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
+        className="ds-raw-button shrink-0 truncate rounded-md px-1.5 py-1 font-semibold text-text-soft transition hover:bg-surface-hover hover:text-text-default"
       >
         {label}
       </button>

@@ -84,9 +84,9 @@ export function StudioInspector({
       <div className="space-y-4 p-4">
         <section>
           <PaneHeading text="Workflow" />
-          <p className="text-sm font-bold text-slate-900">{definition.name}</p>
+          <p className="text-sm font-bold text-text-default">{definition.name}</p>
           <div className="mt-1 flex items-center gap-1.5">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-micro font-semibold text-slate-600">
+            <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-semibold text-text-muted">
               v{definition.version}
             </span>
             {definition.isActive && (
@@ -95,7 +95,7 @@ export function StudioInspector({
               </span>
             )}
           </div>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-text-soft">
             {nodeCount} nodes · {edgeCount} edges
           </p>
         </section>
@@ -138,10 +138,10 @@ export function StudioInspector({
     <div className="space-y-4 p-4">
       <section>
         <PaneHeading text="Node" />
-        <p className="text-sm font-bold text-slate-900">{node.meta?.label ?? node.type}</p>
-        <p className="font-mono text-caption text-slate-400">{node.type}</p>
+        <p className="text-sm font-bold text-text-default">{node.meta?.label ?? node.type}</p>
+        <p className="font-mono text-caption text-text-faint">{node.type}</p>
         {node.meta && (
-          <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-slate-500">
+          <span className="mt-1 inline-block rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-text-soft">
             {node.meta.category}
           </span>
         )}
@@ -151,7 +151,7 @@ export function StudioInspector({
         <section>
           <PaneHeading text="In flight now" />
           <p className="text-sm font-bold text-blue-700">{live.total}</p>
-          <p className="text-caption text-slate-500">
+          <p className="text-caption text-text-soft">
             {live.active} active · {live.blocked} parked
             {live.error > 0 && <span className="font-semibold text-rose-600"> · {live.error} in error</span>}
           </p>
@@ -159,7 +159,7 @@ export function StudioInspector({
             const age = oldestAgeHours(live);
             if (age == null) return null;
             const display = age >= 48 ? `${Math.round(age / 24)}d` : `${Math.round(age)}h`;
-            return <p className="text-caption text-slate-400">oldest here for {display}</p>;
+            return <p className="text-caption text-text-faint">oldest here for {display}</p>;
           })()}
         </section>
       )}
@@ -200,7 +200,7 @@ export function StudioInspector({
               renderFieldHint={(fieldKey, value) => {
                 if (fieldKey !== 'station') return null;
                 const s = STATIONS.find((x) => x.key === String(value ?? ''));
-                return s ? <p className="text-caption text-slate-500">{s.blurb}</p> : null;
+                return s ? <p className="text-caption text-text-soft">{s.blurb}</p> : null;
               }}
             />
           </section>
@@ -215,7 +215,7 @@ export function StudioInspector({
             >
               {station.label}
             </span>
-            <p className="mt-1 text-caption text-slate-500">{station.blurb}</p>
+            <p className="mt-1 text-caption text-text-soft">{station.blurb}</p>
           </section>
         )
       )}
@@ -239,10 +239,10 @@ export function StudioInspector({
               return (
                 <div key={key} className="flex items-center gap-2 text-xs">
                   <span className={`h-2 w-2 shrink-0 rounded-full ${stage.dot}`} />
-                  <span className="font-semibold text-slate-700">
+                  <span className="font-semibold text-text-muted">
                     {circledNumber(stage.order)} {stage.label}
                   </span>
-                  <span className="truncate text-micro text-slate-400">{stage.description}</span>
+                  <span className="truncate text-micro text-text-faint">{stage.description}</span>
                 </div>
               );
             })}
@@ -253,20 +253,20 @@ export function StudioInspector({
       <section>
         <PaneHeading text="Ports" />
         {outputPorts.length === 0 ? (
-          <p className="text-xs text-slate-400">No declared output ports.</p>
+          <p className="text-xs text-text-faint">No declared output ports.</p>
         ) : (
           <ul className="space-y-1">
             {outputPorts.map((port) => {
               const wired = outgoing.find((e) => e.sourcePort === port.id);
               return (
                 <li key={port.id} className="flex items-center gap-1.5 text-xs">
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-micro font-semibold text-slate-600">
+                  <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-micro font-semibold text-text-muted">
                     {port.id}
                   </span>
                   {wired ? (
-                    <span className="truncate text-slate-500">→ {labelOf(wired.target)}</span>
+                    <span className="truncate text-text-soft">→ {labelOf(wired.target)}</span>
                   ) : (
-                    <span className="text-slate-400">→ terminal (run completes)</span>
+                    <span className="text-text-faint">→ terminal (run completes)</span>
                   )}
                 </li>
               );
@@ -274,7 +274,7 @@ export function StudioInspector({
           </ul>
         )}
         {incoming.length > 0 && (
-          <p className="mt-1.5 text-caption text-slate-400">
+          <p className="mt-1.5 text-caption text-text-faint">
             Fed by {incoming.map((e) => `${labelOf(e.source)} (${e.sourcePort})`).join(', ')}
           </p>
         )}
@@ -291,8 +291,8 @@ export function StudioInspector({
                   <span className={d.severity === 'error' ? 'font-bold text-rose-600' : 'font-bold text-amber-600'}>
                     {d.severity === 'error' ? '✖' : '⚠'}
                   </span>{' '}
-                  <span className="text-slate-600">{d.message}</span>
-                  {d.fix && <span className="mt-0.5 block text-micro text-slate-400">↳ {d.fix}</span>}
+                  <span className="text-text-muted">{d.message}</span>
+                  {d.fix && <span className="mt-0.5 block text-micro text-text-faint">↳ {d.fix}</span>}
                 </li>
               ))}
           </ul>
@@ -307,8 +307,8 @@ export function StudioInspector({
           <dl className="space-y-1">
             {configEntries.map(([key, value]) => (
               <div key={key} className="flex items-baseline justify-between gap-2 text-xs">
-                <dt className="font-mono text-caption text-slate-500">{key}</dt>
-                <dd className="truncate font-semibold text-slate-700">{String(value)}</dd>
+                <dt className="font-mono text-caption text-text-soft">{key}</dt>
+                <dd className="truncate font-semibold text-text-muted">{String(value)}</dd>
               </div>
             ))}
           </dl>
@@ -316,13 +316,13 @@ export function StudioInspector({
       )}
 
       {editable && onDeleteNode ? (
-        <div className="border-t border-slate-100 pt-3">
+        <div className="border-t border-border-hairline pt-3">
           <Button variant="danger" size="sm" className="w-full" onClick={() => onDeleteNode(node.id)}>
             Delete node (and its edges)
           </Button>
         </div>
       ) : (
-        <p className="border-t border-slate-100 pt-3 text-caption text-slate-400">
+        <p className="border-t border-border-hairline pt-3 text-caption text-text-faint">
           Read-only — edit on a draft, then publish.
         </p>
       )}
@@ -331,11 +331,11 @@ export function StudioInspector({
 }
 
 function PaneHeading({ text }: { text: string }) {
-  return <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-slate-400">{text}</h3>;
+  return <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-text-faint">{text}</h3>;
 }
 
 function PaneHint({ text }: { text: string }) {
-  return <p className="p-4 text-xs text-slate-400">{text}</p>;
+  return <p className="p-4 text-xs text-text-faint">{text}</p>;
 }
 
 /** Flow² lens: ranked bottlenecks, each click-to-focus its node. */
@@ -356,7 +356,7 @@ function BottlenecksSection({
     <section>
       <PaneHeading text="Bottlenecks" />
       {flow.bottlenecks.length === 0 ? (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-text-faint">
           No bottlenecks over the last {flow.windowDays}d — traffic is flowing cleanly.
         </p>
       ) : (
@@ -367,14 +367,14 @@ function BottlenecksSection({
               <button
                 type="button"
                 onClick={() => onFocus?.(b.nodeId)}
-                className="flex w-full items-start gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-slate-50"
+                className="flex w-full items-start gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover"
               >
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 text-micro font-bold text-rose-700">
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold text-slate-800">{labelOf(b.nodeId)}</span>
-                  <span className="block text-caption text-slate-500">{b.reason}</span>
+                  <span className="block truncate text-xs font-semibold text-text-default">{labelOf(b.nodeId)}</span>
+                  <span className="block text-caption text-text-soft">{b.reason}</span>
                 </span>
               </button>
             </li>
@@ -395,7 +395,7 @@ function CoverageSection({ people }: { people: PeopleNodeCoverage }) {
     <section>
       <PaneHeading text="Coverage" />
       {people.station == null ? (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-text-faint">
           This step has no staffable station — no one is scoped to it.
         </p>
       ) : people.coverage === 0 ? (
@@ -411,9 +411,9 @@ function CoverageSection({ people }: { people: PeopleNodeCoverage }) {
         </div>
       ) : (
         <>
-          <p className="mb-1.5 text-caption text-slate-500">
+          <p className="mb-1.5 text-caption text-text-soft">
             {people.coverage} staffer{people.coverage === 1 ? '' : 's'} scoped to{' '}
-            <span className="font-semibold text-slate-600">{people.station}</span>
+            <span className="font-semibold text-text-muted">{people.station}</span>
           </p>
           <ul className="space-y-1">
             {people.staff.map((s) => (
@@ -421,15 +421,15 @@ function CoverageSection({ people }: { people: PeopleNodeCoverage }) {
                 <HoverTooltip label="Open in the staff editor" asChild>
                   <a
                     href={`/admin?section=staff_schedule&staffId=${s.id}`}
-                    className="flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-slate-50"
+                    className="flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface-hover"
                   >
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-eyebrow font-bold text-violet-700">
                     {staffInitials(s.name)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold text-slate-800">{s.name}</span>
+                    <span className="block truncate text-xs font-semibold text-text-default">{s.name}</span>
                     {s.role && (
-                      <span className="block truncate text-micro text-slate-400">{s.role}</span>
+                      <span className="block truncate text-micro text-text-faint">{s.role}</span>
                     )}
                   </span>
                   {s.isPrimary && (
@@ -442,7 +442,7 @@ function CoverageSection({ people }: { people: PeopleNodeCoverage }) {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-micro text-slate-400">
+          <p className="mt-2 text-micro text-text-faint">
             Read-only — staff↔station access is managed in the staff editor.
           </p>
         </>
@@ -465,22 +465,22 @@ function FlowMetricsSection({
       <PaneHeading text={`Throughput · last ${windowDays}d`} />
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
         <div>
-          <p className="text-micro font-semibold uppercase tracking-wide text-slate-400">In queue</p>
-          <p className="font-bold text-slate-800 tabular-nums">{metrics.currentWip}</p>
+          <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">In queue</p>
+          <p className="font-bold text-text-default tabular-nums">{metrics.currentWip}</p>
         </div>
         <div>
-          <p className="text-micro font-semibold uppercase tracking-wide text-slate-400">Runs</p>
-          <p className="font-bold text-slate-800 tabular-nums">{metrics.runCount}</p>
+          <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">Runs</p>
+          <p className="font-bold text-text-default tabular-nums">{metrics.runCount}</p>
         </div>
         <div>
-          <p className="text-micro font-semibold uppercase tracking-wide text-slate-400">Median dwell</p>
-          <p className="font-bold text-slate-800 tabular-nums">
+          <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">Median dwell</p>
+          <p className="font-bold text-text-default tabular-nums">
             {metrics.dwellMedianS != null ? formatDuration(metrics.dwellMedianS) : '—'}
           </p>
         </div>
         <div>
-          <p className="text-micro font-semibold uppercase tracking-wide text-slate-400">p90 dwell</p>
-          <p className="font-bold text-slate-800 tabular-nums">
+          <p className="text-micro font-semibold uppercase tracking-wide text-text-faint">p90 dwell</p>
+          <p className="font-bold text-text-default tabular-nums">
             {metrics.dwellP90S != null ? formatDuration(metrics.dwellP90S) : '—'}
           </p>
         </div>
@@ -492,14 +492,14 @@ function FlowMetricsSection({
       )}
       {ports.length > 0 && (
         <div className="mt-2">
-          <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-slate-400">Port split</p>
+          <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-text-faint">Port split</p>
           <ul className="space-y-1">
             {ports.map(([port, n]) => (
               <li key={port} className="flex items-center gap-1.5 text-xs">
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-micro font-semibold text-slate-600">
+                <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-micro font-semibold text-text-muted">
                   {port}
                 </span>
-                <span className="tabular-nums text-slate-500">{n}</span>
+                <span className="tabular-nums text-text-soft">{n}</span>
               </li>
             ))}
           </ul>

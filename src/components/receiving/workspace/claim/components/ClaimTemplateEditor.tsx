@@ -23,10 +23,10 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
   } = template;
 
   return (
-    <div className="rounded-2xl border border-slate-300 bg-slate-100 p-3.5 shadow-sm">
+    <div className="rounded-2xl border border-border-default bg-surface-sunken p-3.5 shadow-sm">
       <div className="mb-2.5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
+          <p className="text-micro font-black uppercase tracking-[0.14em] text-text-soft">
             Zendesk ticket {previewLoading ? '(updating…)' : '(editable)'}
           </p>
           {filedTicket ? (
@@ -38,7 +38,7 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
             variant="ghost"
             size="sm"
             onClick={resetTemplate}
-            className="text-gray-500 hover:text-gray-900"
+            className="text-text-soft hover:text-text-default"
           >
             Reset to template
           </Button>
@@ -47,7 +47,7 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
 
       <label
         htmlFor="claim-subject"
-        className="mb-1 block text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400"
+        className="mb-1 block text-eyebrow font-black uppercase tracking-[0.14em] text-text-faint"
       >
         Subject
       </label>
@@ -57,14 +57,14 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
         value={subject}
         onChange={(e) => onSubjectChange(e.target.value)}
         placeholder={previewLoading ? 'Generating…' : 'Subject'}
-        className="mb-3 block h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-label font-medium text-slate-900 shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+        className="mb-3 block h-10 w-full rounded-xl border border-border-default bg-surface-card px-3 text-label font-medium text-text-default shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
       />
 
       <div>
         <div className="mb-1 flex items-center justify-between gap-3">
           <label
             htmlFor="claim-body"
-            className="block text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400"
+            className="block text-eyebrow font-black uppercase tracking-[0.14em] text-text-faint"
           >
             Body
           </label>
@@ -72,7 +72,7 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
             variant="ghost"
             size="sm"
             onClick={() => onDescriptionChange('')}
-            className="text-slate-400 hover:text-slate-700"
+            className="text-text-faint hover:text-text-muted"
           >
             Clear
           </Button>
@@ -83,7 +83,7 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
           onChange={(e) => onDescriptionChange(e.target.value)}
           rows={8}
           placeholder={previewLoading ? 'Generating…' : 'Ticket body'}
-          className="block min-h-[14rem] w-full resize-y rounded-2xl border border-slate-300 bg-white px-4 py-3 text-label font-medium leading-5 tracking-[0.01em] text-slate-900 shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+          className="block min-h-[14rem] w-full resize-y rounded-2xl border border-border-default bg-surface-card px-4 py-3 text-label font-medium leading-5 tracking-[0.01em] text-text-default shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
         />
       </div>
     </div>

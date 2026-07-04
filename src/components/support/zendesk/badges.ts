@@ -9,7 +9,7 @@ interface BadgeStyle {
   className: string;
 }
 
-const NEUTRAL = 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
+const NEUTRAL = 'bg-surface-sunken text-text-muted ring-1 ring-border-soft';
 
 const STATUS_BADGE: Record<string, BadgeStyle> = {
   new: { label: 'New', className: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200' },
@@ -23,8 +23,8 @@ const STATUS_BADGE: Record<string, BadgeStyle> = {
 const PRIORITY_BADGE: Record<string, BadgeStyle> = {
   urgent: { label: 'Urgent', className: 'bg-red-50 text-red-700 ring-1 ring-red-200' },
   high: { label: 'High', className: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200' },
-  normal: { label: 'Normal', className: 'bg-slate-50 text-slate-600 ring-1 ring-slate-200' },
-  low: { label: 'Low', className: 'bg-slate-50 text-slate-500 ring-1 ring-slate-200' },
+  normal: { label: 'Normal', className: 'bg-surface-canvas text-text-muted ring-1 ring-border-soft' },
+  low: { label: 'Low', className: 'bg-surface-canvas text-text-soft ring-1 ring-border-soft' },
 };
 
 export function statusBadge(status?: string | null): BadgeStyle {

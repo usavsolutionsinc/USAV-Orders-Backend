@@ -47,7 +47,7 @@ export function PhotoLabelsSection({
   return (
     <div className="mt-4 space-y-2">
       <div className="flex items-center justify-between gap-2 px-1">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Labels</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Labels</p>
         <div className="flex items-center gap-1">
           {activeLabel ? (
             <Button
@@ -55,7 +55,7 @@ export function PhotoLabelsSection({
               size="sm"
               onClick={() => onSelect(undefined)}
               icon={<X className="h-3.5 w-3.5" />}
-              className="-my-1 h-7 gap-1 px-2 text-micro font-bold uppercase tracking-wider text-gray-400 hover:text-gray-700"
+              className="-my-1 h-7 gap-1 px-2 text-micro font-bold uppercase tracking-wider text-text-faint hover:text-text-muted"
             >
               Clear
             </Button>
@@ -66,18 +66,18 @@ export function PhotoLabelsSection({
               disabled={adding}
               ariaLabel="Add label"
               icon={adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+              className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-text-faint hover:bg-surface-sunken hover:text-text-muted disabled:opacity-40"
             />
           </HoverTooltip>
         </div>
       </div>
 
       {isLoading && labels.length === 0 ? (
-        <div className="flex items-center gap-2 px-3 py-1.5 text-caption text-gray-400">
+        <div className="flex items-center gap-2 px-3 py-1.5 text-caption text-text-faint">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
       ) : labels.length === 0 ? (
-        <p className="px-3 py-1.5 text-caption text-gray-400">No labels yet.</p>
+        <p className="px-3 py-1.5 text-caption text-text-faint">No labels yet.</p>
       ) : (
         <div className="flex flex-wrap gap-1.5 px-1">
           {labels.map((lbl) => {

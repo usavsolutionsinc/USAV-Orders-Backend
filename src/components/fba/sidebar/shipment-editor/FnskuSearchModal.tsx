@@ -62,32 +62,32 @@ export function FnskuSearchModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.98 }}
             transition={{ duration: 0.18, ease: motionBezier.easeOut }}
-            className="relative z-modal flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20"
+            className="relative z-modal flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-2xl shadow-zinc-900/20"
           >
             {/* Header: search input */}
-            <div className="border-b border-zinc-200 px-4 py-3">
+            <div className="border-b border-border-soft px-4 py-3">
               <div className="mb-2 flex items-center justify-between">
                 <div>
                   <p className="text-micro font-black uppercase tracking-[0.16em] text-purple-600">Add FNSKU</p>
-                  <h2 className="mt-0.5 text-sm font-black text-zinc-900">Search shipment catalog</h2>
+                  <h2 className="mt-0.5 text-sm font-black text-text-default">Search shipment catalog</h2>
                 </div>
                 <IconButton
                   type="button"
                   onClick={onClose}
-                  className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800"
+                  className="rounded-full border border-border-soft bg-surface-card p-2 text-text-soft hover:border-border-default hover:bg-surface-hover hover:text-text-default"
                   ariaLabel="Close"
                   icon={<X className="h-4 w-4" />}
                 />
               </div>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-faint" />
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={query}
                   onChange={(e) => onQueryChange(e.target.value)}
                   placeholder="Search FNSKU, ASIN, SKU, or product title..."
-                  className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-10 pr-3 text-sm font-semibold text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30"
+                  className="w-full rounded-xl border border-border-soft bg-surface-card py-2.5 pl-10 pr-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30"
                 />
               </div>
             </div>
@@ -97,22 +97,22 @@ export function FnskuSearchModal({
               {query.trim().length < 2 ? (
                 <div className="py-16 text-center">
                   <Search className="mx-auto h-6 w-6 text-zinc-300" />
-                  <p className="mt-2 text-xs font-semibold text-zinc-400">
+                  <p className="mt-2 text-xs font-semibold text-text-faint">
                     Type at least 2 characters to search
                   </p>
                 </div>
               ) : searching ? (
                 <div className="flex items-center justify-center gap-2 py-16">
-                  <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-                  <p className="text-xs font-semibold text-zinc-500">Searching...</p>
+                  <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
+                  <p className="text-xs font-semibold text-text-soft">Searching...</p>
                 </div>
               ) : results.length === 0 ? (
                 <div className="py-16 text-center">
-                  <p className="text-xs font-semibold text-zinc-400">No matching FNSKUs found</p>
-                  <p className="mt-1 text-micro text-zinc-400">Try a different search term</p>
+                  <p className="text-xs font-semibold text-text-faint">No matching FNSKUs found</p>
+                  <p className="mt-1 text-micro text-text-faint">Try a different search term</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
+                <div className="divide-y divide-border-hairline overflow-hidden rounded-lg border border-border-soft">
                   {results.map((result) => {
                     const alreadyAdded = items.some(
                       (i) => i.fnsku.toUpperCase() === result.fnsku.toUpperCase(),
@@ -141,7 +141,7 @@ export function FnskuSearchModal({
                                   ? 'cursor-default border-emerald-200 bg-emerald-50 text-emerald-600'
                                   : isAdding
                                     ? 'cursor-wait border-purple-200 bg-purple-50 text-purple-500'
-                                    : 'border-purple-200 bg-white text-purple-600 hover:border-purple-400 hover:bg-purple-50',
+                                    : 'border-purple-200 bg-surface-card text-purple-600 hover:border-purple-400 hover:bg-purple-50',
                               ].join(' ')}
                               ariaLabel={alreadyAdded ? 'Already in shipment' : `Add ${result.fnsku} to shipment`}
                               icon={

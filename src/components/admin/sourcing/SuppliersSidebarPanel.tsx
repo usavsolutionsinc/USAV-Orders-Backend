@@ -63,16 +63,16 @@ export function SuppliersSidebarPanel() {
               <path d="M12 5v14" /><path d="M5 12h14" />
             </svg>
           }
-          className="w-full border border-dashed border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          className="w-full border border-dashed border-border-default bg-surface-card text-text-muted hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
           Add supplier
         </Button>
       }
     >
       {isLoading ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">Loading suppliers…</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">Loading suppliers…</div>
       ) : rows.length === 0 ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">No suppliers yet.</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">No suppliers yet.</div>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row) => (

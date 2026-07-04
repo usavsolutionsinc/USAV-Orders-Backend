@@ -48,7 +48,7 @@ export function ReceivingSerialJourneys({ receivingId }: { receivingId: number |
 
   if (query.isLoading) {
     return (
-      <div className="flex items-center gap-2 px-1 py-6 text-caption font-medium text-gray-400">
+      <div className="flex items-center gap-2 px-1 py-6 text-caption font-medium text-text-faint">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading serials…
       </div>
     );
@@ -69,7 +69,7 @@ export function ReceivingSerialJourneys({ receivingId }: { receivingId: number |
   }
   if (serials.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-caption font-medium text-gray-500">
+      <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-8 text-center text-caption font-medium text-text-soft">
         No serialized units on this receiving yet.
       </div>
     );
@@ -83,7 +83,7 @@ export function ReceivingSerialJourneys({ receivingId }: { receivingId: number |
           serialNumber={sn}
           title={serials.length > 1 ? `Serial journey · ${sn}` : 'Serial journey'}
           density="compact"
-          className="border-t border-gray-100 pt-3 pb-2 first:border-t-0 first:pt-0"
+          className="border-t border-border-hairline pt-3 pb-2 first:border-t-0 first:pt-0"
         />
       ))}
     </div>

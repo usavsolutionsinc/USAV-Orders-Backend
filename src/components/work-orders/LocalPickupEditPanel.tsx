@@ -90,9 +90,9 @@ export function LocalPickupEditPanel() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-gray-50">
+    <div className="flex h-full w-full flex-col bg-surface-canvas">
       <PaneHeader
-        className={`z-20 border-b-0 bg-white backdrop-blur-none ${receivingIdentityBandClass}`}
+        className={`z-20 border-b-0 bg-surface-card backdrop-blur-none ${receivingIdentityBandClass}`}
         rowClassName="w-full px-3"
         leftSlot={
           <>
@@ -106,7 +106,7 @@ export function LocalPickupEditPanel() {
                 <>
                   Pickup
                   {selected && cart.length > 1 ? (
-                    <span className="ml-1 text-gray-500">
+                    <span className="ml-1 text-text-soft">
                       · Item {index + 1} of {cart.length}
                     </span>
                   ) : null}
@@ -126,7 +126,7 @@ export function LocalPickupEditPanel() {
                     onClick={goPrev}
                     disabled={!canPrev}
                     ariaLabel="Previous item"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-soft hover:bg-surface-sunken hover:text-text-default"
                     icon={<ChevronUp className="h-4 w-4" />}
                   />
                 </HoverTooltip>
@@ -135,7 +135,7 @@ export function LocalPickupEditPanel() {
                     onClick={goNext}
                     disabled={!canNext}
                     ariaLabel="Next item"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-soft hover:bg-surface-sunken hover:text-text-default"
                     icon={<ChevronDown className="h-4 w-4" />}
                   />
                 </HoverTooltip>
@@ -193,10 +193,10 @@ function PickupEmptyState({ onAdd }: { onAdd: () => void }) {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
           <ShoppingCart className="h-8 w-8 text-emerald-300" />
         </div>
-        <p className="text-label font-black uppercase tracking-tight text-gray-700">
+        <p className="text-label font-black uppercase tracking-tight text-text-muted">
           No items yet
         </p>
-        <p className="mt-1 text-micro text-gray-400">
+        <p className="mt-1 text-micro text-text-faint">
           Add products to start a local pickup intake. Each item lands in the
           sidebar and opens here for editing.
         </p>
@@ -224,11 +224,11 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5"
+      className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-4 sm:p-5"
     >
       {/* Image + remove */}
       <div
-        className="relative flex w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50"
+        className="relative flex w-full items-center justify-center overflow-hidden rounded-xl bg-surface-canvas"
         style={{ height: 280 }}
       >
         {line.image_url ? (
@@ -240,7 +240,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
           <IconButton
             onClick={() => removeLine(line.key)}
             ariaLabel="Remove item"
-            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-400 shadow-sm hover:bg-rose-50 hover:text-rose-600"
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface-card/90 text-text-faint shadow-sm hover:bg-rose-50 hover:text-rose-600"
             icon={<X className="h-4 w-4" />}
           />
         </HoverTooltip>
@@ -248,7 +248,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
 
       {/* Title + SKU */}
       <div>
-        <h2 className="text-base font-black leading-snug text-gray-900">
+        <h2 className="text-base font-black leading-snug text-text-default">
           {line.product_title}
         </h2>
         <p className="mt-1 font-mono text-micro font-black uppercase text-emerald-600">
@@ -258,7 +258,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
 
       {/* Condition Received */}
       <div>
-        <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+        <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
           Condition Received
         </label>
         <ConditionPills
@@ -271,7 +271,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
 
       {/* Parts status */}
       <div>
-        <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+        <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
           Parts
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -282,7 +282,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
             className={`h-9 rounded-lg text-caption font-black uppercase tracking-wider transition-colors ${
               !isMissing
                 ? 'bg-emerald-600 text-white'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                : 'bg-surface-sunken text-text-soft hover:bg-surface-strong'
             }`}
           >
             Complete
@@ -294,7 +294,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
             className={`h-9 rounded-lg text-caption font-black uppercase tracking-wider transition-colors ${
               isMissing
                 ? 'bg-amber-500 text-white'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                : 'bg-surface-sunken text-text-soft hover:bg-surface-strong'
             }`}
           >
             Missing Parts
@@ -305,28 +305,28 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
             value={line.missingPartsNote}
             onChange={(e) => patchLine(line.key, { missingPartsNote: e.target.value })}
             placeholder="List missing parts…"
-            className="mt-2 min-h-[56px] w-full rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-caption text-gray-900 placeholder:text-gray-400 focus:border-amber-400 focus:outline-none"
+            className="mt-2 min-h-[56px] w-full rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-caption text-text-default placeholder:text-text-faint focus:border-amber-400 focus:outline-none"
           />
         ) : null}
       </div>
 
       {/* Condition note */}
       <div>
-        <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+        <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
           Condition note
         </label>
         <textarea
           value={line.conditionNote}
           onChange={(e) => patchLine(line.key, { conditionNote: e.target.value })}
           placeholder="What's wrong or notable about the unit…"
-          className="min-h-[56px] w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-caption text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none"
+          className="min-h-[56px] w-full rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-caption text-text-default placeholder:text-text-faint focus:border-emerald-400 focus:outline-none"
         />
       </div>
 
       {/* Total Price + Qty */}
-      <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
+      <div className="grid grid-cols-2 gap-3 border-t border-border-hairline pt-4">
         <div>
-          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
             Total Price
           </label>
           <div className="relative">
@@ -344,12 +344,12 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
                 if (v === '' || Number(v) >= 0) patchLine(line.key, { total: v });
               }}
               placeholder="0.00"
-              className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-6 pr-3 text-caption font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-border-soft bg-surface-card pl-6 pr-3 text-caption font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none"
             />
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
             Qty
           </label>
           <input
@@ -364,7 +364,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-caption font-black text-gray-900 focus:border-emerald-500 focus:outline-none"
+            className="h-9 w-full rounded-lg border border-border-soft bg-surface-card px-3 text-center text-caption font-black text-text-default focus:border-emerald-500 focus:outline-none"
           />
         </div>
       </div>

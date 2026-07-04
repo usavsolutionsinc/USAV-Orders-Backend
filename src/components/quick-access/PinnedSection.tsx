@@ -25,12 +25,12 @@ export function PinnedSection({ onNavigate }: PinnedSectionProps) {
   return (
     <div className="px-2 pb-2 pt-1">
       <div className="flex items-center justify-between px-2 pb-0.5">
-        <p className="text-micro font-bold uppercase tracking-widest text-gray-400">Pinned</p>
+        <p className="text-micro font-bold uppercase tracking-widest text-text-faint">Pinned</p>
         <PinThisPageButton />
       </div>
 
       {settings.pinned.length === 0 ? (
-        <p className="px-2 py-3 text-caption font-medium text-gray-500">
+        <p className="px-2 py-3 text-caption font-medium text-text-soft">
           No pinned pages yet. Use <span className="font-semibold text-blue-600">+ Pin page</span> to bookmark the current page.
         </p>
       ) : (
@@ -39,7 +39,7 @@ export function PinnedSection({ onNavigate }: PinnedSectionProps) {
             <Row
               key={p.id}
               icon={<BookmarkIcon className="h-4 w-4" />}
-              iconBg="bg-gray-900"
+              iconBg="bg-surface-inverse"
               label={p.label}
               subLabel={<span className="font-mono">{p.href}</span>}
               trailing={
@@ -51,7 +51,7 @@ export function PinnedSection({ onNavigate }: PinnedSectionProps) {
                       unpin(p.id);
                     }}
                     ariaLabel={`Unpin ${p.label}`}
-                    className="invisible flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 group-hover:visible"
+                    className="invisible flex h-6 w-6 items-center justify-center rounded-md text-text-faint hover:bg-surface-strong hover:text-text-muted group-hover:visible"
                     icon={<X className="h-3.5 w-3.5" />}
                   />
                 </HoverTooltip>

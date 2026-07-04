@@ -13,8 +13,8 @@ interface Props {
 
 const TONE: Record<BinStatus, { bg: string; text: string; ring: string; dot: string; label: string }> = {
   empty: {
-    bg: 'bg-slate-50', text: 'text-slate-600', ring: 'ring-slate-200',
-    dot: 'bg-slate-400', label: 'Empty',
+    bg: 'bg-surface-canvas', text: 'text-text-muted', ring: 'ring-border-soft',
+    dot: 'bg-border-emphasis', label: 'Empty',
   },
   low: {
     bg: 'bg-amber-50', text: 'text-amber-800', ring: 'ring-amber-200',

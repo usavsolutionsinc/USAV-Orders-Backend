@@ -34,34 +34,34 @@ export function AiChatSidebarPanel() {
 
   if (isLoaded && !has('dashboard.view')) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-gray-500">
+      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-text-soft">
         Requires the “View dashboard” permission.
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className={`flex shrink-0 items-center justify-between border-b border-gray-100 ${SIDEBAR_GUTTER} py-2.5`}>
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
+      <div className={`flex shrink-0 items-center justify-between border-b border-border-hairline ${SIDEBAR_GUTTER} py-2.5`}>
         <p className={`${sectionLabel} text-blue-600`}>AI Chat</p>
         <HoverTooltip label="New chat" asChild>
           <IconButton
             onClick={() => emitAiChatNew()}
             ariaLabel="New chat"
             icon={<RefreshCw className="h-4 w-4" />}
-            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="rounded-md p-1.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
           />
         </HoverTooltip>
       </div>
 
       <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4`}>
-        <div className="flex items-center gap-2 text-gray-700">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900 text-white">
+        <div className="flex items-center gap-2 text-text-muted">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-inverse text-white">
             <Sparkles className="h-4 w-4" />
           </div>
-          <p className="text-base font-semibold tracking-tight text-gray-900">{PRODUCT_NAME_AI}</p>
+          <p className="text-base font-semibold tracking-tight text-text-default">{PRODUCT_NAME_AI}</p>
         </div>
-        <p className="mt-2 text-caption leading-5 text-gray-600">
+        <p className="mt-2 text-caption leading-5 text-text-muted">
           Ask about the warehouse in plain English. The assistant streams its reply in the
           panel on the right and can query live data across orders, staff, FBA, inventory,
           repairs, and the Bose service manuals.
@@ -69,25 +69,25 @@ export function AiChatSidebarPanel() {
 
         <div className="mt-5 flex flex-col gap-2.5">
           {CAPABILITIES.map((c) => (
-            <div key={c.title} className="rounded-xl border border-gray-200 bg-white p-3">
-              <div className="flex items-center gap-2 text-gray-900">
+            <div key={c.title} className="rounded-xl border border-border-soft bg-surface-card p-3">
+              <div className="flex items-center gap-2 text-text-default">
                 <c.icon className="h-4 w-4 text-blue-500" />
                 <p className="text-caption font-semibold tracking-tight">{c.title}</p>
               </div>
-              <p className="mt-1 text-micro leading-5 text-gray-600">{c.detail}</p>
+              <p className="mt-1 text-micro leading-5 text-text-muted">{c.detail}</p>
             </div>
           ))}
         </div>
 
         <div className="mt-6">
-          <p className="text-micro font-black uppercase tracking-[0.2em] text-gray-500">Try asking</p>
+          <p className="text-micro font-black uppercase tracking-[0.2em] text-text-soft">Try asking</p>
           <div className="mt-3 flex flex-col gap-2">
             {EXAMPLES.map((e) => (
               <button
                 key={e}
                 type="button"
                 onClick={() => emitAiChatPrompt(e)}
-                className="ds-raw-button rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
+                className="ds-raw-button rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-left text-caption leading-5 text-text-muted transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-text-default"
               >
                 {e}
               </button>

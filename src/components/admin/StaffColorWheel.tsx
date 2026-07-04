@@ -65,7 +65,7 @@ export function StaffColorWheel({ value, onChange, disabled, size = 72 }: StaffC
           />
         </button>
       </HoverTooltip>
-      <code className="rounded-full bg-gray-100 px-3 py-1.5 text-caption font-mono uppercase tracking-wide text-gray-700">
+      <code className="rounded-full bg-surface-sunken px-3 py-1.5 text-caption font-mono uppercase tracking-wide text-text-muted">
         {value}
       </code>
     </div>

@@ -42,6 +42,12 @@ import {
   MessageSquare,
 } from '@/components/Icons';
 import { APP_SIDEBAR_NAV, getSidebarNavItems, type SidebarNavItem } from '@/lib/sidebar-navigation';
+import { looksLikeIdentifier, searchScopeHref, searchScopeLabel } from '@/lib/search/search-hit';
+import { isSearchEntityType } from '@/lib/search/build-search-text';
+// AI-search rollout flag probe + retrieve POST — shared client bridge
+// (src/lib/search/ai-search-client.ts) so CommandBar and the workbench
+// quick-jumps stay on one implementation.
+import { fetchAiSearchEnabled, postAiRetrieve } from '@/lib/search/ai-search-client';
 import { useAuth } from '@/contexts/AuthContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -54,12 +60,20 @@ interface RecentItem {
   entityType?: string;
 }
 
+interface SearchResultChip {
+  label: string;
+  tone?: string;
+}
+
 interface SearchResult {
   id: number;
   entityType: string;
   title: string;
   subtitle: string;
   href: string;
+  /** Present on AI-retrieve hits only (SearchHit superset fields). */
+  score?: number;
+  chips?: SearchResultChip[];
 }
 
 type IconComponent = (props: { className?: string }) => JSX.Element;
@@ -75,6 +89,7 @@ const ENTITY_ICONS: Record<string, IconComponent> = {
   fba: Package,
   receiving: ClipboardList,
   sku: Box,
+  unit: PackageCheck,
 };
 
 const NAV_ICON_MAP: Record<string, IconComponent> = {
@@ -135,6 +150,38 @@ function buildNavItems(permissions?: ReadonlySet<string>): NavOption[] {
   }));
 }
 
+/**
+ * Merge AI-retrieve hits with classic global-search rows, deduped by
+ * (entityType, id). AI hits lead (they carry score + facet chips); a
+ * duplicated classic row only contributes its subtitle when the AI hit
+ * lacks one. Classic-only rows follow in their original order.
+ */
+function mergeSearchResults(
+  aiHits: SearchResult[],
+  globalRows: SearchResult[],
+  limit: number,
+): SearchResult[] {
+  const merged: SearchResult[] = [];
+  const seen = new Map<string, SearchResult>();
+  for (const hit of aiHits) {
+    const key = `${hit.entityType}:${hit.id}`;
+    if (seen.has(key)) continue;
+    seen.set(key, hit);
+    merged.push(hit);
+  }
+  for (const row of globalRows) {
+    const key = `${row.entityType}:${row.id}`;
+    const existing = seen.get(key);
+    if (existing) {
+      if (!existing.subtitle && row.subtitle) existing.subtitle = row.subtitle;
+      continue;
+    }
+    seen.set(key, row);
+    merged.push(row);
+  }
+  return merged.slice(0, limit);
+}
+
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function CommandBar() {
@@ -145,6 +192,17 @@ export function CommandBar() {
   const [searching, setSearching] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [recents, setRecents] = useState<RecentItem[]>([]);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  // Phase 2b: inline Ask-AI results (mode:'ask' — one forced LLM tool call
+  // distills the question, same hybrid engine returns the hits). `forQuery`
+  // pins results to the question they answered; typing resets to idle.
+  const [askAi, setAskAi] = useState<{
+    status: 'idle' | 'loading' | 'done';
+    hits: SearchResult[];
+    forQuery: string;
+    /** LLM-distilled scope from mode:'ask' — drives the "View all in …" action. */
+    toolArgs?: { query: string; entityTypes?: string[] };
+  }>({ status: 'idle', hits: [], forQuery: '' });
 
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -188,17 +246,23 @@ export function CommandBar() {
     return () => window.removeEventListener('usav-command-bar-open', onOpen);
   }, []);
 
-  // Reset state on open / close on route change.
+  // Reset state on open / close on route change. Opening also resolves the
+  // AI-search rollout flag (memoized per session — one probe, ever).
   useEffect(() => {
     if (open) {
       setQuery('');
       setSearchResults([]);
+      setAskAi({ status: 'idle', hits: [], forQuery: '' });
       setRecents(getRecent());
+      fetchAiSearchEnabled().then(setAiEnabled);
     }
   }, [open]);
   useEffect(() => { setOpen(false); }, [pathname]);
 
-  // Debounced server search.
+  // Debounced server search. Flag off → the classic global-search fetch,
+  // unchanged. Flag on → global-search AND /api/ai/retrieve race in parallel
+  // under one AbortController; hits merge deduped by (entityType, id). Either
+  // source failing degrades to the other — never a broken palette.
   useEffect(() => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -211,15 +275,60 @@ export function CommandBar() {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      const q = query.trim();
       try {
-        const res = await fetch(
-          `/api/global-search?q=${encodeURIComponent(query.trim())}&limit=12`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) throw new Error('Search failed');
-        const data = await res.json();
+        // Classic-only path: flag off, or sub-2-char input (too short for the
+        // hybrid pipeline to add value over a cached ILIKE pass).
+        if (!aiEnabled || q.length < 2) {
+          const res = await fetch(
+            `/api/global-search?q=${encodeURIComponent(q)}&limit=12`,
+            { signal: controller.signal },
+          );
+          if (!res.ok) throw new Error('Search failed');
+          const data = await res.json();
+          if (!controller.signal.aborted) {
+            setSearchResults(data.rows || []);
+            setSearching(false);
+          }
+          return;
+        }
+
+        const fetchGlobal = () =>
+          fetch(`/api/global-search?q=${encodeURIComponent(q)}&limit=12`, {
+            signal: controller.signal,
+          })
+            .then((res) => (res.ok ? res.json() : { rows: [] }))
+            .catch((err) => {
+              if ((err as { name?: string }).name === 'AbortError') throw err;
+              return { rows: [] };
+            });
+
+        // pageContext = the surface ⌘K was opened from; the server
+        // soft-boosts that surface's entity types (never filters).
+        const fetchRetrieve = () =>
+          postAiRetrieve(q, { limit: 12, pageContext: pathname, signal: controller.signal });
+
+        // Identifier-shaped queries: retrieve's exact bypass runs the SAME
+        // parent-table searchers as global-search, so firing both would run
+        // the 5-table fan-out twice per keystroke. Retrieve only; fall back
+        // to global-search when retrieve itself errors.
+        if (looksLikeIdentifier(q)) {
+          const aiData = await fetchRetrieve();
+          let rows: SearchResult[] = [];
+          if (!aiData) {
+            const globalData = await fetchGlobal();
+            rows = globalData.rows || [];
+          }
+          if (!controller.signal.aborted) {
+            setSearchResults(mergeSearchResults(aiData?.hits || [], rows, 12));
+            setSearching(false);
+          }
+          return;
+        }
+
+        const [globalData, aiData] = await Promise.all([fetchGlobal(), fetchRetrieve()]);
         if (!controller.signal.aborted) {
-          setSearchResults(data.rows || []);
+          setSearchResults(mergeSearchResults(aiData?.hits || [], globalData.rows || [], 12));
           setSearching(false);
         }
       } catch (err) {
@@ -227,7 +336,7 @@ export function CommandBar() {
       }
     }, 250);
     return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, aiEnabled, pathname]);
 
   // Build nav items (perm-aware) and filter manually by query.
   const authPermissions = useMemo<ReadonlySet<string> | undefined>(() => {
@@ -254,12 +363,71 @@ export function CommandBar() {
     [router],
   );
 
-  const handleAskAi = useCallback(() => {
+  const openAiChat = useCallback(() => {
     const q = query.trim();
     const href = q ? `/ai-chat?q=${encodeURIComponent(q)}` : '/ai-chat';
     router.push(href);
     setOpen(false);
   }, [query, router]);
+
+  // Flag on → run Ask-AI inline (audited + rate-limited server-side) and
+  // render the hits in place; any failure falls back to the classic chat
+  // deep-link. Flag off → the pre-AI behavior, unchanged.
+  const handleAskAi = useCallback(async () => {
+    if (!aiEnabled) {
+      openAiChat();
+      return;
+    }
+    const q = query.trim();
+    if (!q) {
+      openAiChat();
+      return;
+    }
+    setAskAi({ status: 'loading', hits: [], forQuery: q });
+    const data = await postAiRetrieve(q, { mode: 'ask', limit: 8, pageContext: pathname });
+    if (data) {
+      // Staleness guard: commit only if this response still answers the
+      // question we're loading — typing resets to idle, and a slow response
+      // for an old question must not resurrect over it (or over a newer ask).
+      setAskAi((prev) =>
+        prev.status === 'loading' && prev.forQuery === q
+          ? { status: 'done', hits: data.hits || [], forQuery: q, toolArgs: data.toolArgs }
+          : prev,
+      );
+    } else {
+      let wasCurrent = false;
+      setAskAi((prev) => {
+        if (prev.status === 'loading' && prev.forQuery === q) {
+          wasCurrent = true;
+          return { status: 'idle', hits: [], forQuery: '' };
+        }
+        return prev;
+      });
+      if (wasCurrent) openAiChat();
+    }
+  }, [aiEnabled, query, pathname, openAiChat]);
+
+  // §8.4 "AI-suggested filter application": when the LLM scoped the question
+  // to one entity type that has a URL-searchable list surface, offer to open
+  // that surface with the distilled query applied as its own filter.
+  const askAiScopeAction = useMemo(() => {
+    if (askAi.status !== 'done' || !askAi.toolArgs) return null;
+    const types = (askAi.toolArgs.entityTypes ?? []).filter(isSearchEntityType);
+    if (types.length !== 1) return null;
+    const href = searchScopeHref(types[0], askAi.toolArgs.query);
+    const label = searchScopeLabel(types[0]);
+    if (!href || !label) return null;
+    return { href, label, query: askAi.toolArgs.query };
+  }, [askAi]);
+
+  // Typing a new question invalidates the previous inline answer.
+  useEffect(() => {
+    setAskAi((prev) =>
+      prev.status === 'idle' || prev.forQuery === query.trim()
+        ? prev
+        : { status: 'idle', hits: [], forQuery: '' },
+    );
+  }, [query]);
 
   if (!mounted) return null;
 
@@ -305,23 +473,23 @@ export function CommandBar() {
               label="Command menu"
               shouldFilter={false}
               loop
-              className="w-full max-w-[560px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-gray-900/30 ring-1 ring-black/[0.04] flex flex-col max-h-[70vh]"
+              className="w-full max-w-[560px] overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-2xl shadow-gray-900/30 ring-1 ring-black/[0.04] flex flex-col max-h-[70vh]"
             >
               {/* Input row */}
-              <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+              <div className="flex items-center gap-3 border-b border-border-hairline px-4 py-3">
                 {searching ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gray-400" />
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-text-faint" />
                 ) : (
-                  <Search className="h-4 w-4 shrink-0 text-gray-400" />
+                  <Search className="h-4 w-4 shrink-0 text-text-faint" />
                 )}
                 <Command.Input
                   value={query}
                   onValueChange={setQuery}
                   placeholder="Search pages, orders, repairs, SKUs…"
                   autoFocus
-                  className="flex-1 bg-transparent text-base font-medium text-gray-900 placeholder:text-gray-400 outline-none"
+                  className="flex-1 bg-transparent text-base font-medium text-text-default placeholder:text-text-faint outline-none"
                 />
-                <kbd className="hidden shrink-0 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-micro font-semibold text-gray-500 md:inline-flex">
+                <kbd className="hidden shrink-0 rounded-md border border-border-soft bg-surface-canvas px-1.5 py-0.5 font-mono text-micro font-semibold text-text-soft md:inline-flex">
                   ESC
                 </kbd>
               </div>
@@ -330,14 +498,14 @@ export function CommandBar() {
               <Command.List
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2"
               >
-                <Command.Empty className="px-4 py-10 text-center text-sm text-gray-500">
+                <Command.Empty className="px-4 py-10 text-center text-sm text-text-soft">
                   {searching ? 'Searching…' : query.trim() ? `No matches for "${query}"` : 'Type to search'}
                 </Command.Empty>
 
                 {showRecentGroup && (
                   <Command.Group
                     heading="Recent"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-text-faint"
                   >
                     {recents.map((r) => {
                       const Icon = r.entityType
@@ -347,7 +515,7 @@ export function CommandBar() {
                         <CmdRow
                           key={`recent:${r.id}`}
                           value={`recent ${r.label} ${r.href ?? ''}`}
-                          icon={<Icon className="h-4 w-4 text-gray-400" />}
+                          icon={<Icon className="h-4 w-4 text-text-faint" />}
                           label={r.label}
                           subLabel={r.subtitle ?? r.href ?? undefined}
                           onSelect={() => navigate(r)}
@@ -360,7 +528,7 @@ export function CommandBar() {
                 {filteredNav.length > 0 && (
                   <Command.Group
                     heading="Pages"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-text-faint"
                   >
                     {filteredNav.map((n) => {
                       const Icon = n.icon;
@@ -368,7 +536,7 @@ export function CommandBar() {
                         <CmdRow
                           key={`nav:${n.id}`}
                           value={`page ${n.label} ${n.href}`}
-                          icon={<Icon className="h-4 w-4 text-gray-400" />}
+                          icon={<Icon className="h-4 w-4 text-text-faint" />}
                           label={n.label}
                           subLabel={n.href}
                           onSelect={() =>
@@ -383,18 +551,32 @@ export function CommandBar() {
                 {showSearchGroup && searchResults.length > 0 && (
                   <Command.Group
                     heading="Search results"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-text-faint"
                   >
+                    <CmdRow
+                      value={`search all results ${query}`}
+                      icon={<Search className="h-4 w-4 text-text-faint" />}
+                      label={`See all results for "${query.trim()}"`}
+                      subLabel="Open the full search page with categories"
+                      onSelect={() =>
+                        navigate({
+                          id: `search-all:${query.trim()}`,
+                          label: `Search: ${query.trim()}`,
+                          href: `/search?q=${encodeURIComponent(query.trim())}`,
+                        })
+                      }
+                    />
                     {searchResults.map((r) => {
                       const Icon = ENTITY_ICONS[r.entityType] || Search;
                       return (
                         <CmdRow
                           key={`result:${r.entityType}:${r.id}`}
                           value={`result ${r.entityType} ${r.id} ${r.title}`}
-                          icon={<Icon className="h-4 w-4 text-gray-400" />}
+                          icon={<Icon className="h-4 w-4 text-text-faint" />}
                           label={r.title}
                           subLabel={r.subtitle}
                           badge={r.entityType}
+                          chips={r.chips}
                           onSelect={() =>
                             navigate({
                               id: `result:${r.entityType}:${r.id}`,
@@ -412,42 +594,111 @@ export function CommandBar() {
 
                 {showAskAi && (
                   <Command.Group
-                    heading="AI"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    heading={askAi.status === 'done' ? 'AI results' : 'AI'}
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-text-faint"
                   >
-                    <CmdRow
-                      value={`ai ask ${query}`}
-                      icon={
-                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 text-white">
-                          <MessageSquare className="h-3 w-3" />
-                        </span>
-                      }
-                      label={`Ask AI: "${query}"`}
-                      subLabel="Open chat with this question"
-                      onSelect={handleAskAi}
-                    />
+                    {askAi.status === 'loading' && (
+                      <CmdRow
+                        value="ai asking"
+                        icon={<Loader2 className="h-4 w-4 animate-spin text-text-faint" />}
+                        label="Asking AI…"
+                        subLabel={`Searching for "${askAi.forQuery}"`}
+                        onSelect={() => {}}
+                      />
+                    )}
+                    {askAi.status === 'done' &&
+                      askAi.hits.map((r) => {
+                        const Icon = ENTITY_ICONS[r.entityType] || Search;
+                        return (
+                          <CmdRow
+                            key={`ai:${r.entityType}:${r.id}`}
+                            value={`ai result ${r.entityType} ${r.id} ${r.title}`}
+                            icon={<Icon className="h-4 w-4 text-text-faint" />}
+                            label={r.title}
+                            subLabel={r.subtitle}
+                            badge={r.entityType}
+                            chips={r.chips}
+                            onSelect={() =>
+                              navigate({
+                                id: `result:${r.entityType}:${r.id}`,
+                                label: r.title,
+                                subtitle: r.subtitle,
+                                href: r.href,
+                                entityType: r.entityType,
+                              })
+                            }
+                          />
+                        );
+                      })}
+                    {askAi.status === 'done' && askAi.hits.length === 0 && (
+                      <CmdRow
+                        value="ai no matches"
+                        icon={<Search className="h-4 w-4 text-text-faint" />}
+                        label="No AI matches"
+                        subLabel="Open chat to dig deeper"
+                        onSelect={openAiChat}
+                      />
+                    )}
+                    {askAiScopeAction && (
+                      <CmdRow
+                        value={`ai scope ${askAiScopeAction.label}`}
+                        icon={<Search className="h-4 w-4 text-text-faint" />}
+                        label={`View all in ${askAiScopeAction.label}`}
+                        subLabel={`Apply "${askAiScopeAction.query}" as the list filter`}
+                        onSelect={() =>
+                          navigate({
+                            id: `ai-scope:${askAiScopeAction.href}`,
+                            label: `${askAiScopeAction.label}: ${askAiScopeAction.query}`,
+                            href: askAiScopeAction.href,
+                          })
+                        }
+                      />
+                    )}
+                    {askAi.status !== 'loading' && (
+                      <CmdRow
+                        value={`ai ask ${query}`}
+                        icon={
+                          <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 text-white">
+                            <MessageSquare className="h-3 w-3" />
+                          </span>
+                        }
+                        label={
+                          askAi.status === 'done'
+                            ? 'Open in AI chat'
+                            : `Ask AI: "${query}"`
+                        }
+                        subLabel={
+                          askAi.status === 'done'
+                            ? 'Continue this question in chat'
+                            : aiEnabled
+                              ? 'Search with AI — results appear here'
+                              : 'Open chat with this question'
+                        }
+                        onSelect={askAi.status === 'done' ? openAiChat : handleAskAi}
+                      />
+                    )}
                   </Command.Group>
                 )}
               </Command.List>
 
               {/* Footer */}
-              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/70 px-4 py-2 text-micro font-bold text-gray-500">
+              <div className="flex items-center justify-between gap-3 border-t border-border-hairline bg-surface-canvas/70 px-4 py-2 text-micro font-bold text-text-soft">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center gap-1">
-                    <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">↑↓</kbd>
+                    <kbd className="rounded border border-border-soft bg-surface-card px-1 py-0.5 font-mono">↑↓</kbd>
                     navigate
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">↵</kbd>
+                    <kbd className="rounded border border-border-soft bg-surface-card px-1 py-0.5 font-mono">↵</kbd>
                     select
                   </span>
                   <span className="hidden sm:inline-flex items-center gap-1">
-                    <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">esc</kbd>
+                    <kbd className="rounded border border-border-soft bg-surface-card px-1 py-0.5 font-mono">esc</kbd>
                     close
                   </span>
                 </div>
                 <span className="hidden md:inline-flex items-center gap-1">
-                  <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">⌘K</kbd>
+                  <kbd className="rounded border border-border-soft bg-surface-card px-1 py-0.5 font-mono">⌘K</kbd>
                   toggle
                 </span>
               </div>
@@ -468,29 +719,51 @@ interface CmdRowProps {
   label: string;
   subLabel?: string;
   badge?: string;
+  /** Facet chips from AI-retrieve SearchHits (status / condition / platform). */
+  chips?: SearchResultChip[];
   onSelect: () => void;
 }
 
-function CmdRow({ value, icon, label, subLabel, badge, onSelect }: CmdRowProps) {
+// House 3-layer chip tones (bg-x-50 / text-x-700 / ring-x-200) — the same
+// families every triage chip uses; tone keys come from SearchHitChip.
+const CHIP_TONE_CLASSES: Record<string, string> = {
+  gray: 'bg-surface-canvas text-text-muted ring-border-soft',
+  blue: 'bg-blue-50 text-blue-700 ring-blue-200',
+  emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+  rose: 'bg-rose-50 text-rose-700 ring-rose-200',
+};
+
+function CmdRow({ value, icon, label, subLabel, badge, chips, onSelect }: CmdRowProps) {
   return (
     <Command.Item
       value={value}
       onSelect={onSelect}
-      className="group mx-1 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-800 transition-colors data-[selected=true]:bg-gray-100 data-[selected=true]:text-gray-900 aria-selected:bg-gray-100"
+      className="group mx-1 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-default transition-colors data-[selected=true]:bg-surface-sunken data-[selected=true]:text-text-default aria-selected:bg-surface-sunken"
     >
       <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold">{label}</span>
         {subLabel && (
-          <span className="block truncate text-caption font-medium text-gray-500">{subLabel}</span>
+          <span className="block truncate text-caption font-medium text-text-soft">{subLabel}</span>
         )}
       </span>
+      {chips?.slice(0, 2).map((chip) => (
+        <span
+          key={chip.label}
+          className={`hidden shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset md:inline-flex ${
+            CHIP_TONE_CLASSES[chip.tone ?? 'gray'] ?? CHIP_TONE_CLASSES.gray
+          }`}
+        >
+          {chip.label}
+        </span>
+      ))}
       {badge && (
-        <span className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-500 group-data-[selected=true]:bg-white group-data-[selected=true]:text-gray-700">
+        <span className="shrink-0 rounded-md bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-text-soft group-data-[selected=true]:bg-surface-card group-data-[selected=true]:text-text-muted">
           {badge}
         </span>
       )}
-      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-300 opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-faint opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
     </Command.Item>
   );
 }

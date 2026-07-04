@@ -49,7 +49,7 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false, headerT
 
   if (hub.loading && !snapshot) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-400">
+      <div className="flex h-full items-center justify-center text-text-faint">
         <Loader2 className="h-5 w-5 animate-spin" />
         <span className="ml-2 text-xs font-semibold">Loading suggestions…</span>
       </div>
@@ -82,7 +82,7 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false, headerT
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {allowManualPair ? <ManualPairForm skuCatalogId={skuCatalogId} onAdded={hub.refresh} /> : null}
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-border-hairline">
           {PRODUCT_HUB_PLATFORMS.map((platform) => (
             <ChannelSection
               key={platform}

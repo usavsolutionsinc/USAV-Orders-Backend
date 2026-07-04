@@ -170,7 +170,7 @@ export function AuditLogFilterDropdown({ onClose }: { onClose: () => void }) {
   return (
     <div className="space-y-6">
       <div>
-        <p className="mb-3 text-caption font-black uppercase tracking-[0.2em] text-gray-400">Date Range</p>
+        <p className="mb-3 text-caption font-black uppercase tracking-[0.2em] text-text-faint">Date Range</p>
         <div className="grid grid-cols-3 gap-2">
           {/* ds-raw-button: segmented date-preset toggle with custom active fill (bg-blue-500) */}
           {presetOptions.map((opt) => (
@@ -181,7 +181,7 @@ export function AuditLogFilterDropdown({ onClose }: { onClose: () => void }) {
               className={`rounded-xl border px-3 py-2 text-micro font-bold uppercase tracking-wider transition-all ${
                 state.preset === opt.id
                   ? 'border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/20'
-                  : 'border-gray-100 bg-gray-50/50 text-gray-600 hover:border-gray-200 hover:bg-white'
+                  : 'border-border-hairline bg-surface-canvas/50 text-text-muted hover:border-border-soft hover:bg-surface-card'
               }`}
             >
               {opt.label}
@@ -196,19 +196,19 @@ export function AuditLogFilterDropdown({ onClose }: { onClose: () => void }) {
             type="date"
             value={customStart}
             onChange={(e) => actions.setCustomStart(e.target.value)}
-            className="h-10 rounded-xl border border-gray-100 bg-gray-50/50 px-3 text-caption font-bold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+            className="h-10 rounded-xl border border-border-hairline bg-surface-canvas/50 px-3 text-caption font-bold text-text-default outline-none focus:border-blue-500 focus:bg-surface-card focus:ring-4 focus:ring-blue-500/10"
           />
           <input
             type="date"
             value={customEnd}
             onChange={(e) => actions.setCustomEnd(e.target.value)}
-            className="h-10 rounded-xl border border-gray-100 bg-gray-50/50 px-3 text-caption font-bold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+            className="h-10 rounded-xl border border-border-hairline bg-surface-canvas/50 px-3 text-caption font-bold text-text-default outline-none focus:border-blue-500 focus:bg-surface-card focus:ring-4 focus:ring-blue-500/10"
           />
         </div>
       )}
 
       <div>
-        <p className="mb-3 text-caption font-black uppercase tracking-[0.2em] text-gray-400">Staff Member</p>
+        <p className="mb-3 text-caption font-black uppercase tracking-[0.2em] text-text-faint">Staff Member</p>
         <StaffCombobox value={state.staffId} onChange={actions.setStaffId} />
       </div>
 
@@ -330,7 +330,7 @@ export function AuditLogFilterStrip() {
   ];
 
   return (
-    <div className="border-b border-gray-100 bg-white/60 px-3 py-2.5">
+    <div className="border-b border-border-hairline bg-surface-card/60 px-3 py-2.5">
       <p className="px-1 pb-1 text-eyebrow font-black uppercase tracking-widest text-emerald-700/80">
         Filters
       </p>
@@ -346,7 +346,7 @@ export function AuditLogFilterStrip() {
             className={`flex-1 rounded-md px-1.5 py-1 text-micro font-bold uppercase tracking-wider transition ${
               preset === opt.id
                 ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-surface-sunken text-text-muted hover:bg-surface-strong'
             }`}
           >
             {opt.label}
@@ -361,13 +361,13 @@ export function AuditLogFilterStrip() {
             type="date"
             value={customStart}
             onChange={(e) => setCustomStart(e.target.value)}
-            className="h-8 rounded-md border border-gray-200 bg-white px-2 text-caption text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            className="h-8 rounded-md border border-border-soft bg-surface-card px-2 text-caption text-text-default outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
           />
           <input
             type="date"
             value={customEnd}
             onChange={(e) => setCustomEnd(e.target.value)}
-            className="h-8 rounded-md border border-gray-200 bg-white px-2 text-caption text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            className="h-8 rounded-md border border-border-soft bg-surface-card px-2 text-caption text-text-default outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
           />
         </div>
       )}
@@ -450,7 +450,7 @@ function StaffCombobox({
   return (
     <div className="relative">
       <div ref={inputWrapRef} className="relative">
-        <User className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <User className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
         <input
           type="text"
           value={open ? query : label}
@@ -463,14 +463,14 @@ function StaffCombobox({
             if (!open) setOpen(true);
           }}
           placeholder="Filter by staff…"
-          className="h-8 w-full rounded-md border border-gray-200 bg-white pl-7 pr-7 text-caption text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+          className="h-8 w-full rounded-md border border-border-soft bg-surface-card pl-7 pr-7 text-caption text-text-default outline-none transition placeholder:text-text-faint focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
         />
         {value != null && !open && (
           <IconButton
             icon={<X className="h-3 w-3" />}
             ariaLabel="Clear staff filter"
             onClick={() => onChange(null)}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
           />
         )}
       </div>
@@ -482,7 +482,7 @@ function StaffCombobox({
         placement="bottom-stretch"
         gap={-1}
       >
-        <div className="max-h-60 overflow-y-auto rounded-b-lg rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg">
+        <div className="max-h-60 overflow-y-auto rounded-b-lg rounded-t-none border border-border-soft border-t-0 bg-surface-card shadow-lg">
           {/* ds-raw-button: full-width left-aligned dropdown menu row (composite content) */}
           <button
             type="button"
@@ -490,18 +490,18 @@ function StaffCombobox({
               onChange(null);
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-caption text-gray-500 hover:bg-gray-50"
+            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-caption text-text-soft hover:bg-surface-hover"
           >
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gray-100">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-surface-sunken">
               <Search className="h-2.5 w-2.5" />
             </span>
             All staff
           </button>
           {loading && (
-            <div className="px-2.5 py-2 text-caption text-gray-400">Loading…</div>
+            <div className="px-2.5 py-2 text-caption text-text-faint">Loading…</div>
           )}
           {!loading && options.length === 0 && (
-            <div className="px-2.5 py-2 text-caption text-gray-400">No matches.</div>
+            <div className="px-2.5 py-2 text-caption text-text-faint">No matches.</div>
           )}
           {/* ds-raw-button: full-width left-aligned dropdown menu row (name/role/count composite) */}
           {options.map((opt) => (
@@ -517,14 +517,14 @@ function StaffCombobox({
               }`}
             >
               <div className="min-w-0">
-                <div className="truncate text-caption font-semibold text-gray-800">
+                <div className="truncate text-caption font-semibold text-text-default">
                   {opt.name}
                 </div>
-                <div className="truncate text-micro text-gray-500">
+                <div className="truncate text-micro text-text-soft">
                   {opt.role ?? '—'}
                 </div>
               </div>
-              <div className="shrink-0 text-micro tabular-nums text-gray-400">
+              <div className="shrink-0 text-micro tabular-nums text-text-faint">
                 {opt.event_count.toLocaleString()}
               </div>
             </button>

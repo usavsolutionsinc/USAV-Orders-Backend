@@ -57,24 +57,24 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
       >
         {/* ── Row 1 — ticket id · customer · trailing chevron. ── */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5 text-caption font-semibold text-gray-500">
+          <div className="flex min-w-0 items-center gap-1.5 text-caption font-semibold text-text-soft">
             <span className="font-mono font-bold text-orange-700">
               #{card.ticketShort}
             </span>
-            <span className="text-gray-300">·</span>
-            <span className="truncate text-gray-700">
+            <span className="text-text-faint">·</span>
+            <span className="truncate text-text-muted">
               {card.customerName || 'Unknown customer'}
             </span>
             {card.isUnassigned && (
               <>
-                <span className="text-gray-300">·</span>
+                <span className="text-text-faint">·</span>
                 <span className="font-bold text-orange-600">Unassigned</span>
               </>
             )}
           </div>
           <span
             aria-hidden
-            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-gray-400 transition-transform ${
+            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-text-faint transition-transform ${
               isExpanded ? 'rotate-90 text-orange-600' : ''
             }`}
           >
@@ -83,7 +83,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
         </div>
 
         {/* ── Row 2 — product title, single-line clamp. ── */}
-        <h4 className="mt-0.5 line-clamp-1 text-sm font-semibold leading-snug tracking-tight text-gray-900">
+        <h4 className="mt-0.5 line-clamp-1 text-sm font-semibold leading-snug tracking-tight text-text-default">
           {repair.productTitle || 'Unknown Product'}
         </h4>
 
@@ -100,7 +100,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
         {/* ── Issue summary — single line in the collapsed row; full text in
               the expanded section below. ── */}
         {repair.issue && (
-          <p className="mt-1.5 line-clamp-1 text-caption font-semibold leading-snug text-gray-600">
+          <p className="mt-1.5 line-clamp-1 text-caption font-semibold leading-snug text-text-muted">
             {repair.issue}
           </p>
         )}
@@ -123,7 +123,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
                 {card.hasOutcome && !card.hasOutOfStock && (
                   <div className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50/40 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),inset_0_0_0_1px_rgba(16,185,129,0.06)]">
                     <span className="mb-1 block text-micro font-black uppercase tracking-widest text-emerald-700">Repaired Part</span>
-                    <p className="text-sm text-gray-900 break-words leading-snug">{repair.repairOutcome}</p>
+                    <p className="text-sm text-text-default break-words leading-snug">{repair.repairOutcome}</p>
                   </div>
                 )}
 
@@ -184,7 +184,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
                           onClick={stopProp}
                           placeholder="What was repaired?"
                           rows={3}
-                          className="w-full resize-none rounded-lg border border-emerald-200 bg-white px-3 py-2.5 text-xs font-bold leading-relaxed text-gray-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:text-gray-400"
+                          className="w-full resize-none rounded-lg border border-emerald-200 bg-surface-card px-3 py-2.5 text-xs font-bold leading-relaxed text-text-default shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:text-text-faint"
                           autoFocus
                         />
                         <div className="grid grid-cols-2 gap-2">
@@ -230,7 +230,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
                       </span>
                       <button
                         onClick={card.openAssignment}
-                        className="ds-raw-button flex-shrink-0 text-gray-400 hover:text-orange-600 transition-colors"
+                        className="ds-raw-button flex-shrink-0 text-text-faint hover:text-orange-600 transition-colors"
                         aria-label="Open work order assignment"
                       >
                         <Settings className="w-3.5 h-3.5" />

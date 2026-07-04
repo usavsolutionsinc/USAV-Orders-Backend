@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { THEME_NAMES, type ThemeName } from '@/design-system/themes/registry';
 
 /**
  * Bindable focus-scan hotkey: a single function key F1–F12. Restricted to
@@ -11,9 +12,14 @@ export const FOCUS_SCAN_HOTKEY_RE = /^F([1-9]|1[0-2])$/;
 /** Default binding when a staffer has never customized it. */
 export const DEFAULT_FOCUS_SCAN_HOTKEY = 'F2';
 
-/** Color themes. `light` is the default when a staffer has never customized it. */
-export const STAFF_THEMES = ['light', 'dark'] as const;
-export type StaffTheme = (typeof STAFF_THEMES)[number];
+/**
+ * Color themes — derived from the theme registry
+ * (src/design-system/themes/registry.ts, the SoT), so registering a new
+ * palette makes it valid here with zero schema changes. `light` is the
+ * default when a staffer has never customized it.
+ */
+export const STAFF_THEMES = THEME_NAMES;
+export type StaffTheme = ThemeName;
 export const DEFAULT_THEME: StaffTheme = 'light';
 
 /** ISO day-range filter — `null` clears it. Shared by board + per-lane prefs. */
@@ -66,7 +72,7 @@ export const StaffPreferencesPutBody = z
       .regex(FOCUS_SCAN_HOTKEY_RE, 'Hotkey must be a function key F1–F12')
       .nullable()
       .optional(),
-    theme: z.enum(STAFF_THEMES).nullable().optional(),
+    theme: z.enum(STAFF_THEMES as [ThemeName, ...ThemeName[]]).nullable().optional(),
     /** Per-board swimlane prefs. One generic shape ({@link BOARD_PREFS}) per
      *  surface; add a key here when a new board surface ships. */
     unshippedBoard: BOARD_PREFS.nullable().optional(),

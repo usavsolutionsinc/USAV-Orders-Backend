@@ -59,10 +59,10 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
         <PaneHeader
-          className="border-gray-100 bg-white/90 backdrop-blur-xl"
+          className="border-border-hairline bg-surface-card/90 backdrop-blur-xl"
           rowClassName="px-6"
           leftSlot={
             <>
@@ -71,7 +71,7 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
                 eyebrow={
                   <>
                     {meta.label.toUpperCase()}{' '}
-                    <span className="text-gray-500">
+                    <span className="text-text-soft">
                       · {formatDateTimePST(row.created_at)}
                     </span>
                   </>
@@ -86,7 +86,7 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
               icon={<X className="h-5 w-5" />}
               ariaLabel="Close"
               onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl hover:bg-gray-100"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl hover:bg-surface-sunken"
             />
           }
           belowSlot={
@@ -145,14 +145,14 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
         </div>
 
         {/* Footer — actions row + sticky destructive */}
-        <div className="border-t border-gray-100 px-6 py-3">
+        <div className="border-t border-border-hairline px-6 py-3">
           <div className="mb-2 flex flex-wrap gap-2">
             {c.externalUrl && c.externalLabel && (
               <a
                 href={c.externalUrl}
                 target={row.kind === 'email_po' ? '_blank' : undefined}
                 rel={row.kind === 'email_po' ? 'noreferrer' : undefined}
-                className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border-soft px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-text-muted hover:bg-surface-hover"
               >
                 <ExternalLink className="h-3 w-3" />
                 {c.externalLabel}
@@ -162,7 +162,7 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
               variant="ghost"
               size="sm"
               onClick={() => void c.handleCopyAll()}
-              className="rounded-md border border-gray-200 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+              className="rounded-md border border-border-soft px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-text-muted hover:bg-surface-hover"
             >
               Copy details
             </Button>
@@ -187,9 +187,9 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
                   : 'Delete Row'}
             </Button>
           ) : (
-            <p className="rounded-xl bg-gray-50 px-3 py-3 text-center text-micro text-gray-500">
+            <p className="rounded-xl bg-surface-canvas px-3 py-3 text-center text-micro text-text-soft">
               Unmatched receiving rows can have attached lines. Use the{' '}
-              <span className="font-bold text-gray-700">Check</span> toggle
+              <span className="font-bold text-text-muted">Check</span> toggle
               to clear from the queue, or open the workspace to delete carefully.
             </p>
           )}

@@ -13,7 +13,7 @@ export function comfyHelperHint(mode: BarcodeMode) {
     mode === 'reprint'
       ? 'Scan or paste a SKU to bring up its last label.'
       : 'Scan or paste a SKU to load product info.';
-  return <p className="mt-2 text-xs text-gray-500">{text}</p>;
+  return <p className="mt-2 text-xs text-text-soft">{text}</p>;
 }
 
 interface WorkspaceCardProps {
@@ -26,11 +26,11 @@ interface WorkspaceCardProps {
 /** Generic white surface card used across the horizontal workspace. */
 export function WorkspaceCard({ label, children, actions }: WorkspaceCardProps) {
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-border-soft/60">
       {(label || actions) && (
         <div className="mb-3 flex items-center justify-between">
           {label && (
-            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">{label}</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-soft">{label}</h3>
           )}
           {actions}
         </div>
@@ -70,7 +70,7 @@ export function ModernSkuField({ value, inputRef, accent, onChange, onNext, onFi
           placeholder="Scan or type a SKU…"
           autoComplete="off"
           spellCheck={false}
-          className={`block h-12 w-full rounded-xl border border-gray-200 bg-white px-4 font-mono text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 ${accent.focusRing}`}
+          className={`block h-12 w-full rounded-xl border border-border-soft bg-surface-card px-4 font-mono text-base text-text-default placeholder:text-text-faint focus:outline-none focus:ring-2 ${accent.focusRing}`}
         />
       </div>
       <HoverTooltip label="Paste from clipboard and search" asChild>
@@ -78,7 +78,7 @@ export function ModernSkuField({ value, inputRef, accent, onChange, onNext, onFi
           icon={<Clipboard className="h-4 w-4" />}
           onClick={handlePaste}
           ariaLabel="Paste from clipboard and search"
-          className="h-12 w-12 rounded-xl border border-gray-200 bg-white hover:bg-gray-50"
+          className="h-12 w-12 rounded-xl border border-border-soft bg-surface-card hover:bg-surface-hover"
         />
       </HoverTooltip>
       <HoverTooltip label="Search" asChild>
@@ -115,10 +115,10 @@ export function ProductContextCard({ title, stock, imageUrl, isLoading }: Produc
         : 'bg-emerald-50 text-emerald-700 ring-emerald-200';
 
   return (
-    <section className="flex items-start gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-200">
+    <section className="flex items-start gap-4 rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-border-soft/60">
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-canvas ring-1 ring-border-soft">
         {isLoading ? (
-          <div className="h-full w-full animate-pulse bg-gray-200" />
+          <div className="h-full w-full animate-pulse bg-surface-strong" />
         ) : imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -130,19 +130,19 @@ export function ProductContextCard({ title, stock, imageUrl, isLoading }: Produc
             }}
           />
         ) : (
-          <Printer className="h-5 w-5 text-gray-300" />
+          <Printer className="h-5 w-5 text-text-faint" />
         )}
       </div>
 
       <div className="min-w-0 flex-1">
         {isLoading ? (
           <div className="space-y-2">
-            <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200" />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-gray-100" />
+            <div className="h-4 w-3/4 animate-pulse rounded bg-surface-strong" />
+            <div className="h-3 w-1/2 animate-pulse rounded bg-surface-sunken" />
           </div>
         ) : (
-          <p className="text-base font-semibold leading-snug text-gray-900">
-            {title || <span className="italic text-gray-400">SKU not in catalog</span>}
+          <p className="text-base font-semibold leading-snug text-text-default">
+            {title || <span className="italic text-text-faint">SKU not in catalog</span>}
           </p>
         )}
       </div>
@@ -165,19 +165,19 @@ interface NotesCardProps {
 /** Collapsible optional notes field. */
 export function NotesCard({ notes, showNotes, accent, onToggleNotes, onNotesChange }: NotesCardProps) {
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-border-soft/60">
       {/* ds-raw-button: full-width text-left collapsible header row (label + ± affordance) */}
       <button
         type="button"
         onClick={onToggleNotes}
-        className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 hover:text-gray-700"
+        className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-[0.14em] text-text-soft hover:text-text-muted"
       >
         <span>
           Notes{' '}
           {notes ? (
-            <span className="ml-1 text-gray-400 normal-case tracking-normal">(filled)</span>
+            <span className="ml-1 text-text-faint normal-case tracking-normal">(filled)</span>
           ) : (
-            <span className="ml-1 text-gray-400 normal-case tracking-normal">(optional)</span>
+            <span className="ml-1 text-text-faint normal-case tracking-normal">(optional)</span>
           )}
         </span>
         <span aria-hidden>{showNotes ? '−' : '+'}</span>
@@ -188,7 +188,7 @@ export function NotesCard({ notes, showNotes, accent, onToggleNotes, onNotesChan
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Anything worth recording with this unit…"
           rows={3}
-          className={`mt-3 block w-full resize-none rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 ${accent.focusRing}`}
+          className={`mt-3 block w-full resize-none rounded-xl border border-border-soft bg-surface-card p-3 text-sm text-text-default placeholder:text-text-faint focus:outline-none focus:ring-2 ${accent.focusRing}`}
         />
       )}
     </section>
@@ -242,25 +242,25 @@ export function PreviewCardModern({
   }
 
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+    <section className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-border-soft/60">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Review</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-soft">Review</h3>
       </div>
-      <div className="space-y-2 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
+      <div className="space-y-2 rounded-xl bg-surface-canvas p-5 ring-1 ring-border-soft/50">
         <div>
-          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">SKU</p>
-          <p className="font-mono text-base font-bold text-gray-900">{uniqueSku}</p>
+          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-soft">SKU</p>
+          <p className="font-mono text-base font-bold text-text-default">{uniqueSku}</p>
         </div>
         <div>
-          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">
+          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-soft">
             Serials ({serialNumbers.length})
           </p>
-          <p className="break-all font-mono text-xs text-gray-700">{serialNumbers.join(', ') || '—'}</p>
+          <p className="break-all font-mono text-xs text-text-muted">{serialNumbers.join(', ') || '—'}</p>
         </div>
         {location && (
           <div>
-            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Location</p>
-            <p className="font-mono text-xs text-gray-700">{location}</p>
+            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-soft">Location</p>
+            <p className="font-mono text-xs text-text-muted">{location}</p>
           </div>
         )}
       </div>
@@ -276,14 +276,14 @@ interface PreviewPlaceholderProps {
 /** Empty-state shown before a SKU/serial is entered. */
 export function PreviewPlaceholder({ mode, sku }: PreviewPlaceholderProps) {
   return (
-    <section className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/50 p-10 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100">
-        <Printer className="h-5 w-5 text-gray-400" />
+    <section className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-default bg-surface-card/50 p-10 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-sunken">
+        <Printer className="h-5 w-5 text-text-faint" />
       </div>
-      <p className="text-sm font-semibold text-gray-700">
+      <p className="text-sm font-semibold text-text-muted">
         {mode === 'sn-to-sku' ? 'Review will appear once a serial is added' : 'Label preview will appear here'}
       </p>
-      <p className="mt-1 max-w-[280px] text-xs text-gray-500">
+      <p className="mt-1 max-w-[280px] text-xs text-text-soft">
         {sku
           ? mode === 'sn-to-sku'
             ? 'Scan at least one serial number to enable the log action.'

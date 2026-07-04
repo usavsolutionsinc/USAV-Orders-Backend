@@ -27,7 +27,7 @@ interface DateTimePickerFieldProps {
 
 const TONE_TRIGGER: Record<NonNullable<DateTimePickerFieldProps['tone']>, string> = {
   default:
-    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-500 focus:ring-blue-500/20',
+    'border-border-soft hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-500 focus:ring-blue-500/20',
   emerald:
     'border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 focus:border-emerald-500 focus:ring-emerald-500/20',
 };
@@ -87,13 +87,13 @@ export function DateTimePickerField({
           type="button"
           disabled={disabled}
           className={cn(
-            'inline-flex h-8 w-full items-center gap-2 rounded-lg border bg-white px-2.5 text-left text-micro font-bold transition-colors focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50',
+            'inline-flex h-8 w-full items-center gap-2 rounded-lg border bg-surface-card px-2.5 text-left text-micro font-bold transition-colors focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50',
             TONE_TRIGGER[tone],
-            hasValue ? 'text-gray-900' : 'text-gray-400',
+            hasValue ? 'text-text-default' : 'text-text-faint',
             className,
           )}
         >
-          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-text-faint" />
           <span className="flex-1 truncate">{label}</span>
         </button>
       </Popover.Trigger>
@@ -102,7 +102,7 @@ export function DateTimePickerField({
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-dropdown rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+          className="z-dropdown rounded-xl border border-border-soft bg-surface-card shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
           <CalendarPicker
             mode="single"
@@ -117,14 +117,14 @@ export function DateTimePickerField({
             }
           />
 
-          <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-3 py-2">
-            <label className="flex items-center gap-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <div className="flex items-center justify-between gap-3 border-t border-border-hairline px-3 py-2">
+            <label className="flex items-center gap-2 text-eyebrow font-black uppercase tracking-wider text-text-soft">
               Time
               <input
                 type="time"
                 value={timeValue}
                 onChange={(e) => handleTimeChange(e.target.value)}
-                className="h-8 rounded-md border border-gray-200 bg-white px-2 text-micro font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                className="h-8 rounded-md border border-border-soft bg-surface-card px-2 text-micro font-bold text-text-default outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
             </label>
             <button

@@ -181,7 +181,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
     // shrink-0 section (not a full panel) — override the shell's h-full +
     // overflow-hidden so it sizes to content and the filter popover isn't clipped.
     <SidebarShell
-      className="h-auto shrink-0 overflow-visible bg-white"
+      className="h-auto shrink-0 overflow-visible bg-surface-card"
       search={{
         value: draft,
         onChange: setDraft,
@@ -198,7 +198,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                   window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
                 });
               }}
-              className="ds-raw-button rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+              className="ds-raw-button rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-surface-strong"
               aria-label="Switch to receiving tab and focus scan field"
             >
               <Plus className="h-5 w-5" />
@@ -214,7 +214,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
           <div className="space-y-3">
             {/* Sort by — lifecycle axis for day headers + server ORDER BY. */}
             <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Sort by
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -230,7 +230,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                       className={`ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                         active
                           ? 'bg-blue-600 text-white ring-blue-600'
-                          : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                          : 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -243,7 +243,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
 
             {/* Carton source — All vs unfound (unmatched) cartons only. */}
             <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Carton source
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -259,7 +259,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                       className={`ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                         active
                           ? 'bg-blue-600 text-white ring-blue-600'
-                          : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                          : 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -272,7 +272,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
 
             {/* Search field — was the field slider (All / PO # / … / Serial #). */}
             <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Search field
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -288,7 +288,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                       className={`ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                         active
                           ? 'bg-blue-600 text-white ring-blue-600'
-                          : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                          : 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -297,7 +297,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                   );
                 })}
               </div>
-              <p className={`${microBadge} mt-1.5 px-0.5 text-gray-500`}>
+              <p className={`${microBadge} mt-1.5 px-0.5 text-text-soft`}>
                 {getReceivingHistoryHelperText(searchField)}
               </p>
             </div>

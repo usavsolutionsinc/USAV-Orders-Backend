@@ -30,13 +30,13 @@ export interface MobileFeedProps<T> {
 const defaultGetId = <T,>(row: T): FeedId => (row as { id: FeedId }).id;
 
 const DefaultEmpty = (
-  <div className="flex h-full flex-col items-center justify-center gap-2 bg-white px-6 text-center">
-    <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">Nothing here yet</p>
+  <div className="flex h-full flex-col items-center justify-center gap-2 bg-surface-card px-6 text-center">
+    <p className="text-sm font-black uppercase tracking-[0.18em] text-text-muted">Nothing here yet</p>
   </div>
 );
 
 const DefaultLoading = (
-  <div className="flex h-full items-center justify-center bg-white text-caption font-black uppercase tracking-widest text-gray-400">
+  <div className="flex h-full items-center justify-center bg-surface-card text-caption font-black uppercase tracking-widest text-text-faint">
     Loading…
   </div>
 );

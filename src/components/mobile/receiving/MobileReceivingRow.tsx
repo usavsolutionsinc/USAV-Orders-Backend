@@ -67,7 +67,7 @@ export function MobileReceivingRow({
   const condGrade = (row.condition_grade || '').toUpperCase();
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
   const conditionColor =
-    condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-gray-500';
+    condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-text-soft';
 
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').toString().trim();
   const trackingValue = (row.tracking_number || '').trim();
@@ -99,7 +99,7 @@ export function MobileReceivingRow({
                   ? 'text-yellow-600'
                   : row.quantity_expected && row.quantity_received >= row.quantity_expected
                     ? 'text-emerald-600'
-                    : 'text-gray-500'
+                    : 'text-text-soft'
               }
             >
               {quantityText}
@@ -147,7 +147,7 @@ export function MobileReceivingRow({
               className={
                 photoCount > 0
                   ? 'ds-raw-button inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-100'
-                  : 'ds-raw-button inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 active:bg-gray-100'
+                  : 'ds-raw-button inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-border-soft bg-surface-canvas text-text-faint active:bg-surface-sunken'
               }
             >
               <ImageIcon className="h-5 w-5" />
@@ -163,7 +163,7 @@ export function MobileReceivingRow({
               className={
                 photoCount > 0
                   ? 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-100'
-                  : 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 active:bg-gray-100'
+                  : 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-border-soft bg-surface-canvas text-text-faint active:bg-surface-sunken'
               }
             >
               <ImageIcon className="h-5 w-5" />

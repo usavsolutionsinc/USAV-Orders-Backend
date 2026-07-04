@@ -146,7 +146,7 @@ export function FbaCreateShipmentForm({
                 Invalid plan ref. Set a valid due date or type a custom ref.
               </p>
             ) : null}
-            <p className="text-micro leading-snug text-gray-500">
+            <p className="text-micro leading-snug text-text-soft">
               Stored as shipment_ref — not the internal DB row id or Amazon&apos;s FBA shipment id.
             </p>
           </div>
@@ -223,7 +223,7 @@ export function FbaCreateShipmentForm({
         />
       </SidebarIntakeFormField>
 
-      <div className="space-y-3 border-t border-gray-100 pt-4">
+      <div className="space-y-3 border-t border-border-hairline pt-4">
         <div className="flex items-center justify-between gap-2">
           <span className={chrome.lineItemLabel}>FBA line items</span>
           <Button
@@ -249,7 +249,7 @@ export function FbaCreateShipmentForm({
                     onClick={() => removeItem(i)}
                     ariaLabel="Remove line"
                     icon={<Trash2 className="h-4 w-4" />}
-                    className="rounded-lg p-1.5 hover:bg-gray-200"
+                    className="rounded-lg p-1.5 hover:bg-surface-strong"
                   />
                 </HoverTooltip>
               ) : null}

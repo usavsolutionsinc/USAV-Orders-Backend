@@ -112,14 +112,14 @@ export function PhotoStationFolders({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-1">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Media type</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Media type</p>
         <HoverTooltip label="Add media type" asChild>
           <IconButton
             icon={adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             ariaLabel="Add media type"
             onClick={addType}
             disabled={adding}
-            className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 disabled:opacity-40"
+            className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-surface-sunken disabled:opacity-40"
           />
         </HoverTooltip>
       </div>
@@ -154,7 +154,7 @@ export function PhotoStationFolders({
         })}
 
         {isLoading && custom.length === 0 ? (
-          <li className="flex items-center gap-2 px-3 py-2 text-caption text-gray-400">
+          <li className="flex items-center gap-2 px-3 py-2 text-caption text-text-faint">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </li>
         ) : null}
@@ -193,10 +193,10 @@ function TypeRow({
           'ds-raw-button flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition',
           active
             ? 'bg-blue-50 text-blue-900 ring-1 ring-inset ring-blue-400'
-            : 'text-gray-700 hover:bg-gray-50',
+            : 'text-text-muted hover:bg-surface-hover',
         )}
       >
-        <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-blue-600' : 'text-gray-400')} />
+        <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-blue-600' : 'text-text-faint')} />
         <span className="flex-1 truncate">{label}</span>
       </button>
     </li>

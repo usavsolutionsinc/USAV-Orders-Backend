@@ -30,7 +30,7 @@ export function FbaQtyStepper({
           onInc();
         }}
         disabled={qty >= PLAN_QTY_MAX}
-        className="flex h-6 w-10 items-center justify-center rounded-t-md border border-gray-200 text-gray-500 hover:bg-gray-50"
+        className="flex h-6 w-10 items-center justify-center rounded-t-md border border-border-soft text-text-soft hover:bg-surface-hover"
       />
       <DeferredQtyInput
         value={qty}
@@ -40,7 +40,7 @@ export function FbaQtyStepper({
           onSet(v);
         }}
         onClick={(e) => e.stopPropagation()}
-        className="h-7 w-10 border-x border-gray-200 bg-white text-center text-sm font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="h-7 w-10 border-x border-border-soft bg-surface-card text-center text-sm font-black tabular-nums text-text-default outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <IconButton
         type="button"
@@ -54,7 +54,7 @@ export function FbaQtyStepper({
         className={`flex h-6 w-10 items-center justify-center rounded-b-md border ${
           qty <= 1
             ? 'border-red-300 text-red-500 hover:bg-red-50'
-            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+            : 'border-border-soft text-text-soft hover:bg-surface-hover'
         }`}
       />
     </>

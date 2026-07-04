@@ -62,13 +62,13 @@ export function InventoryGraphSidebar() {
             }}
             bodyClassName="scrollbar-hide pb-5 space-y-2"
         >
-            <p className={`${microBadge} px-1 text-gray-500`}>
+            <p className={`${microBadge} px-1 text-text-soft`}>
                 Search a SKU to map its parents, children, or full BOM tree.
             </p>
 
             {trimmed.length > 0 && results.length === 0 && !isFetching ? (
-                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
-                    <p className={`${microBadge} text-gray-500`}>No SKUs match “{trimmed}”.</p>
+                <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center">
+                    <p className={`${microBadge} text-text-soft`}>No SKUs match “{trimmed}”.</p>
                 </div>
             ) : null}
 
@@ -84,18 +84,18 @@ export function InventoryGraphSidebar() {
                                     'ds-raw-button flex w-full flex-col items-start rounded-lg px-2.5 py-1.5 text-left transition-colors',
                                     active
                                         ? 'bg-blue-50 ring-1 ring-inset ring-blue-200'
-                                        : 'hover:bg-gray-50',
+                                        : 'hover:bg-surface-hover',
                                 )}
                             >
                                 <span
                                     className={cn(
                                         'text-[13px] font-semibold',
-                                        active ? 'text-blue-900' : 'text-gray-900',
+                                        active ? 'text-blue-900' : 'text-text-default',
                                     )}
                                 >
                                     {item.sku}
                                 </span>
-                                <span className="line-clamp-1 text-caption text-gray-500">
+                                <span className="line-clamp-1 text-caption text-text-soft">
                                     {item.product_title}
                                 </span>
                             </button>

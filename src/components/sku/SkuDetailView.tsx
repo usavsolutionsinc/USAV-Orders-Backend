@@ -32,7 +32,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-          className="fixed right-0 top-0 z-panel flex h-screen w-[420px] max-w-full flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+          className="fixed right-0 top-0 z-panel flex h-screen w-[420px] max-w-full flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
         >
           {content}
         </motion.div>
@@ -42,10 +42,10 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
 
   if (c.loading) {
     return wrapPanel(
-      <div className="flex h-full items-center justify-center bg-gray-50">
+      <div className="flex h-full items-center justify-center bg-surface-canvas">
         <div className="text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm font-semibold text-gray-600">Loading SKU detail...</p>
+          <p className="text-sm font-semibold text-text-muted">Loading SKU detail...</p>
         </div>
       </div>,
     );
@@ -53,7 +53,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
 
   if (c.error && !data) {
     return wrapPanel(
-      <div className="flex h-full flex-col items-center justify-center bg-gray-50 px-6">
+      <div className="flex h-full flex-col items-center justify-center bg-surface-canvas px-6">
         <p className="mb-4 text-sm font-bold text-red-600">{c.error}</p>
         <Button variant="ghost" onClick={c.handleClose} className="text-sm font-bold text-blue-600 underline">
           Back to SKU Stock
@@ -65,13 +65,13 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
   if (!data) return isPanel ? wrapPanel(null) : null;
 
   return wrapPanel(
-    <div className="flex h-full min-h-0 flex-col bg-gray-50">
+    <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
       <SkuDetailHeader c={c} data={data} />
 
       <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
         {data.productImage && (
-          <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
-            <img src={data.productImage} alt={data.productTitle || data.sku} className="w-full h-48 object-contain bg-gray-50" loading="eager" />
+          <div className="rounded-xl bg-surface-card border border-border-soft overflow-hidden">
+            <img src={data.productImage} alt={data.productTitle || data.sku} className="w-full h-48 object-contain bg-surface-canvas" loading="eager" />
           </div>
         )}
 
@@ -82,7 +82,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
 
       {/* Footer: deactivate (panel only, active catalog SKUs) */}
       {isPanel && data.catalog?.isActive ? (
-        <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+        <div className="flex-shrink-0 border-t border-border-soft bg-surface-card px-4 py-3">
           {c.deactivateError ? <p className="mb-2 text-caption font-semibold text-rose-600">{c.deactivateError}</p> : null}
           <DeleteButton
             onConfirm={c.handleDeactivate}

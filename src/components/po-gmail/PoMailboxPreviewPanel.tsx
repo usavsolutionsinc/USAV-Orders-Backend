@@ -24,13 +24,13 @@ export function PoMailboxPreviewPanel({
     <section className={embedded ? 'space-y-2.5' : 'space-y-4'}>
       {!embedded && (title || description) && (
         <div>
-          {title && <h2 className="text-base font-semibold text-gray-900">{title}</h2>}
-          {description && <p className="mt-0.5 text-label text-gray-500">{description}</p>}
+          {title && <h2 className="text-base font-semibold text-text-default">{title}</h2>}
+          {description && <p className="mt-0.5 text-label text-text-soft">{description}</p>}
         </div>
       )}
 
       {/* Mode toggle — small inline pill row */}
-      <div className={`${embedded ? 'flex w-full' : 'inline-flex'} rounded-md border border-gray-200 bg-white p-0.5`}>
+      <div className={`${embedded ? 'flex w-full' : 'inline-flex'} rounded-md border border-border-soft bg-surface-card p-0.5`}>
         {MODE_TABS.map((t) => (
           <Button
             key={t.id}

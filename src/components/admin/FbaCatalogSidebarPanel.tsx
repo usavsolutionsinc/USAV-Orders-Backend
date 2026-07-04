@@ -132,7 +132,7 @@ export function FbaCatalogSidebarPanel() {
             variant="secondary"
             size="sm"
             onClick={emitOpenAddFba}
-            className="border-dashed border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            className="border-dashed border-border-default bg-surface-card text-text-muted hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
             icon={
               <svg
                 viewBox="0 0 24 24"
@@ -153,7 +153,7 @@ export function FbaCatalogSidebarPanel() {
             variant="secondary"
             size="sm"
             onClick={emitOpenUploadFba}
-            className="border-dashed border-gray-300 bg-white text-gray-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+            className="border-dashed border-border-default bg-surface-card text-text-muted hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
             icon={
               <svg
                 viewBox="0 0 24 24"
@@ -175,9 +175,9 @@ export function FbaCatalogSidebarPanel() {
       }
     >
       {isLoading ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">Loading catalog…</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">Loading catalog…</div>
       ) : visibleRows.length === 0 ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">
+        <div className="px-2 py-6 text-center text-xs text-text-faint">
           {rows.length === 0 ? 'No FNSKUs.' : `No ${filter} FNSKUs.`}
         </div>
       ) : (

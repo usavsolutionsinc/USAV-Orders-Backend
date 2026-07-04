@@ -198,10 +198,10 @@ export const MobileSidebarDrawer = ({
             onDragEnd={(_, info) => {
               if (info.offset.x < -80 || info.velocity.x < -500) onClose();
             }}
-            className="fixed inset-y-0 left-0 z-panel flex h-[100dvh] w-[82%] max-w-[320px] flex-col border-r border-slate-200 bg-white shadow-[12px_0_48px_-16px_rgba(15,23,42,0.35)]"
+            className="fixed inset-y-0 left-0 z-panel flex h-[100dvh] w-[82%] max-w-[320px] flex-col border-r border-border-soft bg-surface-card shadow-[12px_0_48px_-16px_rgba(15,23,42,0.35)]"
           >
             {/* Header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+            <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
               <span className="text-caption font-black uppercase tracking-[0.2em] text-blue-400">
                 Menu
               </span>
@@ -209,7 +209,7 @@ export const MobileSidebarDrawer = ({
                 icon={<X className="h-5 w-5" />}
                 onClick={onClose}
                 ariaLabel="Close menu"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all active:scale-90"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-border-soft bg-surface-card text-text-soft shadow-sm transition-all active:scale-90"
               />
             </div>
 
@@ -228,10 +228,10 @@ export const MobileSidebarDrawer = ({
                           className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors active:scale-[0.98] ${
                             active
                               ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
-                              : 'text-slate-600 hover:bg-slate-50'
+                              : 'text-text-muted hover:bg-surface-hover'
                           }`}
                         >
-                          <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
+                          <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-blue-600' : 'text-text-faint'}`} />
                           <span className="text-[15px] font-bold tracking-tight">{item.label}</span>
                         </button>
                       </li>
@@ -251,13 +251,13 @@ export const MobileSidebarDrawer = ({
                         className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors active:scale-[0.98] ${
                           groupActive
                             ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
-                            : 'text-slate-600 hover:bg-slate-50'
+                            : 'text-text-muted hover:bg-surface-hover'
                         }`}
                       >
-                        <Icon className={`h-5 w-5 shrink-0 ${groupActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                        <Icon className={`h-5 w-5 shrink-0 ${groupActive ? 'text-blue-600' : 'text-text-faint'}`} />
                         <span className="flex-1 text-[15px] font-bold tracking-tight">{item.label}</span>
                         <motion.span animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                          <ChevronDown className={`h-4 w-4 ${groupActive ? 'text-blue-400' : 'text-slate-300'}`} />
+                          <ChevronDown className={`h-4 w-4 ${groupActive ? 'text-blue-400' : 'text-text-faint'}`} />
                         </motion.span>
                       </button>
 
@@ -270,7 +270,7 @@ export const MobileSidebarDrawer = ({
                             transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
                             className="overflow-hidden pl-3"
                           >
-                            <div className="ml-2 space-y-1 border-l border-slate-100 pl-2 pt-1">
+                            <div className="ml-2 space-y-1 border-l border-border-hairline pl-2 pt-1">
                               {item.children.map((child) => {
                                 const ChildIcon = child.icon;
                                 const childActive = isChildActive(pathname, currentMode, child.href);
@@ -282,10 +282,10 @@ export const MobileSidebarDrawer = ({
                                       className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.98] ${
                                         childActive
                                           ? 'bg-blue-50 text-blue-700'
-                                          : 'text-slate-500 hover:bg-slate-50'
+                                          : 'text-text-soft hover:bg-surface-hover'
                                       }`}
                                     >
-                                      <ChildIcon className={`h-4 w-4 shrink-0 ${childActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                                      <ChildIcon className={`h-4 w-4 shrink-0 ${childActive ? 'text-blue-600' : 'text-text-faint'}`} />
                                       <span className="text-[13.5px] font-semibold">{child.label}</span>
                                     </button>
                                   </li>
@@ -303,13 +303,13 @@ export const MobileSidebarDrawer = ({
 
             {/* Footer — low-frequency actions pinned to the very bottom, away from
                 the primary nav so they can't be accidentally pressed. */}
-            <div className="shrink-0 border-t border-slate-100 px-2 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+            <div className="shrink-0 border-t border-border-hairline px-2 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
               {/* ds-raw-button: text-left full-width sign-out row (icon + label), not a standard action button */}
               <button
                 onClick={handleSignOut}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-slate-500 transition-colors hover:bg-rose-50 active:scale-[0.98]"
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-text-soft transition-colors hover:bg-rose-50 active:scale-[0.98]"
               >
-                <Lock className="h-5 w-5 shrink-0 text-slate-400" />
+                <Lock className="h-5 w-5 shrink-0 text-text-faint" />
                 <span className="text-[15px] font-bold tracking-tight">Sign out</span>
               </button>
             </div>

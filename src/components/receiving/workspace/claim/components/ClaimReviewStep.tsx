@@ -18,9 +18,9 @@ function ReviewBlock({
   return (
     <section className="space-y-1.5">
       <div className="flex items-center gap-1.5">
-        <span className="text-gray-400">{icon}</span>
-        <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">{label}</p>
-        {hint ? <span className="text-micro font-semibold text-gray-400">· {hint}</span> : null}
+        <span className="text-text-faint">{icon}</span>
+        <p className="text-micro font-black uppercase tracking-[0.14em] text-text-soft">{label}</p>
+        {hint ? <span className="text-micro font-semibold text-text-faint">· {hint}</span> : null}
       </div>
       {children}
     </section>
@@ -73,12 +73,12 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
                 alt=""
                 loading="lazy"
                 decoding="async"
-                className="aspect-square w-full rounded bg-gray-100 object-cover ring-1 ring-rose-200"
+                className="aspect-square w-full rounded bg-surface-sunken object-cover ring-1 ring-rose-200"
               />
             ))}
           </div>
         ) : (
-          <p className="text-caption font-medium text-gray-400">No photos selected to attach.</p>
+          <p className="text-caption font-medium text-text-faint">No photos selected to attach.</p>
         )}
       </ReviewBlock>
 
@@ -87,23 +87,23 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
         label="Zendesk ticket"
         hint={template.previewLoading ? 'updating…' : undefined}
       >
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-          <p className="border-b border-slate-200 px-3 py-2 text-label font-bold text-slate-900">
+        <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-canvas">
+          <p className="border-b border-border-soft px-3 py-2 text-label font-bold text-text-default">
             {subject || <span className="font-medium text-rose-500">No subject yet</span>}
           </p>
-          <p className="max-h-40 overflow-y-auto whitespace-pre-wrap px-3 py-2 text-caption font-medium leading-5 text-slate-700">
+          <p className="max-h-40 overflow-y-auto whitespace-pre-wrap px-3 py-2 text-caption font-medium leading-5 text-text-muted">
             {body || <span className="text-rose-500">No body yet</span>}
           </p>
         </div>
       </ReviewBlock>
 
       <ReviewBlock icon={<Archive className="h-3.5 w-3.5" />} label="Local backup">
-        <p className="text-caption font-medium leading-5 text-gray-600">
+        <p className="text-caption font-medium leading-5 text-text-muted">
           On file, this carton&apos;s {photos.photos.length || 'carton'}
           {photos.photos.length === 1 ? ' photo' : ' photos'} are saved to local storage in a folder
           named after the new case # (fallback{' '}
-          <span className="font-bold text-gray-800">{folderFallback}</span>), alongside a{' '}
-          <span className="font-bold text-gray-800">case-info.txt</span> notepad with the ticket
+          <span className="font-bold text-text-default">{folderFallback}</span>), alongside a{' '}
+          <span className="font-bold text-text-default">case-info.txt</span> notepad with the ticket
           details.
         </p>
       </ReviewBlock>

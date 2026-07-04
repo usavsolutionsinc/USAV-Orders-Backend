@@ -130,7 +130,7 @@ export function ShippedDetailsPanelContent({
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">SKU Integrity Photos</h3>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-default">SKU Integrity Photos</h3>
                     <p className="text-micro font-bold text-indigo-600 mt-0.5">{prepackedSku.staticSku}</p>
                   </div>
                 </div>
@@ -160,7 +160,7 @@ export function ShippedDetailsPanelContent({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Packing Photos</h3>
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-default">Packing Photos</h3>
               </div>
             </div>
             <PhotoGallery

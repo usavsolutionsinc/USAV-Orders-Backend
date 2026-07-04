@@ -95,7 +95,7 @@ export function IdentityLinkChip({
             disabled={!openHref}
             onClick={openExternal}
             tone="accent"
-            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:text-slate-300 disabled:opacity-60"
+            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:text-text-faint disabled:opacity-60"
           />
         </HoverTooltip>
       ) : null}
@@ -150,7 +150,7 @@ export function IdentityLinkChip({
           <div
             role="menu"
             aria-label={`${display} actions`}
-            className="min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+            className="min-w-[128px] overflow-hidden rounded-lg border border-border-soft bg-surface-card shadow-lg"
           >
             {menuFirstAction === 'open' ? (
               <HoverTooltip label={openHref ? openTitle : 'No link available'} asChild>
@@ -161,7 +161,7 @@ export function IdentityLinkChip({
                   disabled={!openHref}
                   onClick={openExternal}
                   aria-label={openTitle}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-40"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-text-faint disabled:opacity-40"
                 >
                   <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
                   Open
@@ -175,9 +175,9 @@ export function IdentityLinkChip({
                 disabled={!canCopy}
                 onClick={copyValue}
                 aria-label={`Copy ${display}`}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Copy className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                <Copy className="h-3.5 w-3.5 shrink-0 text-text-soft" />
                 Copy
               </button>
             )}
@@ -189,9 +189,9 @@ export function IdentityLinkChip({
                 onClick={onEdit}
                 aria-expanded={editOpen}
                 aria-label={editLabel}
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 border-t border-border-hairline px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-text-muted hover:bg-surface-hover"
               >
-                <Pencil className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-text-soft" />
                 Edit
               </button>
             ) : null}

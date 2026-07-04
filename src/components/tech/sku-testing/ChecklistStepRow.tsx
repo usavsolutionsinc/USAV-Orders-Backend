@@ -30,7 +30,7 @@ export function ChecklistStepRow({
   return (
     <li
       className={`flex items-start gap-2 rounded-lg border px-3 py-2 transition-colors duration-150 ${
-        checked ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200/70 bg-white'
+        checked ? 'border-emerald-200 bg-emerald-50/60' : 'border-border-soft/70 bg-surface-card'
       }`}
     >
       <HoverTooltip label={recordHint} asChild>
@@ -42,10 +42,10 @@ export function ChecklistStepRow({
           aria-pressed={checked}
           aria-label={recordHint}
           className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-black transition-all duration-150 active:scale-95 ${
-            checked ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300 bg-white text-transparent'
+            checked ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-border-default bg-surface-card text-transparent'
           } ${!canRecord ? 'cursor-default opacity-90' : ''}`}
         >
-          {recording ? <Loader2 className="h-3 w-3 animate-spin text-gray-400" /> : '✓'}
+          {recording ? <Loader2 className="h-3 w-3 animate-spin text-text-faint" /> : '✓'}
         </button>
       </HoverTooltip>
 
@@ -60,7 +60,7 @@ export function ChecklistStepRow({
                 if (e.key === 'Escape') ed.setEditingId(null);
               }}
               autoFocus
-              className="w-full rounded-md border border-blue-300 px-2 py-1 text-caption font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="w-full rounded-md border border-blue-300 px-2 py-1 text-caption font-medium text-text-default focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
             <IconButton
               onClick={() => void ed.saveEdit()}
@@ -73,12 +73,12 @@ export function ChecklistStepRow({
               onClick={() => ed.setEditingId(null)}
               ariaLabel="Cancel edit"
               icon={<X className="h-4 w-4" />}
-              className="rounded-md p-1 text-gray-400 hover:bg-gray-100"
+              className="rounded-md p-1 text-text-faint hover:bg-surface-sunken"
             />
           </div>
         ) : (
           <>
-            <span className="block text-caption font-semibold leading-snug text-gray-900">{step.step_label}</span>
+            <span className="block text-caption font-semibold leading-snug text-text-default">{step.step_label}</span>
             {isValueStep && canRecord ? (
               <StepValueControl
                 step={step}
@@ -106,7 +106,7 @@ export function ChecklistStepRow({
               }}
               ariaLabel="Edit step"
               icon={<Pencil className="h-3.5 w-3.5" />}
-              className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-md p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
             />
           </HoverTooltip>
           <HoverTooltip label="Delete step" asChild>
@@ -114,7 +114,7 @@ export function ChecklistStepRow({
               onClick={() => void ed.removeStep(step.step_id)}
               ariaLabel="Delete step"
               icon={<Trash2 className="h-3.5 w-3.5" />}
-              className="rounded-md p-1 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+              className="rounded-md p-1 text-text-faint hover:bg-rose-50 hover:text-rose-600"
             />
           </HoverTooltip>
         </div>

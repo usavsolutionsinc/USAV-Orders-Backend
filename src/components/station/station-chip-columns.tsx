@@ -52,7 +52,7 @@ export function buildStationChipColumns({
         <PlatformChip
           label={plat}
           underlineClass={getOrderPlatformBorderColor(plat)}
-          iconClass={plat && productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
+          iconClass={plat && productUrl ? getOrderPlatformColor(plat) : 'text-text-soft'}
           onClick={() => {
             if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
           }}

@@ -42,7 +42,7 @@ export interface SubstitutePanelProps {
   className?: string;
 }
 
-const FIELD_LABEL = 'text-micro font-black uppercase tracking-widest text-gray-500';
+const FIELD_LABEL = 'text-micro font-black uppercase tracking-widest text-text-soft';
 
 export function SubstitutePanel({
   orderLabel,
@@ -77,14 +77,14 @@ export function SubstitutePanel({
   return (
     <section
       data-testid="substitute-panel"
-      className={cn('flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4', className)}
+      className={cn('flex flex-col gap-3 rounded-xl border border-border-soft bg-surface-card p-4', className)}
     >
       {/* Eyebrow header */}
       <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+        <span className="inline-flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-widest text-text-soft">
           <RefreshCw className="h-3.5 w-3.5" /> Substitute unit
         </span>
-        <span className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-400">{orderLabel}</span>
+        <span className="truncate text-eyebrow font-semibold uppercase tracking-widest text-text-faint">{orderLabel}</span>
       </div>
 
       {/* Ordered → Substitute */}
@@ -94,11 +94,11 @@ export function SubstitutePanel({
           {original.sku ? (
             <SkuScanRefChip value={original.sku} display={original.sku} dense />
           ) : (
-            <span className="text-caption text-gray-400">No SKU</span>
+            <span className="text-caption text-text-faint">No SKU</span>
           )}
           {original.serial ? <SerialChip value={original.serial} /> : null}
           {original.condition ? (
-            <span className="rounded bg-gray-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-600 ring-1 ring-inset ring-gray-200">
+            <span className="rounded bg-surface-canvas px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-text-muted ring-1 ring-inset ring-border-soft">
               {original.condition}
             </span>
           ) : null}
@@ -117,7 +117,7 @@ export function SubstitutePanel({
           placeholder="Scan or enter serial"
           autoCapitalize="characters"
           spellCheck={false}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm uppercase tracking-wider placeholder:text-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="w-full rounded-lg border border-border-soft px-3 py-2 font-mono text-sm uppercase tracking-wider placeholder:text-text-faint focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
       </div>
 
@@ -126,7 +126,7 @@ export function SubstitutePanel({
         <p className={FIELD_LABEL}>Reason</p>
         <SubstituteReasonPicker value={reasonCode} onChange={setReasonCode} reasons={reasons} />
         {selectedReason?.hint ? (
-          <p className="text-caption text-gray-400">{selectedReason.hint}</p>
+          <p className="text-caption text-text-faint">{selectedReason.hint}</p>
         ) : null}
       </div>
 
@@ -139,7 +139,7 @@ export function SubstitutePanel({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="e.g. customer asked for white"
-          className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="w-full resize-none rounded-lg border border-border-soft px-3 py-2 text-sm placeholder:text-text-faint focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
       </div>
 
@@ -158,7 +158,7 @@ export function SubstitutePanel({
         </div>
       ) : null}
 
-      <div className="flex justify-end border-t border-gray-100 pt-3">
+      <div className="flex justify-end border-t border-border-hairline pt-3">
         <Button
           data-testid="substitute-submit"
           variant="primary"

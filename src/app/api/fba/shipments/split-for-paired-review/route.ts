@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { detectCarrier } from '@/lib/tracking-format';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -215,6 +216,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaShipmentChanged({ action: 'updated', shipmentId: sourceShipmentId, source: 'fba.split-for-paired', organizationId: ctx.organizationId });
     await publishFbaShipmentChanged({ action: 'created', shipmentId: outcome.newShipmentId, source: 'fba.split-for-paired', organizationId: ctx.organizationId });
 

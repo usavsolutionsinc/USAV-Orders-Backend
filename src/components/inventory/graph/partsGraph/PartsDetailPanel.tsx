@@ -18,14 +18,14 @@ const TIER_BADGE = {
 const REVIEW_BADGE: Record<PartReviewState, { label: string; cls: string }> = {
   unreviewed: { label: 'Needs review', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
   confirmed: { label: 'Confirmed', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  not_a_part: { label: 'Not a part', cls: 'bg-gray-100 text-gray-500 ring-gray-200' },
+  not_a_part: { label: 'Not a part', cls: 'bg-surface-sunken text-text-soft ring-border-soft' },
 };
 
 function StatTile({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl bg-gray-50 p-3">
-      <div className="text-caption uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="text-2xl font-bold tabular-nums text-gray-900">{value}</div>
+    <div className="rounded-xl bg-surface-canvas p-3">
+      <div className="text-caption uppercase tracking-wide text-text-faint">{label}</div>
+      <div className="text-2xl font-bold tabular-nums text-text-default">{value}</div>
     </div>
   );
 }
@@ -35,17 +35,17 @@ function ParentPicker({ onPick, disabled }: { onPick: (item: ItemSearchResult) =
   const [q, setQ] = useState('');
   const { data = [], isFetching } = useItemsSearch(q);
   return (
-    <div className="space-y-1.5 rounded-lg border border-gray-200 p-2">
+    <div className="space-y-1.5 rounded-lg border border-border-soft p-2">
       <div className="flex items-center gap-1.5">
-        <Search className="h-3.5 w-3.5 text-gray-400" />
+        <Search className="h-3.5 w-3.5 text-text-faint" />
         <input
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search items by SKU or name…"
-          className="w-full bg-transparent text-label text-gray-900 outline-none placeholder:text-gray-400"
+          className="w-full bg-transparent text-label text-text-default outline-none placeholder:text-text-faint"
         />
-        {isFetching && <span className="text-micro text-gray-400">…</span>}
+        {isFetching && <span className="text-micro text-text-faint">…</span>}
       </div>
       {data.length > 0 && (
         <ul className="max-h-44 space-y-0.5 overflow-y-auto">
@@ -55,13 +55,13 @@ function ParentPicker({ onPick, disabled }: { onPick: (item: ItemSearchResult) =
                 type="button"
                 disabled={disabled}
                 onClick={() => onPick(it)}
-                className="ds-raw-button flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-gray-50 disabled:opacity-50"
+                className="ds-raw-button flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-surface-hover disabled:opacity-50"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-label font-medium text-gray-900">{it.sku}</span>
-                  <span className="block truncate text-caption text-gray-500">{it.name}</span>
+                  <span className="block truncate text-label font-medium text-text-default">{it.sku}</span>
+                  <span className="block truncate text-caption text-text-soft">{it.name}</span>
                 </span>
-                <Plus className="ml-2 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <Plus className="ml-2 h-3.5 w-3.5 shrink-0 text-text-faint" />
               </button>
             </li>
           ))}
@@ -77,8 +77,8 @@ export function PartsDetailPanel({ meta }: { meta: PartsNodeMeta | null }) {
 
   if (!meta) {
     return (
-      <aside className="flex w-80 shrink-0 items-center justify-center border-l border-gray-200 bg-white p-6 text-center">
-        <p className="text-label text-gray-400">Select a base unit or a part to inspect and pair it.</p>
+      <aside className="flex w-80 shrink-0 items-center justify-center border-l border-border-soft bg-surface-card p-6 text-center">
+        <p className="text-label text-text-faint">Select a base unit or a part to inspect and pair it.</p>
       </aside>
     );
   }
@@ -86,16 +86,16 @@ export function PartsDetailPanel({ meta }: { meta: PartsNodeMeta | null }) {
   if (meta.kind === 'base') {
     const { base } = meta;
     return (
-      <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-l border-gray-200 bg-white p-4">
+      <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-l border-border-soft bg-surface-card p-4">
         <div>
           <span className={cn('rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase ring-1', TIER_BADGE.base)}>
             Base unit
           </span>
-          <h2 className="mt-1.5 text-[15px] font-bold text-gray-900">{base.base}</h2>
+          <h2 className="mt-1.5 text-[15px] font-bold text-text-default">{base.base}</h2>
           {base.baseUnit ? (
-            <p className="text-label text-gray-500">{base.baseUnit.name || base.baseUnit.sku}</p>
+            <p className="text-label text-text-soft">{base.baseUnit.name || base.baseUnit.sku}</p>
           ) : (
-            <p className="text-label italic text-gray-400">
+            <p className="text-label italic text-text-faint">
               No matching whole-unit item — candidate parent unverified.
             </p>
           )}
@@ -107,18 +107,18 @@ export function PartsDetailPanel({ meta }: { meta: PartsNodeMeta | null }) {
         </div>
 
         <div>
-          <h3 className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-gray-400">
+          <h3 className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-text-faint">
             Logical parts ({base.parts.length})
           </h3>
           <ul className="space-y-1">
             {base.parts.map((p) => (
               <li key={p.logicalKey} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-label">
-                <span className="min-w-0 truncate text-gray-900">
+                <span className="min-w-0 truncate text-text-default">
                   {['Part', p.colorLabel, p.conditionLabel, ...p.unknownTokens].filter(Boolean).join(' · ')}
                 </span>
                 <span
                   className={cn('ml-2 h-1.5 w-1.5 shrink-0 rounded-full',
-                    p.reviewState === 'confirmed' ? 'bg-emerald-500' : p.reviewState === 'not_a_part' ? 'bg-gray-300' : 'bg-amber-400')}
+                    p.reviewState === 'confirmed' ? 'bg-emerald-500' : p.reviewState === 'not_a_part' ? 'bg-surface-strong' : 'bg-amber-400')}
                 />
               </li>
             ))}
@@ -138,7 +138,7 @@ export function PartsDetailPanel({ meta }: { meta: PartsNodeMeta | null }) {
     assignParent.mutate({ childLogicalKey: part.logicalKey, childBase: part.base, parentItemId });
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-l border-gray-200 bg-white p-4">
+    <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-l border-border-soft bg-surface-card p-4">
       <div>
         <div className="flex items-center gap-1.5">
           <span className={cn('rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase ring-1', TIER_BADGE.part)}>
@@ -148,17 +148,17 @@ export function PartsDetailPanel({ meta }: { meta: PartsNodeMeta | null }) {
             {review.label}
           </span>
         </div>
-        <h2 className="mt-1.5 text-[15px] font-bold text-gray-900">{part.logicalLabel}</h2>
-        <p className="text-label text-gray-500">Base unit {part.base}</p>
+        <h2 className="mt-1.5 text-[15px] font-bold text-text-default">{part.logicalLabel}</h2>
+        <p className="text-label text-text-soft">Base unit {part.base}</p>
       </div>
 
       {/* ── Pairing ─────────────────────────────────────────────────── */}
       <div className="space-y-2">
-        <h3 className="text-caption font-semibold uppercase tracking-wide text-gray-400">Parent pairing</h3>
+        <h3 className="text-caption font-semibold uppercase tracking-wide text-text-faint">Parent pairing</h3>
 
         {part.reviewState === 'not_a_part' ? (
-          <div className="space-y-2 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3">
-            <p className="text-label text-gray-500">Marked as <strong>not a part</strong>.</p>
+          <div className="space-y-2 rounded-lg border border-dashed border-border-soft bg-surface-canvas p-3">
+            <p className="text-label text-text-soft">Marked as <strong>not a part</strong>.</p>
             <Button
               size="sm"
               variant="secondary"
@@ -179,8 +179,8 @@ export function PartsDetailPanel({ meta }: { meta: PartsNodeMeta | null }) {
                     className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50 px-2 py-1.5 ring-1 ring-inset ring-emerald-200"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-label font-medium text-gray-900">{ap.parentSku ?? '—'}</span>
-                      <span className="block truncate text-caption text-gray-500">{ap.parentName ?? ''}</span>
+                      <span className="block truncate text-label font-medium text-text-default">{ap.parentSku ?? '—'}</span>
+                      <span className="block truncate text-caption text-text-soft">{ap.parentName ?? ''}</span>
                     </span>
                     <Button
                       size="sm"
@@ -198,11 +198,11 @@ export function PartsDetailPanel({ meta }: { meta: PartsNodeMeta | null }) {
 
             {/* Suggested parent (same-base whole-unit) — one-click confirm */}
             {suggested && !suggestedAssigned && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-2 py-1.5">
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-border-soft px-2 py-1.5">
                 <span className="min-w-0">
-                  <span className="block text-micro uppercase tracking-wide text-gray-400">Suggested</span>
-                  <span className="block truncate text-label font-medium text-gray-900">{suggested.sku}</span>
-                  <span className="block truncate text-caption text-gray-500">{suggested.name}</span>
+                  <span className="block text-micro uppercase tracking-wide text-text-faint">Suggested</span>
+                  <span className="block truncate text-label font-medium text-text-default">{suggested.sku}</span>
+                  <span className="block truncate text-caption text-text-soft">{suggested.name}</span>
                 </span>
                 <Button size="sm" variant="primary" icon={<Check />} loading={busy} onClick={() => doAssign(suggested.itemId)}>
                   Confirm

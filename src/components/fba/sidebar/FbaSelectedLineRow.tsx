@@ -44,7 +44,7 @@ export function FbaSelectedLineRow({
   leadingSlot,
   hideCheckbox = false,
 }: FbaSelectedLineRowProps) {
-  const microcopyColor = microcopyTone === 'success' ? 'text-emerald-700' : 'text-gray-500';
+  const microcopyColor = microcopyTone === 'success' ? 'text-emerald-700' : 'text-text-soft';
   const showLeading = !hideCheckbox;
   const gridCols = showLeading
     ? 'grid-cols-[auto_minmax(0,1fr)_auto]'
@@ -54,7 +54,7 @@ export function FbaSelectedLineRow({
   const rightColStart = showLeading ? 'col-start-3' : 'col-start-2';
 
   return (
-    <div className={`grid ${gridCols} grid-rows-[auto_auto] items-start gap-x-2.5 gap-y-1 border-b border-gray-100 px-3 py-2 last:border-b-0`}>
+    <div className={`grid ${gridCols} grid-rows-[auto_auto] items-start gap-x-2.5 gap-y-1 border-b border-border-hairline px-3 py-2 last:border-b-0`}>
       {showLeading && (
         <div className="row-span-2">
           {leadingSlot ?? (
@@ -91,7 +91,7 @@ export function FbaSelectedLineRow({
                 e.stopPropagation();
                 onEditDetails();
               }}
-              className="relative z-10 flex min-h-[2.25rem] min-w-[2.25rem] shrink-0 items-center justify-center rounded-md hover:bg-gray-100 active:bg-gray-200"
+              className="relative z-10 flex min-h-[2.25rem] min-w-[2.25rem] shrink-0 items-center justify-center rounded-md hover:bg-surface-sunken active:bg-surface-strong"
               ariaLabel={`Edit catalog details for ${fnsku}`}
             />
           </HoverTooltip>

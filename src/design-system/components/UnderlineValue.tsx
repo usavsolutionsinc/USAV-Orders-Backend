@@ -5,13 +5,13 @@ import type { ReactNode } from 'react';
 type UnderlineTone = 'neutral' | 'blue' | 'orange' | 'red' | 'green' | 'purple' | 'yellow';
 
 const toneClasses: Record<UnderlineTone, string> = {
-  neutral: 'border-gray-400 text-gray-900',
-  blue: 'border-blue-500 text-gray-900',
-  orange: 'border-orange-500 text-gray-900',
-  red: 'border-red-500 text-gray-900',
-  green: 'border-green-500 text-gray-900',
-  purple: 'border-purple-500 text-gray-900',
-  yellow: 'border-yellow-500 text-gray-900',
+  neutral: 'border-border-emphasis text-text-default',
+  blue: 'border-blue-500 text-text-default',
+  orange: 'border-orange-500 text-text-default',
+  red: 'border-red-500 text-text-default',
+  green: 'border-green-500 text-text-default',
+  purple: 'border-purple-500 text-text-default',
+  yellow: 'border-yellow-500 text-text-default',
 };
 
 interface UnderlineValueProps {

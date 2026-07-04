@@ -77,7 +77,7 @@ export function StaffInitials({ staffId, name, className = '' }: StaffInitialsPr
   const isAssigned = !!staffId && !!display && display !== '---';
 
   if (!isAssigned) {
-    return <span className={`text-gray-300 ${className}`.trim()} aria-hidden>--</span>;
+    return <span className={`text-text-faint ${className}`.trim()} aria-hidden>--</span>;
   }
 
   const colors = stationThemeColors[getStaffThemeById(staffId)];

@@ -116,10 +116,10 @@ export function PhotoSortMenu({
                     'ds-raw-button flex w-full items-center justify-start gap-1.5 rounded-md py-1.5 pl-1.5 pr-1 text-micro font-semibold transition-colors',
                     active
                       ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
+                      : 'text-text-muted hover:bg-surface-sunken hover:text-text-default',
                   )}
                 >
-                  <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-blue-600' : 'text-gray-900')} />
+                  <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-blue-600' : 'text-text-default')} />
                   {o.label}
                 </button>
               </li>

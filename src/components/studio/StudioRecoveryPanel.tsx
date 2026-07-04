@@ -80,21 +80,21 @@ export function StudioRecoveryPanel({ definitionId }: { definitionId: number }) 
 
   return (
     <section>
-      <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-slate-400">
+      <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-text-faint">
         Stuck items{items ? ` · ${items.length}` : ''}
       </h3>
 
       {error && <p className="mb-1.5 text-caption font-semibold text-rose-600">{error}</p>}
-      {items === null && <p className="text-xs text-slate-400">Checking…</p>}
+      {items === null && <p className="text-xs text-text-faint">Checking…</p>}
 
       <ul className="space-y-1.5">
         {(items ?? []).map((it) => (
           <li
             key={it.serialUnitId}
-            className="rounded-md border border-slate-100 bg-slate-50/60 px-2 py-1.5"
+            className="rounded-md border border-border-hairline bg-surface-canvas/60 px-2 py-1.5"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate font-mono text-caption font-semibold text-slate-700">
+              <span className="truncate font-mono text-caption font-semibold text-text-muted">
                 {it.serialNumber || `#${it.serialUnitId}`}
               </span>
               <span
@@ -108,7 +108,7 @@ export function StudioRecoveryPanel({ definitionId }: { definitionId: number }) 
                 {it.status}
               </span>
             </div>
-            <p className="mt-0.5 truncate text-micro text-slate-400">
+            <p className="mt-0.5 truncate text-micro text-text-faint">
               {it.sku ? `${it.sku} · ` : ''}
               {it.currentStatus ?? '—'}
               {it.nodeType ? ` · at ${it.nodeType}` : ''}

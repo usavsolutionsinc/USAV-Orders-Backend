@@ -18,7 +18,7 @@ export const STATION_SCAN_BAR_PAD_LEFT_CLASS = 'pl-7';
 export const STATION_SCAN_BAR_PAD_LEFT_NONE_ICON_CLASS = 'pl-3.5';
 
 export const STATION_SCAN_BAR_INPUT_CLASS =
-  'box-border h-10 w-full rounded-xl bg-gray-50 text-xs font-bold leading-normal text-gray-900 outline-none transition-all shadow-inner py-2 placeholder:text-gray-400';
+  'box-border h-10 w-full rounded-xl bg-surface-canvas text-xs font-bold leading-normal text-text-default outline-none transition-all shadow-inner py-2 placeholder:text-text-faint';
 
 export const STATION_SCAN_BAR_RIGHT_SLOT_CLASS =
   'absolute right-3 top-1/2 z-dropdown isolate flex -translate-y-1/2 items-center gap-1.5';
@@ -38,7 +38,7 @@ export const STATION_SCAN_BAR_MODE_BTN_COMPACT =
 
 /** Idle mode icon — no solid chip; the glass rail carries the surface. */
 export const STATION_SCAN_BAR_MODE_BTN_INACTIVE =
-  'relative z-base text-gray-500 hover:text-gray-700';
+  'relative z-base text-text-soft hover:text-text-muted';
 
 /** Armed mode — translucent tint + ring; stays glassy rather than a flat fill. */
 export const STATION_SCAN_BAR_MODE_BTN_ARMED =

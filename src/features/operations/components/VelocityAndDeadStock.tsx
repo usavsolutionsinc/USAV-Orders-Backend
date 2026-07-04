@@ -126,7 +126,7 @@ export function VelocityAndDeadStock() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)]"
+          className="bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)]"
         >
           <p className="text-label font-extrabold text-text-default tracking-tight mb-4">Velocity tier mix</p>
           <TierDonut counts={tierCounts} />
@@ -154,7 +154,7 @@ export function VelocityAndDeadStock() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           whileHover={{ y: -2 }}
-          className="block lg:col-span-1 bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+          className="block lg:col-span-1 bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
         >
           <div className="flex items-baseline justify-between mb-4">
             <p className="text-label font-extrabold text-text-default tracking-tight">Top movers</p>
@@ -194,7 +194,7 @@ export function VelocityAndDeadStock() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           whileHover={{ y: -2 }}
-          className="block bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+          className="block bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
         >
           <div className="flex items-baseline justify-between mb-3">
             <p className="text-label font-extrabold text-text-default tracking-tight">Dead stock</p>

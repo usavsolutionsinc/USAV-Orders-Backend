@@ -48,16 +48,16 @@ export function MobilePackingList({ packerId, limit = 8 }: { packerId: string; l
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col bg-white">
+    <div className="flex h-full w-full flex-col bg-surface-card">
       <MobileFeed<PackerLogRow>
         rows={rows}
         isLoading={isLoading}
         scrollRef={scrollRef}
         freshIds={freshIds}
         empty={
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-white px-6 text-center">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">No pack history yet</p>
-            <p className="max-w-[260px] text-caption font-semibold text-gray-500">
+          <div className="flex h-full flex-col items-center justify-center gap-2 bg-surface-card px-6 text-center">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-text-muted">No pack history yet</p>
+            <p className="max-w-[260px] text-caption font-semibold text-text-soft">
               Pack something at a desktop station — recent entries will land here.
             </p>
           </div>

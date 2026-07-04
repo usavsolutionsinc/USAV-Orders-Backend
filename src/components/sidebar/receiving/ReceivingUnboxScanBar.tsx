@@ -38,8 +38,8 @@ export const UNBOX_SCAN_MODES: readonly UnboxScanModeMeta[] = [
     mode: 'order',
     label: 'PO #',
     Icon: Hash,
-    armedClass: 'text-gray-700 bg-slate-500/10',
-    iconClass: 'text-gray-500',
+    armedClass: 'text-text-muted bg-slate-500/10',
+    iconClass: 'text-text-soft',
   },
 ] as const;
 

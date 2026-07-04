@@ -27,7 +27,7 @@ export function InventoryShell() {
     // the same section. Default/absent section = the inventory views below.
     if (searchParams.get('section') === 'replenish') {
         return (
-            <div className="flex h-full min-h-0 flex-col bg-gray-50">
+            <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
                 <ReplenishWorkspace />
             </div>
         );
@@ -39,14 +39,14 @@ export function InventoryShell() {
     // swallowed by the ledger detail overlay and these would never render.
     if (mode === 'triage') {
         return (
-            <div className="flex h-full min-h-0 flex-col bg-white">
+            <div className="flex h-full min-h-0 flex-col bg-surface-card">
                 <TriageWorkspace selectedId={sidebar.open} />
             </div>
         );
     }
     if (mode === 'pulse') {
         return (
-            <div className="flex h-full min-h-0 flex-col bg-white">
+            <div className="flex h-full min-h-0 flex-col bg-surface-card">
                 <PulseWorkspace unitId={sidebar.open} />
             </div>
         );
@@ -62,16 +62,16 @@ export function InventoryShell() {
     // panel's own header takes over the top of the right pane.
     if (hasOpenDetail) {
         return (
-            <div className="flex h-full min-h-0 flex-col bg-white">
+            <div className="flex h-full min-h-0 flex-col bg-surface-card">
                 <InventoryDetailsOverlay />
             </div>
         );
     }
 
     return (
-        <div className="flex h-full min-h-0 flex-col bg-gray-50">
+        <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
             <PageHeader
-                className={cn('border-transparent bg-white', receivingHeaderHairlineClass)}
+                className={cn('border-transparent bg-surface-card', receivingHeaderHairlineClass)}
                 maxWidth="5xl"
                 title="Inventory"
                 rightSlot={
@@ -80,7 +80,7 @@ export function InventoryShell() {
                             variant="ghost"
                             size="sm"
                             onClick={clearAll}
-                            className="px-0 text-xs text-gray-500 underline hover:bg-transparent hover:text-gray-900"
+                            className="px-0 text-xs text-text-soft underline hover:bg-transparent hover:text-text-default"
                         >
                             Back to recent activity
                         </Button>

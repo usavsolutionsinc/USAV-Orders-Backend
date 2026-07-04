@@ -48,10 +48,9 @@ export interface SerialUnitRow {
   current_status: SerialStatus;
   current_location: string | null;
   condition_grade: string | null;
-  origin_source: string | null;
-  origin_receiving_line_id: number | null;
-  origin_tsn_id: number | null;
-  origin_sku_id: number | null;
+  // origin_* columns dropped in Phase 4 (2026-07-03b); origin provenance now
+  // lives in serial_unit_provenance (read via v_serial_unit_origins). The WRITE
+  // input (UpsertSerialUnitInput) still accepts origin_* and routes them there.
   received_at: string | null;
   received_by: number | null;
   notes: string | null;
@@ -452,9 +451,14 @@ export async function resolveCurrentReceivingLineIds(
   if (serialUnitIds.length === 0) return map;
   const result = await tenantQuery<{ serial_unit_id: number; receiving_line_id: number | null }>(
     orgId,
+    // Phase 3 (serial_unit_provenance): the frozen-origin fallback now comes
+    // from the reconstruction view (vo.origin_receiving_line_id), not the
+    // serial_units.origin_receiving_line_id column (dropped in Phase 4). The
+    // view join is bounded to the passed id-set, so no full-table scan.
     `SELECT su.id AS serial_unit_id,
-            COALESCE(cur.receiving_line_id, su.origin_receiving_line_id) AS receiving_line_id
+            COALESCE(cur.receiving_line_id, vo.origin_receiving_line_id) AS receiving_line_id
        FROM serial_units su
+       JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
        LEFT JOIN LATERAL (
          SELECT ie.receiving_line_id
            FROM inventory_events ie
@@ -479,11 +483,16 @@ export async function listByReceivingLine(
   receivingLineId: number,
   orgId?: OrgId,
 ): Promise<SerialUnitRow[]> {
+  // Phase 3: filter-by-origin now uses the indexed provenance reverse lookup
+  // (idx_serial_unit_provenance_origin) instead of serial_units.origin_receiving_line_id.
   if (orgId) {
     const scoped = await tenantQuery<SerialUnitRow>(
       orgId,
       `SELECT * FROM serial_units
-       WHERE origin_receiving_line_id = $1 AND organization_id = $2
+       WHERE id IN (
+         SELECT p.serial_unit_id FROM serial_unit_provenance p
+          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1 AND p.organization_id = $2)
+         AND organization_id = $2
        ORDER BY created_at ASC, id ASC`,
       [receivingLineId, orgId],
     );
@@ -491,7 +500,9 @@ export async function listByReceivingLine(
   }
   const result = await pool.query<SerialUnitRow>(
     `SELECT * FROM serial_units
-     WHERE origin_receiving_line_id = $1
+     WHERE id IN (
+       SELECT p.serial_unit_id FROM serial_unit_provenance p
+        WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1)
      ORDER BY created_at ASC, id ASC`,
     [receivingLineId],
   );
@@ -502,12 +513,16 @@ export async function countByReceivingLine(
   receivingLineId: number,
   orgId?: OrgId,
 ): Promise<number> {
+  // Phase 3: count-by-origin via the indexed provenance reverse lookup.
   if (orgId) {
     const scoped = await tenantQuery<{ count: number }>(
       orgId,
       `SELECT COUNT(*)::int AS count
        FROM serial_units
-       WHERE origin_receiving_line_id = $1 AND organization_id = $2`,
+       WHERE id IN (
+         SELECT p.serial_unit_id FROM serial_unit_provenance p
+          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1 AND p.organization_id = $2)
+         AND organization_id = $2`,
       [receivingLineId, orgId],
     );
     return scoped.rows[0]?.count ?? 0;
@@ -515,7 +530,9 @@ export async function countByReceivingLine(
   const result = await pool.query<{ count: number }>(
     `SELECT COUNT(*)::int AS count
      FROM serial_units
-     WHERE origin_receiving_line_id = $1`,
+     WHERE id IN (
+       SELECT p.serial_unit_id FROM serial_unit_provenance p
+        WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1)`,
     [receivingLineId],
   );
   return result.rows[0]?.count ?? 0;
@@ -541,6 +558,62 @@ export interface UpsertSerialUnitOptions {
    * the first txn and hit Neon "Query read timeout".
    */
   dbClient?: import('pg').PoolClient;
+}
+
+/**
+ * Phase 4: record serial-unit origin provenance edges app-side — the replacement
+ * for the dropped serial_units.origin_* columns + the dual-write trigger
+ * (fn_sync_serial_unit_provenance). Mirrors the 2026-07-01n backfill / trigger
+ * mapping exactly: independent concrete edges for a receiving line / tech serial
+ * / sku import, else a text-only edge derived from origin_source. FIRST-WINS per
+ * origin_type (NOT EXISTS guard) reproduces the old COALESCE-once column
+ * semantics — the FOR UPDATE lock on the serial_units row serializes concurrent
+ * upserts of the same unit. Runs on the caller's txn client so it commits/rolls
+ * back atomically with the unit write. Best-effort per edge (idempotent).
+ */
+export async function recordOriginProvenance(
+  client: Queryable,
+  orgId: OrgId,
+  serialUnitId: number,
+  input: {
+    origin_source?: string | null;
+    origin_receiving_line_id?: number | null;
+    origin_tsn_id?: number | null;
+    origin_sku_id?: number | null;
+  },
+  occurredAtIso: string,
+): Promise<void> {
+  const edges: Array<{ type: string; id: number | null }> = [];
+  if (input.origin_receiving_line_id != null) {
+    edges.push({ type: 'RECEIVING_LINE', id: input.origin_receiving_line_id });
+  }
+  if (input.origin_tsn_id != null) edges.push({ type: 'TECH_SERIAL', id: input.origin_tsn_id });
+  if (input.origin_sku_id != null) edges.push({ type: 'SKU_IMPORT', id: input.origin_sku_id });
+  if (edges.length === 0) {
+    // Text-only fallback (no concrete id) — same map as the backfill/trigger.
+    const textMap: Record<string, string> = {
+      receiving: 'RECEIVING_LINE',
+      tsn: 'TECH_SERIAL',
+      sku: 'SKU_IMPORT',
+      manual: 'MANUAL',
+      legacy: 'LEGACY',
+    };
+    const t = input.origin_source ? textMap[input.origin_source] : undefined;
+    if (t) edges.push({ type: t, id: null });
+  }
+  for (const e of edges) {
+    await client.query(
+      `INSERT INTO serial_unit_provenance
+         (organization_id, serial_unit_id, origin_type, origin_id, occurred_at)
+       SELECT $1, $2, $3, $4, $5
+        WHERE NOT EXISTS (
+          SELECT 1 FROM serial_unit_provenance
+           WHERE organization_id = $1 AND serial_unit_id = $2 AND origin_type = $3
+        )
+       ON CONFLICT DO NOTHING`,
+      [orgId, serialUnitId, e.type, e.id, occurredAtIso],
+    );
+  }
 }
 
 export async function upsertSerialUnit(
@@ -623,17 +696,16 @@ export async function upsertSerialUnit(
         created_at_iso: nowIso,
       };
 
+      // Phase 4: origin_* columns dropped — provenance is written app-side below.
       const inserted = await client.query<SerialUnitRow>(
         `INSERT INTO serial_units (
            serial_number, normalized_serial, sku, sku_catalog_id, zoho_item_id,
            current_status, current_location, condition_grade,
-           origin_source, origin_receiving_line_id, origin_tsn_id, origin_sku_id,
            received_at, received_by, metadata, unit_uid, organization_id
          ) VALUES (
            $1, $2, $3, $4, $5,
            $6, $7, $8::condition_grade_enum,
-           $9, $10, $11, $12,
-           $13, $14, $15::jsonb, $16, $17
+           $9, $10, $11::jsonb, $12, $13
          )
          RETURNING *`,
         [
@@ -645,10 +717,6 @@ export async function upsertSerialUnit(
           targetStatus,
           trimmedLocation,
           trimmedGrade,
-          input.origin_source,
-          input.origin_receiving_line_id ?? null,
-          input.origin_tsn_id ?? null,
-          input.origin_sku_id ?? null,
           isReceivingTouch ? nowIso : null,
           isReceivingTouch ? input.actor_id ?? null : null,
           JSON.stringify(insertMetadata),
@@ -656,6 +724,8 @@ export async function upsertSerialUnit(
           orgId,
         ],
       );
+
+      await recordOriginProvenance(client, orgId, inserted.rows[0].id, input, nowIso);
 
       return {
         unit: inserted.rows[0],
@@ -691,14 +761,10 @@ export async function upsertSerialUnit(
          current_status = $5,
          current_location = COALESCE($6, current_location),
          condition_grade = COALESCE($7::condition_grade_enum, condition_grade),
-         origin_source = COALESCE(origin_source, $8),
-         origin_receiving_line_id = COALESCE(origin_receiving_line_id, $9),
-         origin_tsn_id = COALESCE(origin_tsn_id, $10),
-         origin_sku_id = COALESCE(origin_sku_id, $11),
-         received_at = COALESCE(received_at, $12),
-         received_by = COALESCE(received_by, $13),
-         metadata = metadata || $14::jsonb,
-         unit_uid = COALESCE(unit_uid, $15),
+         received_at = COALESCE(received_at, $8),
+         received_by = COALESCE(received_by, $9),
+         metadata = metadata || $10::jsonb,
+         unit_uid = COALESCE(unit_uid, $11),
          updated_at = NOW()`;
     const updateParams = [
       prior.id,
@@ -708,10 +774,6 @@ export async function upsertSerialUnit(
       next,
       trimmedLocation,
       trimmedGrade,
-      input.origin_source,
-      input.origin_receiving_line_id ?? null,
-      input.origin_tsn_id ?? null,
-      input.origin_sku_id ?? null,
       isReceivingTouch && !prior.received_at ? nowIso : null,
       isReceivingTouch && !prior.received_by ? input.actor_id ?? null : null,
       JSON.stringify(metadataPatch),
@@ -719,10 +781,14 @@ export async function upsertSerialUnit(
     ];
     const updated = await client.query<SerialUnitRow>(
       `${updateSet}
-       WHERE id = $1 AND organization_id = $16
+       WHERE id = $1 AND organization_id = $12
        RETURNING *`,
       [...updateParams, orgId],
     );
+
+    // Phase 4: origin_* columns dropped — provenance written app-side (first-wins
+    // per type reproduces the old COALESCE-once column semantics for a re-touch).
+    await recordOriginProvenance(client, orgId, prior.id, input, nowIso);
 
     return {
       unit: updated.rows[0],

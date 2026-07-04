@@ -46,7 +46,7 @@ function SecondaryTile({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
-      className={`ds-raw-button relative rounded-2xl border border-border-soft bg-white p-4 shadow-[0_2px_8px_rgba(161,140,90,0.04)] transition-shadow hover:shadow-[0_4px_14px_rgba(161,140,90,0.08)] ${'cursor-pointer'}`}
+      className={`ds-raw-button relative rounded-2xl border border-border-soft bg-surface-card p-4 shadow-[0_2px_8px_rgba(161,140,90,0.04)] transition-shadow hover:shadow-[0_4px_14px_rgba(161,140,90,0.08)] ${'cursor-pointer'}`}
       role="button"
       tabIndex={0}
       aria-label={`${label}: ${value}. ${sub}`}

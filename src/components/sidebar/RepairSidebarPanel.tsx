@@ -183,10 +183,10 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const content = (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       headerAbove={
         !hideSectionHeader ? (
-          <div className={`border-b border-gray-100 ${SIDEBAR_GUTTER} pt-4 pb-3`}>
+          <div className={`border-b border-border-hairline ${SIDEBAR_GUTTER} pt-4 pb-3`}>
             <p className={`${sectionLabel} text-orange-500`}>Repair Service</p>
             <h2 className={`mt-1 ${cardTitle}`}>Repairs</h2>
           </div>
@@ -241,7 +241,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
       bodyClassName="relative pb-4"
     >
         {isFetchingFavorite && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-surface-card/80 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-orange-500">
               <Loader2 className="h-5 w-5 animate-spin" />
               <span className={sectionLabel}>Loading…</span>
@@ -272,7 +272,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const intakeOverlay =
     isMounted && showIntakeForm
       ? createPortal(
-          <div className="fixed inset-0 z-panelOverlay bg-white">
+          <div className="fixed inset-0 z-panelOverlay bg-surface-card">
             <RepairIntakeForm
               onClose={handleCloseForm}
               onSubmit={handleSubmitForm}
@@ -287,7 +287,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   if (embedded) {
     return (
       <>
-        <div className="h-full overflow-hidden bg-white">{content}</div>
+        <div className="h-full overflow-hidden bg-surface-card">{content}</div>
         {intakeOverlay}
       </>
     );
@@ -295,7 +295,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   return (
     <>
-      <aside className="h-full overflow-hidden border-r border-gray-200 bg-white">{content}</aside>
+      <aside className="h-full overflow-hidden border-r border-border-soft bg-surface-card">{content}</aside>
       {intakeOverlay}
     </>
   );

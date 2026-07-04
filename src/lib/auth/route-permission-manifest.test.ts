@@ -305,3 +305,23 @@ test('regression: the ShipStation webhook is a signature-verified public route',
   assert.equal(route.permission, null);
   assert.ok(route.exemptReason, 'the ShipStation webhook should be exempt (signature-gated)');
 });
+
+test('regression: ai.search gates the AI retrieve endpoint (AI search Phase 1)', () => {
+  const route = routeByPath('/api/ai/retrieve/route.ts');
+  assert.ok(route, 'the AI retrieve route should be in the manifest');
+  assert.equal(route.gate, 'withAuth');
+  assert.equal(route.permission, 'ai.search');
+  const paths = routesGatedBy('ai.search').map((r) => r.path);
+  assert.ok(paths.includes('/api/ai/retrieve/route.ts'), 'ai.search should gate /api/ai/retrieve');
+});
+
+test('assistant chat route is gated by assistant.chat', () => {
+  const paths = routesGatedBy('assistant.chat').map((r) => r.path);
+  assert.ok(paths.includes('/api/assistant/chat/route.ts'));
+  assert.ok(paths.includes('/api/assistant/mutations/route.ts'));
+});
+
+test('assistant mutation revert route is gated by studio.manage', () => {
+  const paths = routesGatedBy('studio.manage').map((r) => r.path);
+  assert.ok(paths.includes('/api/assistant/mutations/[id]/revert/route.ts'));
+});

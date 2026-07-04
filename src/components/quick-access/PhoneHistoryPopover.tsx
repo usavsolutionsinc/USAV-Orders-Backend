@@ -59,7 +59,7 @@ function carrierBadgeColor(carrier: string | null): string {
   if (c.includes('ups')) return 'bg-amber-100 text-amber-700 border-amber-200';
   if (c.includes('fedex')) return 'bg-purple-100 text-purple-700 border-purple-200';
   if (c.includes('usps')) return 'bg-blue-100 text-blue-700 border-blue-200';
-  return 'bg-gray-100 text-gray-600 border-gray-200';
+  return 'bg-surface-sunken text-text-muted border-border-soft';
 }
 
 interface PhoneHistoryPopoverProps {
@@ -163,14 +163,14 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
     <div
       role="dialog"
       aria-label="Phone history"
-      className="flex w-[320px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+      className="flex w-[320px] flex-col overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-xl"
     >
-      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-gray-100 px-4 py-3">
+      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-border-hairline px-4 py-3">
         <div>
-          <p className="text-micro font-black uppercase tracking-widest text-gray-500">
+          <p className="text-micro font-black uppercase tracking-widest text-text-soft">
             Phone history
           </p>
-          <p className="mt-0.5 text-sm font-black text-gray-900">
+          <p className="mt-0.5 text-sm font-black text-text-default">
             Recent packs · tap to resume
           </p>
         </div>
@@ -187,25 +187,25 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
       <div className="h-[min(480px,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-4 py-2">
         {scans && scans.length > 0 && (
           <section className="mb-3">
-            <p className="mb-1 text-micro font-black uppercase tracking-widest text-gray-500">
+            <p className="mb-1 text-micro font-black uppercase tracking-widest text-text-soft">
               Phone scans · tap to open
             </p>
-            <div className="overflow-hidden rounded-lg border border-gray-100 divide-y divide-gray-100">
+            <div className="overflow-hidden rounded-lg border border-border-hairline divide-y divide-border-hairline">
               {scans.map((s) => (
                 // ds-raw-button: text-left scan row (type badge + raw value + time), not a single DS Button
                 <button
                   key={s.id}
                   type="button"
                   onClick={() => handleOpenScan(s)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-gray-50 hover:bg-gray-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-surface-hover hover:bg-surface-hover"
                 >
-                  <span className="inline-flex shrink-0 items-center rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-gray-600">
+                  <span className="inline-flex shrink-0 items-center rounded-md border border-border-soft bg-surface-canvas px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-text-muted">
                     {s.typeLabel}
                   </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-label font-bold text-gray-900">
+                  <span className="min-w-0 flex-1 truncate font-mono text-label font-bold text-text-default">
                     {s.rawValue}
                   </span>
-                  <span className="shrink-0 text-micro text-gray-400">{timeAgo(s.scannedAt)}</span>
+                  <span className="shrink-0 text-micro text-text-faint">{timeAgo(s.scannedAt)}</span>
                 </button>
               ))}
             </div>
@@ -213,10 +213,10 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
         )}
         {entries === null ? (
           <div className="flex items-center justify-center py-6">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border-soft border-t-gray-600" />
           </div>
         ) : entries.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-5 text-center text-caption italic text-gray-400">
+          <p className="rounded-lg border border-dashed border-border-soft bg-surface-canvas/60 px-3 py-5 text-center text-caption italic text-text-faint">
             {error ?? 'No recent packs yet — pack an order to see history here.'}
           </p>
         ) : (
@@ -231,10 +231,10 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
               <p className="text-eyebrow font-black uppercase tracking-widest text-emerald-700">
                 Resume last pack
               </p>
-              <p className="mt-0.5 truncate text-sm font-black text-gray-900">
+              <p className="mt-0.5 truncate text-sm font-black text-text-default">
                 {first.productTitle || first.tracking || `Log #${first.packerLogId}`}
               </p>
-              <div className="mt-1 flex items-center gap-2 text-micro text-gray-600">
+              <div className="mt-1 flex items-center gap-2 text-micro text-text-muted">
                 <span className="inline-flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {timeAgo(first.packedAt)}
@@ -247,7 +247,7 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
                   </span>
                 )}
                 {first.photos.length > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-gray-400">
+                  <span className="inline-flex items-center gap-0.5 text-text-faint">
                     <Image className="h-3 w-3" />
                     {first.photos.length}
                   </span>
@@ -257,20 +257,20 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
           )}
 
           {rest.length > 0 && (
-            <div className="max-h-[260px] overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-100">
+            <div className="max-h-[260px] overflow-y-auto rounded-lg border border-border-hairline divide-y divide-border-hairline">
               {rest.map((entry) => (
                 // ds-raw-button: text-left multi-line history row (title + meta + photo count), not a single DS Button
                 <button
                   key={entry.packerLogId}
                   type="button"
                   onClick={() => handleResume(entry)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-gray-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-surface-hover"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-label font-bold text-gray-900">
+                    <p className="truncate text-label font-bold text-text-default">
                       {entry.productTitle || entry.tracking || `Log #${entry.packerLogId}`}
                     </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-micro text-gray-500">
+                    <div className="mt-0.5 flex items-center gap-2 text-micro text-text-soft">
                       <span>{timeAgo(entry.packedAt)}</span>
                       {entry.tracking && (
                         <span className="font-mono">TRK {getLast4(entry.tracking)}</span>
@@ -279,7 +279,7 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
                     </div>
                   </div>
                   {entry.photos.length > 0 && (
-                    <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-gray-400">
+                    <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-text-faint">
                       <Image className="h-3 w-3" />
                       {entry.photos.length}
                     </span>

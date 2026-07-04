@@ -68,7 +68,7 @@ export function StudioSidebarPanel() {
 
   if (isLoaded && !has('studio.view')) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-gray-500">
+      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-text-soft">
         Requires the “View Operations Studio” permission.
       </div>
     );
@@ -84,11 +84,11 @@ export function StudioSidebarPanel() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       {/* No own header — the master-nav already renders the "Studio" route title. */}
 
       {/* ─── Combined View dropdown (lens · zoom) ─── */}
-      <div className={`relative shrink-0 border-b border-gray-100 ${SIDEBAR_GUTTER} py-2.5`}>
+      <div className={`relative shrink-0 border-b border-border-hairline ${SIDEBAR_GUTTER} py-2.5`}>
         <button
           type="button"
           aria-haspopup="menu"
@@ -96,18 +96,18 @@ export function StudioSidebarPanel() {
           onClick={() => setOpen((v) => !v)}
           className={cn(
             'ds-raw-button flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors',
-            open ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50',
+            open ? 'border-blue-300 bg-blue-50' : 'border-border-soft bg-surface-card hover:bg-surface-hover',
           )}
         >
           <ActiveLensIcon className="h-4 w-4 shrink-0 text-blue-600" />
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-gray-900">
+            <span className="block text-sm font-semibold text-text-default">
               {activeLens.label} · {activeZoomLabel}
             </span>
-            <span className="block text-caption text-gray-500">Lens &amp; zoom</span>
+            <span className="block text-caption text-text-soft">Lens &amp; zoom</span>
           </span>
           <ChevronDown
-            className={cn('h-4 w-4 shrink-0 text-gray-400 transition-transform', open && 'rotate-180')}
+            className={cn('h-4 w-4 shrink-0 text-text-faint transition-transform', open && 'rotate-180')}
           />
         </button>
 
@@ -124,8 +124,8 @@ export function StudioSidebarPanel() {
               role="menu"
               className={`absolute left-0 right-0 z-panelPopover mt-1 ${SIDEBAR_GUTTER} `}
             >
-              <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
-                <p className="mb-1 px-1 text-micro font-bold uppercase tracking-wider text-gray-400">Lenses</p>
+              <div className="rounded-xl border border-border-soft bg-surface-card p-2 shadow-xl">
+                <p className="mb-1 px-1 text-micro font-bold uppercase tracking-wider text-text-faint">Lenses</p>
                 <div className="space-y-0.5">
                   {LENSES.map((l) => {
                     const disabled = editing && l.id === 'live';
@@ -144,7 +144,7 @@ export function StudioSidebarPanel() {
                   })}
                 </div>
 
-                <p className="mb-1 mt-2 px-1 text-micro font-bold uppercase tracking-wider text-gray-400">Zoom</p>
+                <p className="mb-1 mt-2 px-1 text-micro font-bold uppercase tracking-wider text-text-faint">Zoom</p>
                 <div className="space-y-0.5">
                   {ZOOMS.map((zoom) => (
                     <Row
@@ -157,7 +157,7 @@ export function StudioSidebarPanel() {
                     />
                   ))}
                 </div>
-                <p className="mt-1.5 px-1 text-micro leading-relaxed text-gray-400">
+                <p className="mt-1.5 px-1 text-micro leading-relaxed text-text-faint">
                   Double-click a step at L1 to open its station detail (L2).
                 </p>
               </div>
@@ -214,13 +214,13 @@ function Row({
           ? 'cursor-not-allowed opacity-40'
           : active
             ? 'bg-blue-50 text-blue-700'
-            : 'text-gray-700 hover:bg-gray-50',
+            : 'text-text-muted hover:bg-surface-hover',
       )}
     >
-      <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-blue-600' : 'text-gray-400')} />
+      <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-blue-600' : 'text-text-faint')} />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{label}</span>
-        <span className="block text-caption text-gray-500">{detail}</span>
+        <span className="block text-caption text-text-soft">{detail}</span>
       </span>
       {active && <span className="mt-0.5 shrink-0 text-xs font-bold text-blue-600">✓</span>}
     </button>

@@ -60,7 +60,7 @@ export function ActivityHeatmap({
       <svg width={width} height={height} role="img" aria-label="Activity heatmap">
         {/* column labels */}
         {colLabels && (
-          <g className="text-gray-400">
+          <g className="text-text-faint">
             {colLabels.map((label, c) =>
               c % Math.max(1, Math.ceil(cols / 12)) === 0 ? (
                 <text
@@ -80,7 +80,7 @@ export function ActivityHeatmap({
 
         {/* row labels */}
         {rowLabels && (
-          <g className="text-gray-400">
+          <g className="text-text-faint">
             {rowLabels.map((label, r) => (
               <text
                 key={r}

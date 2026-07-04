@@ -103,7 +103,7 @@ export function FnskuCatalogInfoPanel({
             <IconButton
               type="button"
               onClick={openCatalogEdit}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-text-faint hover:bg-surface-sunken hover:text-text-muted"
               ariaLabel="Edit catalog details"
               icon={<Pencil className="h-3.5 w-3.5" />}
             />
@@ -119,7 +119,7 @@ export function FnskuCatalogInfoPanel({
                 <IconButton
                   type="button"
                   onClick={() => navigator.clipboard.writeText(productTitle)}
-                  className="text-gray-400 hover:text-gray-700"
+                  className="text-text-faint hover:text-text-muted"
                   ariaLabel="Copy product title"
                   icon={<Copy className="h-3.5 w-3.5" />}
                 />
@@ -127,8 +127,8 @@ export function FnskuCatalogInfoPanel({
             ) : null
           }
         >
-          <p className="whitespace-pre-wrap break-words text-sm font-bold text-gray-900">
-            {productTitle || <span className="text-gray-400">No title</span>}
+          <p className="whitespace-pre-wrap break-words text-sm font-bold text-text-default">
+            {productTitle || <span className="text-text-faint">No title</span>}
           </p>
         </DetailsPanelRow>
         <DetailsPanelRow
@@ -139,7 +139,7 @@ export function FnskuCatalogInfoPanel({
                 <IconButton
                   type="button"
                   onClick={() => navigator.clipboard.writeText(condition)}
-                  className="text-gray-400 hover:text-gray-700"
+                  className="text-text-faint hover:text-text-muted"
                   ariaLabel="Copy condition"
                   icon={<Copy className="h-3.5 w-3.5" />}
                 />
@@ -147,15 +147,15 @@ export function FnskuCatalogInfoPanel({
             ) : null
           }
         >
-          <p className="text-sm font-bold text-gray-900">
-            {condition || <span className="text-gray-400">—</span>}
+          <p className="text-sm font-bold text-text-default">
+            {condition || <span className="text-text-faint">—</span>}
           </p>
         </DetailsPanelRow>
         <DetailsPanelRow label="FNSKU">
           {fnskuTrimmed ? (
             <FnskuChip value={fnskuTrimmed} />
           ) : (
-            <p className="font-mono text-sm font-bold text-gray-400">—</p>
+            <p className="font-mono text-sm font-bold text-text-faint">—</p>
           )}
         </DetailsPanelRow>
         <DetailsPanelRow
@@ -166,7 +166,7 @@ export function FnskuCatalogInfoPanel({
                 <IconButton
                   type="button"
                   onClick={() => navigator.clipboard.writeText(asin)}
-                  className="text-gray-400 hover:text-gray-700"
+                  className="text-text-faint hover:text-text-muted"
                   ariaLabel="Copy ASIN"
                   icon={<Copy className="h-3.5 w-3.5" />}
                 />
@@ -174,8 +174,8 @@ export function FnskuCatalogInfoPanel({
             ) : null
           }
         >
-          <p className="font-mono text-sm font-bold text-gray-900">
-            {asin || <span className="text-gray-400">—</span>}
+          <p className="font-mono text-sm font-bold text-text-default">
+            {asin || <span className="text-text-faint">—</span>}
           </p>
         </DetailsPanelRow>
         <DetailsPanelRow
@@ -187,7 +187,7 @@ export function FnskuCatalogInfoPanel({
                 <IconButton
                   type="button"
                   onClick={() => navigator.clipboard.writeText(sku)}
-                  className="text-gray-400 hover:text-gray-700"
+                  className="text-text-faint hover:text-text-muted"
                   ariaLabel="Copy SKU"
                   icon={<Copy className="h-3.5 w-3.5" />}
                 />
@@ -195,8 +195,8 @@ export function FnskuCatalogInfoPanel({
             ) : null
           }
         >
-          <p className="font-mono text-sm font-bold text-gray-900">
-            {sku || <span className="text-gray-400">—</span>}
+          <p className="font-mono text-sm font-bold text-text-default">
+            {sku || <span className="text-text-faint">—</span>}
           </p>
         </DetailsPanelRow>
       </div>

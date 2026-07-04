@@ -471,7 +471,7 @@ export function getDaysLateNullable(deadlineAt: string | null | undefined): numb
 
 /** Tailwind text-color class based on days late. Accepts null for "no deadline" styling. */
 export function getDaysLateTone(daysLate: number | null): string {
-  if (daysLate === null) return 'text-gray-500';
+  if (daysLate === null) return 'text-text-soft';
   if (daysLate > 1) return 'text-red-600';
   if (daysLate === 1) return 'text-yellow-600';
   return 'text-emerald-600';

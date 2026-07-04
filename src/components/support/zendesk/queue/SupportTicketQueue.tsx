@@ -89,7 +89,7 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
   const showRecents = recents.length > 0 && !debounced;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       {/* Search — shared SearchBar primitive */}
       <div className="shrink-0 px-2 pt-2">
         <SearchBar
@@ -122,7 +122,7 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
             icon={<RefreshCw className="h-4 w-4" />}
             onClick={() => void queryClient.invalidateQueries({ queryKey: ['zendesk'] })}
             ariaLabel="Refresh tickets"
-            className="rounded-md p-1.5 hover:bg-gray-100"
+            className="rounded-md p-1.5 hover:bg-surface-sunken"
           />
         </HoverTooltip>
       </div>
@@ -131,8 +131,8 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
       <div className="min-h-0 flex-1 overflow-y-auto">
         {modeToggle}
         {showRecents ? (
-          <div className="border-b border-gray-100 pb-1.5">
-            <p className="flex items-center gap-1 px-3 pb-1 pt-2 text-micro font-black uppercase tracking-widest text-gray-400">
+          <div className="border-b border-border-hairline pb-1.5">
+            <p className="flex items-center gap-1 px-3 pb-1 pt-2 text-micro font-black uppercase tracking-widest text-text-faint">
               <History className="h-3 w-3" /> Recently opened
             </p>
             {recents.map((r) => (
@@ -143,14 +143,14 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
                 onClick={() => select(r)}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-1.5 text-left transition',
-                  r.id === selectedId ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50',
+                  r.id === selectedId ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-surface-hover',
                 )}
               >
-                <Clock className="h-3 w-3 shrink-0 text-gray-300" />
-                <span className="min-w-0 flex-1 truncate text-label font-semibold text-gray-700">
+                <Clock className="h-3 w-3 shrink-0 text-text-faint" />
+                <span className="min-w-0 flex-1 truncate text-label font-semibold text-text-muted">
                   {r.subject || `Ticket #${r.id}`}
                 </span>
-                <span className="shrink-0 text-micro font-bold text-gray-300">#{r.id}</span>
+                <span className="shrink-0 text-micro font-bold text-text-faint">#{r.id}</span>
               </button>
             ))}
           </div>
@@ -174,9 +174,9 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
             <EmptyState title="No tickets match" description="Try a different filter or search." />
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border-hairline">
             {showRecents ? (
-              <p className="px-3 pb-1 pt-2.5 text-micro font-black uppercase tracking-widest text-gray-400">
+              <p className="px-3 pb-1 pt-2.5 text-micro font-black uppercase tracking-widest text-text-faint">
                 All tickets
               </p>
             ) : null}
@@ -200,7 +200,7 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
       </div>
 
       {/* Pagination */}
-      <div className="flex shrink-0 items-center justify-between border-t border-gray-100 px-3 py-2">
+      <div className="flex shrink-0 items-center justify-between border-t border-border-hairline px-3 py-2">
         <Button
           variant="secondary"
           size="sm"
@@ -209,7 +209,7 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
         >
           Prev
         </Button>
-        <span className="text-micro font-semibold text-gray-400">
+        <span className="text-micro font-semibold text-text-faint">
           {data?.count != null ? `${data.count} total` : ''}
         </span>
         <Button

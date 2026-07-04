@@ -27,7 +27,7 @@ export function PendingFooter({
   if (actionable === 0 && !saveError) return null;
 
   return (
-    <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 py-3 backdrop-blur">
+    <div className="sticky bottom-0 z-10 border-t border-border-soft bg-surface-card/90 py-3 backdrop-blur">
       <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 px-4 sm:px-6">
         {saveError ? (
           <div className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-caption font-semibold text-red-700">

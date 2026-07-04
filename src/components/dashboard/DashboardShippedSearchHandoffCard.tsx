@@ -33,7 +33,7 @@ export function DashboardShippedSearchHandoffCard({
           disabled={buttonDisabled}
           loading={isBusy}
           iconRight={<ChevronRight />}
-          className={`w-full justify-center rounded-xl border border-blue-200 bg-white px-3 py-2 ring-0 ${sectionLabel} text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-blue-100 disabled:bg-blue-50 disabled:text-blue-300`}
+          className={`w-full justify-center rounded-xl border border-blue-200 bg-surface-card px-3 py-2 ring-0 ${sectionLabel} text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-blue-100 disabled:bg-blue-50 disabled:text-blue-300`}
         >
           Open Shipped
         </Button>

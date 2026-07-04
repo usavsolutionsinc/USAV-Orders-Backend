@@ -7,6 +7,8 @@
  *   node --import tsx --test src/lib/studio/definitions.test.ts
  */
 
+import '@/lib/assistant/test-db-url'; // sets DATABASE_URL before the workflow barrel loads
+import '@/lib/workflow'; // register builtin nodes so the publish config-gate sees real schemas
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { PoolClient } from 'pg';
@@ -285,4 +287,32 @@ test('publish: unknown definition → 404', async () => {
   assert.equal(res.status, 404);
   if (res.status !== 404) return;
   assert.equal(res.body.ok, false);
+});
+
+// ─── Publish config-schema gate (validate-config.ts) ─────────────────────────
+
+test('publish: a node whose config violates its type schema BLOCKS (invalid-config diagnostic, no flip)', async () => {
+  const f = publishClient({
+    defRow: { id: 99, name: 'Standard refurb', version: 4, is_active: false },
+    nodeRows: [{ id: 'a', type: 'inspection', config: { slaHours: 'soon' } }],
+  });
+  const res = await publishDefinition({ client: f.client, orgId: ORG, definitionId: 99 }, publishDeps([]));
+  assert.equal(res.status, 422);
+  if (res.status !== 422 || !('diagnostics' in res.body)) return assert.fail('expected 422 PUBLISH_BLOCKED');
+  assert.equal(res.body.error, 'PUBLISH_BLOCKED');
+  assert.ok(
+    res.body.diagnostics.some((d) => d.rule === 'invalid-config' && d.nodeId === 'a'),
+    'a config violation must surface as an invalid-config diagnostic',
+  );
+  assert.equal(f.queries.some((q) => /WITH deactivated AS/.test(q.sql)), false); // no flip
+});
+
+test('publish: a valid config for a real node type does NOT block', async () => {
+  const f = publishClient({
+    defRow: { id: 99, name: 'Standard refurb', version: 4, is_active: false },
+    nodeRows: [{ id: 'a', type: 'inspection', config: { slaHours: 24, trigger: 'scan' } }],
+    edgeRows: [{ id: 'e1', source_node: 'a', source_port: 'done', target_node: 'a' }],
+  });
+  const res = await publishDefinition({ client: f.client, orgId: ORG, definitionId: 99 }, publishDeps([]));
+  assert.equal(res.status, 200);
 });

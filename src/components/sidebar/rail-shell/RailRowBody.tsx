@@ -56,7 +56,7 @@ export function RailRowBody({
   return (
     <div className={`min-w-0 ${className ?? ''}`}>
       {hasEyebrow ? (
-        <div className="flex items-center justify-between gap-2 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+        <div className="flex items-center justify-between gap-2 text-eyebrow font-black uppercase tracking-widest text-text-soft">
           <div className="flex min-w-0 items-center gap-1.5">{vm.eyebrow}</div>
           {vm.eyebrowTrailing != null ? <div className="shrink-0">{vm.eyebrowTrailing}</div> : null}
         </div>
@@ -67,7 +67,7 @@ export function RailRowBody({
           here would jostle neighbours. */}
       <div className={`flex min-w-0 items-center gap-1.5 ${hasEyebrow ? 'mt-0.5' : ''}`}>
         {/* ds-allow-title: truncation tooltip on a non-interactive CSS-clipped (`truncate`) title line */}
-        <p className="truncate text-caption font-bold text-gray-900" title={vm.titleAttr}>
+        <p className="truncate text-caption font-bold text-text-default" title={vm.titleAttr}>
           {vm.title}
         </p>
         {vm.titleAccessory}

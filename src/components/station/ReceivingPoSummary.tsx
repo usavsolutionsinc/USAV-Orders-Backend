@@ -180,7 +180,7 @@ export function ReceivingPoSummary({
               {quantityText}
             </span>
           }
-          condition={<span className="text-gray-400">{conditionLabel}</span>}
+          condition={<span className="text-text-faint">{conditionLabel}</span>}
           rest={
             <div className="flex items-center gap-2">
               {shouldShowWorkflowStatusIcon({ isHistory, isIncoming }) ? (

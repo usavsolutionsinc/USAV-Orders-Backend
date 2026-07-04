@@ -43,7 +43,7 @@ export function ListingPhotoGallery({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-1">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{title}</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">{title}</p>
         <Button
           type="button"
           variant="ghost"
@@ -57,18 +57,18 @@ export function ListingPhotoGallery({
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 px-3 py-4 text-caption text-gray-400">
+        <div className="flex items-center gap-2 px-3 py-4 text-caption text-text-faint">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading gallery…
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-caption text-gray-500">
+        <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-soft">
           No listing photos yet. Add photos to build the marketplace gallery.
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border-hairline">
           {items.map((it, index) => (
             <li key={it.photoId} className="flex items-center gap-3 py-2">
-              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-gray-200">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border-soft">
                 <PhotoThumb src={it.thumbUrl} alt="" ratio="square" />
                 {it.isCover ? (
                   <span className="absolute left-0 top-0 inline-flex items-center gap-0.5 rounded-br-lg bg-amber-500 px-1 py-0.5 text-mini font-black uppercase tracking-widest text-white">
@@ -78,8 +78,8 @@ export function ListingPhotoGallery({
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-caption font-semibold text-gray-900">Photo #{it.photoId}</div>
-                <div className="text-micro text-gray-500">Position {index + 1}</div>
+                <div className="text-caption font-semibold text-text-default">Photo #{it.photoId}</div>
+                <div className="text-micro text-text-soft">Position {index + 1}</div>
               </div>
 
               <div className="flex items-center gap-0.5">
@@ -159,7 +159,7 @@ function IconBtn({
         ariaLabel={label}
         className={cn(
           'inline-flex h-7 w-7 items-center justify-center rounded-lg transition disabled:opacity-30',
-          danger ? 'text-gray-400 hover:bg-rose-50 hover:text-rose-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700',
+          danger ? 'text-text-faint hover:bg-rose-50 hover:text-rose-600' : 'text-text-faint hover:bg-surface-sunken hover:text-text-muted',
           active && 'text-amber-500',
         )}
         icon={children}
@@ -216,19 +216,19 @@ function ListingPhotoPicker({
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl ring-1 ring-black/5"
+        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-surface-card shadow-xl ring-1 ring-black/5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border-hairline px-4 py-3">
           <div className="flex items-center gap-2">
-            <ImageIcon className="h-4 w-4 text-gray-500" />
-            <h2 className="text-sm font-bold text-gray-900">Add listing photos</h2>
+            <ImageIcon className="h-4 w-4 text-text-soft" />
+            <h2 className="text-sm font-bold text-text-default">Add listing photos</h2>
           </div>
           <IconButton
             type="button"
             onClick={onClose}
             ariaLabel="Close"
-            className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-text-faint hover:bg-surface-sunken hover:text-text-muted"
             icon={<X className="h-4 w-4" />}
           />
         </div>
@@ -239,11 +239,11 @@ function ListingPhotoPicker({
               {error}
             </div>
           ) : photos === null ? (
-            <div className="flex items-center gap-2 py-6 text-caption text-gray-400">
+            <div className="flex items-center gap-2 py-6 text-caption text-text-faint">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading photos…
             </div>
           ) : photos.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-caption text-gray-500">
+            <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-soft">
               No more photos available to add.
             </div>
           ) : (
@@ -259,7 +259,7 @@ function ListingPhotoPicker({
                     aria-pressed={on}
                     className={cn(
                       'relative overflow-hidden rounded-lg border-2 transition',
-                      on ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-gray-300',
+                      on ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-border-default',
                     )}
                   >
                     <PhotoThumb src={p.thumbUrl} alt="" ratio="square" />
@@ -275,8 +275,8 @@ function ListingPhotoPicker({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-4 py-3">
-          <span className="text-caption text-gray-500">{picked.size} selected</span>
+        <div className="flex items-center justify-between gap-2 border-t border-border-hairline px-4 py-3">
+          <span className="text-caption text-text-soft">{picked.size} selected</span>
           <div className="flex items-center gap-2">
             <Button
               type="button"

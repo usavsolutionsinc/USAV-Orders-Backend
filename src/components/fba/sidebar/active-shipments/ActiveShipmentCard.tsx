@@ -67,7 +67,7 @@ export function ActiveShipmentCard({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15, ease: 'easeOut' }}
-      className="[overflow:clip] border border-gray-200 bg-white transition-colors"
+      className="[overflow:clip] border border-border-soft bg-surface-card transition-colors"
     >
       {/* ── Header (matches FbaShipmentCard layout) ── */}
       {/* role="button" (not <button>) so the inline Edit/Return controls below remain valid — a <button> cannot nest a <button>. */}
@@ -81,14 +81,14 @@ export function ActiveShipmentCard({
             onToggleExpand();
           }
         }}
-        className="flex w-full cursor-pointer items-center justify-between gap-2 bg-white px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
+        className="flex w-full cursor-pointer items-center justify-between gap-2 bg-surface-card px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Package className="h-4 w-4 shrink-0 text-purple-500" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex min-w-0 items-baseline gap-1.5">
               <span className="inline-flex min-w-0 max-w-full items-center gap-0.5 leading-none">
-                <span className="truncate font-mono text-label font-black leading-none text-gray-900">
+                <span className="truncate font-mono text-label font-black leading-none text-text-default">
                   {shipment.amazon_shipment_id || shipment.shipment_ref}
                 </span>
                 {editable && (
@@ -106,7 +106,7 @@ export function ActiveShipmentCard({
                   </HoverTooltip>
                 )}
               </span>
-              <span className="shrink-0 text-micro font-bold text-gray-400">
+              <span className="shrink-0 text-micro font-bold text-text-faint">
                 {shipment.items.length} SKU · {totalQty} units
               </span>
               <FbaStatusBadge
@@ -118,7 +118,7 @@ export function ActiveShipmentCard({
               />
             </div>
             <div className="flex min-w-0 items-center gap-1.5">
-              <p className="truncate font-mono text-micro font-bold text-gray-400">
+              <p className="truncate font-mono text-micro font-bold text-text-faint">
                 {shipment.tracking_numbers.length > 1
                   ? `${shipment.tracking_numbers.length} trackings`
                   : `${carrier ? `${carrier} · ` : ''}${primaryTracking}`}
@@ -163,9 +163,9 @@ export function ActiveShipmentCard({
                 return (
                   <>
                     {unallocatedItems.length > 0 && (
-                      <div className="divide-y divide-gray-50">
+                      <div className="divide-y divide-border-hairline">
                         {hasBundles && (
-                          <p className="px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest text-gray-400">
+                          <p className="px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest text-text-faint">
                             Unallocated
                           </p>
                         )}

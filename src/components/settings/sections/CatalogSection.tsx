@@ -14,31 +14,31 @@ export function CatalogSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-gray-900">Platforms &amp; Types</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-lg font-bold text-text-default">Platforms &amp; Types</h2>
+        <p className="mt-1 text-sm text-text-soft">
           The sales channels, storefront accounts, and receiving flow types your team picks from
           across receiving and orders. Add, rename, reorder, hide, or delete your own — built-in
           defaults are protected (hide-only, restorable).
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">Platforms</h3>
+      <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="mb-3 text-sm font-semibold text-text-default">Platforms</h3>
         <CatalogManagerList kind="platform" />
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-1 text-sm font-semibold text-gray-900">Storefront accounts</h3>
-        <p className="mb-3 text-xs text-gray-500">
+      <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="mb-1 text-sm font-semibold text-text-default">Storefront accounts</h3>
+        <p className="mb-3 text-xs text-text-soft">
           The specific stores under each platform (e.g. your eBay accounts). A flow type can pin one
           so it resolves the right integration.
         </p>
         <PlatformAccountsManager />
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-1 text-sm font-semibold text-gray-900">Receiving types</h3>
-        <p className="mb-3 text-xs text-gray-500">
+      <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="mb-1 text-sm font-semibold text-text-default">Receiving types</h3>
+        <p className="mb-3 text-xs text-text-soft">
           Use the <span className="font-semibold">gear</span> on a type to bind it to a storefront
           account or a custom workflow node (e.g. your own repair-service flow).
         </p>

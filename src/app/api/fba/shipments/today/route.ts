@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 /**
  * GET /api/fba/shipments/today
@@ -16,6 +18,15 @@ import { tenantQuery } from '@/lib/tenancy/db';
  */
 export const GET = withAuth(async (_request, ctx) => {
   try {
+    // Per-scan "today's shipment" snapshot → short-TTL cache (20s bounds tracking-
+    // status staleness); FBA writes bust fba-today/fba-stage-counts org-scoped.
+    const cached = await getOrSet<{ shipment: unknown }>(
+      CACHE_NS.fbaToday,
+      ctx.organizationId,
+      'today',
+      20,
+      [CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts],
+      async () => {
     const shipRes = await tenantQuery(ctx.organizationId, `
       SELECT id, shipment_ref, due_date, status, amazon_shipment_id
       FROM fba_shipments
@@ -26,7 +37,7 @@ export const GET = withAuth(async (_request, ctx) => {
     `, [ctx.organizationId]);
 
     if (shipRes.rows.length === 0) {
-      return NextResponse.json({ success: true, shipment: null });
+      return { shipment: null };
     }
 
     const shipment = shipRes.rows[0];
@@ -74,8 +85,7 @@ export const GET = withAuth(async (_request, ctx) => {
       [shipment.id, ctx.organizationId]
     );
 
-    return NextResponse.json({
-      success: true,
+    return {
       shipment: {
         id: shipment.id,
         shipment_ref: shipment.shipment_ref,
@@ -85,7 +95,11 @@ export const GET = withAuth(async (_request, ctx) => {
         tracking_numbers: trackingRes.rows,
         items: itemsRes.rows,
       },
-    });
+    };
+      },
+    );
+
+    return NextResponse.json({ success: true, shipment: cached.shipment });
   } catch (error: any) {
     console.error('[GET /api/fba/shipments/today]', error);
     return NextResponse.json(

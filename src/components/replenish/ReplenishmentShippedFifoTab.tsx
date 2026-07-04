@@ -32,17 +32,17 @@ export function ReplenishmentShippedFifoTab({ skuSearch }: ReplenishmentShippedF
 
   if (query.isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="flex-1 flex items-center justify-center bg-surface-canvas">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Analyzing shipped SKU depletion...</p>
+          <p className="text-sm font-semibold text-text-muted">Analyzing shipped SKU depletion...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-w-0 flex-1 bg-white relative">
+    <div className="flex h-full min-w-0 flex-1 bg-surface-card relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className={mainStickyHeaderClass}>
           <div className={mainStickyHeaderRowClass}>
@@ -64,7 +64,7 @@ export function ReplenishmentShippedFifoTab({ skuSearch }: ReplenishmentShippedF
           {rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                <p className="text-gray-500 font-semibold italic opacity-40">
+                <p className="text-text-soft font-semibold italic opacity-40">
                   {skuSearch
                     ? `No shipped SKUs match "${skuSearch}"`
                     : 'No shipped SKU data in last 30 days'}
@@ -72,7 +72,7 @@ export function ReplenishmentShippedFifoTab({ skuSearch }: ReplenishmentShippedF
               </div>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-border-hairline">
               {rows.map((row) => {
                 const hasReplenishment = !!row.active_replenishment_id;
                 const needsAttention = !hasReplenishment && Number(row.avg_units_per_week) > 0;
@@ -82,13 +82,13 @@ export function ReplenishmentShippedFifoTab({ skuSearch }: ReplenishmentShippedF
                   <div
                     key={row.sku}
                     className={`px-4 py-3 transition-colors ${
-                      needsAttention ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-gray-50/60'
+                      needsAttention ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-surface-canvas/60'
                     }`}
                   >
                     <div className="grid grid-cols-[minmax(0,1.6fr)_70px_90px_90px_90px_90px_120px] gap-3 items-start">
                       {/* Item info */}
                       <div className="min-w-0">
-                        <p className="text-label font-black text-gray-900 truncate">
+                        <p className="text-label font-black text-text-default truncate">
                           {row.product_title || row.sku}
                         </p>
                         <p className={`${fieldLabel} mt-0.5 truncate`}>
@@ -101,34 +101,34 @@ export function ReplenishmentShippedFifoTab({ skuSearch }: ReplenishmentShippedF
                       </div>
 
                       {/* Shipped qty */}
-                      <div className="text-micro font-black text-gray-700">
-                        <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>Shipped</p>
+                      <div className="text-micro font-black text-text-muted">
+                        <p className={`uppercase tracking-widest text-text-soft ${tableHeader}`}>Shipped</p>
                         <p className="mt-1">{row.shipped_qty}</p>
                       </div>
 
                       {/* Units/week */}
-                      <div className="text-micro font-black text-gray-700">
-                        <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>Units/Wk</p>
+                      <div className="text-micro font-black text-text-muted">
+                        <p className={`uppercase tracking-widest text-text-soft ${tableHeader}`}>Units/Wk</p>
                         <p className={`mt-1 ${Number(row.avg_units_per_week) >= 3 ? 'text-red-600' : ''}`}>
                           {row.avg_units_per_week}
                         </p>
                       </div>
 
                       {/* Zoho available */}
-                      <div className="text-micro font-black text-gray-700">
-                        <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>Avail</p>
+                      <div className="text-micro font-black text-text-muted">
+                        <p className={`uppercase tracking-widest text-text-soft ${tableHeader}`}>Avail</p>
                         <p className="mt-1">{zohoLinked ? numText(row.zoho_qty_available) : '—'}</p>
                       </div>
 
                       {/* Zoho incoming */}
-                      <div className="text-micro font-black text-gray-700">
-                        <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>Incoming</p>
+                      <div className="text-micro font-black text-text-muted">
+                        <p className={`uppercase tracking-widest text-text-soft ${tableHeader}`}>Incoming</p>
                         <p className="mt-1">{zohoLinked ? numText(row.zoho_incoming_qty) : '—'}</p>
                       </div>
 
                       {/* Reorder level */}
-                      <div className="text-micro font-black text-gray-700">
-                        <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>Reorder Lvl</p>
+                      <div className="text-micro font-black text-text-muted">
+                        <p className={`uppercase tracking-widest text-text-soft ${tableHeader}`}>Reorder Lvl</p>
                         <p className="mt-1">{row.reorder_level != null ? row.reorder_level : '—'}</p>
                       </div>
 
@@ -140,14 +140,14 @@ export function ReplenishmentShippedFifoTab({ skuSearch }: ReplenishmentShippedF
                               {(row.replenishment_status || '').replace(/_/g, ' ')}
                             </span>
                             {row.zoho_po_number && (
-                              <p className="text-eyebrow font-bold text-gray-500 mt-1">PO {row.zoho_po_number}</p>
+                              <p className="text-eyebrow font-bold text-text-soft mt-1">PO {row.zoho_po_number}</p>
                             )}
                           </div>
                         ) : (
                           <span className={`inline-flex items-center rounded-full border px-2 py-1 text-eyebrow font-black uppercase tracking-wider ${
                             needsAttention
                               ? 'bg-red-100 text-red-700 border-red-200'
-                              : 'bg-gray-100 text-gray-500 border-gray-200'
+                              : 'bg-surface-sunken text-text-soft border-border-soft'
                           }`}>
                             {needsAttention ? 'No coverage' : 'OK'}
                           </span>

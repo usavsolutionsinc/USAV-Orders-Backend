@@ -74,9 +74,9 @@ export function NextWeekScheduleTable({
       </div>
 
       {calendarExpanded && (
-        <div className="overflow-x-auto border border-gray-200 bg-white">
+        <div className="overflow-x-auto border border-border-soft bg-surface-card">
           <div className="min-w-[920px]">
-            <div className="grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-gray-200 bg-gray-50 px-4 py-2.5">
+            <div className="grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-border-soft bg-surface-canvas px-4 py-2.5">
               <span className={tableHeader}>Staff</span>
               {nextBusinessDays.map((day) => (
                 <span key={`upcoming-${day.date}`} className={`${tableHeader} text-center`}>
@@ -87,8 +87,8 @@ export function NextWeekScheduleTable({
             {filteredStaff.map((member) => (
               <div
                 key={`upcoming-row-${member.id}`}
-                className={`grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-gray-100 px-4 py-2 ${
-                  member.active ? 'bg-white' : 'bg-gray-50'
+                className={`grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-border-hairline px-4 py-2 ${
+                  member.active ? 'bg-surface-card' : 'bg-surface-canvas'
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -97,7 +97,7 @@ export function NextWeekScheduleTable({
                     className="inline-block h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/5"
                     style={{ backgroundColor: getStaffColorHex(member) }}
                   />
-                  <p className={`${dataValue} truncate uppercase tracking-[0.02em] ${member.active ? 'text-gray-900' : 'text-gray-500'}`}>
+                  <p className={`${dataValue} truncate uppercase tracking-[0.02em] ${member.active ? 'text-text-default' : 'text-text-soft'}`}>
                     {member.name}
                   </p>
                 </div>
@@ -125,15 +125,15 @@ export function NextWeekScheduleTable({
                         className={[
                           `${tableHeader} mx-2 h-7 border text-center leading-7 transition-colors`,
                           !member.active
-                            ? 'border-gray-200 bg-gray-100 text-gray-400'
+                            ? 'border-border-soft bg-surface-sunken text-text-faint'
                             : hasConflict
                               ? 'border-amber-300 bg-amber-50 text-amber-800'
                               : blockedByRule
                                 ? 'border-red-200 bg-red-50 text-red-700'
                                 : isScheduled
                                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                  : 'border-gray-200 bg-gray-50 text-gray-500',
-                          isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
+                                  : 'border-border-soft bg-surface-canvas text-text-soft',
+                          isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-border-emphasis',
                         ].join(' ')}
                         aria-pressed={isScheduled}
                         aria-label={`${member.name} next week ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}

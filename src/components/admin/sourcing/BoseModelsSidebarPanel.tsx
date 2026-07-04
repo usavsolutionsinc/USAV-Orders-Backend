@@ -70,16 +70,16 @@ export function BoseModelsSidebarPanel() {
               <path d="M5 12h14" />
             </svg>
           }
-          className="w-full border border-dashed border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          className="w-full border border-dashed border-border-default bg-surface-card text-text-muted hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
           Add model
         </Button>
       }
     >
       {isLoading ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">Loading models…</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">Loading models…</div>
       ) : rows.length === 0 ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">No Bose models yet.</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">No Bose models yet.</div>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row) => (
@@ -95,7 +95,7 @@ export function BoseModelsSidebarPanel() {
                     asChild
                     focusable={false}
                   >
-                    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-semibold text-gray-600">
+                    <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-micro font-semibold text-text-muted">
                       {row.compat_count}
                     </span>
                   </HoverTooltip>

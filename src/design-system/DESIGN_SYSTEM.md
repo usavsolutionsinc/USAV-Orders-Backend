@@ -36,13 +36,33 @@ This design system implements the "Kinetic Ledger" direction for dense operation
 - CSS variable generation:
   - `tokens/css-variables.ts`
 
-### Themes
+### Themes (the theme registry — SoT for all theme-varying color)
 
-- `themes/light.ts` and `themes/dark.ts` now include:
-  - Surface container ladder (`containerLow` -> `containerHighest`)
-  - Signature primary gradient zone
-  - Glass/scrim overlay values
-  - Ghost border and no-box primitives
+- `themes/registry.ts` is the single source of truth for every theme-varying
+  CSS variable (`--ds-color-*` + `--background`/`--foreground`), the
+  `ThemePalette` contract, the `STAFF_ACCENTS` table, and the CSS generator
+  (`themeRegistryCssText()` → injected by `app/layout.tsx` as
+  `<style id="app-theme-palettes">`).
+- Palettes: `themes/light.ts` (default), `themes/dark.ts`, `themes/mono.ts`
+  (strict grayscale; collapses staff accents; keeps a muted
+  success/warning/danger safety triad), `themes/slate.ts` (cool industrial).
+- Two `<html>` attributes, stamped by `src/lib/theme/theme.ts`:
+  `data-theme="<name>"` selects the palette block; `data-color-scheme="dark"`
+  (from `palette.scheme`) scopes the raw-neutral compatibility remap in
+  `src/styles/globals.css` + dark staff-accent overrides — any dark-family
+  theme inherits both for free.
+- **Adding a theme**: author `themes/<name>.ts` (the `ThemeVars` Record type
+  forces full variable coverage), register it in `THEME_PALETTES`, widen
+  `ThemeName`. The boot script, the Appearance switcher (with preview
+  miniature), and persistence pick it up automatically. Run the contrast audit
+  before shipping (see the audit report's §5 execution log).
+- **Consuming color**: use the semantic utilities bound to the registry —
+  `bg-surface-card/canvas/sunken/hover/strong/inverse`, `text-text-default/
+  muted/soft/faint/inverse/inverse-soft`, `border-border-hairline/soft/default/
+  emphasis/strong/inverse`, functional trios (`*-success/warning/danger/accent`),
+  and tone fills (`bg-fill-info` …). Alpha modifiers work (`bg-surface-card/90`
+  → `color-mix()`); raw neutrals are ratcheted by
+  `src/components/ui/color-neutrals.guard.test.ts`.
 
 ### Primitives (`primitives/`)
 

@@ -151,24 +151,24 @@ export function AuditTimeline(props: Props) {
   }, [url]);
 
   if (!url) {
-    return <div className="text-xs text-gray-400">Pass binId or sku.</div>;
+    return <div className="text-xs text-text-faint">Pass binId or sku.</div>;
   }
 
   return (
     <section className={compact ? 'space-y-2' : 'space-y-3'}>
       {!noHeader && (
         <header className="flex items-baseline justify-between">
-          <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+          <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-text-soft">
             History
           </h2>
           {!loading && events.length > 0 && (
-            <span className="text-micro text-slate-400">{events.length} events</span>
+            <span className="text-micro text-text-faint">{events.length} events</span>
           )}
         </header>
       )}
 
       {loading && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
+        <div className="rounded-lg border border-border-soft bg-surface-card p-3 text-xs text-text-soft">
           Loading history…
         </div>
       )}
@@ -180,13 +180,13 @@ export function AuditTimeline(props: Props) {
       )}
 
       {!loading && !err && events.length === 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-400">
+        <div className="rounded-lg border border-border-soft bg-surface-card p-3 text-xs text-text-faint">
           No history yet.
         </div>
       )}
 
       {!loading && !err && events.length > 0 && (
-        <ol className="rounded-lg border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
+        <ol className="rounded-lg border border-border-soft bg-surface-card overflow-hidden divide-y divide-border-hairline">
           {events.map((ev) => {
             const diffs = diffSummary(ev.before, ev.after);
             return (
@@ -203,21 +203,21 @@ export function AuditTimeline(props: Props) {
                     </span>
                   </HoverTooltip>
                   <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="font-mono text-label font-semibold text-slate-900">
+                    <span className="font-mono text-label font-semibold text-text-default">
                       {ev.kind}
                     </span>
                     {ev.sku && (
-                      <span className="font-mono text-caption text-slate-600">
+                      <span className="font-mono text-caption text-text-muted">
                         {ev.sku}
                       </span>
                     )}
                     {ev.bin_code && (
-                      <span className="font-mono text-caption text-slate-600">
+                      <span className="font-mono text-caption text-text-muted">
                         @ {ev.bin_code}
                       </span>
                     )}
                     {ev.reason_code && (
-                      <span className="rounded-sm bg-slate-100 px-1 py-px text-micro text-slate-600">
+                      <span className="rounded-sm bg-surface-sunken px-1 py-px text-micro text-text-muted">
                         {ev.reason_code}
                       </span>
                     )}
@@ -228,7 +228,7 @@ export function AuditTimeline(props: Props) {
                       {diffs.map((d, i) => (
                         <li
                           key={i}
-                          className="font-mono text-caption text-slate-700"
+                          className="font-mono text-caption text-text-muted"
                         >
                           {d}
                         </li>
@@ -237,11 +237,11 @@ export function AuditTimeline(props: Props) {
                   )}
 
                   {ev.note && (
-                    <p className="mt-1 text-caption italic text-slate-500">{ev.note}</p>
+                    <p className="mt-1 text-caption italic text-text-soft">{ev.note}</p>
                   )}
 
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-micro text-slate-500">
-                    <span className="font-semibold text-slate-700">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-micro text-text-soft">
+                    <span className="font-semibold text-text-muted">
                       {ev.actor_name ?? 'Unknown'}
                     </span>
                     <HoverTooltip label={fmtTime(ev.occurred_at)} asChild>

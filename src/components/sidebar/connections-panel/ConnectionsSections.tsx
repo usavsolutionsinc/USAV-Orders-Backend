@@ -12,7 +12,7 @@ export function OrdersSection({ c }: { c: ConnectionsPanelController }) {
       <LineItem label="Sync eBay Orders" detail="Pull eBay changes and reconcile order exceptions" right={<ActionButton onClick={() => c.ebaySyncMutation.mutate()} loading={c.ebaySyncMutation.isPending} title="Sync eBay orders" tone="blue" />} />
       <LineItem label="Sync Ecwid Exceptions" detail="Copy tracking updates onto open Ecwid exceptions" right={<ActionButton onClick={() => c.ecwidExceptionTrackingMutation.mutate()} loading={c.ecwidExceptionTrackingMutation.isPending} title="Sync Ecwid exceptions" tone="blue" />} />
       <LineItem label="Clear Resolved Exceptions" detail="Remove exception rows that no longer need attention" right={<ActionButton onClick={() => c.exceptionsSyncMutation.mutate()} loading={c.exceptionsSyncMutation.isPending} title="Clear resolved exceptions" tone="green" />} />
-      <LineItem label="Upload ShipStation CSV" detail="Import a local ShipStation export" right={/* ds-raw-button: flush w-12 h-full cell action mirroring ActionButton geometry — not a Button shape */<button type="button" onClick={() => c.shipStationFileInputRef.current?.click()} className={`ds-raw-button h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-700 hover:bg-gray-100`}>Up</button>} />
+      <LineItem label="Upload ShipStation CSV" detail="Import a local ShipStation export" right={/* ds-raw-button: flush w-12 h-full cell action mirroring ActionButton geometry — not a Button shape */<button type="button" onClick={() => c.shipStationFileInputRef.current?.click()} className={`ds-raw-button h-full w-12 border-l border-border-soft ${sectionLabel} text-text-muted hover:bg-surface-sunken`}>Up</button>} />
       {c.tokenAccounts.map((account) => {
         const minutesLeft = Math.floor((new Date(account.token_expires_at).getTime() - c.now.getTime()) / 60000);
         const isRefreshing = c.refreshTokenMutation.isPending && c.refreshTokenMutation.variables === account.account_name;
@@ -32,24 +32,24 @@ export function OrdersSection({ c }: { c: ConnectionsPanelController }) {
 export function ZohoSection({ c }: { c: ConnectionsPanelController }) {
   return (
     <SidebarSection title="Zoho" expanded={c.showZoho} onToggle={() => c.setShowZoho((v) => !v)}>
-      <div className="border-b border-gray-200 bg-white px-4 py-3">
+      <div className="border-b border-border-soft bg-surface-card px-4 py-3">
         <Link
           href="/admin?section=connections&page=zoho-management"
-          className={`inline-flex border-b border-gray-900 py-1 ${sectionLabel} text-gray-900`}
+          className={`inline-flex border-b border-border-strong py-1 ${sectionLabel} text-text-default`}
         >
           Open Zoho Tools
         </Link>
       </div>
       <LineItem label="Refresh Token" detail="Refresh the Zoho auth token before syncing" right={<ActionButton onClick={() => c.zohoRefreshMutation.mutate()} loading={c.zohoRefreshMutation.isPending} title="Refresh Zoho token" />} />
       <LineItem label="Sync Expected POs" detail="Load expected inbound lines before receiving starts" right={<ActionButton onClick={() => c.zohoSyncMutation.mutate()} loading={c.zohoSyncMutation.isPending} title="Sync Zoho purchase orders" tone="green" />} />
-      <div className="border-b border-gray-200 bg-white px-4 py-3">
+      <div className="border-b border-border-soft bg-surface-card px-4 py-3">
         <p className={dataValue}>Import One Purchase Receive</p>
-        <div className="mt-2 flex items-stretch gap-0 border border-gray-200">
+        <div className="mt-2 flex items-stretch gap-0 border border-border-soft">
           <input
             value={c.purchaseReceiveId}
             onChange={(e) => c.setPurchaseReceiveId(e.target.value)}
             placeholder="Paste purchase receive ID"
-            className={`flex-1 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
+            className={`flex-1 bg-surface-canvas px-2 py-2 ${sectionLabel} text-text-default outline-none`}
           />
           {/* ds-raw-button: flush w-12 input-adjoined cell action (no rounding, border-l seam) — not a Button shape */}
           <button
@@ -136,27 +136,27 @@ export function AmazonSection({ c }: { c: ConnectionsPanelController }) {
         detail="Import every order, including untracked SKUs"
         right={<ActionButton onClick={() => c.amazonSyncMutation.mutate(true)} loading={c.amazonSyncMutation.isPending && c.amazonSyncMutation.variables === true} title="Sync all Amazon orders" tone="indigo" />}
       />
-      <div className="border-b border-gray-200 bg-white px-4 py-3">
+      <div className="border-b border-border-soft bg-surface-card px-4 py-3">
         <p className={dataValue}>Connect with Refresh Token</p>
-        <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Self-authorized private app (bootstrap)</p>
+        <p className={`mt-0.5 ${fieldLabel} text-text-soft`}>Self-authorized private app (bootstrap)</p>
         <div className="mt-2 space-y-2">
           <input
             value={c.amazonRefreshToken}
             onChange={(e) => c.setAmazonRefreshToken(e.target.value)}
             placeholder="Paste LWA refresh token (Atzr|…)"
-            className={`w-full border border-gray-200 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
+            className={`w-full border border-border-soft bg-surface-canvas px-2 py-2 ${sectionLabel} text-text-default outline-none`}
           />
           <div className="flex items-stretch gap-2">
             <input
               value={c.amazonSellerId}
               onChange={(e) => c.setAmazonSellerId(e.target.value)}
               placeholder="Seller ID (optional)"
-              className={`min-w-0 flex-1 border border-gray-200 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
+              className={`min-w-0 flex-1 border border-border-soft bg-surface-canvas px-2 py-2 ${sectionLabel} text-text-default outline-none`}
             />
             <select
               value={c.amazonRegion}
               onChange={(e) => c.setAmazonRegion(e.target.value as 'NA' | 'EU' | 'FE')}
-              className={`border border-gray-200 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
+              className={`border border-border-soft bg-surface-canvas px-2 py-2 ${sectionLabel} text-text-default outline-none`}
             >
               <option value="NA">NA</option>
               <option value="EU">EU</option>
@@ -186,7 +186,7 @@ export function AmazonSection({ c }: { c: ConnectionsPanelController }) {
                 type="button"
                 onClick={() => c.amazonDisconnectMutation.mutate(acc.id)}
                 disabled={c.amazonDisconnectMutation.isPending && c.amazonDisconnectMutation.variables === acc.id}
-                className={`ds-raw-button h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-600 hover:bg-gray-100 disabled:opacity-50`}
+                className={`ds-raw-button h-full w-12 border-l border-border-soft ${sectionLabel} text-text-muted hover:bg-surface-sunken disabled:opacity-50`}
                 aria-label={`Disconnect ${acc.account_name}`}
               >
                 Off

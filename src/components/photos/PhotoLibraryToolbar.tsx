@@ -85,8 +85,8 @@ export function PhotoLibraryToolbar<T>({
   }, [count, deleteArmed, deleting, onDeleteSelected, rows]);
 
   return (
-    <div className="flex h-[40px] shrink-0 items-center gap-2 border-b border-gray-200 bg-gray-50/80 px-4 backdrop-blur-sm lg:px-6">
-      <span className="shrink-0 text-xs font-bold tabular-nums text-gray-700">
+    <div className="flex h-[40px] shrink-0 items-center gap-2 border-b border-border-soft bg-surface-canvas/80 px-4 backdrop-blur-sm lg:px-6">
+      <span className="shrink-0 text-xs font-bold tabular-nums text-text-muted">
         {shownCount} selected
       </span>
       <Button
@@ -119,9 +119,9 @@ export function PhotoLibraryToolbar<T>({
               type="button"
               aria-label={a.label}
               onClick={() => void a.run(rows)}
-              className="ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-600 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900"
+              className="ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-text-muted transition-colors duration-200 hover:bg-surface-sunken hover:text-text-default"
             >
-              <span className="inline-flex shrink-0 text-gray-400">{a.icon}</span>
+              <span className="inline-flex shrink-0 text-text-faint">{a.icon}</span>
               <span className="whitespace-nowrap">{a.label}</span>
             </button>
           ) : (
@@ -130,7 +130,7 @@ export function PhotoLibraryToolbar<T>({
                 ariaLabel={a.label}
                 onClick={() => void a.run(rows)}
                 icon={a.icon}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-700"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-faint transition-colors duration-200 hover:bg-surface-sunken hover:text-text-muted"
               />
             </HoverTooltip>
           ),
@@ -150,7 +150,7 @@ export function PhotoLibraryToolbar<T>({
                 'ds-raw-button inline-flex items-center rounded-lg transition-colors duration-200 disabled:opacity-60',
                 deleteArmed
                   ? 'gap-1.5 bg-red-50 px-2 py-1.5 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100'
-                  : 'h-8 w-8 justify-center text-gray-400 hover:bg-gray-100 hover:text-red-600',
+                  : 'h-8 w-8 justify-center text-text-faint hover:bg-surface-sunken hover:text-red-600',
               )}
             >
               <Trash2 className="h-4 w-4 shrink-0" />
@@ -166,7 +166,7 @@ export function PhotoLibraryToolbar<T>({
           ariaLabel="Clear selection"
           onClick={onClear}
           icon={<X className="h-4 w-4" />}
-          className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+          className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-faint hover:bg-surface-strong hover:text-text-muted"
         />
       </div>
     </div>

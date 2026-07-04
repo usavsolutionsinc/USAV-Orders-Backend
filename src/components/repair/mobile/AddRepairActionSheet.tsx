@@ -96,11 +96,11 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
     actionType === 'replaced';
 
   return (
-    <div className="fixed inset-0 z-modal flex flex-col bg-white">
-      <header className="shrink-0 flex items-center justify-between border-b border-slate-200 px-4 py-3">
+    <div className="fixed inset-0 z-modal flex flex-col bg-surface-card">
+      <header className="shrink-0 flex items-center justify-between border-b border-border-soft px-4 py-3">
         {step === 'type' ? (
           <>
-            <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">
+            <h2 className="text-sm font-black uppercase tracking-wide text-text-default">
               Add action
             </h2>
             <Button variant="ghost" size="sm" onClick={onClose}>
@@ -112,7 +112,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
             <Button variant="ghost" size="sm" onClick={() => setStep('type')}>
               ← Back
             </Button>
-            <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">
+            <h2 className="text-sm font-black uppercase tracking-wide text-text-default">
               {actionType && TYPES.find((t) => t.id === actionType)?.label}
             </h2>
             {/* ds-raw-button: solid-orange repair-theme save CTA — no orange DS Button variant */}
@@ -137,13 +137,13 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
                 key={t.id}
                 type="button"
                 onClick={() => pick(t.id)}
-                className="flex flex-col items-start gap-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50 active:scale-[0.98] transition-transform"
+                className="flex flex-col items-start gap-1 rounded-xl border border-border-soft bg-surface-card p-4 shadow-sm active:bg-surface-hover active:scale-[0.98] transition-transform"
               >
                 <span className="text-3xl leading-none" aria-hidden>
                   {t.emoji}
                 </span>
-                <p className="mt-1 text-sm font-black text-slate-900">{t.label}</p>
-                <p className="text-micro font-semibold text-slate-500 leading-snug">{t.sub}</p>
+                <p className="mt-1 text-sm font-black text-text-default">{t.label}</p>
+                <p className="text-micro font-semibold text-text-soft leading-snug">{t.sub}</p>
               </button>
             ))}
           </div>
@@ -246,7 +246,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-micro font-black uppercase tracking-[0.14em] text-slate-500 mb-1">
+      <span className="block text-micro font-black uppercase tracking-[0.14em] text-text-soft mb-1">
         {label}
       </span>
       <input
@@ -258,7 +258,7 @@ function Field({
         autoFocus={autoFocus}
         autoComplete="off"
         spellCheck={false}
-        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 ${
+        className={`w-full rounded-lg border border-border-default bg-surface-card px-3 py-2.5 text-sm font-bold text-text-default outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 ${
           mono ? 'font-mono' : ''
         }`}
       />
@@ -279,7 +279,7 @@ function FieldTextarea({
 }) {
   return (
     <label className="block">
-      <span className="block text-micro font-black uppercase tracking-[0.14em] text-slate-500 mb-1">
+      <span className="block text-micro font-black uppercase tracking-[0.14em] text-text-soft mb-1">
         {label}
       </span>
       <textarea
@@ -287,7 +287,7 @@ function FieldTextarea({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={4}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 resize-none"
+        className="w-full rounded-lg border border-border-default bg-surface-card px-3 py-2.5 text-sm font-medium text-text-default outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 resize-none"
       />
     </label>
   );

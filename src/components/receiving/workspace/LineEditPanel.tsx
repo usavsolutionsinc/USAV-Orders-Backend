@@ -33,6 +33,7 @@ import { POUnboxingSection } from './line-edit/POUnboxingSection';
 import { LineEditModals } from './line-edit/LineEditModals';
 import { useUnboxLineController } from './line-edit/hooks/useUnboxLineController';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { LinkedTicketsPanel } from '@/components/linkage/LinkedTicketsPanel';
 
 export function LineEditPanel({
   row,
@@ -81,7 +82,7 @@ export function LineEditPanel({
 
   return (
     <>
-      <div className="relative flex h-full min-h-0 flex-col bg-gray-50">
+      <div className="relative flex h-full min-h-0 flex-col bg-surface-canvas">
         <LineEditToolbar
           mode="unbox"
           receivingId={row.receiving_id ?? null}
@@ -135,6 +136,16 @@ export function LineEditPanel({
             <motion.div variants={revealItem}>
               <WorkspaceNotesCard row={row} c={c} onActionFeedback={setActionFeedback} />
             </motion.div>
+
+            {/* Returned-serial closed loop: when the scanned serial was
+                previously shipped, surface its outbound order ↔ tracking ↔ any
+                linked Zendesk tickets. hideWhenEmpty keeps it silent for normal
+                (non-return) lines. */}
+            {c.serialInput.trim() ? (
+              <motion.div variants={revealItem}>
+                <LinkedTicketsPanel serial={c.serialInput.trim()} hideWhenEmpty dense />
+              </motion.div>
+            ) : null}
 
             {/* Label preview — you print at unbox. */}
             <motion.div variants={revealItem}>

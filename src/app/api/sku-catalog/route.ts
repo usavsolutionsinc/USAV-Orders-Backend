@@ -14,6 +14,8 @@ import {
 } from '@/lib/api-idempotency';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import pool from '@/lib/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 
 const ROUTE_SKU_CATALOG_POST = 'sku-catalog.post';
 
@@ -116,6 +118,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       });
     }
 
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.skuCatalog]);
     return NextResponse.json(responseBody, { status: 201 });
   } catch (error: any) {
     if (error?.code === '23505' || /unique/i.test(error?.message || '')) {

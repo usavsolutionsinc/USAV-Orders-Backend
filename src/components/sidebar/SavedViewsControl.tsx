@@ -119,20 +119,20 @@ export function SavedViewsControl({
         variant="ghost"
         size="sm"
         onClick={() => setOpen((o) => !o)}
-        icon={<Star className={`h-3.5 w-3.5 ${activeView ? 'text-amber-500' : 'text-gray-400'}`} />}
+        icon={<Star className={`h-3.5 w-3.5 ${activeView ? 'text-amber-500' : 'text-text-faint'}`} />}
         className={`text-caption font-bold uppercase tracking-wide ${
-          activeView ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'
+          activeView ? 'text-text-default' : 'text-text-soft hover:text-text-default'
         }`}
         aria-expanded={open}
       >
         <span className="truncate max-w-[120px]">{activeView ? activeView.name : label}</span>
-        {views.length > 0 ? <span className="tabular-nums text-gray-400">{views.length}</span> : null}
+        {views.length > 0 ? <span className="tabular-nums text-text-faint">{views.length}</span> : null}
       </Button>
 
       <AnchoredLayer open={open} onClose={() => setOpen(false)} anchorRef={triggerRef} placement="bottom-start" gap={6}>
-        <div className="w-60 rounded-xl border border-gray-200 bg-white py-1.5 shadow-lg">
+        <div className="w-60 rounded-xl border border-border-soft bg-surface-card py-1.5 shadow-lg">
           {views.length === 0 ? (
-            <p className="px-3 py-2 text-xs italic text-gray-400">No saved views yet.</p>
+            <p className="px-3 py-2 text-xs italic text-text-faint">No saved views yet.</p>
           ) : (
             <ul className="max-h-64 overflow-y-auto py-0.5">
               {views.map((view) => {
@@ -142,8 +142,8 @@ export function SavedViewsControl({
                     <button
                       type="button"
                       onClick={() => applyView(view)}
-                      className={`ds-raw-button flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-gray-50 ${
-                        isActive ? 'font-semibold text-gray-900' : 'text-gray-700'
+                      className={`ds-raw-button flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-surface-hover ${
+                        isActive ? 'font-semibold text-text-default' : 'text-text-muted'
                       }`}
                     >
                       <Check className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-blue-600' : 'text-transparent'}`} />
@@ -153,7 +153,7 @@ export function SavedViewsControl({
                       icon={<Trash2 className="h-3.5 w-3.5" />}
                       ariaLabel={`Delete view ${view.name}`}
                       onClick={() => removeView(view.id)}
-                      className="mr-1.5 shrink-0 rounded p-1 text-gray-300 opacity-0 transition-all hover:text-rose-500 group-hover:opacity-100"
+                      className="mr-1.5 shrink-0 rounded p-1 text-text-faint opacity-0 transition-all hover:text-rose-500 group-hover:opacity-100"
                     />
                   </li>
                 );
@@ -161,7 +161,7 @@ export function SavedViewsControl({
             </ul>
           )}
 
-          <div className="mt-1 border-t border-gray-100 pt-1.5">
+          <div className="mt-1 border-t border-border-hairline pt-1.5">
             {naming ? (
               <form
                 onSubmit={(e) => {
@@ -176,7 +176,7 @@ export function SavedViewsControl({
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
                   placeholder="Name this view…"
-                  className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-sm outline-none focus:border-blue-400"
+                  className="min-w-0 flex-1 rounded-md border border-border-soft px-2 py-1 text-sm outline-none focus:border-blue-400"
                 />
                 <Button
                   type="submit"
@@ -205,7 +205,7 @@ export function SavedViewsControl({
                 onClick={() => setNaming(true)}
                 disabled={!hasActiveFilters || Boolean(activeView)}
                 icon={<Plus className="h-3.5 w-3.5 shrink-0" />}
-                className="w-full justify-start text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="w-full justify-start text-sm font-medium text-text-muted hover:bg-surface-hover"
               >
                 Save current view
               </Button>

@@ -176,19 +176,19 @@ export function CsvOrderImport() {
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <CheckCircle className="h-5 w-5 text-emerald-600" />
-          <h3 className="text-caption font-bold text-gray-900">Import complete</h3>
+          <h3 className="text-caption font-bold text-text-default">Import complete</h3>
         </div>
-        <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+        <div className="divide-y divide-border-hairline rounded-xl border border-border-soft">
           <div className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-500">Inserted</span>
+            <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-soft">Inserted</span>
             <span className="text-caption font-bold text-emerald-700">{result.inserted}</span>
           </div>
           <div className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-500">Skipped (duplicates)</span>
-            <span className="text-caption font-bold text-gray-700">{result.skipped}</span>
+            <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-soft">Skipped (duplicates)</span>
+            <span className="text-caption font-bold text-text-muted">{result.skipped}</span>
           </div>
           <div className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-500">Errors</span>
+            <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-soft">Errors</span>
             <span className="text-caption font-bold text-rose-700">{result.errors.length}</span>
           </div>
         </div>
@@ -218,7 +218,7 @@ export function CsvOrderImport() {
     return (
       <div className="space-y-4">
         <EmptyState
-          icon={<FileText className="h-6 w-6 text-gray-400" />}
+          icon={<FileText className="h-6 w-6 text-text-faint" />}
           title="Import orders from CSV"
           description="Upload a CSV export from any channel. You'll map its columns to order fields on the next step."
           action={
@@ -253,9 +253,9 @@ export function CsvOrderImport() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          <FileText className="h-4 w-4 shrink-0 text-gray-500" />
-          <span className="truncate text-caption font-bold text-gray-900">{fileName}</span>
-          <span className="shrink-0 text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+          <FileText className="h-4 w-4 shrink-0 text-text-soft" />
+          <span className="truncate text-caption font-bold text-text-default">{fileName}</span>
+          <span className="shrink-0 text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
             {rows.length} rows
           </span>
         </div>
@@ -263,19 +263,19 @@ export function CsvOrderImport() {
       </div>
 
       <div className="space-y-3">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Map columns</p>
-        <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Map columns</p>
+        <div className="divide-y divide-border-hairline rounded-xl border border-border-soft">
           {CANONICAL_FIELDS.map((field) => {
             const selected = mapping[field.key] ?? '';
             const missingRequired = field.required && !selected;
             return (
               <div key={field.key} className="flex items-center justify-between gap-3 px-4 py-2.5">
                 <div className="min-w-0">
-                  <p className="truncate text-caption font-bold text-gray-900">
+                  <p className="truncate text-caption font-bold text-text-default">
                     {field.label}
                     {field.required && <span className="ml-1 text-rose-600">*</span>}
                   </p>
-                  <p className="text-eyebrow font-semibold uppercase tracking-widest text-gray-500">{field.key}</p>
+                  <p className="text-eyebrow font-semibold uppercase tracking-widest text-text-soft">{field.key}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {selected && !missingRequired && <Check className="h-3.5 w-3.5 text-emerald-600" />}
@@ -289,10 +289,10 @@ export function CsvOrderImport() {
                         return next;
                       });
                     }}
-                    className={`h-8 rounded-lg border bg-white px-2 text-label font-semibold text-gray-900 focus:outline-none focus:ring-1 ${
+                    className={`h-8 rounded-lg border bg-surface-card px-2 text-label font-semibold text-text-default focus:outline-none focus:ring-1 ${
                       missingRequired
                         ? 'border-rose-300 ring-rose-200'
-                        : 'border-gray-200 focus:border-blue-400 focus:ring-blue-400'
+                        : 'border-border-soft focus:border-blue-400 focus:ring-blue-400'
                     }`}
                   >
                     <option value="">— Not mapped —</option>
@@ -313,9 +313,9 @@ export function CsvOrderImport() {
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+      <div className="flex items-center justify-end gap-2 border-t border-border-hairline pt-3">
         {!mapping.order_number && (
-          <span className="text-mini font-semibold text-gray-500">Map an order number column to continue</span>
+          <span className="text-mini font-semibold text-text-soft">Map an order number column to continue</span>
         )}
         <Button
           variant="primary"

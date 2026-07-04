@@ -120,16 +120,16 @@ export function SupportChatComposer({
         : `${staffName ? `Signs as — ${staffName} · ` : ''}Not emailed`;
 
   return (
-    <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+    <div className="shrink-0 border-t border-border-hairline bg-surface-card px-4 py-3">
       <div className="mb-2.5 flex items-center justify-between">
-        <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+        <div className="inline-flex rounded-lg bg-surface-sunken p-0.5">
           {/* ds-raw-button: segmented toggle (conditional active fill), not a single-variant Button */}
           <button
             type="button"
             onClick={() => setIsPublic(false)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-caption font-bold transition',
-              !isPublic ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+              !isPublic ? 'bg-surface-card text-amber-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
             )}
           >
             <Lock className="h-3.5 w-3.5" /> Internal note
@@ -140,7 +140,7 @@ export function SupportChatComposer({
             onClick={() => setIsPublic(true)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-caption font-bold transition',
-              isPublic ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+              isPublic ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
             )}
           >
             <Globe className="h-3.5 w-3.5" /> Public reply
@@ -186,8 +186,8 @@ export function SupportChatComposer({
 
       {/* CC collaborators — public replies only (CCs make no sense on a note). */}
       {isPublic ? (
-        <div className="mb-2.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50/60 px-2 py-1.5">
-          <span className="inline-flex items-center gap-1 text-micro font-black uppercase tracking-widest text-gray-400">
+        <div className="mb-2.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-border-soft bg-surface-canvas/60 px-2 py-1.5">
+          <span className="inline-flex items-center gap-1 text-micro font-black uppercase tracking-widest text-text-faint">
             <Mail className="h-3 w-3" /> Cc
           </span>
           {ccs.map((email) => (
@@ -219,7 +219,7 @@ export function SupportChatComposer({
             }}
             onBlur={() => addCc(ccInput)}
             placeholder={ccs.length ? 'Add another…' : 'Add email to CC…'}
-            className="min-w-[8rem] flex-1 bg-transparent px-1 text-label text-gray-800 outline-none placeholder:text-gray-400"
+            className="min-w-[8rem] flex-1 bg-transparent px-1 text-label text-text-default outline-none placeholder:text-text-faint"
           />
           <datalist id="support-cc-suggestions">
             {ccSuggestions.map((email) => (
@@ -236,7 +236,7 @@ export function SupportChatComposer({
               key={s.tempId}
               className={cn(
                 'relative h-14 w-14 overflow-hidden rounded-lg ring-1 ring-inset',
-                s.status === 'error' ? 'ring-rose-300' : 'ring-gray-200',
+                s.status === 'error' ? 'ring-rose-300' : 'ring-border-soft',
               )}
             >
               <img src={s.thumbUrl || s.previewUrl} alt={s.name} className="h-full w-full object-cover" />
@@ -263,9 +263,9 @@ export function SupportChatComposer({
 
       <div
         className={cn(
-          'rounded-xl border bg-white transition',
+          'rounded-xl border bg-surface-card transition',
           isPublic
-            ? 'border-gray-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100'
+            ? 'border-border-soft focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100'
             : 'border-amber-300 bg-amber-50/30 focus-within:ring-2 focus-within:ring-amber-100',
         )}
       >
@@ -279,10 +279,10 @@ export function SupportChatComposer({
           placeholder={
             isPublic ? 'Reply to the customer…  (⌘↵ to send)' : 'Internal note — not emailed…  (⌘↵ to send)'
           }
-          className="block w-full resize-none rounded-xl bg-transparent px-3.5 py-2.5 text-[13px] leading-relaxed text-gray-900 outline-none placeholder:text-gray-400"
+          className="block w-full resize-none rounded-xl bg-transparent px-3.5 py-2.5 text-[13px] leading-relaxed text-text-default outline-none placeholder:text-text-faint"
         />
-        <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
-          <span className="text-caption text-gray-400">{hint}</span>
+        <div className="flex items-center justify-between border-t border-border-hairline px-3 py-2">
+          <span className="text-caption text-text-faint">{hint}</span>
           <Button
             variant={isPublic ? 'primary' : 'secondary'}
             size="sm"

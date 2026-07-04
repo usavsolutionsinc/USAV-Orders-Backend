@@ -80,7 +80,7 @@ export const EMPTY_COUNTS: QueueCounts = {
 export const STATUS_OPTIONS: WorkStatus[] = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE', 'CANCELED'];
 
 export const STATUS_COLOR: Record<WorkStatus, string> = {
-  OPEN: 'text-slate-600 bg-slate-100',
+  OPEN: 'text-text-muted bg-surface-sunken',
   ASSIGNED: 'text-blue-700 bg-blue-50',
   IN_PROGRESS: 'text-amber-700 bg-amber-50',
   DONE: 'text-emerald-700 bg-emerald-50',

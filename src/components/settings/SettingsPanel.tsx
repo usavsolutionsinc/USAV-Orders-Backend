@@ -28,7 +28,7 @@ function Badge({ tone, children }: { tone: 'amber' | 'gray'; children: React.Rea
   const cls =
     tone === 'amber'
       ? 'bg-amber-50 text-amber-700 ring-amber-200'
-      : 'bg-gray-100 text-gray-600 ring-gray-200';
+      : 'bg-surface-sunken text-text-muted ring-border-soft';
   return (
     <span className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${cls}`}>
       {children}
@@ -55,18 +55,18 @@ function SettingRow({ def, resolved, value, caption, onChange }: RowProps) {
     <div className="flex items-start justify-between gap-4 py-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-gray-900">{def.label}</span>
+          <span className="text-sm font-semibold text-text-default">{def.label}</span>
           {resolved.locked && <Badge tone="amber">Upgrade</Badge>}
           {def.comingSoon && <Badge tone="gray">Coming soon</Badge>}
         </div>
-        {def.description && <p className="mt-0.5 text-caption text-gray-500">{def.description}</p>}
+        {def.description && <p className="mt-0.5 text-caption text-text-soft">{def.description}</p>}
         {upgradeFor && (
           <p className="mt-0.5 text-caption font-medium text-amber-600">Available on the {upgradeFor} plan.</p>
         )}
         {lockedOptionPlan && (
           <p className="mt-0.5 text-caption font-medium text-amber-600">Direct mode needs the {lockedOptionPlan} plan.</p>
         )}
-        {caption && <p className="mt-0.5 text-caption font-medium text-gray-400">{caption}</p>}
+        {caption && <p className="mt-0.5 text-caption font-medium text-text-faint">{caption}</p>}
       </div>
       <div className="flex-shrink-0 pt-0.5">
         <SettingControl
@@ -111,16 +111,16 @@ function PanelSection({ title, subtitle, defs, byKey, variant, onChange }: Secti
   return (
     <section className="space-y-3">
       <header>
-        <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500">{title}</h3>
-        <p className="mt-0.5 text-caption text-gray-500">{subtitle}</p>
+        <h3 className="text-sm font-bold uppercase tracking-widest text-text-soft">{title}</h3>
+        <p className="mt-0.5 text-caption text-text-soft">{subtitle}</p>
       </header>
       <div className="space-y-4">
         {groups.map(({ group, defs: groupDefsList }) => (
-          <div key={group} className="rounded-2xl border border-gray-200 bg-white px-5 shadow-sm">
-            <div className="border-b border-gray-100 py-2.5">
-              <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{group}</span>
+          <div key={group} className="rounded-2xl border border-border-soft bg-surface-card px-5 shadow-sm">
+            <div className="border-b border-border-hairline py-2.5">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">{group}</span>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-border-hairline">
               {groupDefsList.map((def) => {
                 const resolved = byKey(def.key);
                 if (!resolved) return null;
@@ -162,7 +162,7 @@ export function SettingsPanel({ page }: { page: SettingPage }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 px-1 py-6 text-sm text-gray-500">
+      <div className="flex items-center gap-2 px-1 py-6 text-sm text-text-soft">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading settings…
       </div>
     );
@@ -178,8 +178,8 @@ export function SettingsPanel({ page }: { page: SettingPage }) {
   return (
     <div className="space-y-8">
       <header>
-        <h2 className="text-lg font-semibold text-gray-900">{meta?.label ?? 'Settings'}</h2>
-        <p className="mt-1 text-sm text-gray-500">{meta?.description}</p>
+        <h2 className="text-lg font-semibold text-text-default">{meta?.label ?? 'Settings'}</h2>
+        <p className="mt-1 text-sm text-text-soft">{meta?.description}</p>
       </header>
 
       <PanelSection

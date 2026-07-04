@@ -29,12 +29,12 @@ const spring = { type: 'spring', stiffness: 520, damping: 38 } as const;
 // Light design-system palette — matches the repo's white/blur action chrome
 // (StickyActionBar) rather than the old dark-glass capsule.
 const TONE = {
-  iconBtn: 'text-gray-500 hover:bg-gray-100 hover:text-gray-900',
+  iconBtn: 'text-text-soft hover:bg-surface-sunken hover:text-text-default',
   danger: 'text-rose-600 hover:bg-rose-50',
-  saChip: 'bg-gray-50 ring-gray-200 hover:bg-gray-100',
-  saRing: 'border-gray-300 bg-white text-gray-700',
+  saChip: 'bg-surface-canvas ring-border-soft hover:bg-surface-sunken',
+  saRing: 'border-border-default bg-surface-card text-text-muted',
   saActive: 'border-blue-600 bg-blue-600 text-white',
-  clear: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600',
+  clear: 'text-text-faint hover:bg-surface-sunken hover:text-text-muted',
 };
 
 /**
@@ -124,7 +124,7 @@ function GlassActions({
         );
       })}
       {/* Hairline divider keeps the dismiss control visually distinct from actions. */}
-      <span aria-hidden className="mx-0.5 h-5 w-px bg-gray-200" />
+      <span aria-hidden className="mx-0.5 h-5 w-px bg-surface-strong" />
       <motion.button
         onClick={handleClear}
         aria-label={onDismiss ? 'Exit selection mode' : 'Clear selection'}
@@ -153,8 +153,8 @@ function useBarAnim() {
 }
 
 // Light, clean surface that reads as part of the white table chrome (mirrors
-// StickyActionBar's `bg-white/90 backdrop-blur border`) instead of dark glass.
-const SURFACE_LIGHT = 'bg-white/95 ring-1 ring-gray-200 backdrop-blur-xl';
+// StickyActionBar's `bg-surface-card/90 backdrop-blur border`) instead of dark glass.
+const SURFACE_LIGHT = 'bg-surface-card/95 ring-1 ring-border-soft backdrop-blur-xl';
 
 export function MobileSelectionBar({
   count,
@@ -174,7 +174,7 @@ export function MobileSelectionBar({
           <div className={cn('relative flex items-center overflow-hidden rounded-full p-1.5 shadow-xl shadow-gray-900/10', SURFACE_LIGHT)}>
             <div className="relative z-10 flex flex-1 items-center gap-2">
               <SelectAll count={count} allSelected={allSelected} onToggleAll={onToggleAll} />
-              <span className="text-eyebrow font-bold uppercase tracking-wider text-gray-500">
+              <span className="text-eyebrow font-bold uppercase tracking-wider text-text-soft">
                 selected
               </span>
               <GlassActions actions={actions} onClear={onClear} onDismiss={onDismiss} />

@@ -17,13 +17,9 @@
  *     for production multi-instance).
  */
 
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || '';
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
-const REDIS_PREFIX = 'rl:v1:';
+import { isRedisConfigured, redisPipeline } from '@/lib/redis/client';
 
-function isRedisConfigured(): boolean {
-  return Boolean(REDIS_URL && REDIS_TOKEN);
-}
+const REDIS_PREFIX = 'rl:v1:';
 
 // Loud boot warning: in production, an unconfigured Redis means the limiter
 // silently falls back to a per-instance in-memory Map — effectively OFF under
@@ -110,30 +106,14 @@ export async function checkRateLimitAsync(opts: RateLimitOptions): Promise<RateL
   const member = `${now}:${Math.random().toString(36).slice(2, 10)}`;
 
   try {
-    const res = await fetch(`${REDIS_URL.replace(/\/+$/, '')}/pipeline`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${REDIS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([
-        ['ZREMRANGEBYSCORE', key, '-inf', String(cutoff)],
-        ['ZADD', key, String(now), member],
-        ['ZCARD', key],
-        ['PEXPIRE', key, String(opts.windowMs)],
-      ]),
-      cache: 'no-store',
-    });
+    const results = await redisPipeline([
+      ['ZREMRANGEBYSCORE', key, '-inf', String(cutoff)],
+      ['ZADD', key, String(now), member],
+      ['ZCARD', key],
+      ['PEXPIRE', key, String(opts.windowMs)],
+    ]);
 
-    if (!res.ok) {
-      // Don't fail-closed on Redis hiccups — log and fall back.
-      console.warn(`[api-guard] redis pipeline failed: ${res.status}`);
-      return checkRateLimit(opts);
-    }
-
-    const data = (await res.json()) as Array<{ result: unknown }> | { result: unknown };
-    const results = Array.isArray(data) ? data : [data];
-    const count = Number((results[2] as { result?: unknown } | undefined)?.result ?? 0);
+    const count = Number(results[2] ?? 0);
 
     if (count > opts.limit) {
       return { ok: false, retryAfterSec: Math.ceil(opts.windowMs / 1000) };

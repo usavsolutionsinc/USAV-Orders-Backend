@@ -16,40 +16,46 @@ interface StatCardProps {
   maxValue?: number;
 }
 
-const CATEGORY_STYLES: Record<StatCategory, { 
-  text: string; 
+/**
+ * Category → semantic tone tokens (theme registry vars, NOT raw Tailwind hues)
+ * so every theme — including mono's grayscale — restyles the dashboard without
+ * touching this file. Tone meaning: all=info, tested=success, repair=warning,
+ * outOfStock/pendingLate=danger, fba=fulfillment.
+ */
+const CATEGORY_STYLES: Record<StatCategory, {
+  text: string;
   progress: string;
   accent: string;
 }> = {
   all: {
-    text: 'text-blue-600',
-    progress: 'bg-blue-600',
-    accent: 'bg-blue-600',
+    text: 'text-text-info',
+    progress: 'bg-fill-info',
+    accent: 'bg-fill-info',
   },
   tested: {
-    text: 'text-green-600',
-    progress: 'bg-green-600',
-    accent: 'bg-green-600',
+    text: 'text-text-success',
+    progress: 'bg-fill-success',
+    accent: 'bg-fill-success',
   },
   repair: {
-    text: 'text-orange-500',
-    progress: 'bg-orange-500',
-    accent: 'bg-orange-500',
+    text: 'text-text-warning',
+    progress: 'bg-fill-warning',
+    accent: 'bg-fill-warning',
   },
   outOfStock: {
-    text: 'text-red-600',
-    progress: 'bg-red-500',
-    accent: 'bg-red-500',
+    text: 'text-text-danger',
+    progress: 'bg-fill-danger',
+    accent: 'bg-fill-danger',
   },
   pendingLate: {
-    text: 'text-red-600',
-    progress: 'bg-red-500',
-    accent: 'bg-red-500',
+    text: 'text-text-danger',
+    progress: 'bg-fill-danger',
+    accent: 'bg-fill-danger',
   },
   fba: {
-    text: 'text-purple-600',
-    progress: 'bg-purple-500',
-    accent: 'bg-purple-500',
+    text: 'text-text-fulfillment',
+    progress: 'bg-fill-fulfillment',
+    accent: 'bg-fill-fulfillment',
   },
 };
 
@@ -72,27 +78,27 @@ export function StatCard({
   const progressPercent = Math.min(100, (numValue / maxValue) * 100);
 
   return (
-    <div className={`group relative flex flex-col justify-between h-[110px] bg-white px-4 py-3.5 transition-all duration-300 hover:bg-slate-50/50 border-r border-slate-100 last:border-r-0 ${className}`}>
+    <div className={`group relative flex flex-col justify-between h-[110px] bg-surface-card px-4 py-3.5 transition-all duration-300 hover:bg-surface-hover border-r border-border-hairline last:border-r-0 ${className}`}>
       {/* 2026 Top Accent Line - subtle normally, vibrant on hover */}
       <div className={`absolute top-0 left-0 right-0 h-[3px] ${styles.accent} opacity-10 group-hover:opacity-100 transition-opacity duration-300`} />
       
       <div className="flex items-center justify-between">
-        <span className="text-micro font-black uppercase tracking-[0.15em] text-slate-400 group-hover:text-slate-600 transition-colors truncate pr-2">
+        <span className="text-micro font-black uppercase tracking-[0.15em] text-text-faint group-hover:text-text-muted transition-colors truncate pr-2">
           {label}
         </span>
-        <div className="text-slate-300 group-hover:text-slate-400 transition-colors shrink-0">
+        <div className="text-text-faint group-hover:text-text-soft transition-colors shrink-0">
           {icon && React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement, { className: 'w-3.5 h-3.5' }) : null}
         </div>
       </div>
 
       <div className="flex items-baseline gap-2 mt-1.5">
         {isLoading ? (
-          <div className="h-8 w-20 bg-slate-100 animate-pulse rounded-sm" />
+          <div className="h-8 w-20 bg-surface-sunken animate-pulse rounded-sm" />
         ) : (
           <motion.span 
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-2xl font-black tracking-tight text-slate-900 tabular-nums"
+            className="text-2xl font-black tracking-tight text-text-default tabular-nums"
           >
             {typeof value === 'number' ? value.toLocaleString() : value}
           </motion.span>
@@ -102,7 +108,7 @@ export function StatCard({
           <motion.span 
             initial={{ opacity: 0, x: -5 }}
             animate={{ opacity: 1, x: 0 }}
-            className={`text-caption font-black tabular-nums flex items-center gap-0.5 ${delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}
+            className={`text-caption font-black tabular-nums flex items-center gap-0.5 ${delta >= 0 ? 'text-text-success' : 'text-text-danger'}`}
           >
             <span className="text-mini font-normal">{delta > 0 ? '▲' : '▼'}</span>
             {Math.abs(delta)}%
@@ -112,7 +118,7 @@ export function StatCard({
 
       {/* Modern Progress Indicator - refined 2026 thin bar */}
       <div className="mt-3">
-        <div className="h-1 w-full bg-slate-100/50 rounded-full overflow-hidden">
+        <div className="h-1 w-full bg-surface-sunken rounded-full overflow-hidden">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progressPercent}%` }}

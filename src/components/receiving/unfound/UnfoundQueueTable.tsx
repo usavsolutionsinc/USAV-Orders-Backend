@@ -42,11 +42,11 @@ export function UnfoundQueueTable() {
   } = useUnfoundQueueTable();
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-gray-50">
+    <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
       {/* Loading rail at the top — replaces the toolbar's spinner now that
           the toolbar lives in the sidebar. */}
       {loading && (
-        <div className="h-0.5 w-full bg-gray-100">
+        <div className="h-0.5 w-full bg-surface-sunken">
           <div className="recv-indet-bar h-full w-1/3 rounded-full bg-blue-500" />
         </div>
       )}
@@ -71,8 +71,8 @@ export function UnfoundQueueTable() {
             <col style={{ width: '88px' }} />
             <col style={{ width: '96px' }} />
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-white shadow-sm">
-            <tr className="text-left text-micro font-bold uppercase tracking-wider text-gray-500">
+          <thead className="sticky top-0 z-10 bg-surface-card shadow-sm">
+            <tr className="text-left text-micro font-bold uppercase tracking-wider text-text-soft">
               <th className="px-3 py-2">Zendesk</th>
               <th className="px-3 py-2">Product Title</th>
               <th className="px-3 py-2">USA Team Note</th>
@@ -81,10 +81,10 @@ export function UnfoundQueueTable() {
               <th className="px-3 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border-hairline">
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-label text-gray-500">
+                <td colSpan={6} className="px-3 py-8 text-center text-label text-text-soft">
                   {error ? '—' : 'Nothing in the unfound queue. Nice.'}
                 </td>
               </tr>

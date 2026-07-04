@@ -140,13 +140,13 @@ export function UnmatchedLineRow({
           />
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-label font-bold text-gray-900">
+          <div className="truncate text-label font-bold text-text-default">
             {line.item_name ?? line.sku ?? `Line ${line.id}`}
           </div>
           {/* Meta row — indented under title when a leading track exists
               (PoLinesAccordion uses META_COL.indentWide); unfound rows have
               no chevron so meta starts flush left. */}
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-text-soft">
             <ProgressBadge
               received={line.quantity_received ?? 0}
               expected={line.quantity_expected ?? 1}
@@ -188,7 +188,7 @@ export function UnmatchedLineRow({
             icon={<Trash2 className="h-4 w-4" />}
             onClick={() => void onRemove(line.id)}
             ariaLabel="Remove item"
-            className="shrink-0 self-start rounded-md p-1.5 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+            className="shrink-0 self-start rounded-md p-1.5 text-text-faint hover:bg-rose-50 hover:text-rose-600"
           />
         </HoverTooltip>
       </div>

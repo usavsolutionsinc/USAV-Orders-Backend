@@ -250,8 +250,8 @@ export function RightPaneOverlay({
 
   const panelClass =
     align === 'right'
-      ? 'pointer-events-auto h-full border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)]'
-      : 'pointer-events-auto max-h-full w-[min(92%,32rem)] rounded-xl border border-slate-200 shadow-xl';
+      ? 'pointer-events-auto h-full border-l border-border-soft shadow-[-20px_0_50px_rgba(0,0,0,0.05)]'
+      : 'pointer-events-auto max-h-full w-[min(92%,32rem)] rounded-xl border border-border-soft shadow-xl';
 
   // A resized center panel switches to explicit px dims; `none` lifts the
   // className max-* clamps so the operator can grow past the default frame.
@@ -295,7 +295,7 @@ export function RightPaneOverlay({
             exit={{ ...panelMotion.exit, pointerEvents: 'none' }}
             transition={panelMotion.transition}
             style={panelStyle}
-            className={cn('relative flex flex-col overflow-hidden bg-white', panelClass, className)}
+            className={cn('relative flex flex-col overflow-hidden bg-surface-card', panelClass, className)}
           >
             {children}
             {resizable && align === 'center' ? (
@@ -304,7 +304,7 @@ export function RightPaneOverlay({
                   role="presentation"
                   aria-hidden
                   onPointerDown={startResize}
-                  className="absolute bottom-0 right-0 z-10 flex h-4 w-4 cursor-nwse-resize items-end justify-end p-0.5 text-gray-300 transition-colors hover:text-gray-500"
+                  className="absolute bottom-0 right-0 z-10 flex h-4 w-4 cursor-nwse-resize items-end justify-end p-0.5 text-text-faint transition-colors hover:text-text-soft"
                 >
                   <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
                     <path d="M9 3 L3 9 M9 6.5 L6.5 9" />

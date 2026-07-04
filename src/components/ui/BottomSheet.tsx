@@ -158,17 +158,17 @@ function SheetPanel({ title, dragDisabled, maxWidth, reduceMotion, onClose, chil
         onDragEnd={(_, info) => {
           if (info.offset.y > 100 || info.velocity.y > 600) onClose();
         }}
-        className="w-full overflow-hidden rounded-t-[28px] bg-white shadow-[0_-12px_48px_-16px_rgba(0,0,0,0.25)]"
+        className="w-full overflow-hidden rounded-t-[28px] bg-surface-card shadow-[0_-12px_48px_-16px_rgba(0,0,0,0.25)]"
         style={{ maxWidth, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         {!dragDisabled && (
           <div className="flex justify-center pt-3 pb-1">
-            <div className="h-1.5 w-12 rounded-full bg-gray-300" />
+            <div className="h-1.5 w-12 rounded-full bg-surface-strong" />
           </div>
         )}
         {title && (
           <div className="px-6 pt-2 pb-1 text-center">
-            <h3 className="text-base font-semibold tracking-tight text-gray-900">
+            <h3 className="text-base font-semibold tracking-tight text-text-default">
               {title}
             </h3>
           </div>
@@ -205,12 +205,12 @@ function DialogPanel({ title, maxWidth, reduceMotion, children }: DialogPanelPro
             ? { duration: 0 }
             : { type: 'spring', damping: 28, stiffness: 360, mass: 0.7 }
         }
-        className="w-full overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-[0_24px_64px_-12px_rgba(0,0,0,0.25),0_0_0_1px_rgba(0,0,0,0.02)]"
+        className="w-full overflow-hidden rounded-3xl border border-border-hairline bg-surface-card shadow-[0_24px_64px_-12px_rgba(0,0,0,0.25),0_0_0_1px_rgba(0,0,0,0.02)]"
         style={{ maxWidth }}
       >
         {title && (
-          <div className="border-b border-gray-100 px-6 pt-5 pb-4 text-center">
-            <h3 className="text-base font-semibold tracking-tight text-gray-900">
+          <div className="border-b border-border-hairline px-6 pt-5 pb-4 text-center">
+            <h3 className="text-base font-semibold tracking-tight text-text-default">
               {title}
             </h3>
           </div>
@@ -247,7 +247,7 @@ export function ConfirmSheet({
   return (
     <BottomSheet open={open} onClose={onClose} dragDisabled={destructive} title={title}>
       {message && (
-        <p className="mb-5 text-center text-sm leading-relaxed text-gray-600">
+        <p className="mb-5 text-center text-sm leading-relaxed text-text-muted">
           {message}
         </p>
       )}
@@ -271,7 +271,7 @@ export function ConfirmSheet({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 sm:flex-1"
+          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-text-muted transition-colors hover:bg-surface-sunken sm:flex-1"
         >
           {cancelLabel}
         </button>
@@ -327,7 +327,7 @@ export function PromptSheet({
   return (
     <BottomSheet open={open} onClose={onClose} title={title}>
       {message && (
-        <p className="mb-3 text-center text-label text-gray-500">{message}</p>
+        <p className="mb-3 text-center text-label text-text-soft">{message}</p>
       )}
       <input
         ref={inputRef}
@@ -339,7 +339,7 @@ export function PromptSheet({
           if (e.key === 'Escape') onClose();
         }}
         autoComplete="off"
-        className="mb-4 h-12 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
+        className="mb-4 h-12 w-full rounded-2xl border border-border-default bg-surface-canvas px-4 text-sm font-semibold text-text-default outline-none transition-colors focus:border-blue-500 focus:bg-surface-card focus:ring-2 focus:ring-blue-200"
       />
       <div className="flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
         {/* ds-raw-button: full-width gradient sheet CTA (h-12, blue gradient + shadow) — DS Button has no gradient variant */}
@@ -354,7 +354,7 @@ export function PromptSheet({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 sm:flex-1"
+          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-text-muted transition-colors hover:bg-surface-sunken sm:flex-1"
         >
           Cancel
         </button>

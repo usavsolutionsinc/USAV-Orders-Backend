@@ -138,8 +138,8 @@ export function DashboardShippedTable({
   // rule: the older tail is never dropped without telling the user. Rendered as a
   // persistent bottom bar so it works for both the list and the board view.
   const loadMoreFooter = pagination.isTruncated ? (
-    <div className="flex shrink-0 items-center justify-center gap-3 border-t border-gray-200 bg-white px-3 py-2">
-      <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+    <div className="flex shrink-0 items-center justify-center gap-3 border-t border-border-soft bg-surface-card px-3 py-2">
+      <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
         Showing the most recent entries · older rows in this range are truncated
       </span>
       <Button
@@ -256,12 +256,12 @@ export function DashboardShippedTable({
 
   // Desktop dashboard is board-only; the embedded (mobile) variant keeps the
   // dense day-banded list — a drag-reorder / resize board isn't a phone surface.
-  if (embedded) return <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">{shippedTableInner}{loadMoreFooter}</div>;
+  if (embedded) return <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-card">{shippedTableInner}{loadMoreFooter}</div>;
 
   const mainContent = shippedView === 'all' ? (
     <TableColumnConfigProvider tableId="shipped">
-      <div className="flex h-full min-h-0 flex-col bg-white">
-        <div className="flex h-[40px] shrink-0 items-center justify-between gap-3 border-b border-gray-300 px-3">
+      <div className="flex h-full min-h-0 flex-col bg-surface-card">
+        <div className="flex h-[40px] shrink-0 items-center justify-between gap-3 border-b border-border-default px-3">
           <div className="flex items-center gap-3">
             <DateRangePickerPill
               label={periodLabel}
@@ -287,7 +287,7 @@ export function DashboardShippedTable({
 
   return (
     <div className="flex-1 min-w-0 h-full overflow-hidden">
-      <div className="flex h-full min-w-0 flex-1 bg-white relative">
+      <div className="flex h-full min-w-0 flex-1 bg-surface-card relative">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {mainContent}
           {loadMoreFooter}

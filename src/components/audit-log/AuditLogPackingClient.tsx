@@ -85,16 +85,16 @@ export function AuditLogPackingClient() {
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <div className="border-b border-border-soft bg-surface-card px-6 py-4">
         <p className="text-micro font-bold uppercase tracking-widest text-emerald-700">
           Packing audit
         </p>
-        <h2 className="mt-0.5 break-all font-mono text-base font-bold text-gray-900">
+        <h2 className="mt-0.5 break-all font-mono text-base font-bold text-text-default">
           {detail.tracking}
         </h2>
         {detail.sku_summary && (
-          <p className="mt-1 text-label text-gray-500">SKU: {detail.sku_summary}</p>
+          <p className="mt-1 text-label text-text-soft">SKU: {detail.sku_summary}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-1.5">
           {detail.packer_logs.map((pl) => (

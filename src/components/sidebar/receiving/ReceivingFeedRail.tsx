@@ -18,7 +18,9 @@ import { useMemo, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { parseStaffParam } from '@/hooks/useStaffFilter';
-import { RecentActivityRailBase } from './RecentActivityRailBase';
+import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
+import { useRailExclusions } from './useRailExclusions';
+import { railExclusionFeedKey } from '@/lib/receiving/rail/exclusion-feed-key';
 import {
   RECEIVING_RAIL_FEEDS,
   fetchReceivingLines,
@@ -67,22 +69,44 @@ export function ReceivingFeedRail({
   const staffId = feed.usesStaffFilter ? parseStaffParam(searchParams.get('staff')) : null;
   const q = filterText.trim().toLowerCase();
 
-  // Distinct, isolated cache entry per feed/scope/staff/query — still under the
-  // ['receiving-lines-table'] prefix so broad invalidations refresh it.
+  // Phase 4 read filter: this staffer's dismissed rows for the feed
+  // (staff_rail_exclusions, keyed by rail id = row.id). A stable signature of the
+  // set rides the queryKey so a change (fresh load, a new dismiss) forces a
+  // filtered refetch instead of serving stale unfiltered cache.
+  const exclusionFeedKey = railExclusionFeedKey(feedId, scope);
+  const excluded = useRailExclusions(exclusionFeedKey);
+  const excludedSig = useMemo(() => Array.from(excluded).sort((a, b) => a - b).join(','), [excluded]);
+
+  // Distinct, isolated cache entry per feed/scope/staff/query/exclusion-set —
+  // still under the ['receiving-lines-table'] prefix so broad invalidations refresh it.
   const queryKey = useMemo(
     () =>
-      ['receiving-lines-table', 'rail', feed.segment, scope ?? 'default', q, staffId ?? 'all'] as const,
-    [feed.segment, scope, q, staffId],
+      ['receiving-lines-table', 'rail', feed.segment, scope ?? 'default', q, staffId ?? 'all', excludedSig] as const,
+    [feed.segment, scope, q, staffId, excludedSig],
   );
 
   const rt: RailFetchRuntime = { staffId, query: q };
-  const fetchFn = feed.buildFetcher
+  const baseFetchFn = feed.buildFetcher
     ? feed.buildFetcher(rt)
     : () =>
         fetchReceivingLines(
           { segment: feed.segment, view: feed.view!, sort: feed.sort, postFilter: feed.postFilter },
           rt,
         );
+
+  // Strictly additive — an empty exclusion set returns the fetched rows untouched.
+  const fetchFn = useMemo<() => Promise<ApiResponse>>(() => {
+    if (excluded.size === 0) return baseFetchFn;
+    return async () => {
+      const data = await baseFetchFn();
+      const rows = data.receiving_lines ?? [];
+      const kept = rows.filter((r) => !excluded.has(r.id));
+      return { ...data, receiving_lines: kept, total: kept.length };
+    };
+    // baseFetchFn is rebuilt each render from rt (staffId/query); the stable
+    // inputs (+ excludedSig) below track a real fetch-shape change (baseFetchFn
+    // itself is intentionally omitted — it has a new identity every render).
+  }, [excluded, excludedSig, feed.segment, scope, q, staffId]);
 
   const qty = RAIL_QTY[feed.qty];
   const dot = RAIL_STATUS[feed.status];

@@ -42,7 +42,7 @@ export function ClaimTicketPicker({
               {sb.label}
             </span>
           </div>
-          <p className="mt-0.5 truncate text-[13px] font-semibold text-gray-800">
+          <p className="mt-0.5 truncate text-[13px] font-semibold text-text-default">
             {ticket.subject || 'Untitled ticket'}
           </p>
         </div>
@@ -50,7 +50,7 @@ export function ClaimTicketPicker({
           variant="ghost"
           size="sm"
           onClick={() => onPick(null)}
-          className="h-auto shrink-0 rounded-lg px-2 py-1 text-caption font-bold text-gray-500 hover:bg-white hover:text-gray-800"
+          className="h-auto shrink-0 rounded-lg px-2 py-1 text-caption font-bold text-text-soft hover:bg-surface-card hover:text-text-default"
         >
           Change
         </Button>
@@ -61,20 +61,20 @@ export function ClaimTicketPicker({
   return (
     <div className="space-y-2">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-faint" />
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Search tickets by subject or #id…"
-          className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-9 pr-9 text-[13px] outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          className="w-full rounded-xl border border-border-default bg-surface-card py-2.5 pl-9 pr-9 text-[13px] outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
         />
         {isLoading ? (
-          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-text-faint" />
         ) : null}
       </div>
-      <div className="max-h-56 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+      <div className="max-h-56 divide-y divide-border-hairline overflow-y-auto rounded-xl border border-border-soft">
         {tickets.length === 0 && !isLoading ? (
-          <p className="px-3.5 py-6 text-center text-label text-gray-400">
+          <p className="px-3.5 py-6 text-center text-label text-text-faint">
             {debounced ? 'No matching tickets' : 'No open tickets'}
           </p>
         ) : (
@@ -93,10 +93,10 @@ export function ClaimTicketPicker({
                     priority: (t.priority as string) ?? null,
                   })
                 }
-                className="ds-raw-button flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition hover:bg-gray-50"
+                className="ds-raw-button flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition hover:bg-surface-hover"
               >
-                <span className="text-caption font-black text-gray-400">#{t.id}</span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-gray-800">
+                <span className="text-caption font-black text-text-faint">#{t.id}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text-default">
                   {t.subject || 'Untitled ticket'}
                 </span>
                 {pb ? (

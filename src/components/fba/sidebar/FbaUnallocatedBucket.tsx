@@ -66,13 +66,13 @@ export function FbaUnallocatedBucket({
       className={`rounded-lg border transition-colors ${
         isOver
           ? 'border-dashed border-emerald-400 bg-emerald-50/40'
-          : 'border-gray-200 bg-gray-50/30'
+          : 'border-border-soft bg-surface-canvas/30'
       }`}
     >
       <div className="flex items-center justify-between px-3 py-1.5">
-        <p className={`${microBadge} tracking-wider text-gray-500`}>Unallocated</p>
+        <p className={`${microBadge} tracking-wider text-text-soft`}>Unallocated</p>
         {allocations.length > 0 && (
-          <span className={`${microBadge} tabular-nums text-gray-400`}>
+          <span className={`${microBadge} tabular-nums text-text-faint`}>
             {allocations.length} · {totalUnits}
           </span>
         )}
@@ -85,7 +85,7 @@ export function FbaUnallocatedBucket({
           </p>
         </div>
       ) : (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-border-hairline">
           {allocations.map((alloc) => {
             const item = itemMap.get(alloc.item_id);
             if (!item) return null;

@@ -48,7 +48,7 @@ export function DesktopShell({
   const resolvedWidth = typeof sidebarWidth === 'number' ? `${sidebarWidth}px` : sidebarWidth;
 
   return (
-    <div className={`flex h-screen overflow-hidden bg-white ${className}`.trim()}>
+    <div className={`flex h-screen overflow-hidden bg-surface-card ${className}`.trim()}>
       {/* ── Sidebar ── */}
       {sidebar && (
         <div

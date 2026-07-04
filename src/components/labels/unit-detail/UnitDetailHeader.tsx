@@ -45,7 +45,7 @@ export function UnitDetailHeader({
       // Inner (inset-shadow) bottom hairline — the canonical receiving header
       // hairline — instead of the default border, so the 40px band reads as a
       // distinct header over the gray-50 body.
-      className={`bg-white border-b-0 ${receivingHeaderHairlineClass}`}
+      className={`bg-surface-card border-b-0 ${receivingHeaderHairlineClass}`}
       leftSlot={
         <>
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
@@ -84,7 +84,7 @@ export function UnitDetailHeader({
             rel="noreferrer"
             title="Photos in library"
             aria-label="Photos in library"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-soft transition-colors hover:bg-surface-sunken hover:text-text-muted"
           >
             <Camera className="h-4 w-4" />
           </Link>
@@ -132,7 +132,7 @@ function ActionIconButton({
         className={`flex h-8 w-8 items-center justify-center rounded-lg ${
           active
             ? 'bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200'
-            : 'hover:bg-gray-100 hover:text-gray-700'
+            : 'hover:bg-surface-sunken hover:text-text-muted'
         }`}
       />
     </HoverTooltip>

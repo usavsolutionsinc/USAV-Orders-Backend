@@ -65,7 +65,7 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-16 text-gray-400">
+            <div className="flex items-center justify-center py-16 text-text-faint">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="ml-2 text-sm">Loading unit {ref}…</span>
             </div>
@@ -103,28 +103,28 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
         <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6">
             <header className="space-y-2">
                 <div className="flex flex-wrap items-baseline gap-4">
-                    <h1 className="font-mono text-2xl font-semibold text-gray-900">
+                    <h1 className="font-mono text-2xl font-semibold text-text-default">
                         {unit.serial_number}
                     </h1>
                     <StatusBadge status={unit.current_status} />
                     {unit.condition_grade ? (
-                        <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                        <span className="rounded bg-surface-sunken px-2 py-0.5 text-xs text-text-muted">
                             {unit.condition_grade}
                         </span>
                     ) : null}
                 </div>
                 {unit.product_title ? (
-                    <p className="text-sm text-gray-700">{unit.product_title}</p>
+                    <p className="text-sm text-text-muted">{unit.product_title}</p>
                 ) : null}
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-text-soft">
                     serial_units.id = <code>{unit.id}</code> · normalized = <code>{unit.normalized_serial}</code>
                 </p>
             </header>
 
             {/* Current state */}
-            <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-                <header className="border-b border-gray-100 px-6 py-4">
-                    <h2 className="text-lg font-medium text-gray-900">Current state</h2>
+            <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+                <header className="border-b border-border-hairline px-6 py-4">
+                    <h2 className="text-lg font-medium text-text-default">Current state</h2>
                 </header>
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 text-sm md:grid-cols-3">
                     <Field label="SKU">
@@ -151,36 +151,36 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
                     <Field label="Updated at">{new Date(unit.updated_at).toLocaleString()}</Field>
                 </dl>
                 {unit.notes ? (
-                    <div className="border-t border-gray-100 px-6 py-3 text-sm text-gray-700">
-                        <span className="text-xs uppercase tracking-wide text-gray-500">Notes</span>
+                    <div className="border-t border-border-hairline px-6 py-3 text-sm text-text-muted">
+                        <span className="text-xs uppercase tracking-wide text-text-soft">Notes</span>
                         <p className="mt-1 whitespace-pre-wrap">{unit.notes}</p>
                     </div>
                 ) : null}
             </section>
 
             {/* Timeline */}
-            <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-                <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                    <h2 className="text-lg font-medium text-gray-900">inventory_events timeline</h2>
-                    <span className="text-xs text-gray-500">{events.length} events</span>
+            <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+                <header className="flex items-center justify-between border-b border-border-hairline px-6 py-4">
+                    <h2 className="text-lg font-medium text-text-default">inventory_events timeline</h2>
+                    <span className="text-xs text-text-soft">{events.length} events</span>
                 </header>
                 {events.length === 0 ? (
-                    <p className="px-6 py-4 text-sm text-gray-600">
+                    <p className="px-6 py-4 text-sm text-text-muted">
                         No events recorded yet. Events land when a flagged path writes for this unit.
                     </p>
                 ) : (
-                    <ol className="divide-y divide-gray-100">
+                    <ol className="divide-y divide-border-hairline">
                         {events.map((e) => (
                             <li key={e.id} className="px-6 py-3">
                                 <div className="flex flex-wrap items-baseline gap-3">
-                                    <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+                                    <code className="rounded bg-surface-sunken px-1.5 py-0.5 text-xs font-medium text-text-muted">
                                         {e.event_type}
                                     </code>
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-text-soft">
                                         {new Date(e.occurred_at).toLocaleString()}
                                     </span>
                                     {e.station ? (
-                                        <span className="text-xs text-gray-600">{e.station}</span>
+                                        <span className="text-xs text-text-muted">{e.station}</span>
                                     ) : null}
                                     {e.prev_status || e.next_status ? (
                                         <span className="text-xs">
@@ -189,15 +189,15 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
                                         </span>
                                     ) : null}
                                     {e.bin_name ? (
-                                        <span className="text-xs text-gray-600">bin {e.bin_name}</span>
+                                        <span className="text-xs text-text-muted">bin {e.bin_name}</span>
                                     ) : null}
-                                    <span className="ml-auto text-xs text-gray-500">
+                                    <span className="ml-auto text-xs text-text-soft">
                                         {e.actor_name ??
                                             (e.actor_staff_id ? `#${e.actor_staff_id}` : 'system')}
                                     </span>
                                 </div>
                                 {e.notes ? (
-                                    <p className="mt-1 text-sm text-gray-700">{e.notes}</p>
+                                    <p className="mt-1 text-sm text-text-muted">{e.notes}</p>
                                 ) : null}
                                 {eventPhotos(e).length > 0 ? (
                                     <div className="mt-2">
@@ -209,12 +209,12 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
                                     </div>
                                 ) : null}
                                 {e.payload && Object.keys(e.payload).length > 0 ? (
-                                    <pre className="mt-2 overflow-x-auto rounded bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                                    <pre className="mt-2 overflow-x-auto rounded bg-surface-canvas px-3 py-2 text-xs text-text-muted">
                                         {JSON.stringify(e.payload, null, 2)}
                                     </pre>
                                 ) : null}
                                 {e.client_event_id ? (
-                                    <p className="mt-1 text-micro text-gray-400">
+                                    <p className="mt-1 text-micro text-text-faint">
                                         client_event_id: <code>{e.client_event_id}</code>
                                         {e.stock_ledger_id ? ` · stock_ledger_id: ${e.stock_ledger_id}` : ''}
                                     </p>
@@ -227,29 +227,29 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
 
             {/* Condition history */}
             {conditions.length > 0 ? (
-                <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <header className="border-b border-gray-100 px-6 py-4">
-                        <h2 className="text-lg font-medium text-gray-900">Condition history</h2>
+                <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+                    <header className="border-b border-border-hairline px-6 py-4">
+                        <h2 className="text-lg font-medium text-text-default">Condition history</h2>
                     </header>
-                    <ol className="divide-y divide-gray-100 text-sm">
+                    <ol className="divide-y divide-border-hairline text-sm">
                         {conditions.map((c) => (
                             <li key={c.id} className="flex flex-wrap items-baseline gap-3 px-6 py-3">
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-text-soft">
                                     {new Date(c.assessed_at).toLocaleString()}
                                 </span>
-                                <span className="text-xs text-gray-700">
-                                    <code className="rounded bg-gray-100 px-1.5 py-0.5">
+                                <span className="text-xs text-text-muted">
+                                    <code className="rounded bg-surface-sunken px-1.5 py-0.5">
                                         {c.prev_grade ?? '—'}
                                     </code>{' '}
                                     →{' '}
-                                    <code className="rounded bg-gray-100 px-1.5 py-0.5">{c.new_grade}</code>
+                                    <code className="rounded bg-surface-sunken px-1.5 py-0.5">{c.new_grade}</code>
                                 </span>
-                                <span className="ml-auto text-xs text-gray-500">
+                                <span className="ml-auto text-xs text-text-soft">
                                     {c.assessed_by_name ??
                                         (c.assessed_by_staff_id ? `#${c.assessed_by_staff_id}` : 'system')}
                                 </span>
                                 {c.cosmetic_notes || c.functional_notes ? (
-                                    <div className="basis-full text-sm text-gray-700">
+                                    <div className="basis-full text-sm text-text-muted">
                                         {c.cosmetic_notes ? <p>cosmetic: {c.cosmetic_notes}</p> : null}
                                         {c.functional_notes ? <p>functional: {c.functional_notes}</p> : null}
                                     </div>
@@ -262,13 +262,13 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
 
             {/* Allocations */}
             {allocations.length > 0 ? (
-                <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <header className="border-b border-gray-100 px-6 py-4">
-                        <h2 className="text-lg font-medium text-gray-900">Order allocations</h2>
+                <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+                    <header className="border-b border-border-hairline px-6 py-4">
+                        <h2 className="text-lg font-medium text-text-default">Order allocations</h2>
                     </header>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-100 text-sm">
-                            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                        <table className="min-w-full divide-y divide-border-hairline text-sm">
+                            <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                                 <tr>
                                     <th className="px-6 py-2 text-left font-medium">Order</th>
                                     <th className="px-6 py-2 text-left font-medium">Allocated</th>
@@ -277,22 +277,22 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
                                     <th className="px-6 py-2 text-left font-medium">Reason</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-border-hairline">
                                 {allocations.map((a) => (
                                     <tr key={a.id}>
                                         <td className="px-6 py-2 font-mono text-xs">#{a.order_id}</td>
-                                        <td className="px-6 py-2 text-xs text-gray-500">
+                                        <td className="px-6 py-2 text-xs text-text-soft">
                                             {new Date(a.allocated_at).toLocaleString()}
                                         </td>
                                         <td className="px-6 py-2">
                                             <StatusBadge status={a.state} />
                                         </td>
-                                        <td className="px-6 py-2 text-xs text-gray-500">
+                                        <td className="px-6 py-2 text-xs text-text-soft">
                                             {a.released_at
                                                 ? new Date(a.released_at).toLocaleString()
                                                 : '—'}
                                         </td>
-                                        <td className="px-6 py-2 text-xs text-gray-600">
+                                        <td className="px-6 py-2 text-xs text-text-muted">
                                             {a.released_reason ?? '—'}
                                         </td>
                                     </tr>
@@ -305,16 +305,16 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
 
             {/* TSN cross-refs */}
             {tsnLinks.length > 0 ? (
-                <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <header className="border-b border-gray-100 px-6 py-4">
-                        <h2 className="text-lg font-medium text-gray-900">tech_serial_numbers links</h2>
-                        <p className="mt-1 text-xs text-gray-500">
+                <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+                    <header className="border-b border-border-hairline px-6 py-4">
+                        <h2 className="text-lg font-medium text-text-default">tech_serial_numbers links</h2>
+                        <p className="mt-1 text-xs text-text-soft">
                             Legacy audit table. Helpful when joining v1 tech-station logs to v2 lifecycle.
                         </p>
                     </header>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-100 text-sm">
-                            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                        <table className="min-w-full divide-y divide-border-hairline text-sm">
+                            <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                                 <tr>
                                     <th className="px-6 py-2 text-left font-medium">TSN id</th>
                                     <th className="px-6 py-2 text-left font-medium">When</th>
@@ -324,11 +324,11 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
                                     <th className="px-6 py-2 text-left font-medium">Tested by</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-border-hairline">
                                 {tsnLinks.map((t) => (
                                     <tr key={t.id}>
                                         <td className="px-6 py-2 font-mono text-xs">{t.id}</td>
-                                        <td className="px-6 py-2 text-xs text-gray-500">
+                                        <td className="px-6 py-2 text-xs text-text-soft">
                                             {new Date(t.created_at).toLocaleString()}
                                         </td>
                                         <td className="px-6 py-2 text-xs">{t.station_source ?? '—'}</td>
@@ -354,14 +354,14 @@ interface FieldProps {
 function Field({ label, children }: FieldProps) {
     return (
         <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">{label}</dt>
-            <dd className="mt-0.5 text-sm text-gray-900">{children}</dd>
+            <dt className="text-xs uppercase tracking-wide text-text-soft">{label}</dt>
+            <dd className="mt-0.5 text-sm text-text-default">{children}</dd>
         </div>
     );
 }
 
 function StatusBadge({ status }: { status: string | null }) {
-    if (!status) return <span className="text-xs text-gray-400">—</span>;
+    if (!status) return <span className="text-xs text-text-faint">—</span>;
     return (
         <span
             className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${inventoryStatusBadgeClass(status)}`}

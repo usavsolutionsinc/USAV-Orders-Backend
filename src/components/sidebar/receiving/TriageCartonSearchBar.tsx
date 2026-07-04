@@ -46,7 +46,7 @@ export function TriageCartonSearchBar({
   }, [draft, value, onChange]);
 
   return (
-    <div className="shrink-0 border-t border-gray-100 bg-white px-3 py-2">
+    <div className="shrink-0 border-t border-border-hairline bg-surface-card px-3 py-2">
       <SearchBar
         value={draft}
         onChange={setDraft}

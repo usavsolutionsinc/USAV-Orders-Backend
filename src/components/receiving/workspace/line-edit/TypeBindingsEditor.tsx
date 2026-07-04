@@ -20,7 +20,7 @@ import type { TypeRow } from '@/lib/neon/catalog-queries';
 import { usePlatformAccountCatalog, usePlatformCatalog, useWorkflowNodeOptions } from '@/hooks/useCatalog';
 
 const SELECT =
-  'w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-label text-gray-900 outline-none transition-colors focus:border-blue-500';
+  'w-full rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5 text-label text-text-default outline-none transition-colors focus:border-blue-500';
 
 export function TypeBindingsEditor({
   type,
@@ -56,9 +56,9 @@ export function TypeBindingsEditor({
   }
 
   return (
-    <div className="mt-1.5 grid grid-cols-1 gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-2.5 sm:grid-cols-2">
+    <div className="mt-1.5 grid grid-cols-1 gap-2 rounded-lg border border-dashed border-border-soft bg-surface-canvas p-2.5 sm:grid-cols-2">
       <label className="flex flex-col gap-1">
-        <span className="flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-widest text-gray-400">
+        <span className="flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-widest text-text-faint">
           Storefront account
           {busy === 'account' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
         </span>
@@ -80,7 +80,7 @@ export function TypeBindingsEditor({
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-widest text-gray-400">
+        <span className="flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-widest text-text-faint">
           Workflow node
           {busy === 'workflow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
         </span>

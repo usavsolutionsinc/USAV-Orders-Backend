@@ -35,7 +35,7 @@ export function InlineSaveIndicator({
       ? 'text-emerald-600'
       : state === 'error'
         ? 'text-red-600'
-        : 'text-gray-400';
+        : 'text-text-faint';
 
   return (
     <span

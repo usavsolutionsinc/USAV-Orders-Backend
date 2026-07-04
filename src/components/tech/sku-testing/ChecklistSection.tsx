@@ -52,7 +52,7 @@ export function ChecklistSection({
               className={`rounded-md px-2 py-0.5 text-micro font-bold uppercase tracking-wider ${
                 canRecord && ed.done === steps.length
                   ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-gray-100 text-gray-600'
+                  : 'bg-surface-sunken text-text-muted'
               }`}
             >
               {ed.done}/{steps.length} done
@@ -74,7 +74,7 @@ export function ChecklistSection({
                   {ed.allDone ? 'Clear all' : 'Check all'}
                 </Button>
               </HoverTooltip>
-              <span className="h-3.5 w-px bg-gray-200" aria-hidden />
+              <span className="h-3.5 w-px bg-surface-strong" aria-hidden />
             </>
           ) : null}
           <Button
@@ -119,7 +119,7 @@ export function ChecklistSection({
             }}
             autoFocus
             placeholder="New checklist step…"
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-caption font-medium text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-caption font-medium text-text-default placeholder:text-text-faint focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
           />
           <Button
             variant="primary"
@@ -134,11 +134,11 @@ export function ChecklistSection({
       ) : null}
 
       {steps.length === 0 && !ed.adding ? (
-        <p className="text-caption text-gray-400">No checklist steps yet. Use “Add” to create one.</p>
+        <p className="text-caption text-text-faint">No checklist steps yet. Use “Add” to create one.</p>
       ) : null}
 
       {steps.length > 0 && !canRecord ? (
-        <p className="mt-2.5 text-micro font-medium uppercase tracking-wide text-gray-400">
+        <p className="mt-2.5 text-micro font-medium uppercase tracking-wide text-text-faint">
           Scan a serial to record results
         </p>
       ) : null}

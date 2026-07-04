@@ -86,8 +86,8 @@ export function ColumnConfigButton({ className, iconOnly = false }: { className?
           className={cn(
             'h-auto gap-1 rounded text-eyebrow font-black uppercase tracking-widest -my-0.5',
             iconOnly ? 'relative px-1 py-1' : 'px-1.5 py-0.5',
-            'text-gray-500 hover:bg-gray-50 hover:text-gray-700',
-            open && 'bg-gray-50 text-gray-700',
+            'text-text-soft hover:bg-surface-hover hover:text-text-muted',
+            open && 'bg-surface-canvas text-text-muted',
           )}
           aria-haspopup="menu"
           aria-expanded={open}
@@ -118,11 +118,11 @@ export function ColumnConfigButton({ className, iconOnly = false }: { className?
               ref={panelRef}
               role="menu"
               data-testid="column-config-panel"
-              className="fixed z-tooltip w-56 rounded-lg border border-gray-200 bg-white p-1 shadow-xl"
+              className="fixed z-tooltip w-56 rounded-lg border border-border-soft bg-surface-card p-1 shadow-xl"
               style={{ top: coords.top, left: coords.left }}
             >
               <div className="flex items-center justify-between px-2 py-1.5">
-                <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
+                <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
                   Show columns
                 </p>
                 {hiddenCount > 0 ? (
@@ -136,7 +136,7 @@ export function ColumnConfigButton({ className, iconOnly = false }: { className?
                   </Button>
                 ) : null}
               </div>
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-border-hairline">
                 {cfg.columns.map((col) => {
                   const shown = !cfg.isHidden(col.key);
                   return (
@@ -147,14 +147,14 @@ export function ColumnConfigButton({ className, iconOnly = false }: { className?
                       aria-checked={shown}
                       data-testid={`column-toggle-${col.key}`}
                       onClick={() => cfg.toggle(col.key)}
-                      className="ds-raw-button flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-caption font-semibold text-gray-700 hover:bg-gray-50"
+                      className="ds-raw-button flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-caption font-semibold text-text-muted hover:bg-surface-hover"
                     >
                       <span
                         className={cn(
                           'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border',
                           shown
                             ? 'border-blue-500 bg-blue-500 text-white'
-                            : 'border-gray-300 bg-white text-transparent',
+                            : 'border-border-default bg-surface-card text-transparent',
                         )}
                       >
                         <Check className="h-3 w-3" />

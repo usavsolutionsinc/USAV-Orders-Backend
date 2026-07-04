@@ -304,7 +304,7 @@ export default function SignInPage() {
             <button
               type="button"
               onClick={() => setShowPhoneQr(true)}
-              className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-label font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
+              className="group inline-flex items-center gap-2 rounded-full border border-border-soft bg-surface-card/70 px-4 py-2 text-label font-medium text-text-muted shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-border-default hover:bg-surface-card hover:text-text-default"
             >
               <PhoneQrIcon />
               Use your phone to sign in
@@ -314,8 +314,8 @@ export default function SignInPage() {
       ) : (
         <div className="w-full max-w-md">
           <div className="text-center">
-            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Sign in</h1>
-            <p className="mt-1.5 text-sm text-gray-500">Tap your name to continue.</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-text-default">Sign in</h1>
+            <p className="mt-1.5 text-sm text-text-soft">Tap your name to continue.</p>
           </div>
           <div className="mt-8">
             <StaffPickerList
@@ -335,7 +335,7 @@ export default function SignInPage() {
               <button
                 type="button"
                 onClick={() => setShowPhoneQr(true)}
-                className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-label font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
+                className="group inline-flex items-center gap-2 rounded-full border border-border-soft bg-surface-card/70 px-4 py-2 text-label font-medium text-text-muted shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-border-default hover:bg-surface-card hover:text-text-default"
               >
                 <PhoneQrIcon />
                 Use your phone to sign in
@@ -378,12 +378,12 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
         onClick={onClose}
         className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity"
       />
-      <div className="relative w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-7 shadow-2xl shadow-gray-900/20">
+      <div className="relative w-full max-w-sm rounded-3xl border border-border-soft bg-surface-card p-7 shadow-2xl shadow-gray-900/20">
         <IconButton
           type="button"
           onClick={onClose}
           ariaLabel="Close"
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-100"
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-surface-sunken"
           icon={
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M6 6l12 12" /><path d="M18 6L6 18" />
@@ -395,31 +395,31 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
           <div className="mx-auto inline-flex items-center justify-center rounded-full bg-slate-900/95 px-3 py-1 text-micro font-semibold uppercase tracking-[0.18em] text-white">
             Phone sign-in
           </div>
-          <h2 className="mt-3 text-lg font-semibold tracking-tight text-gray-900">
+          <h2 className="mt-3 text-lg font-semibold tracking-tight text-text-default">
             Scan to sign in on your phone
           </h2>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-gray-500">
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-text-soft">
             Point your phone camera at the code. After your PIN, you can enable Face ID for one-tap sign-in next time.
           </p>
         </div>
 
         <div className="mt-5 flex justify-center">
-          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-inner shadow-gray-900/[0.03]">
+          <div className="rounded-2xl border border-border-soft bg-surface-card p-3 shadow-inner shadow-gray-900/[0.03]">
             {url ? (
               <QRCode value={url} size={196} level="M" />
             ) : (
-              <div className="h-[196px] w-[196px] animate-pulse rounded-lg bg-gray-100" />
+              <div className="h-[196px] w-[196px] animate-pulse rounded-lg bg-surface-sunken" />
             )}
           </div>
         </div>
 
-        <ol className="mt-5 space-y-2 text-[12.5px] text-gray-600">
+        <ol className="mt-5 space-y-2 text-[12.5px] text-text-muted">
           <Step n={1}>Open your phone&apos;s camera and aim at the code.</Step>
           <Step n={2}>Tap the link, pick your name, enter your PIN.</Step>
           <Step n={3}>Enable Face ID to skip the PIN next time.</Step>
         </ol>
 
-        <div className="mt-5 break-all rounded-lg bg-gray-50 px-3 py-2 text-center text-[10.5px] font-mono text-gray-500">
+        <div className="mt-5 break-all rounded-lg bg-surface-canvas px-3 py-2 text-center text-[10.5px] font-mono text-text-soft">
           {url || ' '}
         </div>
       </div>
@@ -430,7 +430,7 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2.5">
-      <span className="mt-[1px] inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-eyebrow font-bold text-white">
+      <span className="mt-[1px] inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-surface-inverse text-eyebrow font-bold text-white">
         {n}
       </span>
       <span>{children}</span>
@@ -451,22 +451,22 @@ interface RememberMeToggleProps {
  */
 function RememberMeToggle({ checked, onChange }: RememberMeToggleProps) {
   return (
-    <label className="group inline-flex cursor-pointer items-center gap-3 rounded-full border border-gray-200 bg-white/80 px-4 py-2 text-label font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:text-gray-900">
+    <label className="group inline-flex cursor-pointer items-center gap-3 rounded-full border border-border-soft bg-surface-card/80 px-4 py-2 text-label font-medium text-text-muted shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-border-default hover:text-text-default">
       <span
         className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-          checked ? 'bg-slate-900' : 'bg-gray-300'
+          checked ? 'bg-surface-inverse' : 'bg-surface-strong'
         }`}
         aria-hidden
       >
         <span
-          className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          className={`inline-block h-4 w-4 rounded-full bg-surface-card shadow-sm transition-transform ${
             checked ? 'translate-x-[18px]' : 'translate-x-[2px]'
           }`}
         />
       </span>
       <span className="flex flex-col leading-tight">
         <span>Keep me signed in</span>
-        <span className="text-[10.5px] text-gray-400 group-hover:text-gray-500">
+        <span className="text-[10.5px] text-text-faint group-hover:text-text-soft">
           30 days on this device — uncheck on shared computers
         </span>
       </span>
@@ -482,7 +482,7 @@ function RememberMeToggle({ checked, onChange }: RememberMeToggleProps) {
 
 function PhoneQrIcon() {
   return (
-    <svg className="h-3.5 w-3.5 text-gray-400 transition-colors group-hover:text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg className="h-3.5 w-3.5 text-text-faint transition-colors group-hover:text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />

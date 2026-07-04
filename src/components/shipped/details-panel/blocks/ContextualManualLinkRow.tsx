@@ -119,7 +119,7 @@ export function ContextualManualLinkRow({
       label="Product Manual"
       headerAccessory={
         effectiveItemNumber ? (
-          <span className="truncate text-micro font-black uppercase tracking-wide text-gray-500">
+          <span className="truncate text-micro font-black uppercase tracking-wide text-text-soft">
             {effectiveItemNumber}
           </span>
         ) : null
@@ -133,7 +133,7 @@ export function ContextualManualLinkRow({
                 href={openUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 transition-colors hover:text-blue-600"
+                className="text-text-faint transition-colors hover:text-blue-600"
                 aria-label={`Open manual for ${contextualKey}`}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -154,7 +154,7 @@ export function ContextualManualLinkRow({
               setSaveState('idle');
             }}
             placeholder="Item number"
-            className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold uppercase tracking-wide text-gray-900 outline-none"
+            className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold uppercase tracking-wide text-text-default outline-none"
           />
         ) : null}
         <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ export function ContextualManualLinkRow({
                 : 'Enter item number'
             }
             disabled={!effectiveItemNumber}
-            className="h-8 flex-1 border-0 bg-transparent px-0 text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400 disabled:text-gray-400"
+            className="h-8 flex-1 border-0 bg-transparent px-0 text-sm font-medium text-text-default outline-none placeholder:text-text-faint disabled:text-text-faint"
           />
           <HoverTooltip label="Paste manual link" asChild>
             <IconButton

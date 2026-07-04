@@ -46,8 +46,13 @@ export type BoardPrefsKey = 'unshippedBoard' | 'shippedBoard';
 export interface StaffPreferences {
   /** Function key (F1–F12) that focuses the active scan bar. Absent = default (F2). */
   focusScanHotkey?: string | null;
-  /** Color theme. Absent = light (the default). Drives `data-theme` on <html>. */
-  theme?: 'light' | 'dark' | null;
+  /**
+   * Color theme name from the theme registry (light | dark | mono | slate —
+   * see src/design-system/themes/registry.ts). Absent = light (the default).
+   * Drives `data-theme` / `data-color-scheme` on <html>; unknown values fall
+   * back to light at apply time, so stale prefs are harmless.
+   */
+  theme?: string | null;
   /**
    * Unshipped · Shelf-board layout prefs (cross-device). Lanes are PENDING /
    * TESTED / BLOCKED; see {@link BoardPrefs} for the shape. One board surface =

@@ -105,14 +105,14 @@ export function LineMatchingSection({
   // a real receivingId, so we don't mount it here).
   if (!pkg.receivingId) {
     const teaching = (
-      <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
+      <p className="rounded-lg border border-dashed border-border-soft bg-surface-canvas px-4 py-5 text-center text-xs text-text-soft">
         This package has no carton record yet — scan its tracking to enable pairing.
       </p>
     );
     if (embedded) {
       return (
         <div className="space-y-2">
-          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
             Package Pairing
           </h3>
           {teaching}
@@ -412,7 +412,7 @@ function TriageMatchingCard({
         />
         {tab === 'zendesk' && t.hiddenLinked > 0 ? (
           <HoverTooltip label={`${t.hiddenLinked} ticket(s) already linked elsewhere are hidden`}>
-            <span className="ml-auto shrink-0 text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+            <span className="ml-auto shrink-0 text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
               {t.hiddenLinked} hidden
             </span>
           </HoverTooltip>
@@ -460,7 +460,7 @@ function TriageMatchingCard({
         <span className="text-eyebrow font-black uppercase tracking-widest text-violet-700">
           Claim ticket
         </span>
-        <p className="truncate text-caption font-bold font-mono text-gray-900">
+        <p className="truncate text-caption font-bold font-mono text-text-default">
           {pkg.zendeskTicket}
         </p>
       </div>
@@ -493,7 +493,7 @@ function TriageMatchingCard({
               size="sm"
               icon={<Link2 />}
               onClick={() => setForcePicker(true)}
-              className="h-7 px-2.5 text-gray-600"
+              className="h-7 px-2.5 text-text-muted"
             >
               Change / add pairing
             </Button>
@@ -538,9 +538,9 @@ function TriageMatchingCard({
         className={collapsed ? 'overflow-hidden' : 'overflow-visible'}
         aria-hidden={collapsed}
       >
-        <div className={showTopRule ? 'border-t border-gray-100 pt-4' : undefined}>
+        <div className={showTopRule ? 'border-t border-border-hairline pt-4' : undefined}>
           <div className="mb-3 flex min-w-0 items-center justify-between gap-2 overflow-visible">
-            <h3 className="min-w-0 shrink text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+            <h3 className="min-w-0 shrink text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
               Package Pairing
             </h3>
             {headerActions}
@@ -564,21 +564,21 @@ function ZendeskMatchTab({ t }: { t: ReturnType<typeof useTriagePanel> }) {
     <>
       {/* Search */}
       <div className="relative mb-3">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
         <input
           type="text"
           value={t.matchQuery}
           onChange={(e) => t.setMatchQuery(e.target.value)}
           placeholder="Search claim tickets by #, order, email, customer…"
-          className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-8 text-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-border-soft py-2 pl-8 pr-8 text-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         {t.candidatesFetching ? (
-          <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-gray-400" />
+          <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-text-faint" />
         ) : null}
       </div>
 
       {t.candidatesLoading ? (
-        <p className="flex items-center justify-center gap-2 py-5 text-xs text-gray-500">
+        <p className="flex items-center justify-center gap-2 py-5 text-xs text-text-soft">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading matches…
         </p>
       ) : t.candidatesError ? (
@@ -586,7 +586,7 @@ function ZendeskMatchTab({ t }: { t: ReturnType<typeof useTriagePanel> }) {
           Couldn’t load Zendesk matches. Zendesk may be unconfigured.
         </p>
       ) : t.candidates.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
+        <p className="rounded-lg border border-dashed border-border-soft bg-surface-canvas px-4 py-5 text-center text-xs text-text-soft">
           {t.matchQuery.trim()
             ? `No tickets match “${t.matchQuery.trim()}”.`
             : 'No recent claim tickets. Search by order #, email, or customer name.'}
@@ -607,8 +607,8 @@ function ZendeskMatchTab({ t }: { t: ReturnType<typeof useTriagePanel> }) {
 
       {/* eBay delivered-email corroboration (real signal; order # via copy chip · last 4) */}
       {t.deliveredEmails.length > 0 ? (
-        <div className="mt-3 border-t border-gray-100 pt-3">
-          <p className="mb-1.5 text-eyebrow font-black uppercase tracking-widest text-gray-400">
+        <div className="mt-3 border-t border-border-hairline pt-3">
+          <p className="mb-1.5 text-eyebrow font-black uppercase tracking-widest text-text-faint">
             Marketplace delivery signals
           </p>
           <div className="space-y-1">
@@ -618,11 +618,11 @@ function ZendeskMatchTab({ t }: { t: ReturnType<typeof useTriagePanel> }) {
                 className="flex items-center gap-2 rounded-lg bg-violet-50/60 px-2.5 py-1.5"
               >
                 <Mail className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-gray-600">
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-text-muted">
                   Order
                   <OrderIdChip value={sig.orderNumber} display={getLast4(sig.orderNumber)} dense />
                   {sig.deliveredAt ? (
-                    <span className="truncate text-gray-400">· delivered {relativeTime(sig.deliveredAt)}</span>
+                    <span className="truncate text-text-faint">· delivered {relativeTime(sig.deliveredAt)}</span>
                   ) : null}
                 </span>
               </div>

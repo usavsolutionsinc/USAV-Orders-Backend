@@ -92,7 +92,7 @@ export function OutOfStockField({
           }}
           placeholder="Describe missing parts..."
           autoFocus={autoFocus}
-          className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}
+          className={`w-full bg-transparent text-sm font-normal text-text-default outline-none placeholder:text-text-soft ${dmSans.className}`}
         />
       </div>
     );
@@ -119,7 +119,7 @@ export function OutOfStockField({
         ) : null}
       </div>
 
-      <p className={`text-sm font-medium text-gray-800 ${dmSans.className}`}>
+      <p className={`text-sm font-medium text-text-default ${dmSans.className}`}>
         {value || 'N/A'}
       </p>
     </div>

@@ -177,7 +177,7 @@ export function TriagePanel({
 
   return (
     <>
-      <div className="relative flex h-full min-h-0 flex-col bg-gray-50">
+      <div className="relative flex h-full min-h-0 flex-col bg-surface-canvas">
         <LineEditToolbar
           mode="triage"
           receivingId={row.receiving_id ?? null}

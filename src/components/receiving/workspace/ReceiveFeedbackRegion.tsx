@@ -192,7 +192,7 @@ function ReceiveSuccessChecklist({
         <>
           {/* Reconcile footer — only while a real Zoho receive is in flight. */}
           {result.reconcile && status === 'pending' && view.tone === 'emerald' ? (
-            <p className="mt-1.5 flex items-center gap-1.5 text-micro font-semibold uppercase tracking-wider text-slate-400">
+            <p className="mt-1.5 flex items-center gap-1.5 text-micro font-semibold uppercase tracking-wider text-text-faint">
               <Loader2 className="h-3 w-3 animate-spin" />
               Syncing to Zoho…
             </p>
@@ -215,7 +215,7 @@ function ReceiveSuccessChecklist({
                 className={`transition-transform duration-150 ${detailsOpen ? 'rotate-180' : ''}`}
               />
             }
-            className="mt-1.5 -ml-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-400 hover:text-slate-600"
+            className="mt-1.5 -ml-0.5 text-eyebrow font-black uppercase tracking-widest text-text-faint hover:text-text-muted"
           >
             {detailsOpen ? 'Hide details' : 'Details'}
           </Button>
@@ -230,14 +230,14 @@ function ReceiveSuccessChecklist({
                 transition={collapseTransition}
                 className="overflow-hidden"
               >
-                <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded border border-slate-200 bg-white/70 px-2 py-1.5">
+                <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded border border-border-soft bg-surface-card/70 px-2 py-1.5">
                   {detailRows.map(([k, v]) => (
                     <div key={k} className="contents">
-                      <dt className="text-micro font-semibold uppercase tracking-wide text-slate-400">
+                      <dt className="text-micro font-semibold uppercase tracking-wide text-text-faint">
                         {k}
                       </dt>
                       <dd
-                        className={`min-w-0 break-words text-micro font-medium text-slate-700 ${
+                        className={`min-w-0 break-words text-micro font-medium text-text-muted ${
                           k === 'Item description' || k === 'PO notes' ? 'whitespace-pre-wrap' : ''
                         }`}
                       >

@@ -240,7 +240,7 @@ export function InlineSerialAdder({
                 icon={<X className="h-3 w-3" />}
                 ariaLabel={editing ? 'Cancel edit' : 'Clear'}
                 onClick={() => (editing ? cancelEdit() : setScan(''))}
-                className="rounded-md p-1 hover:bg-gray-100"
+                className="rounded-md p-1 hover:bg-surface-sunken"
               />
             ) : undefined
           }
@@ -252,7 +252,7 @@ export function InlineSerialAdder({
           ariaLabel={editing ? 'Save serial' : 'Add serial'}
           onClick={() => void submit()}
           disabled={!scan.trim() || isSubmitting || disabled}
-          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm disabled:bg-gray-300 disabled:opacity-100 ${
+          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm disabled:bg-surface-strong disabled:opacity-100 ${
             editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
           }`}
         />

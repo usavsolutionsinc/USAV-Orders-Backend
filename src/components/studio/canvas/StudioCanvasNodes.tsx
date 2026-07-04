@@ -71,18 +71,18 @@ export function ProcessNode({ data }: NodeProps) {
         simGhost
           ? 'border-violet-500 ring-2 ring-violet-300 bg-violet-50'
           : focused
-            ? 'border-blue-400 ring-2 ring-blue-200 bg-white'
+            ? 'border-blue-400 ring-2 ring-blue-200 bg-surface-card'
             : gapErrors.length > 0
-              ? 'border-rose-400 ring-2 ring-rose-200 bg-white'
+              ? 'border-rose-400 ring-2 ring-rose-200 bg-surface-card'
               : gapWarnings.length > 0
-                ? 'border-amber-400 ring-2 ring-amber-200 bg-white'
+                ? 'border-amber-400 ring-2 ring-amber-200 bg-surface-card'
                 : peopleGap
                   ? 'border-amber-300 border-dashed ring-1 ring-amber-200 bg-amber-50'
                   : heat
                     ? HEAT_TONE[heat.level]
                     : flowHeat
                       ? HEAT_TONE[flowHeat.level]
-                      : 'border-slate-200 bg-white',
+                      : 'border-border-soft bg-surface-card',
         // People lens dims uncovered nodes so staffed ones stand out.
         dimmed || (!!people && people.coverage === 0 && !peopleGap) ? 'opacity-40' : 'opacity-100',
       ].join(' ')}
@@ -92,7 +92,7 @@ export function ProcessNode({ data }: NodeProps) {
           className="absolute -left-3 -top-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg ring-2 ring-white"
           title="Simulation ghost is here"
         >
-          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-surface-card" />
         </span>
       )}
       {gaps.length > 0 && (
@@ -144,15 +144,15 @@ export function ProcessNode({ data }: NodeProps) {
           {people.coverage > 0 ? people.coverage : '!'}
         </span>
       )}
-      <Handle type="target" position={Position.Left} className="!bg-slate-300" />
+      <Handle type="target" position={Position.Left} className="!bg-surface-strong" />
       <div
-        className="flex items-center gap-2 rounded-t-xl border-b border-slate-100 px-3 py-2"
+        className="flex items-center gap-2 rounded-t-xl border-b border-border-hairline px-3 py-2"
         style={{ borderLeft: `4px solid ${accent}` }}
       >
-        <NodeIcon name={node.meta?.icon} className="h-4 w-4 shrink-0 text-slate-500" />
+        <NodeIcon name={node.meta?.icon} className="h-4 w-4 shrink-0 text-text-soft" />
         <div className="min-w-0">
-          <p className="truncate text-xs font-bold text-slate-900">{node.meta?.label ?? node.type}</p>
-          <p className="truncate font-mono text-micro text-slate-400">{node.type}</p>
+          <p className="truncate text-xs font-bold text-text-default">{node.meta?.label ?? node.type}</p>
+          <p className="truncate font-mono text-micro text-text-faint">{node.type}</p>
         </div>
         {staticRole ? (
           <span
@@ -185,14 +185,14 @@ export function ProcessNode({ data }: NodeProps) {
         </div>
       )}
       {station && (
-        <div className="border-t border-slate-100 px-3 py-1.5">
+        <div className="border-t border-border-hairline px-3 py-1.5">
           <span className="text-micro font-semibold uppercase tracking-wide" style={{ color: station.color }}>
             {station.label}
           </span>
         </div>
       )}
       {staticRole && staticDangling.length > 0 && (
-        <div className="border-t border-slate-100 px-3 py-1.5">
+        <div className="border-t border-border-hairline px-3 py-1.5">
           <HoverTooltip
             label={`Unwired output port(s): ${staticDangling.join(', ')} — data leaving here goes nowhere`}
             asChild
@@ -204,7 +204,7 @@ export function ProcessNode({ data }: NodeProps) {
         </div>
       )}
       {live && live.total > 0 && (
-        <div className="flex items-center gap-1 border-t border-slate-100 px-3 py-1.5">
+        <div className="flex items-center gap-1 border-t border-border-hairline px-3 py-1.5">
           {Array.from({ length: Math.min(live.total, 8) }).map((_, i) => (
             <span
               key={i}
@@ -219,7 +219,7 @@ export function ProcessNode({ data }: NodeProps) {
           <span className="ml-auto flex items-center gap-2">
             {live.blocked > 0 && (
               <HoverTooltip label="Parked, awaiting a human/event" asChild>
-                <span className="text-micro text-slate-400">{live.blocked} parked</span>
+                <span className="text-micro text-text-faint">{live.blocked} parked</span>
               </HoverTooltip>
             )}
             {ageHours != null && (
@@ -232,7 +232,7 @@ export function ProcessNode({ data }: NodeProps) {
                 asChild
               >
                 <span
-                  className={`text-micro font-semibold tabular-nums ${heat ? HEAT_ACCENT[heat.level] : 'text-slate-400'}`}
+                  className={`text-micro font-semibold tabular-nums ${heat ? HEAT_ACCENT[heat.level] : 'text-text-faint'}`}
                 >
                   ⏱ {formatAgeHours(ageHours)}
                 </span>
@@ -243,8 +243,8 @@ export function ProcessNode({ data }: NodeProps) {
       )}
       {flow && (flow.currentWip > 0 || flow.runCount > 0 || (flow.dwellMedianS != null)) && (
         <div
-          className={`flex items-center gap-2 border-t border-slate-100 px-3 py-1.5 ${
-            flowHeat ? HEAT_ACCENT[flowHeat.level] : 'text-slate-500'
+          className={`flex items-center gap-2 border-t border-border-hairline px-3 py-1.5 ${
+            flowHeat ? HEAT_ACCENT[flowHeat.level] : 'text-text-soft'
           }`}
         >
           <HoverTooltip
@@ -278,7 +278,7 @@ export function ProcessNode({ data }: NodeProps) {
                   return trend.slice(-10).map((t, i) => (
                     <span
                       key={`${t.date}-${i}`}
-                      className={`w-0.5 rounded-sm ${flowHeat ? HEAT_DOT[flowHeat.level] : 'bg-slate-400'}`}
+                      className={`w-0.5 rounded-sm ${flowHeat ? HEAT_DOT[flowHeat.level] : 'bg-border-emphasis'}`}
                       style={{ height: `${Math.max(8, (t.queueDepth / peak) * 100)}%` }}
                     />
                   ));
@@ -289,7 +289,7 @@ export function ProcessNode({ data }: NodeProps) {
         </div>
       )}
       {people && (
-        <div className="flex items-center gap-1 border-t border-slate-100 px-3 py-1.5">
+        <div className="flex items-center gap-1 border-t border-border-hairline px-3 py-1.5">
           {people.coverage > 0 ? (
             <>
               {people.staff.slice(0, 5).map((s) => (
@@ -342,12 +342,12 @@ export function ProcessNode({ data }: NodeProps) {
             type="source"
             position={Position.Right}
             style={{ top: `${((i + 1) / (all.length + 1)) * 100}%` }}
-            className="!h-2.5 !w-2.5 !bg-slate-400"
+            className="!h-2.5 !w-2.5 !bg-border-emphasis"
             title={`port: ${port.id}`}
           />
         ))
       ) : (
-        <Handle type="source" position={Position.Right} className="!bg-slate-400" />
+        <Handle type="source" position={Position.Right} className="!bg-border-emphasis" />
       )}
     </div>
   );
@@ -356,8 +356,8 @@ export function ProcessNode({ data }: NodeProps) {
 export function DepartmentNode({ data }: NodeProps) {
   const d = data as DepartmentNodeData;
   return (
-    <div className="relative w-52 cursor-zoom-in rounded-2xl border-2 bg-white px-4 py-3 shadow-sm" style={{ borderColor: d.color }}>
-      <Handle type="target" position={Position.Left} className="!bg-slate-300" />
+    <div className="relative w-52 cursor-zoom-in rounded-2xl border-2 bg-surface-card px-4 py-3 shadow-sm" style={{ borderColor: d.color }}>
+      <Handle type="target" position={Position.Left} className="!bg-surface-strong" />
       {d.inFlight != null && d.inFlight > 0 && (
         <span className="absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-600 px-1.5 text-caption font-bold text-white shadow">
           {d.inFlight}
@@ -366,12 +366,12 @@ export function DepartmentNode({ data }: NodeProps) {
       <p className="text-sm font-bold" style={{ color: d.color }}>
         {d.label}
       </p>
-      <p className="mt-0.5 text-caption text-slate-500">
+      <p className="mt-0.5 text-caption text-text-soft">
         {d.stepCount} step{d.stepCount === 1 ? '' : 's'} · {d.stepLabels.join(' · ')}
         {d.inFlight != null && <> · {d.inFlight} in flight</>}
       </p>
-      <p className="mt-1 text-micro text-slate-300">double-click to expand</p>
-      <Handle type="source" position={Position.Right} className="!bg-slate-400" />
+      <p className="mt-1 text-micro text-text-faint">double-click to expand</p>
+      <Handle type="source" position={Position.Right} className="!bg-border-emphasis" />
     </div>
   );
 }

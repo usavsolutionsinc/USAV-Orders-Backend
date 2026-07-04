@@ -166,7 +166,7 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
             icon={<X className="h-5 w-5 text-blue-400" />}
             onClick={() => router.back()}
             ariaLabel="Go back"
-            className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center shadow-sm"
+            className="h-10 w-10 rounded-full bg-surface-card border border-blue-100 flex items-center justify-center shadow-sm"
           />
         </div>
         <MobileCard className="mt-10 py-12 text-center">
@@ -188,7 +188,7 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
           icon={<X className="h-5 w-5 text-blue-400" />}
           onClick={() => router.back()}
           ariaLabel="Go back"
-          className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center shadow-sm"
+          className="h-10 w-10 rounded-full bg-surface-card border border-blue-100 flex items-center justify-center shadow-sm"
         />
         <div className="flex items-center gap-2">
           {order.status && (
@@ -200,7 +200,7 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
             icon={<Copy className="h-5 w-5 text-blue-600" />}
             onClick={copyId}
             ariaLabel="Copy order number"
-            className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center shadow-sm"
+            className="h-10 w-10 rounded-full bg-surface-card border border-blue-100 flex items-center justify-center shadow-sm"
           />
         </div>
       </div>
@@ -242,7 +242,7 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
               {order.quantity} Unit{order.quantity === 1 ? '' : 's'}
             </span>
             {order.serials.length > 0 && (
-              <span className="text-micro font-black uppercase tracking-wider bg-slate-50 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200">
+              <span className="text-micro font-black uppercase tracking-wider bg-surface-canvas text-text-muted px-2.5 py-1 rounded-lg border border-border-soft">
                 {order.serials.length} Serial{order.serials.length === 1 ? '' : 's'}
               </span>
             )}

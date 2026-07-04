@@ -1,7 +1,47 @@
 {
-  "generatedAt": "2026-07-01T13:50:25.667Z",
+  "generatedAt": "2026-07-04T20:22:30.918Z",
   "count": 198,
   "commits": [
+    {
+      "sha": "95f39f692f043ad25976898f1e017227a979a9fc",
+      "shortSha": "95f39f69",
+      "date": "2026-07-03T11:23:01-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Add universal feed polymorphic linkage plan",
+      "body": "Design doc for feed_links — a generic polymorphic membership table so\ntriage-style sidebar bulk-delete unlinks from the feed without touching\nthe underlying receiving/FBA/repair/order record. Includes the exact\nreceiving_triage state mapping verified against the current fetchers.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Add universal feed polymorphic linkage plan"
+    },
+    {
+      "sha": "997e3c3b5ea1f52158c572fcc40ae02abb758e11",
+      "shortSha": "997e3c3b",
+      "date": "2026-07-02T21:57:35-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Add photo reassignment — move a receiving photo to another PO/line from the UI",
+      "body": "Formalizes the manual \"move photo to another carton\" fix into a proper,\naudited feature: PATCH /api/photos/[id]/reassign re-points a photo's\nprimary entity link and po_ref, gated by receiving.upload_photo and\nrecorded via the PHOTO_REASSIGN audit action. Wires a MovePhotoToPoPanel\ninto the photo gallery/viewer so operators can do this themselves.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016yhRqxMaePRmiMafjoeVXt",
+      "type": "other",
+      "title": "Add photo reassignment — move a receiving photo to another PO/line from the UI"
+    },
+    {
+      "sha": "2b39d809346fcb661581795a28e92006fc4b2f62",
+      "shortSha": "2b39d809",
+      "date": "2026-07-01T17:38:59-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Universal Incoming eBay purchase sync, ShipStation outbound labels, and facts/permission updates",
+      "body": "Wires eBay buyer-side purchase orders into a polymorphic Incoming spine\n(equivalence/merge/mirror + cron sync), adds ShipStation rate-shopping,\nlabel purchase/void, and inbound webhook routes, and extends the\nreceiving facts registry, permission manifest, and integration\ncredentials/connector registry to support both.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016yhRqxMaePRmiMafjoeVXt",
+      "type": "other",
+      "title": "Universal Incoming eBay purchase sync, ShipStation outbound labels, and facts/permission updates"
+    },
+    {
+      "sha": "85535d2584065bc87988cf8b28d844b22052c418",
+      "shortSha": "85535d25",
+      "date": "2026-07-01T08:50:51-07:00",
+      "author": "DENSENSE8",
+      "subject": "Media library, outbound documents, receiving triage, and support tickets.",
+      "body": "Modernize the photo library (saved views, picker, grid density), replace order labels with polymorphic outbound documents, ship receiving triage staging/metrics/done flows, add entity-linked support tickets and RMA disposition/backlog, with migrations and route permissions.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Media library, outbound documents, receiving triage, and support tickets."
+    },
     {
       "sha": "d5619b9af9b60957d9343b8d9d3b1d239908acf5",
       "shortSha": "d5619b9a",
@@ -1941,46 +1981,6 @@
       "body": "",
       "type": "other",
       "title": "added a testing pipeline to the testing page and updated the receiving pipeline"
-    },
-    {
-      "sha": "2d3c2f037f3639dd25dc87610ec4d53a65d427b3",
-      "shortSha": "2d3c2f03",
-      "date": "2026-05-26T12:32:47-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "station scan bar updates and dashboard order created at bug from search",
-      "body": "",
-      "type": "other",
-      "title": "station scan bar updates and dashboard order created at bug from search"
-    },
-    {
-      "sha": "f2736f95508575742d87ccf2dcbf469b7164c5ce",
-      "shortSha": "f2736f95",
-      "date": "2026-05-26T10:36:29-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the staff colors",
-      "body": "",
-      "type": "other",
-      "title": "updated the staff colors"
-    },
-    {
-      "sha": "401c0c8eec34ca176094f373ae1dc0527a5948fb",
-      "shortSha": "401c0c8e",
-      "date": "2026-05-26T09:43:51-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the packer to be more supportive of older devices",
-      "body": "",
-      "type": "other",
-      "title": "updated the packer to be more supportive of older devices"
-    },
-    {
-      "sha": "272c0b1387c65895909b0b4c8d5631dee0530ab0",
-      "shortSha": "272c0b13",
-      "date": "2026-05-26T08:48:22-07:00",
-      "author": "DENSENSE8",
-      "subject": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page",
-      "body": "",
-      "type": "other",
-      "title": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page"
     }
   ]
 }

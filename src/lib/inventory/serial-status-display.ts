@@ -22,8 +22,8 @@ interface SerialStatusMeta {
 }
 
 const SERIAL_STATUS_META: Record<string, SerialStatusMeta> = {
-  RECEIVED: { label: 'Received', dot: 'bg-gray-400' },
-  TRIAGED: { label: 'Triaged', dot: 'bg-gray-400' },
+  RECEIVED: { label: 'Received', dot: 'bg-border-emphasis' },
+  TRIAGED: { label: 'Triaged', dot: 'bg-border-emphasis' },
   IN_TEST: { label: 'In test', dot: 'bg-blue-500' },
   TESTED: { label: 'Tested', dot: 'bg-blue-500' },
   GRADED: { label: 'Graded', dot: 'bg-blue-500' },
@@ -43,7 +43,7 @@ const SERIAL_STATUS_META: Record<string, SerialStatusMeta> = {
   REPAIR_DONE: { label: 'Repaired', dot: 'bg-violet-500' },
   ON_HOLD: { label: 'On hold', dot: 'bg-amber-500' },
   SCRAPPED: { label: 'Scrapped', dot: 'bg-rose-500' },
-  UNKNOWN: { label: 'Unknown', dot: 'bg-gray-300' },
+  UNKNOWN: { label: 'Unknown', dot: 'bg-surface-strong' },
 };
 
 const UNKNOWN_STATUS: SerialStatusMeta = SERIAL_STATUS_META.UNKNOWN;

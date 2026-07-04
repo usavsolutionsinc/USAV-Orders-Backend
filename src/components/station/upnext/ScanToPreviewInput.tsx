@@ -73,7 +73,7 @@ export function ScanToPreviewInput({ orders }: { orders: any[] }) {
       ? 'border-emerald-300 bg-emerald-50/80 ring-1 ring-inset ring-emerald-200'
       : feedback === 'missed'
       ? 'border-red-300 bg-red-50/80 ring-1 ring-inset ring-red-200'
-      : 'border-gray-200 bg-white focus-within:border-blue-300 focus-within:ring-1 focus-within:ring-inset focus-within:ring-blue-200';
+      : 'border-border-soft bg-surface-card focus-within:border-blue-300 focus-within:ring-1 focus-within:ring-inset focus-within:ring-blue-200';
 
   return (
     <div
@@ -81,7 +81,7 @@ export function ScanToPreviewInput({ orders }: { orders: any[] }) {
     >
       <Barcode
         className={`h-3.5 w-3.5 flex-shrink-0 ${
-          feedback === 'matched' ? 'text-emerald-500' : feedback === 'missed' ? 'text-red-500' : 'text-gray-400'
+          feedback === 'matched' ? 'text-emerald-500' : feedback === 'missed' ? 'text-red-500' : 'text-text-faint'
         }`}
       />
       <input
@@ -93,7 +93,7 @@ export function ScanToPreviewInput({ orders }: { orders: any[] }) {
         aria-label="Scan tracking number to preview order"
         spellCheck={false}
         autoComplete="off"
-        className="min-w-0 flex-1 bg-transparent text-label font-semibold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
+        className="min-w-0 flex-1 bg-transparent text-label font-semibold text-text-default outline-none placeholder:font-medium placeholder:text-text-faint"
       />
       {feedback === 'missed' ? (
         <span className="text-micro font-black uppercase tracking-widest text-red-500">
@@ -104,7 +104,7 @@ export function ScanToPreviewInput({ orders }: { orders: any[] }) {
           Selected
         </span>
       ) : (
-        <kbd className="hidden rounded bg-gray-100 px-1 py-px text-eyebrow font-bold text-gray-500 sm:inline-flex">
+        <kbd className="hidden rounded bg-surface-sunken px-1 py-px text-eyebrow font-bold text-text-soft sm:inline-flex">
           ↵
         </kbd>
       )}

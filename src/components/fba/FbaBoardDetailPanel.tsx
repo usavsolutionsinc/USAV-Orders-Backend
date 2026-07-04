@@ -41,10 +41,10 @@ export function FbaBoardDetailPanel({
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 26, stiffness: 360, mass: 0.45 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
+        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
       >
       {/* ── Fixed header (4 rows) — never scrolls ──────────────────── */}
-      <div className="shrink-0 overflow-hidden bg-white">
+      <div className="shrink-0 overflow-hidden bg-surface-card">
         {/* Row 1: label */}
         <div className="px-6 pt-4 pb-0">
           <p className="text-eyebrow font-black uppercase tracking-[0.3em] text-purple-700">
@@ -53,7 +53,7 @@ export function FbaBoardDetailPanel({
         </div>
 
         {/* Row 2: title */}
-        <div className="px-6 pt-1.5 pb-2 border-b border-gray-200 h-[100px]">
+        <div className="px-6 pt-1.5 pb-2 border-b border-border-soft h-[100px]">
           <h2 className="line-clamp-4 text-lg font-black leading-snug tracking-tight text-gray-950">
             {headerTitle}
           </h2>
@@ -74,7 +74,7 @@ export function FbaBoardDetailPanel({
         {/* Row 4: FNSKU + totals */}
         <div className="flex items-center justify-between px-6 pt-2 pb-2">
           <div className="flex items-center gap-4 text-caption">
-            <span className="flex items-center gap-1 font-bold text-gray-600">
+            <span className="flex items-center gap-1 font-bold text-text-muted">
               <ClipboardList className="h-3 w-3 text-purple-500" />
               <span className="tabular-nums">{totalExpected}</span>
             </span>
@@ -101,20 +101,20 @@ export function FbaBoardDetailPanel({
             onCatalogSaved={onSaved}
           />
 
-          <div className="h-px bg-gray-100" />
+          <div className="h-px bg-surface-sunken" />
 
           {/* Static details */}
           <section className="py-4">
             <p className={`mb-2 ${sectionLabel}`}>Details</p>
             <dl className="space-y-1 text-label">
               <div className="flex items-center justify-between gap-4">
-                <dt className="font-semibold text-gray-500">Plans</dt>
-                <dd className="font-black text-gray-800">{entries.length}</dd>
+                <dt className="font-semibold text-text-soft">Plans</dt>
+                <dd className="font-black text-text-default">{entries.length}</dd>
               </div>
             </dl>
           </section>
 
-          <div className="h-px bg-gray-100" />
+          <div className="h-px bg-surface-sunken" />
 
           {/* Plan entries list */}
           <section className="py-4">
@@ -124,10 +124,10 @@ export function FbaBoardDetailPanel({
 
             {loading ? (
               <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
               </div>
             ) : entries.length === 0 ? (
-              <p className="py-4 text-center text-caption font-bold text-gray-400">
+              <p className="py-4 text-center text-caption font-bold text-text-faint">
                 No active plan entries
               </p>
             ) : (
@@ -145,31 +145,31 @@ export function FbaBoardDetailPanel({
           </section>
 
           {/* Scan activity — who scanned this FNSKU and when */}
-          <div className="h-px bg-gray-100" />
+          <div className="h-px bg-surface-sunken" />
           <section className="py-4">
             <p className={`mb-3 ${sectionLabel}`}>Scan Activity ({scanLogs.length})</p>
             {loading ? (
               <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
               </div>
             ) : scanLogs.length === 0 ? (
-              <p className="py-2 text-center text-caption font-bold text-gray-400">No scans yet</p>
+              <p className="py-2 text-center text-caption font-bold text-text-faint">No scans yet</p>
             ) : (
               <div className="space-y-1.5">
                 {scanLogs.map((log) => (
                   <div
                     key={log.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border-hairline bg-surface-canvas/60 px-2.5 py-1.5"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider bg-purple-100 text-purple-700">
                         {scanActionLabel(log.source_stage, log.event_type)}
                       </span>
-                      <span className="truncate text-caption font-bold text-gray-700">
+                      <span className="truncate text-caption font-bold text-text-muted">
                         {log.staff_name || 'Unknown'}
                       </span>
                     </div>
-                    <span className="shrink-0 text-micro font-semibold tabular-nums text-gray-400">
+                    <span className="shrink-0 text-micro font-semibold tabular-nums text-text-faint">
                       {formatCreatedAt(log.created_at)}
                     </span>
                   </div>
@@ -181,7 +181,7 @@ export function FbaBoardDetailPanel({
           {/* All tracking numbers across entries */}
           {entries.some((e) => e.tracking_numbers.length > 0) && (
             <>
-              <div className="h-px bg-gray-100" />
+              <div className="h-px bg-surface-sunken" />
               <section className="py-4">
                 <p className={`mb-2 ${sectionLabel}`}>All Tracking</p>
                 <div className="space-y-0.5">
@@ -192,8 +192,8 @@ export function FbaBoardDetailPanel({
                         .map((t) => [t.tracking_number, t]),
                     ).values(),
                   ).map((t, i) => (
-                    <p key={i} className="font-mono text-caption font-bold text-gray-700">
-                      {t.carrier && <span className="text-gray-500">{t.carrier} </span>}
+                    <p key={i} className="font-mono text-caption font-bold text-text-muted">
+                      {t.carrier && <span className="text-text-soft">{t.carrier} </span>}
                       {t.tracking_number}
                     </p>
                   ))}
@@ -202,7 +202,7 @@ export function FbaBoardDetailPanel({
             </>
           )}
 
-          <div className="h-px bg-gray-100" />
+          <div className="h-px bg-surface-sunken" />
 
           {/* Delete all entries for this FNSKU */}
           <section className="py-4">

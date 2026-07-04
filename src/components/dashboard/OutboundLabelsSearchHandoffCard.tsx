@@ -34,7 +34,7 @@ export function OutboundLabelsSearchHandoffCard({
           loading={isBusy}
           disabled={buttonDisabled}
           onClick={() => onOpenLabelsMatches?.(normalizedQuery)}
-          className="w-full border border-violet-200 bg-white text-violet-700 hover:bg-violet-100 hover:text-violet-700 disabled:border-violet-100 disabled:bg-violet-50 disabled:text-violet-300"
+          className="w-full border border-violet-200 bg-surface-card text-violet-700 hover:bg-violet-100 hover:text-violet-700 disabled:border-violet-100 disabled:bg-violet-50 disabled:text-violet-300"
         >
           Open Outbound Labels
         </Button>

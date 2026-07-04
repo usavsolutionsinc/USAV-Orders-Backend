@@ -156,13 +156,13 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Buy Label</h3>
+        <h3 className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Buy Label</h3>
         {rates.length > 0 && !bought ? (
           <button /* ds-raw-button: custom rate-shop control (selectable rate card / micro eyebrow action) */
             type="button"
             onClick={() => ratesMutation.mutate()}
             disabled={ratesMutation.isPending}
-            className="-my-0.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-gray-400 hover:bg-gray-50 hover:text-violet-600 disabled:opacity-40"
+            className="-my-0.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-text-faint hover:bg-surface-hover hover:text-violet-600 disabled:opacity-40"
           >
             {ratesMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
             Refresh
@@ -184,16 +184,16 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
               <dl className="mt-2 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <dt className="text-eyebrow font-bold uppercase tracking-widest text-emerald-700/70">Tracking</dt>
-                  <dd className="truncate font-mono text-caption font-semibold text-gray-900">{bought.tracking}</dd>
+                  <dd className="truncate font-mono text-caption font-semibold text-text-default">{bought.tracking}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <dt className="text-eyebrow font-bold uppercase tracking-widest text-emerald-700/70">Carrier</dt>
-                  <dd className="text-caption font-semibold uppercase text-gray-900">{bought.carrier}</dd>
+                  <dd className="text-caption font-semibold uppercase text-text-default">{bought.carrier}</dd>
                 </div>
                 {typeof bought.cost === 'number' ? (
                   <div className="flex items-center justify-between gap-2">
                     <dt className="text-eyebrow font-bold uppercase tracking-widest text-emerald-700/70">Cost</dt>
-                    <dd className="text-caption font-bold text-gray-900">{money(bought.cost, bought.currency)}</dd>
+                    <dd className="text-caption font-bold text-text-default">{money(bought.cost, bought.currency)}</dd>
                   </div>
                 ) : null}
               </dl>
@@ -205,7 +205,7 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
                 <span>{bought.warning}</span>
               </div>
             ) : (
-              <p className="text-eyebrow text-gray-400">Label + packing slip are ready — print them from the main panel.</p>
+              <p className="text-eyebrow text-text-faint">Label + packing slip are ready — print them from the main panel.</p>
             )}
 
             {/* Void / refund */}
@@ -216,7 +216,7 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
                   value={voidReason}
                   onChange={(e) => setVoidReason(e.target.value)}
                   placeholder="e.g. wrong service selected"
-                  className="w-full rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-caption text-gray-900 outline-none focus:border-rose-400"
+                  className="w-full rounded-lg border border-rose-200 bg-surface-card px-2.5 py-1.5 text-caption text-text-default outline-none focus:border-rose-400"
                 />
                 {voidMutation.isError ? (
                   <p className="text-eyebrow font-bold text-rose-600">{voidMutation.error.message}</p>
@@ -248,7 +248,7 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
               <button /* ds-raw-button: custom rate-shop control (selectable rate card / micro eyebrow action) */
                 type="button"
                 onClick={() => setVoidOpen(true)}
-                className="flex items-center gap-1 text-eyebrow font-bold uppercase tracking-widest text-gray-400 hover:text-rose-600"
+                className="flex items-center gap-1 text-eyebrow font-bold uppercase tracking-widest text-text-faint hover:text-rose-600"
               >
                 <Trash2 className="h-3 w-3" /> Void / refund this label
               </button>
@@ -256,7 +256,7 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
           </motion.div>
         ) : ratesMutation.isPending ? (
           /* ── Loading ────────────────────────────────────────────────── */
-          <motion.div key="loading" {...paneMotion} className="flex items-center gap-2 px-1 py-3 text-caption text-gray-500">
+          <motion.div key="loading" {...paneMotion} className="flex items-center gap-2 px-1 py-3 text-caption text-text-soft">
             <Loader2 className="h-4 w-4 animate-spin text-violet-600" /> Fetching live rates…
           </motion.div>
         ) : ratesMutation.isError ? (
@@ -277,7 +277,7 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
           /* ── Rate list ──────────────────────────────────────────────── */
           <motion.div key="rates" {...paneMotion} className="space-y-2">
             {rates.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-caption text-gray-500">
+              <p className="rounded-lg border border-dashed border-border-soft bg-surface-canvas px-3 py-4 text-center text-caption text-text-soft">
                 No rates returned for this parcel.
               </p>
             ) : (
@@ -290,19 +290,19 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
                         type="button"
                         onClick={() => setSelectedRateId(rate.rateId)}
                         className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
-                          selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50'
+                          selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-surface-hover'
                         }`}
                       >
-                        <Truck className={`h-4 w-4 shrink-0 ${selected ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <Truck className={`h-4 w-4 shrink-0 ${selected ? 'text-blue-600' : 'text-text-faint'}`} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-caption font-bold text-gray-900">{rate.carrierName}</p>
-                          <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+                          <p className="truncate text-caption font-bold text-text-default">{rate.carrierName}</p>
+                          <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
                             {rate.serviceName}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-caption font-black tabular-nums text-gray-900">{money(rate.amount, rate.currency)}</p>
-                          <p className="flex items-center justify-end gap-0.5 text-eyebrow font-semibold text-gray-400">
+                          <p className="text-caption font-black tabular-nums text-text-default">{money(rate.amount, rate.currency)}</p>
+                          <p className="flex items-center justify-end gap-0.5 text-eyebrow font-semibold text-text-faint">
                             <Clock className="h-2.5 w-2.5" /> {eta(rate)}
                           </p>
                         </div>
@@ -319,7 +319,7 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
             )}
 
             {invalidRates.length > 0 ? (
-              <p className="px-1 text-eyebrow text-gray-400">
+              <p className="px-1 text-eyebrow text-text-faint">
                 {invalidRates.length} carrier{invalidRates.length > 1 ? 's' : ''} couldn’t rate this parcel.
               </p>
             ) : null}
@@ -328,16 +328,16 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
             {selectedRate ? (
               confirming ? (
                 <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5">
-                  <p className="text-caption font-semibold text-gray-800">
+                  <p className="text-caption font-semibold text-text-default">
                     Purchase this <span className="font-bold">{money(selectedRate.amount, selectedRate.currency)}</span>{' '}
                     {selectedRate.carrierName} {selectedRate.serviceName} label?
                   </p>
-                  <label className="flex items-center gap-1.5 text-eyebrow font-semibold text-gray-600">
+                  <label className="flex items-center gap-1.5 text-eyebrow font-semibold text-text-muted">
                     <input
                       type="checkbox"
                       checked={notifyCustomer}
                       onChange={(e) => setNotifyCustomer(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-gray-300 text-violet-600"
+                      className="h-3.5 w-3.5 rounded border-border-default text-violet-600"
                     />
                     Email the customer a tracking notification
                   </label>
@@ -393,7 +393,7 @@ export function BuyLabelSection({ orderId, orderRef, onChange }: BuyLabelSection
             >
               Get shipping rates
             </Button>
-            <p className="mt-1 px-1 text-eyebrow text-gray-400">Rate-shop live carrier prices for {orderRef}.</p>
+            <p className="mt-1 px-1 text-eyebrow text-text-faint">Rate-shop live carrier prices for {orderRef}.</p>
           </motion.div>
         )}
       </AnimatePresence>

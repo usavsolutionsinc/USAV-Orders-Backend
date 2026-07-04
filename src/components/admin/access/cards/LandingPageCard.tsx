@@ -60,10 +60,10 @@ export function LandingPageCard({
   const mobileDefault = primaryRoleKey ? MOBILE_ROLE_DEFAULTS[primaryRoleKey.toLowerCase()] ?? '/m/home' : '/m/home';
 
   return (
-    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-white shadow-sm`}>
-      <header className="border-b border-gray-100 px-5 py-3">
-        <h2 className="text-sm font-semibold text-gray-900">Landing page</h2>
-        <p className="mt-0.5 text-caption text-gray-500">
+    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-surface-card shadow-sm`}>
+      <header className="border-b border-border-hairline px-5 py-3">
+        <h2 className="text-sm font-semibold text-text-default">Landing page</h2>
+        <p className="mt-0.5 text-caption text-text-soft">
           Where this staff lands right after signing in. Desktop and mobile are independent —
           leave either on <i>“Use role default”</i> to fall back to the role&apos;s built-in destination.
         </p>
@@ -71,39 +71,39 @@ export function LandingPageCard({
       <div className="grid grid-cols-1 gap-4 px-5 py-4 sm:grid-cols-2">
         {/* Desktop */}
         <label className="flex flex-col gap-1.5">
-          <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Desktop</span>
+          <span className="text-micro font-semibold uppercase tracking-wider text-text-soft">Desktop</span>
           <select
             value={desktopPath ?? ''}
             onChange={(e) => onSave({ defaultHomePath: e.target.value === '' ? null : e.target.value })}
             disabled={busy}
-            className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15 disabled:opacity-60"
+            className="h-9 rounded-lg border border-border-soft bg-surface-card px-2 text-sm text-text-default outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15 disabled:opacity-60"
           >
             <option value="">Use role default ({desktopDefault})</option>
             {desktopList.map((o) => (
               <option key={o.value} value={o.value}>{o.label} — {o.value}</option>
             ))}
           </select>
-          <span className="text-micro text-gray-400">
-            {desktopPath ? <>Override active: <span className="font-mono text-gray-600">{desktopPath}</span></> : <>Inheriting <span className="font-mono">{desktopDefault}</span></>}
+          <span className="text-micro text-text-faint">
+            {desktopPath ? <>Override active: <span className="font-mono text-text-muted">{desktopPath}</span></> : <>Inheriting <span className="font-mono">{desktopDefault}</span></>}
           </span>
         </label>
 
         {/* Mobile */}
         <label className="flex flex-col gap-1.5">
-          <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Mobile</span>
+          <span className="text-micro font-semibold uppercase tracking-wider text-text-soft">Mobile</span>
           <select
             value={mobilePath ?? ''}
             onChange={(e) => onSave({ defaultHomePathMobile: e.target.value === '' ? null : e.target.value })}
             disabled={busy}
-            className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15 disabled:opacity-60"
+            className="h-9 rounded-lg border border-border-soft bg-surface-card px-2 text-sm text-text-default outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15 disabled:opacity-60"
           >
             <option value="">Use role default ({mobileDefault})</option>
             {mobileList.map((o) => (
               <option key={o.value} value={o.value}>{o.label} — {o.value}</option>
             ))}
           </select>
-          <span className="text-micro text-gray-400">
-            {mobilePath ? <>Override active: <span className="font-mono text-gray-600">{mobilePath}</span></> : <>Inheriting <span className="font-mono">{mobileDefault}</span></>}
+          <span className="text-micro text-text-faint">
+            {mobilePath ? <>Override active: <span className="font-mono text-text-muted">{mobilePath}</span></> : <>Inheriting <span className="font-mono">{mobileDefault}</span></>}
           </span>
         </label>
       </div>

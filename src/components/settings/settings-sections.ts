@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 export type SettingsSection =
   | 'hardware' | 'workstation' | 'quick-access' | 'appearance' | 'about'
   | 'security' | 'organization' | 'billing' | 'integrations' | 'team'
-  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog' | 'legal' | 'receiving';
+  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog' | 'legal' | 'receiving'
+  | 'ai';
 
 export type SettingsGroup = 'Personal' | 'Organization';
 
@@ -30,6 +31,7 @@ export const SETTINGS_SECTION_OPTIONS: SettingsSectionOption[] = [
   { id: 'organization',  label: 'Organization',  description: 'Timezone, locale, auth policies, warranty',        group: 'Organization', requires: 'admin.view', href: '/settings/organization' },
   { id: 'billing',       label: 'Billing',       description: 'Plan, entitlements & Stripe portal',               group: 'Organization', requires: 'admin.view', href: '/settings/billing' },
   { id: 'integrations',  label: 'Integrations',  description: 'Connect Amazon, eBay, Zoho, Stripe & more',        group: 'Organization', requires: 'admin.view', href: '/settings/integrations' },
+  { id: 'ai',            label: 'AI & Search',   description: 'AI provider, search usage & pricing',              group: 'Organization', requires: 'admin.view', href: '/settings/ai' },
   { id: 'catalog',       label: 'Platforms & Types', description: 'Sales channels & receiving flow types',          group: 'Organization', requires: 'admin.manage_features' },
   { id: 'team',          label: 'Team',          description: 'Invite teammates, roles, deactivate access',       group: 'Organization', requires: 'admin.manage_staff', href: '/settings/staff' },
   { id: 'roles',         label: 'Roles',         description: 'Define what each role can do',                     group: 'Organization', requires: 'admin.manage_roles', href: '/settings/roles' },
@@ -47,6 +49,7 @@ export function resolveSettingsSectionFromPath(pathname: string | null | undefin
   if (!pathname) return null;
   if (pathname === '/settings/billing') return 'billing';
   if (pathname === '/settings/integrations') return 'integrations';
+  if (pathname === '/settings/ai') return 'ai';
   if (pathname === '/settings/team' || pathname === '/settings/staff') return 'team';
   if (pathname === '/settings/roles') return 'roles';
   if (pathname === '/settings/access') return 'access';

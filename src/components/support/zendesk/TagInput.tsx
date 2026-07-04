@@ -37,19 +37,19 @@ export function TagInput({
   };
 
   return (
-    <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-1.5 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+    <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-xl border border-border-default bg-surface-card px-3 py-1.5 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
       {tags.map((t) => (
         <span
           key={t}
-          className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-caption font-bold text-gray-700"
+          className="inline-flex items-center gap-1 rounded bg-surface-sunken px-1.5 py-0.5 text-caption font-bold text-text-muted"
         >
-          <Tag className="h-3 w-3 text-gray-400" />
+          <Tag className="h-3 w-3 text-text-faint" />
           {t}
           <button
             type="button"
             onClick={() => onChange(tags.filter((x) => x !== t))}
             aria-label={`Remove ${t}`}
-            className="ds-raw-button text-gray-400 hover:text-gray-700"
+            className="ds-raw-button text-text-faint hover:text-text-muted"
           >
             <X className="h-3 w-3" />
           </button>

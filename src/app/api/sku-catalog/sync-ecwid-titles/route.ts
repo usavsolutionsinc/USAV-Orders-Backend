@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 
@@ -104,6 +106,9 @@ export const POST = withAuth(async (_req: NextRequest, ctx) => {
       [skuArray, ctx.organizationId],
     );
     const deactivatedCount = deactivated.rowCount || 0;
+
+    // Titles/images changed → bust cached get-title-by-sku bundles for this org.
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.skuCatalog]);
 
     return NextResponse.json({
       success: true,

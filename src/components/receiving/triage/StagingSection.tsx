@@ -22,7 +22,7 @@ import type { TriageStagingController } from './useTriageStaging';
 const LANE_PILL_BASE =
   'shrink-0 rounded-full border px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest transition-colors';
 const LANE_ACTIVE = 'border-blue-500 bg-blue-600 text-white';
-const LANE_INACTIVE = 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50';
+const LANE_INACTIVE = 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover';
 
 export function StagingSection({ staging }: { staging: TriageStagingController }) {
   const {
@@ -44,15 +44,15 @@ export function StagingSection({ staging }: { staging: TriageStagingController }
       label="Staging"
       actions={
         savingLocation || savingLane ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" />
         ) : undefined
       }
     >
       <div className="space-y-3">
         <div className="space-y-1">
-          <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Shelf</p>
+          <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Shelf</p>
           <div className="flex items-center gap-1.5">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-text-faint" />
             <select
               className={SELECT_CLASS}
               value={stagingLocationId ?? ''}
@@ -73,10 +73,10 @@ export function StagingSection({ staging }: { staging: TriageStagingController }
         </div>
 
         <div className="space-y-1">
-          <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+          <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
             Priority lane
             {!priorityLane && suggestedLane ? (
-              <span className="ml-1.5 font-semibold normal-case tracking-normal text-gray-400">
+              <span className="ml-1.5 font-semibold normal-case tracking-normal text-text-faint">
                 (auto: {triageLaneLabel(suggestedLane)})
               </span>
             ) : null}

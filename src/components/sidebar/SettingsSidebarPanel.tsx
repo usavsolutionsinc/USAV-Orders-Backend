@@ -94,6 +94,14 @@ function sectionIcon(id: SettingsSection) {
           <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
       );
+    case 'ai':
+      return (
+        <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          <path d="M11 8v6M8 11h6" />
+        </svg>
+      );
     case 'catalog':
       return (
         <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -201,7 +209,7 @@ export function SettingsSidebar() {
 
   if (mode === 'overview') {
     return (
-      <div className="h-full flex flex-col overflow-hidden bg-white">
+      <div className="h-full flex flex-col overflow-hidden bg-surface-card">
         <div className="min-h-0 flex-1 overflow-hidden">
           <SidebarSectionList
             sections={visible}
@@ -216,21 +224,21 @@ export function SettingsSidebar() {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-white">
+    <div className="h-full flex flex-col overflow-hidden bg-surface-card">
       <div className={`${sidebarHeaderBandClass} ${SIDEBAR_GUTTER} py-2`}>
         <button
           type="button"
           onClick={() => router.replace('/settings')}
-          className="ds-raw-button group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+          className="ds-raw-button group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-text-muted hover:bg-surface-sunken transition-colors"
           aria-label="Back to settings overview"
         >
           <SettingsIcon className="h-5 w-5 text-blue-600" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black tracking-tight text-gray-900 uppercase tracking-wider">
+            <p className="truncate text-sm font-black tracking-tight text-text-default uppercase tracking-wider">
               Settings{sectionLabel ? ` · ${sectionLabel}` : ''}
             </p>
           </div>
-          <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
+          <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-text-faint" />
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">

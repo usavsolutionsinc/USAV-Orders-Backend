@@ -284,7 +284,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           ) : null}
           {!hideSectionHeader ? (
             <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
-              <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+              <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-text-default">
                 Unshipped
               </h2>
               <p className="text-eyebrow font-bold text-blue-600 uppercase tracking-widest mt-1">
@@ -302,7 +302,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         renderDropdown: (onClose: () => void) => (
           <div className="space-y-3">
             <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Stage
               </span>
               <div className="space-y-1.5">
@@ -315,14 +315,14 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
                       type="button"
                       onClick={() => { setStage(opt.id); onClose(); }}
                       className={`ds-raw-button flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
-                        active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                        active ? 'border-blue-300 bg-blue-50' : 'border-border-soft bg-surface-card hover:bg-surface-hover'
                       }`}
                     >
                       {/* Count first, fixed width → every row's number lines up in one column. */}
-                      <span className="shrink-0 w-9 rounded-full bg-gray-100 px-1.5 py-0.5 text-center text-eyebrow font-bold tabular-nums text-gray-600">
+                      <span className="shrink-0 w-9 rounded-full bg-surface-sunken px-1.5 py-0.5 text-center text-eyebrow font-bold tabular-nums text-text-muted">
                         {count}
                       </span>
-                      <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">{opt.label}</span>
+                      <span className="min-w-0 flex-1 text-sm font-semibold text-text-default">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -356,7 +356,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
             <button
               type="button"
               onClick={handleOpenIntakeForm}
-              className="ds-raw-button rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+              className="ds-raw-button rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-surface-strong"
               aria-label="Open new order entry form"
             >
               <Plus className="h-5 w-5" />
@@ -369,7 +369,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
       headerBelow={
         <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
           <div className="flex items-center justify-between">
-            <span className="text-micro font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
+            <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
             <SavedViewsControl storageKey="unshipped_saved_views" paramKeys={UNSHIPPED_VIEW_PARAMS} />
           </div>
           <StatusLegend
@@ -390,7 +390,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           window.dispatchEvent(new CustomEvent('usav-refresh-data'));
         }}
       />
-      <div className="space-y-3 border-t border-gray-100 pt-3">
+      <div className="space-y-3 border-t border-border-hairline pt-3">
         <FirstScanOnboardingCard variant="sidebar" />
         <ThroughputRoiCard variant="sidebar" />
       </div>
@@ -419,11 +419,11 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
   );
 
   if (embedded) {
-    return <div className="h-full overflow-hidden bg-white">{content}</div>;
+    return <div className="h-full overflow-hidden bg-surface-card">{content}</div>;
   }
 
   return (
-    <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative w-[300px]">
+    <aside className="bg-surface-card text-text-default flex-shrink-0 h-full overflow-hidden border-r border-border-soft relative w-[300px]">
       {content}
     </aside>
   );

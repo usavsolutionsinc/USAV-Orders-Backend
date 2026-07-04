@@ -18,7 +18,7 @@ export function FbaPlanPreviewList({
   onPatchQty: (line: PlanPreviewLine, nextQty: number) => void;
 }) {
   return (
-    <div className="divide-y divide-gray-200">
+    <div className="divide-y divide-border-soft">
       {lines.map((line, idx) => (
         <FbaSelectedLineRow
           key={`${line.itemId}-${idx}`}

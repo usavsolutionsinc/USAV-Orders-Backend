@@ -462,7 +462,7 @@ export function MobilePackerSpamCamera({
               aria-label="Capture photo"
               className="h-[72px] w-[72px] rounded-full border-4 border-white bg-transparent active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center"
             >
-              <span className="block h-14 w-14 rounded-full bg-white active:bg-white/80 transition-colors" />
+              <span className="block h-14 w-14 rounded-full bg-surface-card active:bg-surface-card/80 transition-colors" />
             </button>
           </div>
 

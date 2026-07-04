@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
-import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { lookupShipmentId } from '@/lib/shipping/resolve';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -19,7 +19,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
   }
 
   try {
-    const resolved = await resolveShipmentId(tracking);
+    // Read-only resolution (no shipment registration) so this GET is side-effect
+    // free; org-scoped now that we thread ctx.organizationId.
+    const resolved = await lookupShipmentId(tracking, ctx.organizationId);
     // v_sku is a read-only VIEW without organization_id, so the `s` rows ride on
     // the GUC (RLS on the underlying serial_units). The sku_stock string-key
     // join and the photos subquery hit base tables that DO carry
@@ -168,7 +170,15 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
             [id - POST_RETIREMENT_ID_OFFSET, ctx.organizationId],
           )
         : await client.query(
-            `DELETE FROM serial_units WHERE origin_sku_id = $1 AND organization_id = $2 RETURNING id`,
+            // Phase 3: the legacy origin_sku_id group. origin_sku_id was never
+            // populated in live data (SKU_IMPORT provenance edges are text-only,
+            // origin_id NULL), so this branch matched nothing before and matches
+            // nothing now — re-expressed against provenance so it no longer
+            // references the dropped column while preserving the (empty) result.
+            `DELETE FROM serial_units WHERE id IN (
+               SELECT p.serial_unit_id FROM serial_unit_provenance p
+                WHERE p.origin_type = 'SKU_IMPORT' AND p.origin_id = $1 AND p.organization_id = $2)
+               AND organization_id = $2 RETURNING id`,
             [id, ctx.organizationId],
           );
 

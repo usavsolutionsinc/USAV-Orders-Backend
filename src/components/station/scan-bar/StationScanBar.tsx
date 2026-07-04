@@ -43,7 +43,7 @@ export interface StationScanBarProps {
   inputClassName?: string;
   rightContentClassName?: string;
   hasRightContent?: boolean;
-  /** Replaces the default `border border-gray-100` on the `<input>` (e.g. theme stroke from staff-colors). */
+  /** Replaces the default `border border-border-hairline` on the `<input>` (e.g. theme stroke from staff-colors). */
   inputBorderClassName?: string;
   /** Omit left icon slot and use horizontal padding (e.g. labeled fields in FBA sidebar). */
   leadingIcon?: boolean;
@@ -89,7 +89,7 @@ export function StationScanBar({
   placeholder = 'Tracking, FNSKU, RS ID, SN',
   autoFocus = false,
   icon,
-  iconClassName = 'text-gray-700',
+  iconClassName = 'text-text-muted',
   rightContent,
   className = '',
   inputClassName = '',
@@ -209,7 +209,7 @@ export function StationScanBar({
             padLeft,
             padRight,
             showHotkeyGear ? 'group-hover:pl-16' : '',
-            inputBorderClassName ?? 'border border-gray-100',
+            inputBorderClassName ?? 'border border-border-hairline',
             inputClassName,
           )}
         />

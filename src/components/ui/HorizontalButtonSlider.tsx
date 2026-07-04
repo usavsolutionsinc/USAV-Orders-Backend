@@ -37,7 +37,7 @@ const FBA_TONE: Record<
   HorizontalSliderTone,
   { activeBg: string; activeText: string; ring: string }
 > = {
-  zinc: { activeBg: 'bg-zinc-100', activeText: 'text-zinc-900', ring: 'ring-zinc-300' },
+  zinc: { activeBg: 'bg-surface-sunken', activeText: 'text-text-default', ring: 'ring-border-default' },
   yellow: { activeBg: 'bg-yellow-100', activeText: 'text-black', ring: 'ring-yellow-300' },
   emerald: { activeBg: 'bg-emerald-100', activeText: 'text-black', ring: 'ring-emerald-300' },
   red: { activeBg: 'bg-red-100', activeText: 'text-black', ring: 'ring-red-300' },
@@ -175,7 +175,7 @@ export function HorizontalButtonSlider({
   const containerClass = isSegmented
     ? segmentedFlush
       ? // Full-bleed sidebar band: square white fill + bottom hairline (matches header bands).
-        cn('h-full rounded-none bg-white p-0', receivingHeaderHairlineClass)
+        cn('h-full rounded-none bg-surface-card p-0', receivingHeaderHairlineClass)
       : // Recessed gray track (bg-surface-canvas + inset ring) so the active blue
         // pill reads as raised. p-1 + h-8 tabs = 40px in a fixed 40px band.
         'rounded-xl bg-surface-canvas p-1 ring-1 ring-inset ring-border-soft'
@@ -186,7 +186,7 @@ export function HorizontalButtonSlider({
   return (
     <div className={cn(useScroller && 'min-w-0', className)}>
       {legend ? (
-        <span className="mb-1.5 block text-mini font-black uppercase tracking-widest text-zinc-400">
+        <span className="mb-1.5 block text-mini font-black uppercase tracking-widest text-text-faint">
           {legend}
         </span>
       ) : null}
@@ -259,10 +259,10 @@ export function HorizontalButtonSlider({
                   : sizeCls;
               const labelClass = Icon ? 'ml-1.5 max-w-[160px]' : 'max-w-[160px]';
               const stateClass = isDisabled
-                ? 'cursor-not-allowed bg-gray-50 text-gray-400 ring-gray-200'
+                ? 'cursor-not-allowed bg-surface-canvas text-text-faint ring-border-soft'
                 : isActive
                   ? 'bg-blue-600 text-white ring-blue-600 shadow-md shadow-blue-600/25'
-                  : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50 hover:text-gray-900 hover:ring-gray-300';
+                  : 'bg-surface-card text-text-soft ring-border-soft hover:bg-surface-hover hover:text-text-default hover:ring-border-default';
               return (
                 <motion.button
                   key={item.id}
@@ -288,7 +288,7 @@ export function HorizontalButtonSlider({
                       {item.count != null && item.count > 0 ? (
                         <>
                           <span
-                            className={`shrink-0 ${isActive ? 'text-white/60' : 'text-gray-300'}`}
+                            className={`shrink-0 ${isActive ? 'text-white/60' : 'text-text-faint'}`}
                             aria-hidden
                           >
                             •
@@ -301,7 +301,7 @@ export function HorizontalButtonSlider({
                   {item.badge === 'dot' ? (
                     <span
                       className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ${
-                        isActive ? 'bg-white ring-blue-600' : 'bg-emerald-500 ring-white'
+                        isActive ? 'bg-surface-card ring-blue-600' : 'bg-emerald-500 ring-white'
                       }`}
                       aria-hidden
                     />
@@ -314,7 +314,7 @@ export function HorizontalButtonSlider({
               const Icon = item.icon;
               const stateClass = isActive
                 ? 'bg-blue-600 text-white shadow-[0_2px_8px_rgba(37,99,235,0.35)]'
-                : 'bg-white text-gray-700 shadow-[0_1px_4px_rgba(15,23,42,0.14)] hover:bg-gray-50';
+                : 'bg-surface-card text-text-muted shadow-[0_1px_4px_rgba(15,23,42,0.14)] hover:bg-surface-hover';
               return (
                 <motion.button
                   key={item.id}
@@ -352,8 +352,8 @@ export function HorizontalButtonSlider({
                   onClick={() => onChange(item.id)}
                   className={`snap-start whitespace-nowrap rounded-full border font-black uppercase transition-colors ${sizeCls} ${
                     isActive
-                      ? 'border-gray-900 bg-gray-900 text-white shadow-md shadow-gray-900/20'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      ? 'border-border-strong bg-surface-inverse text-white shadow-md shadow-gray-900/20'
+                      : 'border-border-soft bg-surface-card text-text-muted hover:border-border-default hover:bg-surface-hover'
                   }`}
                 >
                   {item.label}
@@ -378,7 +378,7 @@ export function HorizontalButtonSlider({
                 className={`snap-start whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${sizeCls} ${
                   isActive
                     ? `${tone.activeBg} ${tone.activeText} ${tone.ring}`
-                    : 'bg-white text-zinc-400 ring-zinc-200 hover:bg-zinc-50 hover:text-zinc-600'
+                    : 'bg-surface-card text-text-faint ring-border-soft hover:bg-surface-hover hover:text-text-muted'
                 }`}
               >
                 {item.label}

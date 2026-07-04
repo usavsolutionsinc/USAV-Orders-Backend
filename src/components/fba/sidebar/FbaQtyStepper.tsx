@@ -34,7 +34,7 @@ export function FbaQtyStepper({
     ? 'border-amber-300 text-amber-700'
     : isDanger
       ? 'border-red-300 text-red-500'
-      : 'border-gray-200 text-gray-900';
+      : 'border-border-soft text-text-default';
 
   return (
     <div className="flex flex-col items-center">
@@ -42,24 +42,24 @@ export function FbaQtyStepper({
         icon={<Plus className="h-3 w-3" />}
         onClick={(e) => { e.stopPropagation(); onChange(value + 1); }}
         ariaLabel={fnsku ? `Increase ${fnsku} quantity` : 'Increase quantity'}
-        className="flex h-6 w-10 items-center justify-center rounded-t-md border border-gray-200 hover:bg-gray-50"
+        className="flex h-6 w-10 items-center justify-center rounded-t-md border border-border-soft hover:bg-surface-hover"
       />
       <DeferredQtyInput
         value={value}
         min={0}
         onChange={(v) => onChange(Math.max(0, v))}
         onClick={(e) => e.stopPropagation()}
-        className={`h-7 w-10 border-x bg-white text-center text-label font-black tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${inputBorder}`}
+        className={`h-7 w-10 border-x bg-surface-card text-center text-label font-black tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${inputBorder}`}
       />
       <IconButton
-        icon={<Minus className={`h-3 w-3 ${value <= 1 ? 'text-red-500' : 'text-gray-500'}`} />}
+        icon={<Minus className={`h-3 w-3 ${value <= 1 ? 'text-red-500' : 'text-text-soft'}`} />}
         onClick={(e) => { e.stopPropagation(); onChange(value - 1); }}
         disabled={value <= 0}
         ariaLabel={fnsku ? `Decrease ${fnsku} quantity` : 'Decrease quantity'}
         className={`flex h-6 w-10 items-center justify-center rounded-b-md border disabled:opacity-40 ${
           value <= 1
             ? 'border-red-300 hover:bg-red-50'
-            : 'border-gray-200 hover:bg-gray-50'
+            : 'border-border-soft hover:bg-surface-hover'
         }`}
       />
     </div>
@@ -70,8 +70,8 @@ export function FbaQtyStepper({
 export function FbaQtyDisplay({ value }: { value: number }) {
   return (
     <div className="flex shrink-0 flex-col items-center text-center px-2">
-      <span className="text-sm font-black tabular-nums text-gray-900">{value}</span>
-      <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">qty</span>
+      <span className="text-sm font-black tabular-nums text-text-default">{value}</span>
+      <span className="text-eyebrow font-black uppercase tracking-widest text-text-faint">qty</span>
     </div>
   );
 }

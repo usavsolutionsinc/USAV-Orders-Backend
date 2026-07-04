@@ -50,26 +50,26 @@ export function ReceivingScanLoader({ tracking, startedAt }: ReceivingScanLoader
   // workspace header chrome when one is mounted, so a plain top pad is all the
   // breathing room the hero card needs.
   return (
-    <div className="flex h-full w-full items-start justify-center overflow-y-auto bg-white px-4 pb-6 pt-6">
+    <div className="flex h-full w-full items-start justify-center overflow-y-auto bg-surface-card px-4 pb-6 pt-6">
       <div className="w-full max-w-3xl space-y-4">
         {/* Hero card — the focal point: tracking + status + progress bar */}
-        <div className="rounded-2xl border border-gray-200 bg-white px-6 py-7 shadow-sm">
+        <div className="rounded-2xl border border-border-soft bg-surface-card px-6 py-7 shadow-sm">
           <p className="text-micro font-black uppercase tracking-[0.18em] text-blue-600">
             Finding your PO
           </p>
-          <h2 className="mt-1 text-lg font-extrabold tracking-tight text-gray-900">
+          <h2 className="mt-1 text-lg font-extrabold tracking-tight text-text-default">
             Opening your PO
           </h2>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="font-mono text-sm tracking-wide text-gray-700">
+            <span className="font-mono text-sm tracking-wide text-text-muted">
               {tracking}
             </span>
-            <span className="text-caption font-semibold tabular-nums text-gray-400">
+            <span className="text-caption font-semibold tabular-nums text-text-faint">
               · {elapsed}s
             </span>
           </div>
 
-          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-100 ring-1 ring-black/[0.03]">
+          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-surface-sunken ring-1 ring-black/[0.03]">
             <motion.div 
               animate={{ width: `${progress}%` }}
               transition={{ 
@@ -108,13 +108,13 @@ interface SkeletonCardProps {
 
 function SkeletonCard({ rows }: SkeletonCardProps) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-      <div className="mb-3 h-2.5 w-24 animate-pulse rounded-full bg-gray-200" />
+    <div className="rounded-2xl border border-border-soft bg-surface-card px-5 py-4 shadow-sm">
+      <div className="mb-3 h-2.5 w-24 animate-pulse rounded-full bg-surface-strong" />
       <div className="space-y-2">
         {Array.from({ length: rows }).map((_, i) => (
           <div
             key={i}
-            className="h-3 animate-pulse rounded-full bg-gray-100"
+            className="h-3 animate-pulse rounded-full bg-surface-sunken"
             style={{ width: `${100 - i * 12}%` }}
           />
         ))}

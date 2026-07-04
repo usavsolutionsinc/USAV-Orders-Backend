@@ -43,7 +43,7 @@ const STATUS_TABS: Array<{ id: StatusFilter; label: string }> = [
 const STATUS_PILL: Record<TrackingExceptionRow['status'], string> = {
   open: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
   resolved: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  discarded: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
+  discarded: 'bg-surface-sunken text-text-muted ring-1 ring-border-soft',
 };
 
 function formatRelative(iso: string | null): string {
@@ -169,7 +169,7 @@ export function TrackingExceptionsTable() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Filter bar */}
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-6 py-3">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-border-soft bg-surface-card px-6 py-3">
         <div className="flex items-center gap-1">
           {STATUS_TABS.map((tab) => (
             <Button
@@ -188,7 +188,7 @@ export function TrackingExceptionsTable() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tracking…"
-          className="ml-auto w-64 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-label font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+          className="ml-auto w-64 rounded-md border border-border-soft bg-surface-card px-3 py-1.5 text-label font-semibold text-text-default placeholder:text-text-faint focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
         />
         <Button
           type="button"
@@ -200,7 +200,7 @@ export function TrackingExceptionsTable() {
         >
           {loading ? 'Loading…' : 'Reload'}
         </Button>
-        <span className="text-micro font-bold uppercase tracking-widest text-gray-500">
+        <span className="text-micro font-bold uppercase tracking-widest text-text-soft">
           {total} {total === 1 ? 'row' : 'rows'}
         </span>
       </div>
@@ -215,15 +215,15 @@ export function TrackingExceptionsTable() {
       <div className="min-h-0 flex-1 overflow-auto">
         {!loading && !hasRows && (
           <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
-            <p className="text-sm font-bold text-gray-700">No exceptions in this view.</p>
-            <p className="mt-1 text-caption font-semibold text-gray-500">
+            <p className="text-sm font-bold text-text-muted">No exceptions in this view.</p>
+            <p className="mt-1 text-caption font-semibold text-text-soft">
               Unmatched receiving scans are logged here automatically.
             </p>
           </div>
         )}
 
         <table className="w-full border-collapse text-left text-label">
-          <thead className="sticky top-0 bg-gray-50 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+          <thead className="sticky top-0 bg-surface-canvas text-eyebrow font-black uppercase tracking-widest text-text-soft">
             <tr>
               <th className="px-4 py-2">Tracking</th>
               <th className="px-4 py-2">Carrier</th>
@@ -238,23 +238,23 @@ export function TrackingExceptionsTable() {
               <th className="px-4 py-2 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
+          <tbody className="divide-y divide-border-hairline bg-surface-card">
             {rows.map((row) => {
               const refreshing = refreshingIds.has(row.id);
               return (
-                <tr key={row.id} className="hover:bg-gray-50/60">
+                <tr key={row.id} className="hover:bg-surface-canvas/60">
                   <td className="px-4 py-2">
                     <TrackingChip
                       value={row.tracking_number}
                       display={getLast4(row.tracking_number) || row.tracking_number.slice(-4)}
                     />
                   </td>
-                  <td className="px-4 py-2 font-semibold text-gray-700">{getCarrier(row)}</td>
-                  <td className="px-4 py-2 text-gray-700">{row.source_station}</td>
-                  <td className="px-4 py-2 text-gray-700">
+                  <td className="px-4 py-2 font-semibold text-text-muted">{getCarrier(row)}</td>
+                  <td className="px-4 py-2 text-text-muted">{row.source_station}</td>
+                  <td className="px-4 py-2 text-text-muted">
                     {row.staff_display_name || row.staff_name || '—'}
                   </td>
-                  <td className="px-4 py-2 font-semibold text-gray-700">
+                  <td className="px-4 py-2 font-semibold text-text-muted">
                     {row.exception_reason}
                   </td>
                   <td className="px-4 py-2">
@@ -264,11 +264,11 @@ export function TrackingExceptionsTable() {
                       {row.status}
                     </span>
                   </td>
-                  <td className="px-4 py-2 font-mono text-gray-700">{row.zoho_check_count}</td>
-                  <td className="px-4 py-2 text-gray-600">{formatRelative(row.last_zoho_check_at)}</td>
-                  <td className="px-4 py-2 text-gray-600">{formatRelative(row.created_at)}</td>
+                  <td className="px-4 py-2 font-mono text-text-muted">{row.zoho_check_count}</td>
+                  <td className="px-4 py-2 text-text-muted">{formatRelative(row.last_zoho_check_at)}</td>
+                  <td className="px-4 py-2 text-text-muted">{formatRelative(row.created_at)}</td>
                   {/* ds-allow-title: truncation-only on a non-interactive cell — native title surfaces the clipped notes */}
-                  <td className="px-4 py-2 max-w-[260px] truncate text-gray-600" title={row.notes ?? ''}>
+                  <td className="px-4 py-2 max-w-[260px] truncate text-text-muted" title={row.notes ?? ''}>
                     {row.notes || '—'}
                   </td>
                   <td className="px-4 py-2">
@@ -287,7 +287,7 @@ export function TrackingExceptionsTable() {
                           onClick={() => void handleRefreshRow(row)}
                           disabled={refreshing || row.status !== 'open'}
                           aria-label="Refresh from Zoho"
-                          className="rounded-md p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-md p-1.5 text-text-soft hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                         </button>
@@ -298,7 +298,7 @@ export function TrackingExceptionsTable() {
                           type="button"
                           onClick={() => setEditing(row)}
                           aria-label="Edit exception"
-                          className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                          className="rounded-md p-1.5 text-text-soft hover:bg-surface-sunken hover:text-text-default"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -379,9 +379,9 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-          <h2 className="text-label font-black uppercase tracking-widest text-gray-900">
+      <div className="w-full max-w-lg rounded-xl bg-surface-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border-soft px-5 py-3">
+          <h2 className="text-label font-black uppercase tracking-widest text-text-default">
             Edit exception #{row.id}
           </h2>
           <IconButton
@@ -389,41 +389,41 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
             onClick={onClose}
             ariaLabel="Close"
             icon={<X className="h-4 w-4" />}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="rounded-md p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
           />
         </div>
 
         <div className="space-y-3 px-5 py-4">
           <label className="block">
-            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
               Tracking number
             </span>
             <input
               type="text"
               value={trackingNumber}
               onChange={(e) => setTrackingNumber(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-label font-mono text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-border-soft px-2 py-1.5 text-label font-mono text-text-default focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
           </label>
           <label className="block">
-            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
               Reason
             </span>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-label font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-border-soft px-2 py-1.5 text-label font-semibold text-text-default focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
           </label>
           <label className="block">
-            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
               Status
             </span>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TrackingExceptionRow['status'])}
-              className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-label font-bold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-border-soft bg-surface-card px-2 py-1.5 text-label font-bold text-text-default focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             >
               <option value="open">Open</option>
               <option value="resolved">Resolved</option>
@@ -431,14 +431,14 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
             </select>
           </label>
           <label className="block">
-            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
               Notes
             </span>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-label font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-border-soft px-2 py-1.5 text-label font-semibold text-text-default focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
           </label>
 
@@ -447,7 +447,7 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-200 px-5 py-3">
+        <div className="flex items-center justify-between border-t border-border-soft px-5 py-3">
           {!confirmingDelete ? (
             // ds-raw-button: low-emphasis destructive action — transparent bg with red text. No variant fits: `danger` is solid red-fill, `ghost` would drop the red affordance.
             <button

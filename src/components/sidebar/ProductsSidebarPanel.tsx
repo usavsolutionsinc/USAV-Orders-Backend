@@ -64,10 +64,10 @@ const LABELS_SUB_VIEW_ITEMS: HorizontalSliderItem[] = [
 function LabelsSubViewPlaceholder({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">
         {title}
       </p>
-      <p className="mt-3 max-w-[260px] text-caption font-medium text-gray-500">{body}</p>
+      <p className="mt-3 max-w-[260px] text-caption font-medium text-text-soft">{body}</p>
     </div>
   );
 }
@@ -186,7 +186,7 @@ export function ProductsSidebarPanel() {
   // own sidebar bodies below.
   return (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       headerAbove={
         !masterNavEnabled ? (
           <div className={sidebarHeaderPillRowClass}>
@@ -381,7 +381,7 @@ function QcSidebarPicker({ query }: { query: string }) {
   return (
     <div className="flex-1 overflow-y-auto">
       {isLoading && items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-text-faint">
           Loading products…
         </div>
       ) : isError ? (
@@ -389,11 +389,11 @@ function QcSidebarPicker({ query }: { query: string }) {
           Couldn't load products.
         </div>
       ) : items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-text-faint">
           {trimmedQuery ? 'No matches with a QC checklist.' : 'No products have a QC checklist yet.'}
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border-hairline">
           {items.map((item) => {
             const isSelected = selectedSkuId === String(item.id);
             return (
@@ -407,7 +407,7 @@ function QcSidebarPicker({ query }: { query: string }) {
                     isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
                   }`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-canvas ring-1 ring-border-soft">
                     {item.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -419,18 +419,18 @@ function QcSidebarPicker({ query }: { query: string }) {
                         }}
                       />
                     ) : (
-                      <Package className="h-4 w-4 text-gray-300" />
+                      <Package className="h-4 w-4 text-text-faint" />
                     )}
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span
                       className={`text-label font-semibold leading-snug break-words ${
-                        isSelected ? 'text-blue-700' : 'text-gray-900'
+                        isSelected ? 'text-blue-700' : 'text-text-default'
                       }`}
                     >
                       {item.product_title || item.sku}
                     </span>
-                    <span className="truncate font-mono text-micro text-gray-500">{item.sku}</span>
+                    <span className="truncate font-mono text-micro text-text-soft">{item.sku}</span>
                   </span>
                   {isSelected && <Check className="h-4 w-4 shrink-0 text-blue-600" />}
                 </button>
@@ -478,7 +478,7 @@ function KitPartsPicker({ query }: { query: string }) {
   return (
     <div className="flex-1 overflow-y-auto">
       {isLoading && items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-text-faint">
           Loading products…
         </div>
       ) : isError ? (
@@ -486,11 +486,11 @@ function KitPartsPicker({ query }: { query: string }) {
           Couldn&apos;t load products.
         </div>
       ) : items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-text-faint">
           {trimmedQuery ? 'No matches.' : 'No products available.'}
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border-hairline">
           {items.map((item) => {
             const isSelected = selectedSkuId === String(item.id);
             return (
@@ -504,7 +504,7 @@ function KitPartsPicker({ query }: { query: string }) {
                     isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
                   }`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-canvas ring-1 ring-border-soft">
                     {item.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -516,18 +516,18 @@ function KitPartsPicker({ query }: { query: string }) {
                         }}
                       />
                     ) : (
-                      <Package className="h-4 w-4 text-gray-300" />
+                      <Package className="h-4 w-4 text-text-faint" />
                     )}
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span
                       className={`text-label font-semibold leading-snug break-words ${
-                        isSelected ? 'text-blue-700' : 'text-gray-900'
+                        isSelected ? 'text-blue-700' : 'text-text-default'
                       }`}
                     >
                       {item.product_title || item.sku}
                     </span>
-                    <span className="truncate font-mono text-micro text-gray-500">{item.sku}</span>
+                    <span className="truncate font-mono text-micro text-text-soft">{item.sku}</span>
                   </span>
                   {isSelected && <Check className="h-4 w-4 shrink-0 text-blue-600" />}
                 </button>
@@ -582,7 +582,7 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
   return (
     <div className="flex-1 overflow-y-auto">
       {isLoading && items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-text-faint">
           Loading products…
         </div>
       ) : isError ? (
@@ -590,13 +590,13 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
           Couldn't load products.
         </div>
       ) : items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-text-faint">
           {trimmedQuery ? 'No matches.' : 'No products available.'}
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border-hairline">
           {recentItems.length > 0 && (
-            <li className={`bg-gray-50 ${SIDEBAR_GUTTER} py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500`}>
+            <li className={`bg-surface-canvas ${SIDEBAR_GUTTER} py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-text-soft`}>
               Recent
             </li>
           )}
@@ -604,7 +604,7 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
             <ProductRow key={`recent-${item.id}`} item={item} onPick={onPick} />
           ))}
           {recentItems.length > 0 && restItems.length > 0 && (
-            <li className={`bg-gray-50 ${SIDEBAR_GUTTER} py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500`}>
+            <li className={`bg-surface-canvas ${SIDEBAR_GUTTER} py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-text-soft`}>
               All
             </li>
           )}
@@ -631,7 +631,7 @@ function ProductRow({ item, onPick }: ProductRowProps) {
         onClick={() => onPick(item.sku)}
         className={`ds-raw-button flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-canvas ring-1 ring-border-soft">
           {item.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -643,14 +643,14 @@ function ProductRow({ item, onPick }: ProductRowProps) {
               }}
             />
           ) : (
-            <Printer className="h-4 w-4 text-gray-300" />
+            <Printer className="h-4 w-4 text-text-faint" />
           )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-label font-semibold leading-snug text-gray-900 break-words">
+          <span className="text-label font-semibold leading-snug text-text-default break-words">
             {item.product_title || item.sku}
           </span>
-          <span className="truncate font-mono text-micro text-gray-500">{item.sku}</span>
+          <span className="truncate font-mono text-micro text-text-soft">{item.sku}</span>
         </span>
       </button>
     </li>

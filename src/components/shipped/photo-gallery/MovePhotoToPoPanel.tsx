@@ -89,8 +89,8 @@ export function MovePhotoToPoPanel({
       className="absolute inset-x-0 top-24 z-30 mx-auto w-full max-w-md px-6"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="overflow-hidden rounded-2xl border border-white/20 bg-black/80 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <div className="overflow-hidden rounded-2xl border border-glass/20 bg-scrim/80 shadow-2xl backdrop-blur-xl">
+        <div className="flex items-center justify-between border-b border-glass/10 px-4 py-3">
           <div className="flex items-center gap-2 text-white">
             <Package className="h-4 w-4 text-blue-300" />
             <span className="text-sm font-bold">Move photo to PO</span>
@@ -99,15 +99,15 @@ export function MovePhotoToPoPanel({
             <IconButton
               onClick={onClose}
               disabled={busy}
-              className="rounded-full p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              className="rounded-full p-1.5 text-white/70 transition-colors hover:bg-glass/10 hover:text-white"
               ariaLabel="Close move panel"
               icon={<X className="h-4 w-4" />}
             />
           </HoverTooltip>
         </div>
 
-        <div className="border-b border-white/10 px-4 py-3">
-          <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2">
+        <div className="border-b border-glass/10 px-4 py-3">
+          <div className="flex items-center gap-2 rounded-xl border border-glass/15 bg-glass/5 px-3 py-2">
             <Search className="h-4 w-4 shrink-0 text-white/50" />
             <input
               type="search"
@@ -121,7 +121,7 @@ export function MovePhotoToPoPanel({
           </div>
         </div>
 
-        <div className="max-h-64 overflow-y-auto divide-y divide-white/10">
+        <div className="max-h-64 overflow-y-auto divide-y divide-glass/10">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-white/60">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -134,11 +134,12 @@ export function MovePhotoToPoPanel({
           ) : (
             rows.map((row) => (
               <button
+                // ds-raw-button
                 key={`${row.po_id}-${row.receiving_id}`}
                 type="button"
                 disabled={busy || row.receiving_id == null}
                 onClick={() => row.receiving_id != null && onSelect(row.receiving_id)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/10 disabled:opacity-50"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-glass/10 disabled:opacity-50"
               >
                 <div>
                   <p className="text-sm font-bold text-white">
@@ -153,7 +154,7 @@ export function MovePhotoToPoPanel({
         </div>
 
         {error ? (
-          <p className="border-t border-white/10 px-4 py-2 text-center text-xs font-semibold text-rose-300" role="alert">
+          <p className="border-t border-glass/10 px-4 py-2 text-center text-xs font-semibold text-rose-300" role="alert">
             {error}
           </p>
         ) : null}

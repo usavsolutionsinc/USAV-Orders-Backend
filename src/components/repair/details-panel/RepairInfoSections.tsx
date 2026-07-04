@@ -18,33 +18,33 @@ export function RepairCustomerSection({ repair }: { repair: RSRecord }) {
     <section>
       <div className="space-y-3">
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Name</span>
-          <p className="font-bold text-sm text-gray-900">
+          <span className="text-xs text-text-soft font-semibold block mb-1">Name</span>
+          <p className="font-bold text-sm text-text-default">
             {parts[0] || 'Not provided'}
           </p>
         </div>
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Contact</span>
+          <span className="text-xs text-text-soft font-semibold block mb-1">Contact</span>
           <div className="space-y-1">
             {!repair.contact_info ? (
-              <p className="font-semibold text-sm text-gray-900">Not provided</p>
+              <p className="font-semibold text-sm text-text-default">Not provided</p>
             ) : (
               <>
-                {phone ? <p className="font-semibold text-sm text-gray-900">{formatPhoneNumber(phone)}</p> : null}
-                {email ? <p className="font-semibold text-sm text-gray-900 lowercase">{email}</p> : null}
+                {phone ? <p className="font-semibold text-sm text-text-default">{formatPhoneNumber(phone)}</p> : null}
+                {email ? <p className="font-semibold text-sm text-text-default lowercase">{email}</p> : null}
                 {!phone && !email ? (
-                  <p className="font-semibold text-sm text-gray-900">{repair.contact_info}</p>
+                  <p className="font-semibold text-sm text-text-default">{repair.contact_info}</p>
                 ) : null}
               </>
             )}
           </div>
         </div>
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Product(s)</span>
-          <p className="font-semibold text-sm text-gray-900">{repair.product_title || 'Not provided'}</p>
+          <span className="text-xs text-text-soft font-semibold block mb-1">Product(s)</span>
+          <p className="font-semibold text-sm text-text-default">{repair.product_title || 'Not provided'}</p>
         </div>
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Price</span>
+          <span className="text-xs text-text-soft font-semibold block mb-1">Price</span>
           <p className="font-bold text-sm text-emerald-600">{repair.price ? `$${repair.price}` : 'Not set'}</p>
         </div>
       </div>
@@ -58,12 +58,12 @@ export function RepairTechnicalSection({ repair }: { repair: RSRecord }) {
     <section>
       <div className="space-y-3">
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Issue</span>
-          <p className="text-sm text-gray-900 font-bold leading-relaxed">{repair.issue || 'No issue described'}</p>
+          <span className="text-xs text-text-soft font-semibold block mb-1">Issue</span>
+          <p className="text-sm text-text-default font-bold leading-relaxed">{repair.issue || 'No issue described'}</p>
         </div>
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Serial Number</span>
-          <p className="font-mono text-sm text-gray-900 font-semibold">{repair.serial_number || 'N/A'}</p>
+          <span className="text-xs text-text-soft font-semibold block mb-1">Serial Number</span>
+          <p className="font-mono text-sm text-text-default font-semibold">{repair.serial_number || 'N/A'}</p>
         </div>
       </div>
     </section>
@@ -76,14 +76,14 @@ export function RepairRecordSection({ repair }: { repair: RSRecord }) {
     <section>
       <div className="space-y-3">
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Created</span>
-          <p className="font-semibold text-sm text-gray-900">
+          <span className="text-xs text-text-soft font-semibold block mb-1">Created</span>
+          <p className="font-semibold text-sm text-text-default">
             {repair.created_at ? new Date(repair.created_at).toLocaleString() : 'Unknown'}
           </p>
         </div>
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Updated</span>
-          <p className="font-semibold text-sm text-gray-900">
+          <span className="text-xs text-text-soft font-semibold block mb-1">Updated</span>
+          <p className="font-semibold text-sm text-text-default">
             {repair.updated_at ? new Date(repair.updated_at).toLocaleString() : 'Unknown'}
           </p>
         </div>

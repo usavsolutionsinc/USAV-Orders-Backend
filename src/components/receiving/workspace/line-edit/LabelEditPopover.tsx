@@ -68,9 +68,9 @@ export interface LabelEditDraft {
   date: string;
 }
 
-const FIELD_LABEL = `${microBadge} mb-1.5 block text-gray-500 tracking-wider`;
+const FIELD_LABEL = `${microBadge} mb-1.5 block text-text-soft tracking-wider`;
 const TEXT_INPUT =
-  'w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-label text-gray-900 outline-none transition-colors focus:border-blue-500';
+  'w-full rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5 text-label text-text-default outline-none transition-colors focus:border-blue-500';
 
 // Label-face-only platform displays appended after the org's real platforms.
 const PLATFORM_SPECIALS = ['Unfound', 'Local pickup'];
@@ -103,7 +103,7 @@ function SelectField({
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-faint" />
     </div>
   );
 }
@@ -112,14 +112,14 @@ function SelectField({
 function ManagedFieldLabel({ children, onManage }: { children: ReactNode; onManage: () => void }) {
   return (
     <div className="mb-1.5 flex items-center justify-between gap-2">
-      <span className={`${microBadge} text-gray-500 tracking-wider`}>{children}</span>
+      <span className={`${microBadge} text-text-soft tracking-wider`}>{children}</span>
       <HoverTooltip label="Add / edit / delete" asChild>
         <IconButton
           icon={<Pencil className="h-3 w-3" />}
           ariaLabel={`Manage ${typeof children === 'string' ? children.toLowerCase() : 'list'}`}
           onClick={onManage}
           tone="accent"
-          className="text-gray-400 hover:text-blue-600"
+          className="text-text-faint hover:text-blue-600"
         />
       </HoverTooltip>
     </div>
@@ -193,26 +193,26 @@ export function LabelEditPopover({
       onClose={onClose}
       align="center"
       aria-label="Edit label"
-      className="w-[min(94%,38rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
+      className="w-[min(94%,38rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-border-soft"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
-        <span className={`${microBadge} flex items-center gap-1.5 text-gray-700`}>
-          <Pencil className="h-3.5 w-3.5 text-gray-500" />
+      <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-5 py-3">
+        <span className={`${microBadge} flex items-center gap-1.5 text-text-muted`}>
+          <Pencil className="h-3.5 w-3.5 text-text-soft" />
           Edit label
         </span>
         <IconButton
           icon={<X className="h-4 w-4" />}
           ariaLabel="Close"
           onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          className="rounded-lg p-1.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
         />
       </div>
 
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {/* Live preview — identical to the printed face. */}
-        <div className="mb-4 rounded-xl border border-gray-200/80 bg-white px-3 py-3 shadow-sm">
+        <div className="mb-4 rounded-xl border border-border-soft/80 bg-surface-card px-3 py-3 shadow-sm">
           <ReceivingPoLabelPreview {...preview} embedded />
         </div>
 
@@ -252,10 +252,10 @@ export function LabelEditPopover({
                     type="button"
                     className={`${TEXT_INPUT} flex items-center justify-between gap-2 text-left`}
                   >
-                    <span className={`truncate ${draft.date ? '' : 'text-gray-400'}`}>
+                    <span className={`truncate ${draft.date ? '' : 'text-text-faint'}`}>
                       {draft.date || 'Pick'}
                     </span>
-                    <CalendarIcon className="h-4 w-4 shrink-0 text-gray-400" />
+                    <CalendarIcon className="h-4 w-4 shrink-0 text-text-faint" />
                   </button>
                 </Popover.Trigger>
                 <Popover.Portal>
@@ -263,7 +263,7 @@ export function LabelEditPopover({
                     align="end"
                     sideOffset={6}
                     // panelOverlay (130) clears the RightPaneOverlay panel (120).
-                    className="z-panelOverlay rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+                    className="z-panelOverlay rounded-xl border border-border-soft bg-surface-card shadow-lg ring-1 ring-black/5 focus:outline-none"
                   >
                     <Calendar
                       mode="single"
@@ -313,7 +313,7 @@ export function LabelEditPopover({
       </div>
 
       {/* Footer */}
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-hairline bg-surface-canvas px-5 py-3">
         <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>

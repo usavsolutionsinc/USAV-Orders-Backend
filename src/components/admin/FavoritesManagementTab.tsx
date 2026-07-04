@@ -58,7 +58,7 @@ const DEFAULT_FORM_STATE: FavoriteFormState = {
 };
 
 const inputClass =
-  'h-10 w-full border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-gray-400';
+  'h-10 w-full border border-border-soft bg-surface-card px-3 text-sm font-semibold text-text-default outline-none transition-colors focus:border-border-emphasis';
 
 function toNullable(value: string): string | null {
   const v = value.trim();
@@ -222,8 +222,8 @@ export function FavoritesManagementTab() {
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-4`}>
           <div className="flex items-center gap-4">
-            <p className={`${sectionLabel} truncate text-gray-900`}>Favorites</p>
-            <div className="flex items-center border border-gray-200">
+            <p className={`${sectionLabel} truncate text-text-default`}>Favorites</p>
+            <div className="flex items-center border border-border-soft">
               {WORKSPACES.map((w) => (
                 <Button
                   key={w.key}
@@ -247,7 +247,7 @@ export function FavoritesManagementTab() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter sku / label / title"
-              className="h-8 w-64 border border-gray-200 bg-white px-3 text-xs font-medium text-gray-900 outline-none focus:border-gray-400"
+              className="h-8 w-64 border border-border-soft bg-surface-card px-3 text-xs font-medium text-text-default outline-none focus:border-border-emphasis"
             />
             <Button
               variant="secondary"
@@ -263,10 +263,10 @@ export function FavoritesManagementTab() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-gray-200 bg-white">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-border-soft bg-surface-card">
           <div className="min-h-0 flex-1 overflow-auto">
             <div className="min-w-[980px]">
-              <div className={`${tableGridClass} ${tableHeader} border-b border-gray-200 px-4 py-3`}>
+              <div className={`${tableGridClass} ${tableHeader} border-b border-border-soft px-4 py-3`}>
                 <p>SKU</p>
                 <p>Label</p>
                 <p>Product Title</p>
@@ -277,33 +277,33 @@ export function FavoritesManagementTab() {
               </div>
 
               {isLoading ? (
-                <div className="px-6 py-10 text-sm font-medium text-gray-500">Loading favorites...</div>
+                <div className="px-6 py-10 text-sm font-medium text-text-soft">Loading favorites...</div>
               ) : filtered.length === 0 ? (
                 <div className="px-6 py-10 text-center">
                   <p className={sectionLabel}>No Favorites</p>
-                  <p className="mt-2 text-sm font-medium text-gray-500">
+                  <p className="mt-2 text-sm font-medium text-text-soft">
                     {rows.length === 0 ? `Add the first favorite for the ${workspace} workspace.` : 'No favorites match your filter.'}
                   </p>
                 </div>
               ) : (
                 filtered.map((row) => (
-                  <div key={row.id} className={`${tableGridClass} items-center border-b border-gray-100 px-4 py-3 text-sm last:border-b-0`}>
+                  <div key={row.id} className={`${tableGridClass} items-center border-b border-border-hairline px-4 py-3 text-sm last:border-b-0`}>
                     {/* ds-allow-title: native tooltip shows full value when truncated */}
                     <p className={`${tableCell} truncate font-mono`} title={row.sku}>{row.sku}</p>
                     {/* ds-allow-title: native tooltip shows full value when truncated */}
                     <p className={`${tableCell} truncate`} title={row.label}>{row.label}</p>
                     {/* ds-allow-title: native tooltip shows full value when truncated */}
-                    <p className={`${tableCell} truncate text-gray-600`} title={row.productTitle ?? ''}>{row.productTitle || '-'}</p>
-                    <p className={`${tableCell} text-gray-600`}>{row.defaultPrice ? `$${row.defaultPrice}` : '-'}</p>
-                    <p className={`${tableCell} text-gray-600`}>{row.sortOrder}</p>
-                    <p className={`${tableHeader} ${row.isActive ? 'text-emerald-700' : 'text-gray-400'}`}>
+                    <p className={`${tableCell} truncate text-text-muted`} title={row.productTitle ?? ''}>{row.productTitle || '-'}</p>
+                    <p className={`${tableCell} text-text-muted`}>{row.defaultPrice ? `$${row.defaultPrice}` : '-'}</p>
+                    <p className={`${tableCell} text-text-muted`}>{row.sortOrder}</p>
+                    <p className={`${tableHeader} ${row.isActive ? 'text-emerald-700' : 'text-text-faint'}`}>
                       {row.isActive ? 'Active' : 'Hidden'}
                     </p>
                     <div className="flex items-center justify-end gap-2">
                       <HoverTooltip label="Edit favorite" asChild>
                         <IconButton
                           onClick={() => openEdit(row)}
-                          className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 transition-colors hover:bg-gray-50"
+                          className="inline-flex h-8 w-8 items-center justify-center border border-border-soft transition-colors hover:bg-surface-hover"
                           ariaLabel={`Edit ${row.label}`}
                           icon={<Edit className="h-3.5 w-3.5" />}
                         />
@@ -330,23 +330,23 @@ export function FavoritesManagementTab() {
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
           <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close favorite form" />
-          <div className="relative flex w-full max-w-2xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          <div className="relative flex w-full max-w-2xl flex-col overflow-hidden border border-border-soft bg-surface-card shadow-xl">
+            <div className="flex items-center justify-between border-b border-border-soft px-5 py-4">
               <div>
                 <p className={sectionLabel}>{editingId != null ? 'Edit Favorite' : 'New Favorite'}</p>
-                <h3 className="mt-1 text-base font-semibold text-gray-900">
+                <h3 className="mt-1 text-base font-semibold text-text-default">
                   {editingId != null ? `Update ${form.label || form.sku}` : `Add a ${workspace} favorite`}
                 </h3>
               </div>
               <IconButton
                 onClick={closeForm}
-                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 transition-colors hover:bg-gray-50"
+                className="inline-flex h-9 w-9 items-center justify-center border border-border-soft transition-colors hover:bg-surface-hover"
                 ariaLabel="Close"
                 icon={<X className="h-4 w-4" />}
               />
             </div>
 
-            <div className="grid gap-4 border-b border-gray-200 px-5 py-5 md:grid-cols-2">
+            <div className="grid gap-4 border-b border-border-soft px-5 py-5 md:grid-cols-2">
               <label className="space-y-1">
                 <span className={`block ${sectionLabel}`}>SKU</span>
                 <input
@@ -432,18 +432,18 @@ export function FavoritesManagementTab() {
                   onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))}
                   placeholder="Optional"
                   rows={2}
-                  className="w-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-gray-400"
+                  className="w-full border border-border-soft bg-surface-card px-3 py-2 text-sm font-semibold text-text-default outline-none transition-colors focus:border-border-emphasis"
                 />
               </label>
 
-              <label className="flex items-center gap-3 border border-gray-200 px-3 py-3 md:col-span-2">
+              <label className="flex items-center gap-3 border border-border-soft px-3 py-3 md:col-span-2">
                 <input
                   type="checkbox"
                   checked={form.isActive}
                   onChange={(e) => setForm((c) => ({ ...c, isActive: e.target.checked }))}
-                  className="h-4 w-4 border-gray-300 text-gray-900 focus:ring-gray-300"
+                  className="h-4 w-4 border-border-default text-text-default focus:ring-border-default"
                 />
-                <span className={`${sectionLabel} text-gray-700`}>Active (shown in the {workspace} picker)</span>
+                <span className={`${sectionLabel} text-text-muted`}>Active (shown in the {workspace} picker)</span>
               </label>
             </div>
 

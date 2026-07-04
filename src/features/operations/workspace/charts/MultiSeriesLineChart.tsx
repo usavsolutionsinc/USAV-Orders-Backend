@@ -77,7 +77,7 @@ export function MultiSeriesLineChart({
         </g>
 
         {/* y-axis tick labels */}
-        <g className="text-gray-400">
+        <g className="text-text-faint">
           {model.ticks.map((t, i) => (
             <text
               key={i}
@@ -93,7 +93,7 @@ export function MultiSeriesLineChart({
         </g>
 
         {/* x-axis labels */}
-        <g className="text-gray-400">
+        <g className="text-text-faint">
           {xLabels.map((label, i) =>
             i % labelStride === 0 ? (
               <text
@@ -154,7 +154,7 @@ export function MultiSeriesLineChart({
           })}
 
         {!hasData && (
-          <g className="text-gray-400">
+          <g className="text-text-faint">
             <text x={width / 2} y={height / 2} textAnchor="middle" fill="currentColor" className="text-caption font-semibold">
               No activity in this range
             </text>
@@ -167,7 +167,7 @@ export function MultiSeriesLineChart({
         {series.map((s) => (
           <div key={s.key} className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} aria-hidden />
-            <span className="text-eyebrow font-bold uppercase tracking-widest text-gray-500">{s.label}</span>
+            <span className="text-eyebrow font-bold uppercase tracking-widest text-text-soft">{s.label}</span>
           </div>
         ))}
       </div>

@@ -87,7 +87,7 @@ export function ConditionPills({
           type="button"
           onClick={() => setExpanded(true)}
           aria-label="Edit condition"
-          className="ds-raw-button rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          className="ds-raw-button rounded p-0.5 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
         >
           <Pencil className="h-3 w-3" />
         </button>

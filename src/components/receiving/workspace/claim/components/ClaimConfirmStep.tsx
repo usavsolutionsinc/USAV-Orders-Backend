@@ -54,7 +54,7 @@ export function ClaimConfirmStep({ c }: { c: ReceivingClaimController }) {
       {/* ── Local backup result (re-archive suppressed during a dry run) ─── */}
       <ClaimNasBackupCard c={c} canArchive={!isDryRun} />
 
-      <p className="text-caption font-semibold leading-5 text-gray-500">
+      <p className="text-caption font-semibold leading-5 text-text-soft">
         Continue to draft the seller-facing message — it references this case # for full context.
       </p>
     </div>

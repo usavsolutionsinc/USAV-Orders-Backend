@@ -5,11 +5,11 @@ import { cn } from '@/utils/_cn';
 
 /** Matches mobile tech header grid cells: square, no rounding, light hover. */
 export const mobileBoxedNavButtonClass =
-  'flex h-full w-full min-h-[44px] min-w-[40px] items-center justify-center rounded-none bg-white text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:opacity-35 disabled:pointer-events-none';
+  'flex h-full w-full min-h-[44px] min-w-[40px] items-center justify-center rounded-none bg-surface-card text-text-muted transition-colors hover:bg-surface-hover active:bg-surface-sunken disabled:opacity-35 disabled:pointer-events-none';
 
 /** Wrapper width for toolbar leading/trailing slots (aligns with tech `grid-cols-[40px_…_40px]`). */
 export const mobileBoxedNavCellClass =
-  'flex min-h-[44px] min-w-[40px] shrink-0 items-stretch bg-white';
+  'flex min-h-[44px] min-w-[40px] shrink-0 items-stretch bg-surface-card';
 
 export interface MobileBoxedNavChevronProps {
   direction: 'left' | 'right';

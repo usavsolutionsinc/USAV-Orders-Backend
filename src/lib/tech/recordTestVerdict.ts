@@ -31,6 +31,7 @@ import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEven
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { tapWorkflow } from '@/lib/workflow/tap';
 import { applyTransition } from '@/lib/workflow/applyTransition';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 import { isUnifiedEngineApplyTransition, isUnifiedEngineVerdictConfig } from '@/lib/feature-flags';
 import { parseOrgSettings } from '@/lib/tenancy/settings';
 import type { SerialState } from '@/lib/inventory/state-machine';
@@ -150,14 +151,17 @@ export async function recordTestVerdict(
   const mapping = await resolveVerdictMapping(verdict, orgId);
 
   // 1. Fetch existing unit + its parent receiving_line (org-scoped).
+  // Phase 3: origin line (the frozen birth line) via the reconstruction view.
   const existing = await pool.query<TestedUnit>(
     orgId
-      ? `SELECT id, serial_number, current_status::text AS current_status, sku,
-                origin_receiving_line_id, organization_id
-           FROM serial_units WHERE id = $1 AND organization_id = $2`
-      : `SELECT id, serial_number, current_status::text AS current_status, sku,
-                origin_receiving_line_id, organization_id
-           FROM serial_units WHERE id = $1`,
+      ? `SELECT su.id, su.serial_number, su.current_status::text AS current_status, su.sku,
+                vo.origin_receiving_line_id, su.organization_id
+           FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+          WHERE su.id = $1 AND su.organization_id = $2`
+      : `SELECT su.id, su.serial_number, su.current_status::text AS current_status, su.sku,
+                vo.origin_receiving_line_id, su.organization_id
+           FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+          WHERE su.id = $1`,
     orgId ? [serialUnitId, orgId] : [serialUnitId],
   );
   if (existing.rows.length === 0) return null;
@@ -213,21 +217,23 @@ export async function recordTestVerdict(
     eventId = applied.eventId;
     eventCreated = !applied.idempotent;
   } else if (prev.current_status !== mapping.nextStatus) {
-    const updated = await pool.query<TestedUnit>(
+    // Phase 3: origin_receiving_line_id dropped from RETURNING (immutable here,
+    // never read off `unit` downstream) and carried over from prev below.
+    const updated = await pool.query<Omit<TestedUnit, 'origin_receiving_line_id'>>(
       orgId
         ? `UPDATE serial_units
               SET current_status = $2::serial_status_enum, updated_at = NOW()
             WHERE id = $1 AND organization_id = $3
             RETURNING id, serial_number, current_status::text AS current_status,
-                      sku, origin_receiving_line_id, organization_id`
+                      sku, organization_id`
         : `UPDATE serial_units
               SET current_status = $2::serial_status_enum, updated_at = NOW()
             WHERE id = $1
             RETURNING id, serial_number, current_status::text AS current_status,
-                      sku, origin_receiving_line_id, organization_id`,
+                      sku, organization_id`,
       orgId ? [serialUnitId, mapping.nextStatus, orgId] : [serialUnitId, mapping.nextStatus],
     );
-    unit = updated.rows[0];
+    unit = { ...updated.rows[0], origin_receiving_line_id: prev.origin_receiving_line_id };
   }
 
   // 3. Audit row in tech_serial_numbers. Mirrors receive-line.ts' pattern
@@ -300,6 +306,31 @@ export async function recordTestVerdict(
     } catch (err) {
       console.warn('[recordTestVerdict] testing_results insert failed (non-fatal):', err);
     }
+
+    // "Why" signal (plan §2.3 emitter #3 — tech test-fail reasons). Only
+    // non-PASS verdicts carry a "why"; TESTING_FAILED weighs 2, TEST_AGAIN 1.
+    // Guarded by eventCreated like its neighbors so a clientEventId replay
+    // never double-emits. Governed verdict-detail reason codes are captured
+    // at the route layer (flow_context=verdict_detail), not here — free-text
+    // tech notes ride `notes`. Fire-and-forget; never fails the verdict.
+    if (verdict !== 'PASS') {
+      await emitEntitySignalSafe({
+        organizationId: unit.organization_id,
+        entityType: 'SERIAL_UNIT',
+        entityId: unit.id,
+        signalKind: 'test_fail_reason',
+        notes: notes ?? null,
+        severity: verdict === 'TESTING_FAILED' ? 2 : 1,
+        actorStaffId,
+        meta: {
+          verdict,
+          nextStatus: mapping.nextStatus,
+          eventType: mapping.eventType,
+          receivingLineId: lineId,
+          inventoryEventId: eventId,
+        },
+      });
+    }
   }
 
   // 5. Line rollup. Only runs when the unit has a parent line.
@@ -338,7 +369,9 @@ export async function recordTestVerdict(
                 COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
                 COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
            FROM receiving_lines rl
-      LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
+      LEFT JOIN serial_unit_provenance p ON p.origin_type = 'RECEIVING_LINE'
+             AND p.origin_id = rl.id AND p.organization_id = rl.organization_id
+      LEFT JOIN serial_units su ON su.id = p.serial_unit_id
           WHERE rl.id = $1 AND rl.organization_id = $2
           GROUP BY rl.id, rl.quantity_expected`,
         [lineId, rollupOrg],

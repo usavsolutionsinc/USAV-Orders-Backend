@@ -22,6 +22,7 @@ import { resolveWarrantyDays } from './term';
 import { getClaim } from './claims';
 import { REPAIR_ALLOWED_FROM, WARRANTY_LIFECYCLE, repairNextStatus } from './transitions';
 import type { WarrantyClaimDetail, WarrantyClaimStatus } from './types';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 
 // ─── Claim-number generation (per-year, RMA-number precedent) ────────────────
 
@@ -537,12 +538,12 @@ export function approveClaim(claimId: number, actorStaffId: number | null, orgId
   return transition(claimId, orgId, { allowedFrom: WARRANTY_LIFECYCLE.approve.from, to: WARRANTY_LIFECYCLE.approve.to, actorStaffId });
 }
 
-export function denyClaim(
+export async function denyClaim(
   claimId: number,
   args: { reasonCode: string; denialNotes?: string | null; actorStaffId: number | null },
   orgId: OrgId,
 ): Promise<TransitionResult> {
-  return transition(claimId, orgId, {
+  const result = await transition(claimId, orgId, {
     allowedFrom: WARRANTY_LIFECYCLE.deny.from,
     to: WARRANTY_LIFECYCLE.deny.to,
     actorStaffId: args.actorStaffId,
@@ -552,6 +553,24 @@ export function denyClaim(
     ],
     eventPayload: { reasonCode: args.reasonCode },
   });
+
+  if (result.ok) {
+    // "Why" signal (plan §2.3 emitter #1, warranty half) — the denial reason
+    // is THE warranty reason moment (governed reason_codes, flow_context
+    // warranty_denial). Post-commit, fire-and-forget; never fails the deny.
+    await emitEntitySignalSafe({
+      organizationId: orgId,
+      entityType: 'WARRANTY_CLAIM',
+      entityId: claimId,
+      signalKind: 'warranty_denial',
+      reasonCode: args.reasonCode,
+      notes: args.denialNotes ?? null,
+      actorStaffId: args.actorStaffId,
+      meta: { claimNumber: result.claim.claimNumber, serialNumber: result.claim.serialNumber ?? null },
+    });
+  }
+
+  return result;
 }
 
 export function closeClaim(claimId: number, actorStaffId: number | null, orgId: OrgId): Promise<TransitionResult> {

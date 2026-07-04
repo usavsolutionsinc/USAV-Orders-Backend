@@ -229,7 +229,7 @@ export function ReceivingTriagePanel() {
           size="sm"
           textTransform="capitalize"
           className="w-40"
-          buttonClassName="flex h-8 w-full items-center gap-2 rounded-lg border border-gray-300 bg-white pl-2.5 pr-9 text-left text-xs font-black capitalize tracking-wide text-blue-950 outline-none transition-colors hover:bg-gray-50"
+          buttonClassName="flex h-8 w-full items-center gap-2 rounded-lg border border-border-default bg-surface-card pl-2.5 pr-9 text-left text-xs font-black capitalize tracking-wide text-blue-950 outline-none transition-colors hover:bg-surface-hover"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -310,7 +310,7 @@ const VERDICT_META: Record<TestingVerdict, { label: string; cls: string }> = {
 
 function TestingStatField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
+    <div className="rounded-2xl bg-surface-canvas px-3 py-2.5">
       <p className="text-micro font-black uppercase tracking-[0.15em] text-blue-300">{label}</p>
       <p className="mt-1 truncate text-sm font-black tracking-tight text-blue-950">{value}</p>
     </div>
@@ -419,7 +419,7 @@ function TestingRecentSheet({ line, onClose }: { line: ReceivingLineRow | null; 
                         key={s.id}
                         type="button"
                         onClick={() => setSelectedSerial(s)}
-                        className="ds-raw-button flex w-full items-center justify-between gap-3 rounded-2xl border border-blue-50 bg-white px-3 py-2.5 text-left transition-colors active:bg-blue-50"
+                        className="ds-raw-button flex w-full items-center justify-between gap-3 rounded-2xl border border-blue-50 bg-surface-card px-3 py-2.5 text-left transition-colors active:bg-blue-50"
                       >
                         <div className="flex min-w-0 items-center gap-2">
                           <QrCode className="h-4 w-4 shrink-0 text-blue-300" />
@@ -430,7 +430,7 @@ function TestingRecentSheet({ line, onClose }: { line: ReceivingLineRow | null; 
                         <div className="flex shrink-0 items-center gap-2">
                           <span
                             className={`rounded-full border px-2.5 py-0.5 text-micro font-black uppercase tracking-wider ${
-                              meta ? meta.cls : 'border-slate-200 bg-slate-50 text-slate-500'
+                              meta ? meta.cls : 'border-border-soft bg-surface-canvas text-text-soft'
                             }`}
                           >
                             {meta ? meta.label : 'Untested'}
@@ -442,7 +442,7 @@ function TestingRecentSheet({ line, onClose }: { line: ReceivingLineRow | null; 
                   })}
                 </div>
               ) : (
-                <div className="rounded-2xl bg-slate-50 px-4 py-6 text-center">
+                <div className="rounded-2xl bg-surface-canvas px-4 py-6 text-center">
                   <p className="text-xs font-black uppercase tracking-widest text-blue-300">No serials recorded</p>
                 </div>
               )}
@@ -469,7 +469,7 @@ function TestingRecentSheet({ line, onClose }: { line: ReceivingLineRow | null; 
                 </p>
                 <span
                   className={`mt-1 inline-flex rounded-full border px-2.5 py-0.5 text-micro font-black uppercase tracking-wider ${
-                    detailMeta ? detailMeta.cls : 'border-slate-200 bg-slate-50 text-slate-500'
+                    detailMeta ? detailMeta.cls : 'border-border-soft bg-surface-canvas text-text-soft'
                   }`}
                 >
                   {detailMeta ? detailMeta.label : 'Untested'}

@@ -17,7 +17,7 @@ export function Section({
   return (
     <section>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <h3 className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
+        <h3 className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
           {title}
         </h3>
         {action}
@@ -30,10 +30,10 @@ export function Section({
 export function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+      <dt className="text-micro font-semibold uppercase tracking-wider text-text-soft">
         {label}
       </dt>
-      <dd className="text-label text-gray-800 text-right">{value}</dd>
+      <dd className="text-label text-text-default text-right">{value}</dd>
     </div>
   );
 }
@@ -52,7 +52,7 @@ export function FieldRow({
   const confidence = field?.confidence ?? 'low';
   const confirmed = Boolean(field?.confirmed_at);
   return (
-    <label className="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1.5 hover:bg-gray-50">
+    <label className="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1.5 hover:bg-surface-hover">
       <button
         type="button"
         onClick={onToggle}
@@ -60,14 +60,14 @@ export function FieldRow({
         className={`ds-raw-button mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
           confirmed
             ? 'border-emerald-500 bg-emerald-500 text-white'
-            : 'border-gray-300 bg-white'
+            : 'border-border-default bg-surface-card'
         }`}
       >
         {confirmed ? <Check className="h-3 w-3" /> : null}
       </button>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-micro font-bold uppercase tracking-wider text-gray-500">
+          <span className="text-micro font-bold uppercase tracking-wider text-text-soft">
             {label}
           </span>
           {value != null && (
@@ -79,7 +79,7 @@ export function FieldRow({
             </HoverTooltip>
           )}
         </div>
-        <p className="truncate text-label text-gray-800">{value ?? '—'}</p>
+        <p className="truncate text-label text-text-default">{value ?? '—'}</p>
       </div>
     </label>
   );
@@ -88,7 +88,7 @@ export function FieldRow({
 export function LoadingBlock() {
   return (
     <div className="flex h-40 items-center justify-center">
-      <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+      <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
     </div>
   );
 }

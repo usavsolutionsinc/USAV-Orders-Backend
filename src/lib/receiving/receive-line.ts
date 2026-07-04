@@ -287,9 +287,11 @@ export async function receiveLineUnits(
       const normalized = normalizeSerial(serials[0]);
       if (normalized) {
         const existing = await client.query<{ id: number }>(
+          // Phase 3: line membership via provenance reverse lookup (RLS-scoped by the txn GUC).
           `SELECT id FROM serial_units
             WHERE normalized_serial = $1
-              AND origin_receiving_line_id = $2
+              AND id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $2)
             LIMIT 1`,
           [normalized, line.id],
         );

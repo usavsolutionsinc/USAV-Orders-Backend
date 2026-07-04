@@ -95,7 +95,7 @@ export function UnitSlotList({
   const firstEmptyIndex = saved.length < count ? saved.length : -1;
 
   return (
-    <div className="flex min-w-0 flex-col divide-y divide-gray-200">
+    <div className="flex min-w-0 flex-col divide-y divide-border-soft">
       {rows.map(({ index, serial }) => {
         const expanded = singleRowExpanded || index === selectedIndex;
         return expanded ? (
@@ -156,7 +156,7 @@ function UnitRowTitle({
 }) {
   return (
     <div className="flex w-full items-center gap-2">
-      <span className="shrink-0 font-mono text-micro font-black tabular-nums text-gray-500">
+      <span className="shrink-0 font-mono text-micro font-black tabular-nums text-text-soft">
         {index + 1}/{total}
       </span>
       {meta ? <span className="inline-flex items-center">{meta}</span> : null}
@@ -189,7 +189,7 @@ function CollapsedRow({
           onSelect();
         }
       }}
-      className="w-full cursor-pointer px-1 py-2.5 text-left transition-colors hover:bg-gray-50"
+      className="w-full cursor-pointer px-1 py-2.5 text-left transition-colors hover:bg-surface-hover"
     >
       <UnitRowTitle
         index={index}
@@ -197,11 +197,11 @@ function CollapsedRow({
         meta={meta}
         trailing={
           serial ? (
-            <span className="font-mono text-sm font-bold tracking-tight text-gray-900 underline decoration-emerald-500 decoration-2 underline-offset-2">
+            <span className="font-mono text-sm font-bold tracking-tight text-text-default underline decoration-emerald-500 decoration-2 underline-offset-2">
               {last4(serial.serial_number)}
             </span>
           ) : (
-            <span className="text-caption font-semibold uppercase tracking-widest text-gray-400">
+            <span className="text-caption font-semibold uppercase tracking-widest text-text-faint">
               Empty · tap to scan
             </span>
           )
@@ -287,7 +287,7 @@ function ExpandedRow({
             condition read down one vertical line instead of jumping left.
             Hidden in single-row mode so the active unit mirrors a single-qty line. */}
         {singleRow ? null : (
-          <span className="shrink-0 font-mono text-micro font-black tabular-nums text-gray-500">
+          <span className="shrink-0 font-mono text-micro font-black tabular-nums text-text-soft">
             {index + 1}/{total}
           </span>
         )}
@@ -297,7 +297,7 @@ function ExpandedRow({
             // serial share one row; no overflow clip so every grade stays reachable.
             <div className="flex min-w-0 items-center gap-2">
               {meta}
-              <div className="h-8 w-px shrink-0 bg-gray-100" />
+              <div className="h-8 w-px shrink-0 bg-surface-sunken" />
             </div>
           ) : (
             <div
@@ -315,7 +315,7 @@ function ExpandedRow({
                   {meta}
                 </div>
               </div>
-              <div className={`h-8 w-px bg-gray-100 shrink-0 ${showMeta ? 'block' : 'hidden group-hover:block'}`} />
+              <div className={`h-8 w-px bg-surface-sunken shrink-0 ${showMeta ? 'block' : 'hidden group-hover:block'}`} />
             </div>
           )
         ) : null}
@@ -360,7 +360,7 @@ function ExpandedRow({
                   }}
                   ariaLabel={editing ? 'Cancel edit' : 'Clear'}
                   icon={<X className="h-3.5 w-3.5" />}
-                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                  className="rounded-md p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
                 />
               ) : undefined
             }
@@ -377,7 +377,7 @@ function ExpandedRow({
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />
               </svg>
             }
-            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm disabled:cursor-not-allowed disabled:bg-gray-300 ${
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm disabled:cursor-not-allowed disabled:bg-surface-strong ${
               editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           />

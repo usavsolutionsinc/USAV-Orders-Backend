@@ -63,7 +63,7 @@ export function LineLabelPreviewCard({
       >
         {/* Bordered box matches the testing/products LabelPreviewCard so all
             label previews read identically. */}
-        <div className="rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
+        <div className="rounded border border-border-soft bg-surface-card px-2 py-2 shadow-sm">
           {scanValue ? (
             <ReceivingPoLabelPreview {...labelPayload} embedded />
           ) : sku ? (

@@ -71,7 +71,7 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
   );
 
   if (detail.isLoading) {
-    return <div className="p-8 text-center text-sm text-gray-500">Loading staff…</div>;
+    return <div className="p-8 text-center text-sm text-text-soft">Loading staff…</div>;
   }
   if (detail.error) {
     return <div className="m-6 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{detail.error.message}</div>;
@@ -175,15 +175,15 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
       {/* Reset PIN — enrollment QR modal */}
       {qrUrl && (
         <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => setQrUrl(null)}>
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-gray-900">Reset PIN for {staff.name}</h2>
-            <p className="mt-1 text-xs text-gray-500">
+          <div className="w-full max-w-md rounded-3xl bg-surface-card p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-text-default">Reset PIN for {staff.name}</h2>
+            <p className="mt-1 text-xs text-text-soft">
               Have them scan this on their phone to pick a new PIN. Expires {new Date(qrUrl.expiresAt).toLocaleString()}.
             </p>
-            <div className="my-5 inline-block rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="my-5 inline-block rounded-2xl border border-border-soft bg-surface-card p-4">
               <QRCode value={qrUrl.url} size={220} level="M" />
             </div>
-            <p className="break-all text-micro text-gray-400">{qrUrl.url}</p>
+            <p className="break-all text-micro text-text-faint">{qrUrl.url}</p>
             <Button variant="brand" size="lg" onClick={() => setQrUrl(null)} className="mt-5">
               Done
             </Button>

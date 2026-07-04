@@ -557,11 +557,15 @@ export const POST = withAuth(async (request, ctx) => {
         serial_number: string;
       }>(
         ctx.organizationId,
-        `SELECT origin_receiving_line_id, serial_number
-           FROM serial_units
-          WHERE origin_receiving_line_id = ANY($1::int[])
-            AND organization_id = $2
-          ORDER BY created_at ASC, id ASC`,
+        // Phase 3: filter + group by origin line via serial_unit_provenance
+        // (one RECEIVING_LINE edge per unit, so no row multiplication).
+        `SELECT p.origin_id AS origin_receiving_line_id, su.serial_number
+           FROM serial_units su
+           JOIN serial_unit_provenance p
+             ON p.serial_unit_id = su.id AND p.origin_type = 'RECEIVING_LINE'
+            AND p.origin_id = ANY($1::int[]) AND p.organization_id = $2
+          WHERE su.organization_id = $2
+          ORDER BY su.created_at ASC, su.id ASC`,
         [updatedLineIds, ctx.organizationId],
       );
       const seenGlobal = new Set<string>();

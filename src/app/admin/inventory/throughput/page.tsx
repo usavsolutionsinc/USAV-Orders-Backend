@@ -151,7 +151,7 @@ export default async function ThroughputPage({
   const hourlyBuckets = Array.from(new Set(hourly.map((r) => r.hour_bucket.toISOString()))).sort();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-canvas">
       <PageHeader
         backHref="/admin/inventory"
         title="Throughput"
@@ -165,7 +165,7 @@ export default async function ThroughputPage({
                 className={`rounded-md px-2.5 py-1 font-medium ${
                   range === r
                     ? 'bg-blue-600 text-white'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    : 'border border-border-default bg-surface-card text-text-muted hover:bg-surface-hover'
                 }`}
               >
                 {r}
@@ -175,8 +175,8 @@ export default async function ThroughputPage({
         }
       />
       <div className="mx-auto max-w-7xl space-y-6 p-8">
-        <p className="text-sm text-gray-600">
-          Aggregations over <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">inventory_events</code>.
+        <p className="text-sm text-text-muted">
+          Aggregations over <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">inventory_events</code>.
           Numbers stay sparse until the flagged paths start emitting.
         </p>
 
@@ -188,26 +188,26 @@ export default async function ThroughputPage({
         </section>
 
         {/* By event type */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-3">
-            <h2 className="text-lg font-medium text-gray-900">By event type</h2>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="border-b border-border-hairline px-6 py-3">
+            <h2 className="text-lg font-medium text-text-default">By event type</h2>
           </header>
           {byType.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">No events in this range.</p>
+            <p className="px-6 py-8 text-sm text-text-muted">No events in this range.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-border-hairline">
               {byType.map((t) => (
                 <li key={t.event_type} className="flex items-center gap-4 px-6 py-2">
-                  <code className="w-44 shrink-0 font-mono text-xs text-gray-700">{t.event_type}</code>
+                  <code className="w-44 shrink-0 font-mono text-xs text-text-muted">{t.event_type}</code>
                   <div className="flex-1">
-                    <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-2 overflow-hidden rounded-full bg-surface-sunken">
                       <div
                         className="h-full rounded-full bg-blue-500"
                         style={{ width: `${(t.count / maxTypeCount) * 100}%` }}
                       />
                     </div>
                   </div>
-                  <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-gray-900">{t.count}</span>
+                  <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-text-default">{t.count}</span>
                 </li>
               ))}
             </ul>
@@ -216,10 +216,10 @@ export default async function ThroughputPage({
 
         {/* Station × hour heatmap */}
         {hourly.length > 0 ? (
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-            <header className="border-b border-gray-100 px-6 py-3">
-              <h2 className="text-lg font-medium text-gray-900">Station × hour</h2>
-              <p className="mt-1 text-xs text-gray-500">
+          <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+            <header className="border-b border-border-hairline px-6 py-3">
+              <h2 className="text-lg font-medium text-text-default">Station × hour</h2>
+              <p className="mt-1 text-xs text-text-soft">
                 Heatmap intensity ∝ count. Hover for tooltip; cells with 0 events are blank.
               </p>
             </header>
@@ -227,9 +227,9 @@ export default async function ThroughputPage({
               <table className="text-xs">
                 <thead>
                   <tr>
-                    <th className="px-2 py-1 text-left font-medium text-gray-500">Station</th>
+                    <th className="px-2 py-1 text-left font-medium text-text-soft">Station</th>
                     {hourlyBuckets.map((iso) => (
-                      <th key={iso} className="px-1 py-1 text-center font-normal text-micro text-gray-400">
+                      <th key={iso} className="px-1 py-1 text-center font-normal text-micro text-text-faint">
                         {new Date(iso).toLocaleTimeString([], { hour: 'numeric', hour12: true })}
                       </th>
                     ))}
@@ -238,7 +238,7 @@ export default async function ThroughputPage({
                 <tbody>
                   {hourlyStations.map((station) => (
                     <tr key={station}>
-                      <td className="px-2 py-1 font-mono text-caption text-gray-700">{station}</td>
+                      <td className="px-2 py-1 font-mono text-caption text-text-muted">{station}</td>
                       {hourlyBuckets.map((iso) => {
                         const count = hourlyByCell.get(`${station}|${iso}`) ?? 0;
                         const intensity = count === 0 ? 0 : Math.max(0.1, count / maxHourly);
@@ -264,29 +264,29 @@ export default async function ThroughputPage({
         ) : null}
 
         {/* By actor */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-3">
-            <h2 className="text-lg font-medium text-gray-900">By actor</h2>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="border-b border-border-hairline px-6 py-3">
+            <h2 className="text-lg font-medium text-text-default">By actor</h2>
           </header>
           {byActor.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">No actors in this range.</p>
+            <p className="px-6 py-8 text-sm text-text-muted">No actors in this range.</p>
           ) : (
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full divide-y divide-border-hairline text-sm">
+              <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                 <tr>
                   <th className="px-6 py-2 text-left font-medium">Actor</th>
                   <th className="px-6 py-2 text-right font-medium">Events</th>
                   <th className="px-6 py-2 text-left font-medium">Last active</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-hairline">
                 {byActor.map((a) => (
                   <tr key={String(a.actor_staff_id)}>
-                    <td className="px-6 py-2 text-xs text-gray-700">
+                    <td className="px-6 py-2 text-xs text-text-muted">
                       {a.actor_name ?? (a.actor_staff_id ? `#${a.actor_staff_id}` : 'system')}
                     </td>
                     <td className="px-6 py-2 text-right text-sm font-semibold tabular-nums">{a.count}</td>
-                    <td className="px-6 py-2 text-xs text-gray-500">{a.last_active ? new Date(a.last_active).toLocaleString() : '—'}</td>
+                    <td className="px-6 py-2 text-xs text-text-soft">{a.last_active ? new Date(a.last_active).toLocaleString() : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -300,8 +300,8 @@ export default async function ThroughputPage({
 
 function Tile({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white px-6 py-4 shadow-sm">
-      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+    <div className="rounded-lg border border-border-soft bg-surface-card px-6 py-4 shadow-sm">
+      <p className="text-xs uppercase tracking-wide text-text-soft">{label}</p>
       <p className={`mt-1 text-3xl font-semibold ${accent}`}>{value}</p>
     </div>
   );

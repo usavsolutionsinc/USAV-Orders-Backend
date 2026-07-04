@@ -201,8 +201,8 @@ function UnitPageInner() {
     : null;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
+    <div className="min-h-screen bg-surface-canvas flex flex-col">
+      <header className="sticky top-0 z-10 bg-surface-card border-b border-border-soft px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           {lineHref ? (
             <Button
@@ -221,25 +221,25 @@ function UnitPageInner() {
         <div className="mt-2 flex justify-end">
           <StatusPill status={unit?.current_status ?? null} />
         </div>
-        <h1 className="mt-2 truncate font-mono text-base font-black text-slate-900">
+        <h1 className="mt-2 truncate font-mono text-base font-black text-text-default">
           {unit?.serial_number || unitParam}
         </h1>
         {unit?.sku && (
-          <p className="mt-1 font-mono text-caption font-bold text-slate-700">
+          <p className="mt-1 font-mono text-caption font-bold text-text-muted">
             {unit.sku}
           </p>
         )}
         {unit?.product_title && (
-          <p className="mt-1 text-caption text-slate-500 line-clamp-2 leading-snug">
+          <p className="mt-1 text-caption text-text-soft line-clamp-2 leading-snug">
             {unit.product_title}
           </p>
         )}
         <div className="mt-2 flex items-center justify-between text-caption font-bold">
-          <span className="text-slate-700">
+          <span className="text-text-muted">
             {unit?.current_location ? `Loc: ${unit.current_location}` : 'No location'}
           </span>
           {unit?.condition_grade && (
-            <span className="text-slate-500">
+            <span className="text-text-soft">
               {unit.condition_grade.replace(/_/g, ' ')}
             </span>
           )}
@@ -260,7 +260,7 @@ function UnitPageInner() {
 
       <main className="flex-1 px-4 py-3 space-y-4 pb-24">
         {loading && (
-          <p className="text-center text-sm font-semibold text-slate-500 py-6">
+          <p className="text-center text-sm font-semibold text-text-soft py-6">
             Loading…
           </p>
         )}
@@ -273,8 +273,8 @@ function UnitPageInner() {
 
         {unit && (
           <>
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Test status
               </p>
               <div className="grid grid-cols-3 gap-2">
@@ -306,8 +306,8 @@ function UnitPageInner() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Stash in bin
               </p>
               <div className="flex gap-2">
@@ -321,7 +321,7 @@ function UnitPageInner() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') submitPutaway();
                   }}
-                  className="flex-1 rounded-md border border-slate-300 px-3 py-3 text-base font-mono font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
+                  className="flex-1 rounded-md border border-border-default px-3 py-3 text-base font-mono font-bold text-text-default focus:border-blue-500 focus:outline-none"
                 />
                 <Button
                   variant="brand"
@@ -333,8 +333,8 @@ function UnitPageInner() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Note (optional)
               </p>
               <textarea
@@ -342,34 +342,34 @@ function UnitPageInner() {
                 placeholder="e.g. Power button flaky"
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-border-default px-3 py-2 text-sm text-text-default focus:border-blue-500 focus:outline-none"
               />
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Lifecycle
               </p>
               {events.length === 0 ? (
-                <p className="text-caption text-slate-500">No activity yet.</p>
+                <p className="text-caption text-text-soft">No activity yet.</p>
               ) : (
                 <ul className="space-y-2">
                   {events.map((ev) => (
                     <li key={ev.id} className="flex items-start gap-2 text-caption">
-                      <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+                      <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-border-emphasis shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-900">
+                        <p className="font-bold text-text-default">
                           {ev.event_type.replace(/_/g, ' ')}
                           {ev.next_status ? (
-                            <span className="ml-1 text-slate-500">→ {ev.next_status}</span>
+                            <span className="ml-1 text-text-soft">→ {ev.next_status}</span>
                           ) : null}
                         </p>
-                        <p className="text-slate-500">
+                        <p className="text-text-soft">
                           {formatAgo(ev.occurred_at)} ago
                           {ev.station ? ` · ${ev.station}` : ''}
                         </p>
                         {ev.notes && (
-                          <p className="mt-0.5 text-slate-500 italic">{ev.notes}</p>
+                          <p className="mt-0.5 text-text-soft italic">{ev.notes}</p>
                         )}
                       </div>
                     </li>
@@ -386,7 +386,7 @@ function UnitPageInner() {
 
 export default function UnitPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+    <Suspense fallback={<div className="min-h-screen bg-surface-canvas" />}>
       <UnitPageInner />
     </Suspense>
   );

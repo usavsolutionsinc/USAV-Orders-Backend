@@ -31,7 +31,7 @@ function TrackingChip({ tracking }: { tracking?: string }) {
 function CarrierChip({ carrier }: { carrier?: string | null }) {
   if (!carrier || carrier === 'Unknown') return null;
   return (
-    <span className="text-mini font-black uppercase tracking-widest text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+    <span className="text-mini font-black uppercase tracking-widest text-text-soft bg-surface-sunken rounded px-1.5 py-0.5">
       {carrier}
     </span>
   );
@@ -55,17 +55,17 @@ function FeedRow({ log, isSelected, onClick, idx }: FeedRowProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15, delay: Math.min(idx * 0.025, 0.4) }}
       onClick={onClick}
-      className={`ds-raw-button w-full text-left px-4 py-3 border-b border-gray-50 transition-all ${
+      className={`ds-raw-button w-full text-left px-4 py-3 border-b border-border-hairline transition-all ${
         isSelected
           ? 'bg-blue-50 border-l-2 border-l-blue-600'
-          : 'hover:bg-gray-50/60 border-l-2 border-l-transparent'
+          : 'hover:bg-surface-canvas/60 border-l-2 border-l-transparent'
       }`}
     >
       <div className="flex items-center gap-2 flex-wrap">
         <TrackingChip tracking={log.tracking} />
         <CarrierChip carrier={log.status} />
         {condLabel && (
-          <span className="text-mini font-black uppercase tracking-widest text-gray-400">{condLabel}</span>
+          <span className="text-mini font-black uppercase tracking-widest text-text-faint">{condLabel}</span>
         )}
         <span className={`text-mini font-black uppercase tracking-widest rounded px-1.5 py-0.5 ml-auto ${qaCls}`}>
           {(log.qa_status ?? 'PENDING').replace(/_/g, ' ')}
@@ -78,7 +78,7 @@ function FeedRow({ log, isSelected, onClick, idx }: FeedRowProps) {
           </span>
         )}
         {log.unboxed_at && (
-          <span className="text-mini text-gray-400 font-bold">
+          <span className="text-mini text-text-faint font-bold">
             Unboxed {formatDateTimePST(log.unboxed_at)}
           </span>
         )}
@@ -122,16 +122,16 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
   };
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden">
+    <div className="flex flex-col h-full bg-surface-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 bg-white sticky top-0 z-10">
+      <div className="flex items-center justify-between border-b border-border-hairline px-4 py-3 bg-surface-card sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600">
             <Package className="h-4 w-4 text-white" />
           </div>
           <div>
-            <p className="text-sm font-black text-gray-900 leading-none">Inbound Feed</p>
-            <p className="text-eyebrow font-bold uppercase tracking-widest text-gray-400 mt-0.5">
+            <p className="text-sm font-black text-text-default leading-none">Inbound Feed</p>
+            <p className="text-eyebrow font-bold uppercase tracking-widest text-text-faint mt-0.5">
               Receiving Activity
             </p>
           </div>
@@ -142,14 +142,14 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
       </div>
 
       {/* Section pills */}
-      <div className="flex gap-1.5 px-4 py-2.5 border-b border-gray-100 bg-gray-50/40">
+      <div className="flex gap-1.5 px-4 py-2.5 border-b border-border-hairline bg-surface-canvas/40">
         <button
           type="button"
           onClick={() => setSection('testing')}
           className={`ds-raw-button flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
             section === 'testing'
               ? 'bg-orange-500 text-white'
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              : 'bg-surface-sunken text-text-soft hover:bg-surface-strong'
           }`}
         >
           Needs Testing
@@ -167,7 +167,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
           className={`ds-raw-button flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
             section === 'unboxed'
               ? 'bg-indigo-600 text-white'
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              : 'bg-surface-sunken text-text-soft hover:bg-surface-strong'
           }`}
         >
           Recently Unboxed
@@ -190,7 +190,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Package className="w-10 h-10 text-gray-200" />
-            <p className="text-micro font-black uppercase tracking-widest text-gray-300">
+            <p className="text-micro font-black uppercase tracking-widest text-text-faint">
               {section === 'testing' ? 'No items need testing' : 'Nothing unboxed in last 48h'}
             </p>
           </div>
@@ -210,8 +210,8 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
       </div>
 
       {/* Footer count */}
-      <div className="border-t border-gray-100 px-4 py-2 bg-gray-50/60">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
+      <div className="border-t border-border-hairline px-4 py-2 bg-surface-canvas/60">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
           {rows.length} item{rows.length !== 1 ? 's' : ''} •{' '}
           {section === 'testing' ? 'sorted by recency' : 'last 48 hours'}
         </p>

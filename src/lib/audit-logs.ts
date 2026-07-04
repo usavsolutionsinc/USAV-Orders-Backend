@@ -126,6 +126,10 @@ export const AUDIT_ENTITY = {
   STATION_DEFINITION: 'station_definition',
   // Workflow graphs (Operations Studio layer 1)
   WORKFLOW_DEFINITION: 'workflow_definition',
+  // AI write path (universal-feed plan §2.6) — agent-proposed mutations
+  AGENT_MUTATION: 'agent_mutation',
+  // Per-staff rail dismiss (universal-feed plan Phase 4) — staff_rail_exclusions
+  RAIL_EXCLUSION: 'rail_exclusion',
   // Operations ▸ History — server-backed Master Journey saved views
   OPERATIONS_SAVED_VIEW: 'operations_saved_view',
   // Media library (/ops/photos) — server-backed filter/view presets
@@ -135,6 +139,8 @@ export const AUDIT_ENTITY = {
   CALL_EVENT: 'call_event',
   // Tenant / identity (Phase F signup → org provisioning)
   ORGANIZATION: 'organization',
+  // AI search (docs/ai-search-modernization-plan.md) — the Ask-AI invocation
+  AI_SEARCH: 'ai_search',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -159,6 +165,11 @@ export const AUDIT_ACTION = {
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
   /** Real "Save for unbox" transition — stamps receiving.triage_complete. */
   RECEIVING_TRIAGE_COMPLETE: 'receiving.triage.complete',
+  /** Per-staff rail dismiss / restore (universal-feed Phase 4) — writes/removes
+   *  a staff_rail_exclusions row; hides an entity from THIS staffer's rail only
+   *  (reversible, never a shared delete). */
+  RAIL_EXCLUSION_ADD:        'rail_exclusion.add',
+  RAIL_EXCLUSION_REMOVE:     'rail_exclusion.remove',
   /**
    * A scanned serial was auto-resolved to a previously-shipped order during
    * receiving (the shipped↔returned loop), flipping the carton to a return and
@@ -242,6 +253,9 @@ export const AUDIT_ACTION = {
   // External integration connection lifecycle (OAuth connect / disconnect)
   INTEGRATION_CONNECT:     'integration.connect',
   INTEGRATION_DISCONNECT:  'integration.disconnect',
+  // AI search — the explicit Ask-AI tool-calling invocation only (plain
+  // keystroke retrieval is deliberately NOT audited — see /api/ai/retrieve)
+  AI_SEARCH_ASK: 'ai_search.ask',
   // Personal UI preferences (e.g. configurable focus-scan hotkey)
   STAFF_PREFERENCE_UPDATE: 'staff_preference.update',
   // Settings Registry — org/staff per-page setting change (docs/settings-registry.md)
@@ -352,6 +366,10 @@ export const AUDIT_ACTION = {
   WORKFLOW_PUBLISH:      'workflow.publish',
   // Cloning a system template into the org's definitions as a draft (Phase E4).
   WORKFLOW_TEMPLATE_IMPORT: 'workflow.template.import',
+  // AI write path (universal-feed plan §2.6) — apply / propose / revert.
+  AGENT_MUTATION_APPLY:   'agent_mutation.apply',
+  AGENT_MUTATION_PROPOSE: 'agent_mutation.propose',
+  AGENT_MUTATION_REVERT:  'agent_mutation.revert',
   // Operations ▸ History — Master Journey saved views (personal/shared presets)
   OPERATIONS_SAVED_VIEW_CREATE: 'operations.saved_view.create',
   OPERATIONS_SAVED_VIEW_UPDATE: 'operations.saved_view.update',

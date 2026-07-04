@@ -81,7 +81,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     description: 'In-store POS + walk-ins — OAuth via the Nango connector.',
     category: 'Storefronts & POS',
     connect: 'nango',
-    badge: 'bg-slate-200 text-slate-700',
+    badge: 'bg-surface-strong text-text-muted',
   },
 
   // ── Operations ──
@@ -143,7 +143,10 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
   { key: 'shipstation', label: 'ShipStation', description: 'Rate-shop + buy/void labels (v2) and pull orders (v1).', category: 'Shipping carriers', connect: 'vault', docsUrl: 'https://docs.shipstation.com/', badge: 'bg-violet-100 text-violet-700' },
 
   // ── Realtime & AI ──
-  { key: 'ollama', label: 'Ollama (AI)', description: 'Local LLM via Cloudflare tunnel.',    category: 'Realtime & AI', connect: 'vault', badge: 'bg-gray-200 text-gray-700' },
+  { key: 'ollama', label: 'Self-hosted AI (Ollama / custom)', description: 'Any OpenAI-compatible endpoint you run (Ollama, LM Studio, vLLM). Payload: {"baseUrl","model","embedModel"?,"apiKey"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-surface-strong text-text-muted' },
+  { key: 'ai_gateway', label: 'Vercel AI Gateway', description: 'One key, every model — powers AI search + Ask AI. Payload: {"apiKey","chatModel"?,"embedModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-gray-900 text-white' },
+  { key: 'openai', label: 'OpenAI', description: 'Direct key for AI-search embeddings + Ask AI. Payload: {"apiKey","chatModel"?,"embedModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-emerald-100 text-emerald-700' },
+  { key: 'anthropic', label: 'Anthropic', description: 'Claude for Ask AI (chat only — embeddings need another provider). Payload: {"apiKey","chatModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-amber-100 text-amber-700' },
 ];
 
 // ── Shared status shapes (server-computed, passed to the client cards) ──

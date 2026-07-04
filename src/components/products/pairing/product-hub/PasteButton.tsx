@@ -17,7 +17,7 @@ export function PasteButton({ onPaste }: { onPaste: (value: string) => void }) {
             /* clipboard blocked — operator can still type */
           }
         }}
-        className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-gray-100"
+        className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-surface-sunken"
         ariaLabel="Paste from clipboard"
         icon={<Clipboard className="h-3.5 w-3.5" />}
       />

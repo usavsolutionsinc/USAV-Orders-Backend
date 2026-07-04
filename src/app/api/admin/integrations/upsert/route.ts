@@ -13,7 +13,7 @@
  * plus step-up to prevent CSRF-style replays.
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
@@ -28,6 +28,8 @@ import {
 const PROVIDERS = [
   'ebay', 'zoho', 'ecwid', 'square', 'ups', 'fedex', 'usps', 'zendesk',
   'google_sheets', 'ably', 'ollama', 'stripe',
+  // AI search providers (per-org BYOK) — read by src/lib/ai/org-provider.ts
+  'ai_gateway', 'openai', 'anthropic',
 ] as const;
 
 const Body = z.object({
@@ -71,6 +73,21 @@ export const POST = withAuth(async (req, ctx) => {
     payload: parsed.payload,
     createdBy: ctx.staffId,
   });
+
+  // AI provider connected/switched → the org's search docs must re-embed in
+  // the new model's embedding space (mixed models poison cosine relevance).
+  // Enqueue-only + fire-and-forget; the search-outbox cron drains at its pace.
+  if (['ai_gateway', 'openai', 'anthropic', 'ollama'].includes(parsed.provider)) {
+    after(async () => {
+      try {
+        const { enqueueOrgReembed } = await import('@/lib/search/search-outbox-worker');
+        const n = await enqueueOrgReembed(ctx.organizationId);
+        console.info(`[integrations] AI provider changed — re-embed enqueued for ${n} docs`);
+      } catch (err) {
+        console.warn('[integrations] re-embed enqueue failed (non-fatal):', err);
+      }
+    });
+  }
   return NextResponse.json({ status: 'ok' });
 }, {
   permission: 'admin.manage_features',

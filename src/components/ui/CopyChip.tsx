@@ -81,8 +81,8 @@ export const CHIP_TONES = {
   id: {
     icon: <HashIcon />,
     underline: 'border-gray-500',
-    iconClass: 'text-gray-500',
-    dot: 'bg-gray-400',
+    iconClass: 'text-text-soft',
+    dot: 'bg-border-emphasis',
   },
   tracking: {
     icon: <MapPin className="h-4 w-4 shrink-0" />,
@@ -269,7 +269,7 @@ export function CopyChip({
       >
         {resolvedIcon ? <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${resolvedIconClass ?? ''}`}>{resolvedIcon}</span> : null}
         <span
-          className={`${dense ? 'text-caption font-bold font-mono text-gray-900' : monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${resolvedUnderline} ${
+          className={`${dense ? 'text-caption font-bold font-mono text-text-default' : monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${resolvedUnderline} ${
             fitDisplayWidth ? 'min-w-0 shrink-0' : 'min-w-0 flex-1'
           }`}
         >
@@ -398,7 +398,7 @@ export function ListingUrlChip({
             if (openHref) window.open(openHref, '_blank', 'noopener,noreferrer');
           }}
           ariaLabel="Open listing URL in new tab"
-          className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded hover:bg-slate-100"
+          className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded hover:bg-surface-sunken"
         />
       </HoverTooltip>
       <CopyChip
@@ -726,7 +726,7 @@ export const PlatformChip = ({
   });
 
   const resolvedUnderline = isEmpty ? 'border-gray-500' : underlineClass;
-  const resolvedIconClass = isEmpty ? 'text-gray-500' : iconClass;
+  const resolvedIconClass = isEmpty ? 'text-text-soft' : iconClass;
   const labelClass =
     labelTransform === 'none'
       ? isEmpty

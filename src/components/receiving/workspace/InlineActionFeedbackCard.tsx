@@ -95,7 +95,7 @@ export function InlineActionFeedbackCard({
               {headline}
             </p>
             {timestamp ? (
-              <span className="shrink-0 text-eyebrow font-semibold tabular-nums text-slate-400">
+              <span className="shrink-0 text-eyebrow font-semibold tabular-nums text-text-faint">
                 {timestamp}
               </span>
             ) : null}
@@ -134,7 +134,7 @@ export function InlineActionFeedbackCard({
           ) : null}
 
           {note ? (
-            <p className="mt-1.5 flex items-start gap-1.5 text-micro font-medium leading-snug text-slate-600">
+            <p className="mt-1.5 flex items-start gap-1.5 text-micro font-medium leading-snug text-text-muted">
               {tone === 'amber' ? (
                 <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
               ) : null}
@@ -150,7 +150,7 @@ export function InlineActionFeedbackCard({
             <IconButton
               ariaLabel="Dismiss"
               onClick={onDismiss}
-              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-white/60 hover:text-slate-700"
+              className="shrink-0 rounded p-0.5 text-text-faint hover:bg-surface-card/60 hover:text-text-muted"
               icon={<X className="h-3 w-3" />}
             />
           </HoverTooltip>

@@ -34,15 +34,15 @@ export function RecentSearchesList({
   }
 
   return (
-    <section className="border-y border-gray-200">
-      <div className="flex items-center justify-between gap-3 px-0 py-2 border-b border-gray-200">
+    <section className="border-y border-border-soft">
+      <div className="flex items-center justify-between gap-3 px-0 py-2 border-b border-border-soft">
         <p className={sectionLabel}>Recent Searches</p>
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="sm"
             onClick={onClear}
-            className={`${microBadge} h-auto rounded-none px-0 py-0 text-gray-500 hover:bg-transparent hover:text-gray-600`}
+            className={`${microBadge} h-auto rounded-none px-0 py-0 text-text-soft hover:bg-transparent hover:text-text-muted`}
           >
             Clear All
           </Button>
@@ -66,13 +66,13 @@ export function RecentSearchesList({
             type="button"
             onClick={() => onSelect(item.query)}
             className={`ds-raw-button flex w-full items-center justify-between gap-3 px-0 py-2.5 text-left ${
-              index < items.length - 1 ? 'border-b border-gray-200' : ''
+              index < items.length - 1 ? 'border-b border-border-soft' : ''
             }`}
           >
-            <span className="truncate text-caption font-semibold text-gray-900">
+            <span className="truncate text-caption font-semibold text-text-default">
               {getDisplayQuery ? getDisplayQuery(item) : item.query}
             </span>
-            <span className={`shrink-0 ${microBadge} text-gray-500`}>
+            <span className={`shrink-0 ${microBadge} text-text-soft`}>
               {getMetaLabel ? getMetaLabel(item) : 'Reuse'}
             </span>
           </button>

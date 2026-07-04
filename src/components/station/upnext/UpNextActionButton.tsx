@@ -22,8 +22,8 @@ interface UpNextActionButtonProps {
 
 const TONE_CLASSES: Record<Tone, { desktop: string; mobile: string }> = {
   gray: {
-    desktop: 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100',
-    mobile:  'border-gray-200 bg-white text-gray-600 active:bg-gray-100',
+    desktop: 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-sunken',
+    mobile:  'border-border-soft bg-surface-card text-text-muted active:bg-surface-sunken',
   },
   red: {
     desktop: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100',

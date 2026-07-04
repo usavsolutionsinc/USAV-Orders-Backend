@@ -119,7 +119,7 @@ export function ExceptionsRow() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.04 }}
             whileHover={c.disabled ? undefined : { y: -2 }}
-            className={`block bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] ${
+            className={`block bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] ${
               c.disabled ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow'
             }`}
           >

@@ -113,7 +113,7 @@ export function ZohoSplitPane() {
 
   return (
     <aside
-      className="fixed right-0 top-0 z-40 flex h-full flex-col border-l border-gray-200 bg-white shadow-[0_0_24px_-12px_rgba(15,23,42,0.35)]"
+      className="fixed right-0 top-0 z-40 flex h-full flex-col border-l border-border-soft bg-surface-card shadow-[0_0_24px_-12px_rgba(15,23,42,0.35)]"
       style={{ width }}
       role="complementary"
       aria-label="Zoho PO viewer"
@@ -126,15 +126,15 @@ export function ZohoSplitPane() {
         aria-orientation="vertical"
       />
 
-      <header className="flex h-10 shrink-0 items-center justify-between border-b border-gray-100 bg-gray-50 px-3">
-        <span className="text-caption font-black uppercase tracking-[0.18em] text-gray-600">
+      <header className="flex h-10 shrink-0 items-center justify-between border-b border-border-hairline bg-surface-canvas px-3">
+        <span className="text-caption font-black uppercase tracking-[0.18em] text-text-muted">
           Zoho · Purchase Order
         </span>
         <IconButton
           onClick={() => setOpen(false)}
           ariaLabel="Close Zoho pane"
           icon={<X className="h-4 w-4" />}
-          className="flex h-7 w-7 items-center justify-center rounded hover:bg-gray-200"
+          className="flex h-7 w-7 items-center justify-center rounded hover:bg-surface-strong"
         />
       </header>
 
@@ -145,7 +145,7 @@ export function ZohoSplitPane() {
           // Browser tab fallback — Zoho blocks iframe embedding, so we surface
           // the same "open externally" affordance the rest of the receiving
           // workspace uses (see the LISTING PREVIEW card).
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-label text-gray-500">
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-label text-text-soft">
             <p className="leading-snug">
               Embedded Zoho is only available in the desktop app.
             </p>

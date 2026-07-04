@@ -41,11 +41,11 @@ function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`ds-raw-button relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-        checked ? 'bg-blue-600' : 'bg-gray-300'
+        checked ? 'bg-blue-600' : 'bg-surface-strong'
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+        className={`inline-block h-4 w-4 transform rounded-full bg-surface-card shadow transition-transform ${
           checked ? 'translate-x-6' : 'translate-x-1'
         }`}
       />
@@ -54,7 +54,7 @@ function Switch({
 }
 
 const FIELD_CLS =
-  'rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 ' +
+  'rounded-xl border border-border-default bg-surface-card px-3 py-1.5 text-sm text-text-default ' +
   'focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ' +
   'disabled:cursor-not-allowed disabled:opacity-40';
 
@@ -82,7 +82,7 @@ export function SettingControl({ def, value, disabled, lockedOptions = [], onCha
                 className={`rounded-xl border px-3 py-1.5 text-xs disabled:opacity-40 ${
                   isActive
                     ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-500/20'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 ring-0'
+                    : 'border-border-default bg-surface-card text-text-muted hover:bg-surface-hover ring-0'
                 }`}
               >
                 {opt.label}
@@ -134,7 +134,7 @@ export function SettingControl({ def, value, disabled, lockedOptions = [], onCha
             }}
             className={`w-24 ${FIELD_CLS}`}
           />
-          {def.unit && <span className="text-caption text-gray-500">{def.unit}</span>}
+          {def.unit && <span className="text-caption text-text-soft">{def.unit}</span>}
         </div>
       );
 

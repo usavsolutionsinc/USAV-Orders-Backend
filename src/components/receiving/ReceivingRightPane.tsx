@@ -157,7 +157,7 @@ export function ReceivingRightPane({
       {!isTableOnlyMode && !showWorkspace && !showScanLoader && emptyState ? (
         <div className="absolute inset-0 flex items-center justify-center">
           <EmptyState
-            icon={<Barcode className="h-7 w-7 text-gray-400" />}
+            icon={<Barcode className="h-7 w-7 text-text-faint" />}
             title={emptyState.title}
             description={emptyState.description}
           />

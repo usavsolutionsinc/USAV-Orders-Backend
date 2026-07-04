@@ -37,7 +37,7 @@ interface BinFormState {
 }
 
 const inputClass =
-  'h-10 w-full border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-gray-400';
+  'h-10 w-full border border-border-soft bg-surface-card px-3 text-sm font-semibold text-text-default outline-none transition-colors focus:border-border-emphasis';
 
 const ALL_ROOMS = '__all__';
 
@@ -49,7 +49,7 @@ function fillLabel(row: BinRow): string {
 function statusOf(row: BinRow): { label: string; cls: string } {
   if (row.is_over_capacity) return { label: 'Over cap', cls: 'text-rose-700' };
   if (row.has_low_stock) return { label: 'Low', cls: 'text-amber-700' };
-  if (row.is_empty) return { label: 'Empty', cls: 'text-gray-400' };
+  if (row.is_empty) return { label: 'Empty', cls: 'text-text-faint' };
   if (row.is_stale) return { label: 'Stale', cls: 'text-amber-600' };
   return { label: 'OK', cls: 'text-emerald-700' };
 }
@@ -189,11 +189,11 @@ export function LocationsManagementTab() {
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-4`}>
           <div className="flex items-center gap-4">
-            <p className={`${sectionLabel} truncate text-gray-900`}>Locations</p>
+            <p className={`${sectionLabel} truncate text-text-default`}>Locations</p>
             <select
               value={room}
               onChange={(e) => setRoom(e.target.value)}
-              className="h-8 border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-800 outline-none focus:border-gray-400"
+              className="h-8 border border-border-soft bg-surface-card px-2 text-xs font-semibold text-text-default outline-none focus:border-border-emphasis"
             >
               <option value={ALL_ROOMS}>All rooms</option>
               {rooms.map((r) => (
@@ -208,17 +208,17 @@ export function LocationsManagementTab() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter barcode / name / type"
-              className="h-8 w-64 border border-gray-200 bg-white px-3 text-xs font-medium text-gray-900 outline-none focus:border-gray-400"
+              className="h-8 w-64 border border-border-soft bg-surface-card px-3 text-xs font-medium text-text-default outline-none focus:border-border-emphasis"
             />
           </div>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-gray-200 bg-white">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-border-soft bg-surface-card">
           <div className="min-h-0 flex-1 overflow-auto">
             <div className="min-w-[1100px]">
-              <div className={`${tableGridClass} ${tableHeader} border-b border-gray-200 px-4 py-3`}>
+              <div className={`${tableGridClass} ${tableHeader} border-b border-border-soft px-4 py-3`}>
                 <p>Barcode</p>
                 <p>Name</p>
                 <p>Room</p>
@@ -232,11 +232,11 @@ export function LocationsManagementTab() {
               </div>
 
               {isLoading ? (
-                <div className="px-6 py-10 text-sm font-medium text-gray-500">Loading bins...</div>
+                <div className="px-6 py-10 text-sm font-medium text-text-soft">Loading bins...</div>
               ) : filtered.length === 0 ? (
                 <div className="px-6 py-10 text-center">
                   <p className={sectionLabel}>No Bins</p>
-                  <p className="mt-2 text-sm font-medium text-gray-500">
+                  <p className="mt-2 text-sm font-medium text-text-soft">
                     {allRows.length === 0 ? 'No bins found.' : 'No bins match your filter.'}
                   </p>
                 </div>
@@ -245,17 +245,17 @@ export function LocationsManagementTab() {
                   const status = statusOf(row);
                   const pos = [row.row_label, row.col_label].filter(Boolean).join('-') || '-';
                   return (
-                    <div key={row.id} className={`${tableGridClass} items-center border-b border-gray-100 px-4 py-2.5 text-sm last:border-b-0`}>
+                    <div key={row.id} className={`${tableGridClass} items-center border-b border-border-hairline px-4 py-2.5 text-sm last:border-b-0`}>
                       {/* ds-allow-title: native tooltip shows full value when truncated */}
                       <p className={`${tableCell} truncate font-mono`} title={row.barcode ?? ''}>{row.barcode || '-'}</p>
                       {/* ds-allow-title: native tooltip shows full value when truncated */}
                       <p className={`${tableCell} truncate`} title={row.name}>{row.name}</p>
-                      <p className={`${tableCell} truncate text-gray-600`}>{row.room || '-'}</p>
-                      <p className={`${tableCell} text-gray-600`}>{pos}</p>
-                      <p className={`${tableCell} truncate text-gray-600`}>{row.bin_type || '-'}</p>
-                      <p className={`${tableCell} text-gray-600`}>{row.capacity ?? '-'}</p>
-                      <p className={`${tableCell} text-gray-600`}>{row.total_qty}</p>
-                      <p className={`${tableCell} text-gray-600`}>{fillLabel(row)}</p>
+                      <p className={`${tableCell} truncate text-text-muted`}>{row.room || '-'}</p>
+                      <p className={`${tableCell} text-text-muted`}>{pos}</p>
+                      <p className={`${tableCell} truncate text-text-muted`}>{row.bin_type || '-'}</p>
+                      <p className={`${tableCell} text-text-muted`}>{row.capacity ?? '-'}</p>
+                      <p className={`${tableCell} text-text-muted`}>{row.total_qty}</p>
+                      <p className={`${tableCell} text-text-muted`}>{fillLabel(row)}</p>
                       <p className={`${tableHeader} ${status.cls}`}>{status.label}</p>
                       <div className="flex items-center justify-end gap-2">
                         <HoverTooltip label={row.barcode ? 'Edit bin' : 'Bin has no barcode — cannot edit here'} asChild>
@@ -264,7 +264,7 @@ export function LocationsManagementTab() {
                             ariaLabel={`Edit ${row.name}`}
                             onClick={() => openEdit(row)}
                             disabled={!row.barcode}
-                            className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-40"
+                            className="inline-flex h-8 w-8 items-center justify-center border border-border-soft text-text-muted hover:bg-surface-hover hover:text-text-default disabled:opacity-40"
                           />
                         </HoverTooltip>
                         <HoverTooltip label={row.barcode ? 'Remove bin' : 'Bin has no barcode — cannot delete here'} asChild>
@@ -290,11 +290,11 @@ export function LocationsManagementTab() {
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
           <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close bin form" />
-          <div className="relative flex w-full max-w-xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          <div className="relative flex w-full max-w-xl flex-col overflow-hidden border border-border-soft bg-surface-card shadow-xl">
+            <div className="flex items-center justify-between border-b border-border-soft px-5 py-4">
               <div>
                 <p className={sectionLabel}>Edit Bin</p>
-                <h3 className="mt-1 text-base font-semibold text-gray-900">
+                <h3 className="mt-1 text-base font-semibold text-text-default">
                   {editing.room ? `${editing.room} · ` : ''}{editing.name}
                 </h3>
               </div>
@@ -302,11 +302,11 @@ export function LocationsManagementTab() {
                 icon={<X className="h-4 w-4" />}
                 ariaLabel="Close"
                 onClick={closeForm}
-                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                className="inline-flex h-9 w-9 items-center justify-center border border-border-soft text-text-soft hover:bg-surface-hover hover:text-text-default"
               />
             </div>
 
-            <div className="grid gap-4 border-b border-gray-200 px-5 py-5 md:grid-cols-2">
+            <div className="grid gap-4 border-b border-border-soft px-5 py-5 md:grid-cols-2">
               <label className="space-y-1">
                 <span className={`block ${sectionLabel}`}>Name</span>
                 <input
@@ -350,7 +350,7 @@ export function LocationsManagementTab() {
                 />
               </label>
 
-              <p className={`md:col-span-2 ${fieldLabel} text-gray-400`}>
+              <p className={`md:col-span-2 ${fieldLabel} text-text-faint`}>
                 Position (row/col) and room moves are structural — manage those from the location tools, not here.
               </p>
             </div>

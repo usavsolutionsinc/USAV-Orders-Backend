@@ -35,7 +35,7 @@ export function IncomingSidebarPanel() {
   return (
     <>
       <SidebarShell
-        className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white"
+        className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-card"
         search={{ value: filters.search, onChange: filters.setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
         filter={{
           label: 'Filters',
@@ -49,7 +49,7 @@ export function IncomingSidebarPanel() {
             <div className={cn(sidebarHeaderPillRowClass, 'h-auto min-h-[40px] items-start pt-1 pb-2.5')}>
               <IncomingViewBand />
             </div>
-            <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white pb-2 pt-2.5">
+            <div className="shrink-0 space-y-2 border-b border-border-soft bg-surface-card pb-2 pt-2.5">
               <IncomingSyncButtons sync={sync} />
               <div className="flex flex-col">
                 <IncomingAttachTrackingPopover />

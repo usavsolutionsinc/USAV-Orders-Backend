@@ -100,7 +100,7 @@ export function POUnboxingSection({
     // justify-between, so this group is right-aligned and the label leads the
     // pencil). It names what the pencil does — open the PO/package-pairing editor.
     <div className="flex items-center gap-1.5">
-      <span className="text-eyebrow font-black uppercase leading-none tracking-widest text-gray-400">
+      <span className="text-eyebrow font-black uppercase leading-none tracking-widest text-text-faint">
         Edit PO
       </span>
       <IconButton

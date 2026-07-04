@@ -46,7 +46,7 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
-            {/* Explicit white (sectionLabel's own text-gray-500 is invisible on blue). */}
+            {/* Explicit white (sectionLabel's own text-text-soft is invisible on blue). */}
             <span className="text-micro font-black uppercase tracking-[0.2em] text-white">
               {sync.isTransferring ? 'Syncing…' : 'Sync Orders'}
             </span>
@@ -59,9 +59,9 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
             // Match the trigger (= the master-nav/sidebar content width) exactly
             // via Radix's trigger-width var, so the popover never over/under-hangs.
             style={{ width: 'var(--radix-popover-trigger-width)' }}
-            className="z-dropdown rounded-2xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5 focus:outline-none"
+            className="z-dropdown rounded-2xl border border-border-soft bg-surface-card p-3 shadow-xl ring-1 ring-black/5 focus:outline-none"
           >
-            <div className="mb-3 flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+            <div className="mb-3 flex items-center gap-1 rounded-xl bg-surface-sunken p-1">
               {(['sync', 'backfill'] as SyncTab[]).map((t) => (
                 // ds-raw-button: segmented tab toggle (conditional active fill), not a single-variant Button
                 <button
@@ -69,7 +69,7 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
                   type="button"
                   onClick={() => setTab(t)}
                   className={`flex-1 rounded-lg px-3 py-1.5 text-eyebrow font-black uppercase tracking-wider transition-colors ${
-                    tab === t ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    tab === t ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted'
                   }`}
                 >
                   {t === 'sync' ? 'Sync' : 'Backfill'}
@@ -86,7 +86,7 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
                       value={sync.manualSheetName}
                       onChange={(e) => sync.setManualSheetName(e.target.value)}
                       placeholder="e.g., Sheet_01_14_2026"
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-caption text-gray-900 outline-none transition-all focus:border-blue-500"
+                      className="w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2 font-mono text-caption text-text-default outline-none transition-all focus:border-blue-500"
                       disabled={sync.isTransferring}
                     />
                     {sync.isTransferring ? (
@@ -146,7 +146,7 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
                     ) : null}
                   </>
                 ) : (
-                  <p className="px-1 py-6 text-center text-caption text-gray-400">
+                  <p className="px-1 py-6 text-center text-caption text-text-faint">
                     You don&apos;t have permission to import orders.
                   </p>
                 )}

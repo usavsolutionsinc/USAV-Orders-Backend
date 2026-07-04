@@ -11,8 +11,8 @@ import { useStaffOptions } from './useStaffOptions';
 import { CarrierSelect, NeedsAttentionButton, StatusSelect } from './ShippedFilterControls';
 
 const selectClass =
-  'h-9 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2.5 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
-const labelClass = 'mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500';
+  'h-9 w-full cursor-pointer appearance-none rounded-md border border-border-soft bg-surface-card pl-2.5 pr-7 text-caption font-semibold text-text-default hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+const labelClass = 'mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft';
 
 export function ShippedCarrierFilters({
   className,
@@ -66,7 +66,7 @@ export function ShippedCarrierFilters({
         <StatusSelect value={statusCategory} onChange={a.setStatus} />
         {activeCount > 0 ? (
           // ds-raw-button: minimal inline text link with hover:underline, not a DS Button control
-          <button type="button" onClick={clearAll} className="text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
+          <button type="button" onClick={clearAll} className="text-xs font-bold text-text-soft underline-offset-2 hover:text-text-default hover:underline">
             Clear
           </button>
         ) : null}
@@ -86,7 +86,7 @@ export function ShippedCarrierFilters({
           aria-expanded={open}
           aria-haspopup="dialog"
           className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
-            activeCount > 0 ? 'bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100' : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+            activeCount > 0 ? 'bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100' : 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover'
           }`}
         >
           <Filter className="h-4 w-4 shrink-0" />
@@ -105,7 +105,7 @@ export function ShippedCarrierFilters({
           gap={4}
           ignoreClickSelector="[data-radix-popper-content-wrapper]"
         >
-          <div role="dialog" aria-label="Shipment filters" className="space-y-3 rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5">
+          <div role="dialog" aria-label="Shipment filters" className="space-y-3 rounded-xl border border-border-soft bg-surface-card p-3 shadow-xl ring-1 ring-black/5">
             <NeedsAttentionButton active={exceptionsOnly} onClick={a.toggleExceptions} />
 
             <label className="block">
@@ -116,7 +116,7 @@ export function ShippedCarrierFilters({
                     <option key={t.id} value={String(t.id)}>{t.label}</option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
               </div>
             </label>
 
@@ -132,7 +132,7 @@ export function ShippedCarrierFilters({
                   <option value="">All carriers</option>
                   {CARRIERS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
               </div>
             </label>
 
@@ -143,7 +143,7 @@ export function ShippedCarrierFilters({
                   <option value="">All statuses</option>
                   {STATUS_CATEGORIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
               </div>
             </label>
 
@@ -154,7 +154,7 @@ export function ShippedCarrierFilters({
                   <option value="">Any tech</option>
                   {techs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
               </div>
             </label>
 
@@ -165,13 +165,13 @@ export function ShippedCarrierFilters({
                   <option value="">Any packer</option>
                   {packers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
               </div>
             </label>
 
             {activeCount > 0 ? (
               // ds-raw-button: minimal inline text link with hover:underline, not a DS Button control
-              <button type="button" onClick={clearAll} className="w-full text-center text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
+              <button type="button" onClick={clearAll} className="w-full text-center text-xs font-bold text-text-soft underline-offset-2 hover:text-text-default hover:underline">
                 Clear filters
               </button>
             ) : null}

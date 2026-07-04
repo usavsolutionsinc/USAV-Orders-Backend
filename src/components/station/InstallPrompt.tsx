@@ -127,7 +127,7 @@ export function InstallPrompt() {
                   variant="secondary"
                   size="md"
                   onClick={install}
-                  className="flex-1 rounded-station ring-0 bg-white text-navy-800 text-caption font-bold tracking-wide uppercase hover:bg-navy-50 touch-manipulation font-sans"
+                  className="flex-1 rounded-station ring-0 bg-surface-card text-navy-800 text-caption font-bold tracking-wide uppercase hover:bg-navy-50 touch-manipulation font-sans"
                 >
                   Install
                 </Button>

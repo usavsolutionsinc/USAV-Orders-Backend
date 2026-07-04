@@ -74,7 +74,7 @@ function prettyEnum(value: string): string {
  */
 function MetaPill({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-micro font-black uppercase tracking-[0.1em] text-emerald-800 ring-1 ring-inset ring-emerald-200">
+    <span className="inline-flex items-center gap-1 rounded-full bg-surface-card px-2 py-0.5 text-micro font-black uppercase tracking-[0.1em] text-emerald-800 ring-1 ring-inset ring-emerald-200">
       <span className="text-emerald-500/70">{label}</span>
       <span>{value}</span>
     </span>
@@ -112,7 +112,7 @@ export function SerialMatchResult({
         tone="neutral"
         size="sm"
         className={className}
-        icon={<Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+        icon={<Loader2 className="h-4 w-4 animate-spin text-text-faint" />}
       >
         Checking serial…
       </InlineNotice>
@@ -169,10 +169,10 @@ export function SerialMatchResult({
               product title we shipped + the order # so the operator can
               confirm the pairing before filing a claim. */}
           {isReturn && matchedOrder && (matchedOrder.product_title || matchedOrder.order_id) ? (
-            <div className="rounded-lg bg-white/70 px-2.5 py-2 ring-1 ring-inset ring-emerald-200">
+            <div className="rounded-lg bg-surface-card/70 px-2.5 py-2 ring-1 ring-inset ring-emerald-200">
               {matchedOrder.product_title ? (
-                // ds-allow-title: truncation reveal of the full product title on
-                // a non-interactive clipped (truncate) <p>.
+                // Truncation reveal of the full product title on a non-interactive clipped <p>.
+                // ds-allow-title
                 <p className="truncate text-label font-bold text-emerald-900" title={matchedOrder.product_title}>
                   {matchedOrder.product_title}
                 </p>

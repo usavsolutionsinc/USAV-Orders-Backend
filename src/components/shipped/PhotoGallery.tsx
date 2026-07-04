@@ -42,8 +42,8 @@ export function PhotoGallery(props: PhotoGalleryProps) {
 
   if (g.photoItems.length === 0) {
     return (
-      <div className={`w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 ${g.className}`}>
-        <div className="flex items-center justify-center gap-2 text-gray-500">
+      <div className={`w-full bg-surface-canvas border border-border-soft rounded-xl px-4 py-3 ${g.className}`}>
+        <div className="flex items-center justify-center gap-2 text-text-soft">
           <ImageIcon className="h-4 w-4" />
           <span className="text-xs font-semibold">No photos available</span>
         </div>

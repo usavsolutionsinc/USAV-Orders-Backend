@@ -220,12 +220,12 @@ export default async function CycleCountDetailPage({
 
   if (!campaign) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-surface-canvas p-8">
         <div className="mx-auto max-w-3xl space-y-2">
           <Link href="/admin/inventory/cycle-counts" className="text-sm text-blue-600 hover:underline">
             ← back to campaigns
           </Link>
-          <h1 className="text-2xl font-semibold text-gray-900">Campaign not found</h1>
+          <h1 className="text-2xl font-semibold text-text-default">Campaign not found</h1>
         </div>
       </div>
     );
@@ -236,7 +236,7 @@ export default async function CycleCountDetailPage({
   const totalLines = statusCounts.reduce((sum, s) => sum + s.count, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-surface-canvas p-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="space-y-1">
           <Link href="/admin/inventory/cycle-counts" className="text-sm text-blue-600 hover:underline">
@@ -244,15 +244,15 @@ export default async function CycleCountDetailPage({
           </Link>
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">{campaign.name}</h1>
-              <p className="text-xs text-gray-500">
+              <h1 className="text-2xl font-semibold text-text-default">{campaign.name}</h1>
+              <p className="text-xs text-text-soft">
                 #{campaign.id} · variance tol {campaign.variance_tol} · created {new Date(campaign.created_at).toLocaleString()}
                 {campaign.closed_at ? ` · closed ${new Date(campaign.closed_at).toLocaleString()}` : ''}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                isOpen ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                isOpen ? 'bg-blue-100 text-blue-700' : 'bg-surface-sunken text-text-muted'
               }`}>
                 {campaign.status}
               </span>
@@ -288,29 +288,29 @@ export default async function CycleCountDetailPage({
                 className={`rounded-md px-3 py-1.5 font-medium ${
                   filter === s
                     ? 'bg-blue-600 text-white'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    : 'border border-border-default bg-surface-card text-text-muted hover:bg-surface-hover'
                 }`}
               >
-                {s} <span className={filter === s ? 'text-white/80' : 'text-gray-400'}>· {count}</span>
+                {s} <span className={filter === s ? 'text-white/80' : 'text-text-faint'}>· {count}</span>
               </Link>
             );
           })}
         </nav>
 
         {/* Lines table */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-3">
-            <h2 className="text-base font-medium text-gray-900">Lines</h2>
-            <p className="mt-1 text-caption text-gray-500">
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="border-b border-border-hairline px-6 py-3">
+            <h2 className="text-base font-medium text-text-default">Lines</h2>
+            <p className="mt-1 text-caption text-text-soft">
               Pending lines accept a count submission. Pending review needs an admin decision.
             </p>
           </header>
           {lines.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">No lines in this view.</p>
+            <p className="px-6 py-8 text-sm text-text-muted">No lines in this view.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <table className="min-w-full divide-y divide-border-hairline text-sm">
+                <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium">Bin</th>
                     <th className="px-4 py-2 text-left font-medium">SKU</th>
@@ -321,7 +321,7 @@ export default async function CycleCountDetailPage({
                     <th className="px-4 py-2 text-right font-medium">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border-hairline">
                   {lines.map((l) => {
                     const isPending = l.status === 'pending';
                     const isReview = l.status === 'pending_review';
@@ -346,7 +346,7 @@ export default async function CycleCountDetailPage({
                                 min="0"
                                 step="1"
                                 placeholder="qty"
-                                className="w-20 rounded border border-gray-300 px-2 py-1 text-right font-mono text-xs"
+                                className="w-20 rounded border border-border-default px-2 py-1 text-right font-mono text-xs"
                               />
                               <Button type="submit" variant="primary" size="sm">
                                 Submit
@@ -358,7 +358,7 @@ export default async function CycleCountDetailPage({
                         </td>
                         <td className={`px-4 py-2 text-right tabular-nums ${
                           l.variance == null || l.variance === 0
-                            ? 'text-gray-400'
+                            ? 'text-text-faint'
                             : Math.abs(l.variance) > l.expected_qty * Number(campaign.variance_tol)
                               ? 'font-semibold text-red-700'
                               : 'text-amber-700'
@@ -367,7 +367,7 @@ export default async function CycleCountDetailPage({
                         </td>
                         <td className="px-4 py-2">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-micro font-medium ${
-                            l.status === 'pending' ? 'bg-gray-100 text-gray-600' :
+                            l.status === 'pending' ? 'bg-surface-sunken text-text-muted' :
                             l.status === 'counted' ? 'bg-blue-100 text-blue-700' :
                             l.status === 'pending_review' ? 'bg-amber-100 text-amber-800' :
                             l.status === 'approved' ? 'bg-green-100 text-green-700' :
@@ -396,7 +396,7 @@ export default async function CycleCountDetailPage({
                               </form>
                             </div>
                           ) : (
-                            <span className="text-caption text-gray-500">
+                            <span className="text-caption text-text-soft">
                               {l.approved_by_name ? `by ${l.approved_by_name}` :
                                 l.counted_by_name ? `counted by ${l.counted_by_name}` : '—'}
                             </span>
@@ -411,7 +411,7 @@ export default async function CycleCountDetailPage({
           )}
         </section>
 
-        <footer className="text-xs text-gray-500">
+        <footer className="text-xs text-text-soft">
           Approval writes <code>sku_stock_ledger</code> with reason{' '}
           <code>CYCLE_COUNT_ADJ</code> for the variance delta and updates{' '}
           <code>bin_contents.qty</code> + <code>last_counted</code>. Code path:{' '}

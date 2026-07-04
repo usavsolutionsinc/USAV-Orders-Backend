@@ -77,18 +77,18 @@ export function BinsBulkActionBar({ selected, rows, onClearSelection }: Props) {
     <div
       role="region"
       aria-label="Bulk actions"
-      className="sticky bottom-0 left-0 right-0 z-sticky border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-md"
+      className="sticky bottom-0 left-0 right-0 z-sticky border-t border-border-soft bg-surface-card/95 px-4 py-3 backdrop-blur-md"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
       <div className="mx-auto flex max-w-5xl items-center gap-3">
-        <div className="text-sm font-semibold text-gray-900">
+        <div className="text-sm font-semibold text-text-default">
           {count} bin{count === 1 ? '' : 's'} selected
         </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={onClearSelection}
-          className="text-caption text-gray-500 hover:text-gray-700"
+          className="text-caption text-text-soft hover:text-text-muted"
         >
           Clear
         </Button>
@@ -110,7 +110,7 @@ export function BinsBulkActionBar({ selected, rows, onClearSelection }: Props) {
               variant="secondary"
               size="md"
               onClick={() => toast('Cycle counts arrive in the next update.')}
-              className="text-gray-500"
+              className="text-text-soft"
             >
               Mark for cycle count
             </Button>

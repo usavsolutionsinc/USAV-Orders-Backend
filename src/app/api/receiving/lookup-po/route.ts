@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 import { formatPSTTimestamp } from '@/utils/date';
 import { getCarrier, extractCanonicalTracking } from '@/lib/tracking-format';
-import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { getOrSet, invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 import { publishReceivingLogChanged, publishPriorityUnbox } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking, findPurchaseOrderByNumber } from '@/lib/zoho';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
@@ -287,34 +289,46 @@ async function findScanByTracking(
 async function resolvePoIdLocally(orderNumber: string, orgId: string): Promise<string | null> {
   const norm = orderNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!norm) return null;
-  // Tenant-scoped via the GUC pool: receiving_lines + zoho_po_mirror are FORCEd,
-  // so RLS constrains resolution to THIS org — a scanned order# can never resolve
-  // to another tenant's PO id (the cross-org leak this previously had on the
-  // BYPASSRLS owner pool).
-  // 1. receiving_lines (the Incoming table) — newest wins.
-  const rl = await tenantQuery<{ zoho_purchaseorder_id: string }>(
+  // order#→poId is an immutable mapping once the incoming sync materializes it,
+  // so cache the FOUND result (5 min). A not-found returns null and getOrSet does
+  // NOT cache null → a just-synced PO is never masked. Skips the two-table probe
+  // (and the "Opening your PO" Zoho fallback) on a hit. Org-scoped.
+  return getOrSet<string | null>(
+    CACHE_NS.poByRef,
     orgId,
-    `SELECT zoho_purchaseorder_id
-       FROM receiving_lines
-      WHERE zoho_purchaseorder_number_norm = $1
-        AND zoho_purchaseorder_id IS NOT NULL
-      ORDER BY id DESC
-      LIMIT 1`,
-    [norm],
+    norm,
+    300,
+    [CACHE_TAGS.poByRef],
+    async () => {
+      // Tenant-scoped via the GUC pool: receiving_lines + zoho_po_mirror are FORCEd,
+      // so RLS constrains resolution to THIS org — a scanned order# can never resolve
+      // to another tenant's PO id.
+      // 1. receiving_lines (the Incoming table) — newest wins.
+      const rl = await tenantQuery<{ zoho_purchaseorder_id: string }>(
+        orgId,
+        `SELECT zoho_purchaseorder_id
+           FROM receiving_lines
+          WHERE zoho_purchaseorder_number_norm = $1
+            AND zoho_purchaseorder_id IS NOT NULL
+          ORDER BY id DESC
+          LIMIT 1`,
+        [norm],
+      );
+      if (rl.rows[0]?.zoho_purchaseorder_id) return String(rl.rows[0].zoho_purchaseorder_id);
+      // 2. zoho_po_mirror — by PO number, else by reference number.
+      const m = await tenantQuery<{ zoho_purchaseorder_id: string }>(
+        orgId,
+        `SELECT zoho_purchaseorder_id
+           FROM zoho_po_mirror
+          WHERE zoho_purchaseorder_number_norm = $1
+             OR NULLIF(upper(regexp_replace(COALESCE(reference_number, ''), '[^A-Za-z0-9]', '', 'g')), '') = $1
+          ORDER BY last_synced_at DESC NULLS LAST
+          LIMIT 1`,
+        [norm],
+      );
+      return m.rows[0]?.zoho_purchaseorder_id ? String(m.rows[0].zoho_purchaseorder_id) : null;
+    },
   );
-  if (rl.rows[0]?.zoho_purchaseorder_id) return String(rl.rows[0].zoho_purchaseorder_id);
-  // 2. zoho_po_mirror — by PO number, else by reference number.
-  const m = await tenantQuery<{ zoho_purchaseorder_id: string }>(
-    orgId,
-    `SELECT zoho_purchaseorder_id
-       FROM zoho_po_mirror
-      WHERE zoho_purchaseorder_number_norm = $1
-         OR NULLIF(upper(regexp_replace(COALESCE(reference_number, ''), '[^A-Za-z0-9]', '', 'g')), '') = $1
-      ORDER BY last_synced_at DESC NULLS LAST
-      LIMIT 1`,
-    [norm],
-  );
-  return m.rows[0]?.zoho_purchaseorder_id ? String(m.rows[0].zoho_purchaseorder_id) : null;
 }
 
 /**
@@ -517,6 +531,18 @@ async function createUnmatchedReceiving(
   const exceptionCode: ReceivingExceptionCode =
     !carrier || carrier.trim().toUpperCase() === 'UNKNOWN' ? 'CARRIER_MISMATCH' : 'NO_PO';
   await stampReceivingException(receivingId, exceptionCode, organizationId);
+  // Carton-level "why" signal (plan §2.3 emitter #2 — unfound / carrier
+  // mismatch, decided right here). Fire-and-forget; never breaks the scan.
+  await emitEntitySignalSafe({
+    organizationId,
+    entityType: 'RECEIVING',
+    entityId: receivingId,
+    signalKind: 'exception_why',
+    reasonCode: exceptionCode,
+    notes: 'unmatched door scan',
+    actorStaffId: staffId ?? null,
+    meta: { carrier: carrier || null, shipmentId: shipment?.id ?? null },
+  });
   return {
     receivingId,
     shipmentId: shipment?.id ?? null,

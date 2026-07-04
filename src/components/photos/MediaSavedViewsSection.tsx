@@ -66,9 +66,10 @@ export function MediaSavedViewsSection({
   return (
     <div className="mb-3 space-y-1 px-1">
       <div className="flex items-center justify-between">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Saved views</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Saved views</p>
         {savable && !saving ? (
           <HoverTooltip label="Save current filters as a view" focusable={false}>
+            {/* ds-raw-button */}
             <button
               type="button"
               onClick={() => setSaving(true)}
@@ -81,7 +82,7 @@ export function MediaSavedViewsSection({
       </div>
 
       {saving ? (
-        <div className="space-y-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2">
+        <div className="space-y-1.5 rounded-lg border border-border-soft bg-surface-canvas p-2">
           <input
             autoFocus
             value={name}
@@ -91,10 +92,10 @@ export function MediaSavedViewsSection({
               if (e.key === 'Escape') setSaving(false);
             }}
             placeholder="View name…"
-            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-caption text-gray-900 outline-none focus:border-blue-400"
+            className="w-full rounded border border-border-soft bg-surface-card px-2 py-1 text-caption text-text-default outline-none focus:border-blue-400"
           />
           {canManage ? (
-            <label className="flex items-center gap-1.5 text-mini font-semibold uppercase tracking-widest text-gray-500">
+            <label className="flex items-center gap-1.5 text-mini font-semibold uppercase tracking-widest text-text-soft">
               <input
                 type="checkbox"
                 checked={shareWithOrg}
@@ -105,6 +106,7 @@ export function MediaSavedViewsSection({
             </label>
           ) : null}
           <div className="flex items-center gap-1.5">
+            {/* ds-raw-button */}
             <button
               type="button"
               onClick={submit}
@@ -114,10 +116,11 @@ export function MediaSavedViewsSection({
               {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               Save
             </button>
+            {/* ds-raw-button */}
             <button
               type="button"
               onClick={() => setSaving(false)}
-              className="rounded px-2 py-1 text-mini font-black uppercase tracking-widest text-gray-400 hover:text-gray-700"
+              className="rounded px-2 py-1 text-mini font-black uppercase tracking-widest text-text-faint hover:text-text-muted"
             >
               Cancel
             </button>
@@ -126,17 +129,18 @@ export function MediaSavedViewsSection({
       ) : null}
 
       {isLoading ? (
-        <p className="flex items-center gap-1.5 py-1 text-caption text-gray-400">
+        <p className="flex items-center gap-1.5 py-1 text-caption text-text-faint">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
         </p>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border-hairline">
           {views.map((view) => (
             <li key={view.id} className="group flex items-center gap-2 py-1.5">
+              {/* ds-raw-button */}
               <button
                 type="button"
                 onClick={() => onApply(readMediaViewPayload(view))}
-                className="min-w-0 flex-1 truncate text-left text-caption font-bold text-gray-800 hover:text-blue-700"
+                className="min-w-0 flex-1 truncate text-left text-caption font-bold text-text-default hover:text-blue-700"
                 title={view.name}
               >
                 {view.name}
@@ -147,13 +151,14 @@ export function MediaSavedViewsSection({
                 </span>
               ) : null}
               <HoverTooltip label="Delete view" focusable={false}>
+                {/* ds-raw-button */}
                 <button
                   type="button"
                   onClick={() => {
                     if (window.confirm(`Delete saved view "${view.name}"?`)) remove(view.id);
                   }}
                   aria-label={`Delete ${view.name}`}
-                  className="shrink-0 rounded p-1 text-gray-300 opacity-0 transition group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-600"
+                  className="shrink-0 rounded p-1 text-text-faint opacity-0 transition group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-600"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

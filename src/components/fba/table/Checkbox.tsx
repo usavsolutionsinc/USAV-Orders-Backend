@@ -54,7 +54,7 @@ export function PrintTableCheckbox({
         className ?? '',
         checked || indeterminate
           ? u.checkboxChecked
-          : ['border-zinc-300 bg-white', u.checkboxIdleHover].join(' '),
+          : ['border-border-default bg-surface-card', u.checkboxIdleHover].join(' '),
       ].join(' ')}
     >
       <AnimatePresence initial={false} mode="wait">

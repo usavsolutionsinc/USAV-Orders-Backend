@@ -153,7 +153,7 @@ export function ReplenishSidebarPanel() {
 
   return (
     <SidebarShell
-      className="font-dm-sans bg-white"
+      className="font-dm-sans bg-surface-card"
       search={{
         value: localSearch,
         onChange: setLocalSearch,
@@ -221,13 +221,13 @@ export function ReplenishSidebarPanel() {
         />
 
         {/* Total */}
-        <div className="mt-4 px-3 py-3 rounded-xl bg-gray-50 border border-gray-100">
+        <div className="mt-4 px-3 py-3 rounded-xl bg-surface-canvas border border-border-hairline">
           <div className="flex items-center justify-between">
             <div>
-              <p className={`${fieldLabel} text-gray-500`}>Total Active</p>
-              <p className={`${fieldLabel} text-gray-400 mt-0.5`}>across all stages</p>
+              <p className={`${fieldLabel} text-text-soft`}>Total Active</p>
+              <p className={`${fieldLabel} text-text-faint mt-0.5`}>across all stages</p>
             </div>
-            <p className="text-2xl font-black text-gray-900 tabular-nums">
+            <p className="text-2xl font-black text-text-default tabular-nums">
               {counts.total_active}
             </p>
           </div>

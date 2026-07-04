@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseFbaPlanId } from '@/lib/fba/plan-id';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 
@@ -78,6 +79,7 @@ export async function PATCH(
     }
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await invalidateCacheTags(gate.ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaItemChanged({ action: 'reassign', shipmentId: Number(targetShipmentId || 0), itemId: Number(itemId), source: 'fba.shipments.items.reassign', organizationId: gate.ctx.organizationId });
 
     return NextResponse.json({ success: true, moved: { item_id: itemIdNum, from: sourceShipmentId, to: targetShipmentId } });

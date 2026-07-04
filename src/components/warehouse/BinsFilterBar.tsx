@@ -22,15 +22,15 @@ interface Props {
 }
 
 const CHIPS: { id: BinFilterStatus; label: string; tone: string }[] = [
-  { id: 'all',   label: 'All',           tone: 'bg-gray-100 text-gray-800 ring-gray-200' },
-  { id: 'empty', label: 'Empty',         tone: 'bg-slate-50 text-slate-700 ring-slate-200' },
+  { id: 'all',   label: 'All',           tone: 'bg-surface-sunken text-text-default ring-border-soft' },
+  { id: 'empty', label: 'Empty',         tone: 'bg-surface-canvas text-text-muted ring-border-soft' },
   { id: 'low',   label: 'Low',           tone: 'bg-amber-50 text-amber-800 ring-amber-200' },
   { id: 'over',  label: 'Over cap',      tone: 'bg-red-50 text-red-700 ring-red-200' },
   { id: 'stale', label: 'Stale',         tone: 'bg-purple-50 text-purple-700 ring-purple-200' },
 ];
 
 const ACTIVE_TONE: Record<BinFilterStatus, string> = {
-  all:   'bg-gray-900 text-white ring-gray-900',
+  all:   'bg-surface-inverse text-white ring-surface-inverse',
   empty: 'bg-slate-700 text-white ring-slate-700',
   low:   'bg-amber-600 text-white ring-amber-600',
   over:  'bg-red-600 text-white ring-red-600',
@@ -80,7 +80,7 @@ export function BinsFilterBar({ counts, rooms, status, room, onParamChange }: Pr
         <select
           value={room}
           onChange={(e) => onParamChange('room', e.target.value)}
-          className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+          className="h-10 w-full rounded-md border border-border-soft bg-surface-card px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
         >
           <option value="">All rooms</option>
           {rooms.map((r) => {

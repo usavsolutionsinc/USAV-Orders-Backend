@@ -11,7 +11,7 @@ import type { ReceivingClaimController } from '../hooks/useReceivingClaimControl
  */
 export function ClaimWizardNav({ c }: { c: ReceivingClaimController }) {
   return (
-    <div className="space-y-2.5 border-b border-gray-100 pb-2.5">
+    <div className="space-y-2.5 border-b border-border-hairline pb-2.5">
       <div className="flex justify-center">
         <PaneHeaderTabs<ClaimModalMode>
           tabs={[

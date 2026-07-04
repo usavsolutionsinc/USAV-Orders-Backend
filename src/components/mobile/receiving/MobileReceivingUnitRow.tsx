@@ -76,7 +76,7 @@ export function MobileReceivingUnitRow({
       ? 'text-yellow-600'
       : row.quantity_expected && row.quantity_received >= row.quantity_expected
         ? 'text-emerald-600'
-        : 'text-gray-500';
+        : 'text-text-soft';
 
   const dot = getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected);
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
@@ -104,7 +104,7 @@ export function MobileReceivingUnitRow({
         disabled={!onOpenSheet}
         className="ds-raw-button block w-full text-left disabled:cursor-default"
       >
-        <p className="text-base font-bold leading-snug text-gray-900">{title}</p>
+        <p className="text-base font-bold leading-snug text-text-default">{title}</p>
       </button>
 
       {/* Meta row. */}
@@ -138,7 +138,7 @@ export function MobileReceivingUnitRow({
             onClick={toggle}
             aria-expanded={open}
             aria-label={open ? 'Hide details' : 'Show details'}
-            className="ds-raw-button inline-flex h-7 w-7 items-center justify-center text-gray-400"
+            className="ds-raw-button inline-flex h-7 w-7 items-center justify-center text-text-faint"
           >
             <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
           </button>
@@ -177,11 +177,11 @@ export function MobileReceivingUnitRow({
             <ConditionGradeChip grade={row.condition_grade} />
           </div>
           {detailFields.length ? (
-            <dl className="divide-y divide-gray-100 rounded-lg border border-gray-100 bg-gray-50/60">
+            <dl className="divide-y divide-border-hairline rounded-lg border border-border-hairline bg-surface-canvas/60">
               {detailFields.map((f) => (
                 <div key={f.k} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
-                  <dt className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{f.k}</dt>
-                  <dd className="min-w-0 truncate text-caption font-semibold text-gray-700">{f.v}</dd>
+                  <dt className="text-eyebrow font-black uppercase tracking-widest text-text-faint">{f.k}</dt>
+                  <dd className="min-w-0 truncate text-caption font-semibold text-text-muted">{f.v}</dd>
                 </div>
               ))}
             </dl>
@@ -200,7 +200,7 @@ export function MobileReceivingUnitRow({
               className={
                 hasPhotos
                   ? 'ds-raw-button inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 active:bg-blue-100'
-                  : 'ds-raw-button inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-300'
+                  : 'ds-raw-button inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-border-soft bg-surface-canvas text-text-faint'
               }
             >
               <span className="inline-flex items-center gap-1.5 leading-none">
@@ -216,7 +216,7 @@ export function MobileReceivingUnitRow({
               className={
                 hasPhotos
                   ? 'inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 active:bg-blue-100'
-                  : 'inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-300'
+                  : 'inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-border-soft bg-surface-canvas text-text-faint'
               }
             >
               <span className="inline-flex items-center gap-1.5 leading-none">

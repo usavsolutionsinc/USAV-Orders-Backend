@@ -16,7 +16,7 @@ import {
 } from '@/lib/zoho';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
-import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
+import { upsertSerialUnit, recordOriginProvenance } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { transition } from '@/lib/inventory/state-machine';
 import { getOrganization } from '@/lib/tenancy/organizations';
@@ -187,12 +187,11 @@ async function applyInventoryV2Effects(input: {
       const upsert = await client.query<{ id: number }>(
         `INSERT INTO serial_units (
           serial_number, normalized_serial, sku, zoho_item_id,
-          current_status, current_location, origin_source,
-          origin_receiving_line_id, received_at, received_by, condition_grade,
+          current_status, current_location, received_at, received_by, condition_grade,
           organization_id
         )
         VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED'::serial_status_enum,
-                $8, 'receiving', $4, $5, $6, $7::condition_grade_enum, $9::uuid)
+                $8, $5, $6, $7::condition_grade_enum, $9::uuid)
         ON CONFLICT (organization_id, normalized_serial) DO UPDATE SET
           current_status = 'RECEIVED'::serial_status_enum,
           current_location = COALESCE(EXCLUDED.current_location, serial_units.current_location),
@@ -215,6 +214,16 @@ async function applyInventoryV2Effects(input: {
         ],
       );
       serialUnitId = upsert.rows[0]?.id ?? null;
+      // Phase 4: origin provenance written app-side (columns dropped).
+      if (serialUnitId != null) {
+        await recordOriginProvenance(
+          client,
+          input.organizationId,
+          serialUnitId,
+          { origin_source: 'receiving', origin_receiving_line_id: input.receivingLineId },
+          new Date().toISOString(),
+        );
+      }
     }
 
     // 2. sku_stock_ledger row — only for ACCEPT disposition with qty.

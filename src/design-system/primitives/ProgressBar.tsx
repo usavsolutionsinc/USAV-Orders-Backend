@@ -37,7 +37,7 @@ export function ProgressBar({
           {showRemaining && <p className={`${sectionLabel} tabular-nums`}>{remaining} remaining</p>}
         </div>
       )}
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-surface-sunken rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}

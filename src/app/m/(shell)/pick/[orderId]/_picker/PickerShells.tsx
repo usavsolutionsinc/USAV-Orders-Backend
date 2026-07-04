@@ -4,10 +4,10 @@ import { Button } from '@/design-system/primitives';
 
 export function LoadingShell({ label }: { label: string }) {
   return (
-    <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
+    <div className="grid min-h-full place-items-center bg-surface-canvas px-6 py-10 text-center">
       <div>
         <span className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
-        <p className="mt-3 text-sm font-semibold text-slate-600">{label}</p>
+        <p className="mt-3 text-sm font-semibold text-text-muted">{label}</p>
       </div>
     </div>
   );
@@ -15,10 +15,10 @@ export function LoadingShell({ label }: { label: string }) {
 
 export function ErrorShell({ error, onBack }: { error: string; onBack: () => void }) {
   return (
-    <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
+    <div className="grid min-h-full place-items-center bg-surface-canvas px-6 py-10 text-center">
       <div>
         <p className="text-base font-bold text-red-700">Could not load picker</p>
-        <p className="mt-2 text-sm text-slate-600">{error}</p>
+        <p className="mt-2 text-sm text-text-muted">{error}</p>
         <Button variant="brand" size="lg" className="mt-5" onClick={onBack}>
           Back to queue
         </Button>
@@ -29,10 +29,10 @@ export function ErrorShell({ error, onBack }: { error: string; onBack: () => voi
 
 export function EmptyShell({ onBack }: { onBack: () => void }) {
   return (
-    <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
+    <div className="grid min-h-full place-items-center bg-surface-canvas px-6 py-10 text-center">
       <div>
-        <p className="text-base font-bold text-slate-700">Nothing to pick</p>
-        <p className="mt-2 text-sm text-slate-500">All allocations for this order are already picked or shipped.</p>
+        <p className="text-base font-bold text-text-muted">Nothing to pick</p>
+        <p className="mt-2 text-sm text-text-soft">All allocations for this order are already picked or shipped.</p>
         <Button variant="brand" size="lg" className="mt-5" onClick={onBack}>
           Back to queue
         </Button>

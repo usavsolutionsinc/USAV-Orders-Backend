@@ -227,7 +227,7 @@ export function SerialCard({
   const Shell = embedded ? 'div' : 'section';
   const shellClass = embedded
     ? 'w-full group'
-    : 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60 group';
+    : 'rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60 group';
 
   return (
     <Shell className={shellClass}>
@@ -244,7 +244,7 @@ export function SerialCard({
               expanded={condExpanded}
               onExpandedChange={setCondExpanded}
             />
-            <div className="h-8 w-px shrink-0 bg-gray-100" />
+            <div className="h-8 w-px shrink-0 bg-surface-sunken" />
           </div>
         ) : condition ? (
           <div className="shrink-0">
@@ -282,7 +282,7 @@ export function SerialCard({
                 <IconButton
                   onClick={() => (editing ? cancelEdit() : setScan(''))}
                   ariaLabel={editing ? 'Cancel edit' : 'Clear input'}
-                  className="rounded-md p-1 hover:bg-gray-100"
+                  className="rounded-md p-1 hover:bg-surface-sunken"
                   icon={<X className="h-3.5 w-3.5" />}
                 />
               ) : undefined
@@ -316,7 +316,7 @@ export function SerialCard({
             type="button"
             onClick={submit}
             disabled={!scan.trim() || isSubmitting || disabled}
-            className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 ${
+            className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-surface-strong ${
               editing || (showSavingLabel && isSubmitting) ? 'px-4' : 'w-14'
             }`}
           >
@@ -364,10 +364,10 @@ export function SerialCard({
           Same card chrome, same width; a hairline divider signals it's a
           distinct field, not part of the scan flow. */}
       {showNotes ? (
-        <div className="mt-3 border-t border-gray-100 pt-3">
+        <div className="mt-3 border-t border-border-hairline pt-3">
           <label
             htmlFor={notesId}
-            className="block text-micro font-bold uppercase tracking-[0.14em] text-gray-500"
+            className="block text-micro font-bold uppercase tracking-[0.14em] text-text-soft"
           >
             Notes
           </label>
@@ -378,7 +378,7 @@ export function SerialCard({
             onBlur={onNotesBlur}
             rows={2}
             placeholder="PO-line notes (saved on off click)"
-            className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-label font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="mt-1 w-full resize-none rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-label font-medium leading-snug text-text-default placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
       ) : null}
@@ -444,11 +444,11 @@ export function SerialChipWithMenu({
           <div
             role="menu"
             aria-label="Serial actions"
-            className={`overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg ${onSetCondition ? 'min-w-[200px]' : 'min-w-[112px]'}`}
+            className={`overflow-hidden rounded-lg border border-border-soft bg-surface-card shadow-lg ${onSetCondition ? 'min-w-[200px]' : 'min-w-[112px]'}`}
           >
             {onSetCondition ? (
-              <div className="border-b border-gray-100 px-2 py-1.5">
-                <p className="mb-1 text-micro font-bold uppercase tracking-widest text-gray-400">
+              <div className="border-b border-border-hairline px-2 py-1.5">
+                <p className="mb-1 text-micro font-bold uppercase tracking-widest text-text-faint">
                   Condition
                 </p>
                 <ConditionPills
@@ -463,9 +463,9 @@ export function SerialChipWithMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => onEdit(serial)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-text-muted hover:bg-surface-hover"
               >
-                <Pencil className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-text-soft" />
                 Edit
               </button>
             ) : null}
@@ -475,7 +475,7 @@ export function SerialChipWithMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => onDelete(serial)}
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50"
+                className="flex w-full items-center gap-2 border-t border-border-hairline px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50"
               >
                 <X className="h-3.5 w-3.5 shrink-0" />
                 Delete

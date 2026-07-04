@@ -140,7 +140,7 @@ export function ScanOutStationBar({ autoFocus = true }: { autoFocus?: boolean } 
         icon={<Barcode className="h-[17px] w-[17px]" />}
         iconClassName="text-emerald-600"
         inputBorderClassName="border-2 border-emerald-200"
-        inputClassName="bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400"
+        inputClassName="bg-surface-card focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400"
         hasRightContent={false}
         onPaste={(text) => setScanValue(text)}
       />

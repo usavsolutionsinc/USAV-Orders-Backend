@@ -12,9 +12,11 @@ import { SwitchStaffSheet } from "../components/auth/SwitchStaffSheet";
 import { ScanHotkeySync } from "../components/scan/ScanHotkeySync";
 import { ThemeSync } from "../components/theme/ThemeSync";
 import { AuthenticatedAblyProvider } from "../components/providers/AuthenticatedAblyProvider";
+import { AssistantProvider } from "../components/assistant/AssistantProvider";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme/theme";
 import { BOOT_SPLASH_SCRIPT } from "@/lib/boot-splash-script";
 import { designTokenStyleText } from '@/styles/tokens';
+import { themePaletteStyleText } from '@/design-system/themes/registry';
 import { OfflineBanner } from "../components/layout/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
 import { AppearanceApplier } from "../components/settings/AppearanceApplier";
@@ -52,6 +54,10 @@ export default async function RootLayout({
                 {/* Viewport — cover notch, prevent zoom on input focus */}
                 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
                 <style id="app-design-tokens">{designTokenStyleText}</style>
+                {/* Generated theme palettes (light/dark/mono/slate + staff
+                    accents) from the theme registry — the single owner of every
+                    theme-varying --ds-color-* variable. */}
+                <style id="app-theme-palettes">{themePaletteStyleText}</style>
                 {/* Applies the cached theme before paint (no light→dark flash). */}
                 <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
                 {/* Paints the loading splash before hydration on a fresh sign-in
@@ -60,7 +66,7 @@ export default async function RootLayout({
                     blank shell and the splash flickers off and back on. */}
                 <script dangerouslySetInnerHTML={{ __html: BOOT_SPLASH_SCRIPT }} />
             </head>
-            <body className="antialiased m-0 overflow-hidden bg-white">
+            <body className="antialiased m-0 overflow-hidden bg-surface-card">
                 <ElectronDragStrip />
                 {/*
                   Pin the app to the visual viewport. Body must NOT carry safe-area
@@ -80,9 +86,11 @@ export default async function RootLayout({
                                     <HeaderProvider>
                                         <FbaWorkspaceProvider>
                                             <StudioWorkspaceProvider>
-                                                <ResponsiveLayout>
-                                                    {children}
-                                                </ResponsiveLayout>
+                                                <AssistantProvider>
+                                                    <ResponsiveLayout>
+                                                        {children}
+                                                    </ResponsiveLayout>
+                                                </AssistantProvider>
                                             </StudioWorkspaceProvider>
                                         </FbaWorkspaceProvider>
                                     </HeaderProvider>

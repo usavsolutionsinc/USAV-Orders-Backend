@@ -205,13 +205,16 @@ export async function GET(
     if (lineIds.length > 0) {
       const serialsRes = await tenantQuery(
         orgId,
-        `SELECT id, serial_number, current_status::text AS current_status,
-                current_location, condition_grade::text AS condition_grade,
-                origin_receiving_line_id, received_at, updated_at
-         FROM serial_units
-         WHERE origin_receiving_line_id = ANY($1::int[])
-           AND organization_id = $2
-         ORDER BY created_at ASC, id ASC`,
+        // Phase 3: filter + group by origin line via serial_unit_provenance.
+        `SELECT su.id, su.serial_number, su.current_status::text AS current_status,
+                su.current_location, su.condition_grade::text AS condition_grade,
+                p.origin_id AS origin_receiving_line_id, su.received_at, su.updated_at
+         FROM serial_units su
+         JOIN serial_unit_provenance p
+           ON p.serial_unit_id = su.id AND p.origin_type = 'RECEIVING_LINE'
+          AND p.origin_id = ANY($1::int[]) AND p.organization_id = $2
+         WHERE su.organization_id = $2
+         ORDER BY su.created_at ASC, su.id ASC`,
         [lineIds, orgId],
       );
       for (const row of serialsRes.rows) {

@@ -61,7 +61,7 @@ export function WarrantyTicketButton({
             'rounded-md p-1.5 transition',
             linked
               ? 'text-blue-600 hover:bg-blue-50'
-              : 'text-gray-300 hover:bg-gray-100 hover:text-gray-500',
+              : 'text-text-faint hover:bg-surface-sunken hover:text-text-soft',
             className,
           )}
         />
@@ -83,10 +83,10 @@ export function WarrantyTicketButton({
 function TimelineRow({ entry }: { entry: WarrantyTimelineEntry }) {
   if (entry.kind === 'event') {
     return (
-      <li className="flex items-start gap-2 px-1 text-caption text-gray-400">
-        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
+      <li className="flex items-start gap-2 px-1 text-caption text-text-faint">
+        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-surface-strong" />
         <span>
-          <span className="font-medium text-gray-500">{warrantyEventLabel(entry.event)}</span>
+          <span className="font-medium text-text-soft">{warrantyEventLabel(entry.event)}</span>
           <span className="ml-2">{formatDateTimePST(entry.createdAt)}</span>
         </span>
       </li>
@@ -104,9 +104,9 @@ function TimelineRow({ entry }: { entry: WarrantyTimelineEntry }) {
         <span className={comment.public ? 'font-semibold text-blue-600' : 'font-semibold text-amber-600'}>
           {comment.public ? 'Public reply' : 'Internal note'}
         </span>
-        <span className="text-gray-400 normal-case">{formatDateTimePST(comment.createdAt)}</span>
+        <span className="text-text-faint normal-case">{formatDateTimePST(comment.createdAt)}</span>
       </div>
-      <p className="whitespace-pre-wrap text-[13px] leading-snug text-gray-800">{comment.body}</p>
+      <p className="whitespace-pre-wrap text-[13px] leading-snug text-text-default">{comment.body}</p>
     </li>
   );
 }
@@ -164,21 +164,21 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
     <div
       role="dialog"
       aria-label="Support ticket thread"
-      className="flex max-h-[480px] w-[380px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+      className="flex max-h-[480px] w-[380px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-xl"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2">
+      <header className="flex items-center justify-between gap-2 border-b border-border-hairline px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold text-gray-800">
+            <div className="truncate text-[13px] font-semibold text-text-default">
               {linked ? `Ticket #${claim?.zendeskTicketId}` : 'Support thread'}
             </div>
-            <div className="truncate font-mono text-micro text-gray-400">{claim?.claimNumber}</div>
+            <div className="truncate font-mono text-micro text-text-faint">{claim?.claimNumber}</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {ticketQuery.data?.ticket && (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-gray-500">
+            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-text-soft">
               {ticketQuery.data.ticket.status}
             </span>
           )}
@@ -189,7 +189,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Open in Zendesk"
-                className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-md p-1 text-text-faint transition hover:bg-surface-sunken hover:text-text-muted"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
@@ -224,7 +224,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                   <Unlink className="h-3.5 w-3.5" />
                 )
               }
-              className="rounded-md p-1 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+              className="rounded-md p-1 text-text-faint transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
             />
             </HoverTooltip>
           )}
@@ -248,7 +248,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
           <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
         </div>
       ) : !claim ? (
-        <p className="px-3 py-6 text-center text-sm text-gray-400">Claim not found.</p>
+        <p className="px-3 py-6 text-center text-sm text-text-faint">Claim not found.</p>
       ) : (
         <>
           <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
@@ -257,7 +257,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                 <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
               </div>
             ) : timeline.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-400">No history yet.</p>
+              <p className="py-6 text-center text-sm text-text-faint">No history yet.</p>
             ) : (
               <ul className="space-y-2">
                 {timeline.map((entry) => (
@@ -273,10 +273,10 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
             )}
           </div>
 
-          <footer className="border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
+          <footer className="border-t border-border-hairline bg-surface-canvas/60 px-3 py-2.5">
             {!linked ? (
               <div className="space-y-2">
-                <p className="text-label text-gray-500">
+                <p className="text-label text-text-soft">
                   No Zendesk ticket yet — create one from this claim to start the support thread.
                 </p>
                 {createDraft && (
@@ -284,7 +284,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                     <p className="mb-1 text-caption font-medium text-amber-700">
                       {createDraft.message} — copy the draft and file it manually:
                     </p>
-                    <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap text-caption text-gray-700">
+                    <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap text-caption text-text-muted">
                       {[createDraft.draftSubject, createDraft.draftBody].filter(Boolean).join('\n\n')}
                     </pre>
                   </div>
@@ -317,14 +317,14 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                     size="sm"
                     onClick={() => setLinkOpen(true)}
                     icon={<Link2 className="h-3.5 w-3.5" />}
-                    className="h-auto w-full justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-label font-medium text-gray-600 hover:bg-gray-50"
+                    className="h-auto w-full justify-center gap-1.5 rounded-lg border border-border-soft px-3 py-1.5 text-label font-medium text-text-muted hover:bg-surface-hover"
                   >
                     Link an existing ticket
                   </Button>
                 ) : (
-                  <div className="space-y-2 rounded-lg border border-gray-200 p-2">
+                  <div className="space-y-2 rounded-lg border border-border-soft p-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-caption font-semibold text-gray-600">Link existing ticket</span>
+                      <span className="text-caption font-semibold text-text-muted">Link existing ticket</span>
                       <IconButton
                         type="button"
                         onClick={() => {
@@ -333,17 +333,17 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                         }}
                         ariaLabel="Cancel linking"
                         icon={<X className="h-3.5 w-3.5" />}
-                        className="rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                        className="rounded p-0.5 text-text-faint transition hover:bg-surface-sunken hover:text-text-muted"
                       />
                     </div>
                     <div className="relative">
-                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
                       <input
                         value={linkQuery}
                         onChange={(e) => setLinkQuery(e.target.value)}
                         placeholder="Search subject or type ticket # (e.g. 12345)"
                         autoFocus
-                        className="w-full rounded-md border border-gray-200 py-1.5 pl-7 pr-2 text-label focus:border-blue-300 focus:outline-none"
+                        className="w-full rounded-md border border-border-soft py-1.5 pl-7 pr-2 text-label focus:border-blue-300 focus:outline-none"
                       />
                     </div>
                     {linkExisting.isError && (
@@ -361,7 +361,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                           {candidatesQuery.error instanceof Error ? candidatesQuery.error.message : 'Search failed.'}
                         </p>
                       ) : (candidatesQuery.data?.tickets.length ?? 0) === 0 ? (
-                        <p className="px-1 py-2 text-center text-caption text-gray-400">
+                        <p className="px-1 py-2 text-center text-caption text-text-faint">
                           {debouncedQuery.trim() ? 'No matching tickets.' : 'No recent tickets.'}
                         </p>
                       ) : (
@@ -381,16 +381,16 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                                 },
                               })
                             }
-                            className="h-auto w-full items-start justify-start gap-2 rounded-md border border-gray-100 px-2 py-1.5 text-left hover:border-blue-200 hover:bg-blue-50/40"
+                            className="h-auto w-full items-start justify-start gap-2 rounded-md border border-border-hairline px-2 py-1.5 text-left hover:border-blue-200 hover:bg-blue-50/40"
                           >
-                            <span className="mt-0.5 shrink-0 font-mono text-micro font-semibold text-gray-400">
+                            <span className="mt-0.5 shrink-0 font-mono text-micro font-semibold text-text-faint">
                               #{t.id}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-label font-medium text-gray-700">
+                              <span className="block truncate text-label font-medium text-text-muted">
                                 {t.subject || '(no subject)'}
                               </span>
-                              <span className="block text-micro uppercase tracking-wide text-gray-400">
+                              <span className="block text-micro uppercase tracking-wide text-text-faint">
                                 {t.status}
                               </span>
                             </span>
@@ -400,7 +400,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                       )}
                     </div>
                     {(candidatesQuery.data?.hiddenLinked ?? 0) > 0 && (
-                      <p className="px-1 text-micro text-gray-400">
+                      <p className="px-1 text-micro text-text-faint">
                         {candidatesQuery.data!.hiddenLinked} hidden — already linked elsewhere.
                       </p>
                     )}
@@ -426,15 +426,15 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                   placeholder={isPublic ? 'Reply to the customer…' : 'Add an internal note…'}
                   rows={2}
                   autoFocus
-                  className="w-full resize-none rounded-md border border-gray-200 px-2 py-1.5 text-sm focus:border-blue-300 focus:outline-none"
+                  className="w-full resize-none rounded-md border border-border-soft px-2 py-1.5 text-sm focus:border-blue-300 focus:outline-none"
                 />
                 <div className="flex items-center justify-between gap-2">
-                  <label className="flex cursor-pointer items-center gap-1.5 text-caption text-gray-500">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-caption text-text-soft">
                     <input
                       type="checkbox"
                       checked={isPublic}
                       onChange={(e) => setIsPublic(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-gray-300"
+                      className="h-3.5 w-3.5 rounded border-border-default"
                     />
                     Customer-visible reply
                   </label>

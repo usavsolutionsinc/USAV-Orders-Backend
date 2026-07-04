@@ -23,7 +23,7 @@ export const dayGroupChipRowClass = 'flex items-center px-3 py-1.5';
 
 /** The date + qty pill — matches the DateRangeHeader period pill. */
 export const dayGroupChipClass =
-  'inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm';
+  'inline-flex items-center gap-2 rounded-full border border-border-soft bg-surface-card px-3 py-1 shadow-sm';
 
 interface DateGroupHeaderProps {
   date: string;
@@ -58,11 +58,11 @@ export function DateGroupHeader({
       className={cn(sticky && ['sticky z-raised', stickyTopClass], dayGroupChipRowClass, className)}
     >
       <span className={dayGroupChipClass}>
-        <span className="text-caption font-black uppercase tracking-widest text-gray-900">
+        <span className="text-caption font-black uppercase tracking-widest text-text-default">
           {formatDateWithOrdinal(date)}
         </span>
-        <span aria-hidden className="text-gray-300">•</span>
-        <span className="text-caption font-bold tabular-nums text-gray-500">{total}</span>
+        <span aria-hidden className="text-text-faint">•</span>
+        <span className="text-caption font-bold tabular-nums text-text-soft">{total}</span>
         {actions}
       </span>
     </div>

@@ -35,7 +35,7 @@ function stepState(key: RepairIntakeStepKey, current: RepairIntakeStepKey): Step
 }
 
 function connectorTone(leftState: StepState): string {
-  return leftState === 'done' ? 'bg-gray-900' : 'bg-gray-200';
+  return leftState === 'done' ? 'bg-surface-inverse' : 'bg-surface-strong';
 }
 
 export function RepairIntakeStepper({
@@ -66,10 +66,10 @@ export function RepairIntakeStepper({
           onClick={() => clickable && onStepClick?.(step.key)}
           className={`ds-raw-button flex ${nodeSize} shrink-0 items-center justify-center rounded-full border-2 transition-all ${
             state === 'done'
-              ? 'border-gray-900 bg-gray-900 text-white'
+              ? 'border-border-strong bg-surface-inverse text-white'
               : state === 'active'
-                ? 'border-gray-900 bg-white text-gray-900 ring-2 ring-gray-900/10'
-                : 'border-gray-200 bg-white text-gray-300'
+                ? 'border-border-strong bg-surface-card text-text-default ring-2 ring-gray-900/10'
+                : 'border-border-soft bg-surface-card text-text-faint'
           } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
           aria-current={state === 'active' ? 'step' : undefined}
           aria-label={step.label}
@@ -107,10 +107,10 @@ export function RepairIntakeStepper({
                   <span
                     className={`mt-2 max-w-[4.25rem] text-center text-mini font-black uppercase leading-tight tracking-[0.08em] sm:max-w-[5rem] sm:text-eyebrow sm:tracking-[0.1em] ${
                       state === 'active'
-                        ? 'text-gray-900'
+                        ? 'text-text-default'
                         : state === 'done'
-                          ? 'text-gray-600'
-                          : 'text-gray-300'
+                          ? 'text-text-muted'
+                          : 'text-text-faint'
                     }`}
                   >
                     {step.label}
@@ -156,10 +156,10 @@ export function RepairIntakeStepper({
                     onClick={() => clickable && onStepClick?.(step.key)}
                     className={`ds-raw-button flex ${nodeSize} shrink-0 items-center justify-center rounded-full border-2 transition-all ${
                       state === 'done'
-                        ? 'border-gray-900 bg-gray-900 text-white'
+                        ? 'border-border-strong bg-surface-inverse text-white'
                         : state === 'active'
-                          ? 'border-gray-900 bg-white text-gray-900 ring-2 ring-gray-900/10'
-                          : 'border-gray-200 bg-white text-gray-300'
+                          ? 'border-border-strong bg-surface-card text-text-default ring-2 ring-gray-900/10'
+                          : 'border-border-soft bg-surface-card text-text-faint'
                     } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
                     aria-current={state === 'active' ? 'step' : undefined}
                     aria-label={step.label}
@@ -176,10 +176,10 @@ export function RepairIntakeStepper({
                   <span
                     className={`mt-2 w-full text-center text-mini font-black uppercase leading-tight tracking-[0.1em] sm:text-eyebrow sm:tracking-[0.12em] ${
                       state === 'active'
-                        ? 'text-gray-900'
+                        ? 'text-text-default'
                         : state === 'done'
-                          ? 'text-gray-600'
-                          : 'text-gray-300'
+                          ? 'text-text-muted'
+                          : 'text-text-faint'
                     }`}
                   >
                     {step.label}

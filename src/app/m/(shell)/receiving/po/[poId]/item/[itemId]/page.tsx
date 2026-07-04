@@ -96,7 +96,7 @@ export default function MobilePurchaseOrderItemDetailPage(
   const galleryHref = receivingPhotosGalleryUrl(captureHref);
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-surface-card pb-24">
       <MobileTopBar
         title={item?.item_name || item?.sku || 'Purchase Order Item'}
         subtitle={header ? `PO ${header.po_number || header.po_id}` : ''}
@@ -104,32 +104,32 @@ export default function MobilePurchaseOrderItemDetailPage(
       />
 
       {/* Identity */}
-      <section className="border-b border-gray-100 px-4 py-4">
+      <section className="border-b border-border-hairline px-4 py-4">
         {isLoading || !item ? (
           <div className="space-y-2">
-            <div className="h-4 w-48 animate-pulse rounded bg-gray-100" />
-            <div className="h-3 w-40 animate-pulse rounded bg-gray-100" />
+            <div className="h-4 w-48 animate-pulse rounded bg-surface-sunken" />
+            <div className="h-3 w-40 animate-pulse rounded bg-surface-sunken" />
           </div>
         ) : (
           <>
             <div className="flex items-start gap-3">
-              <div className="relative h-16 w-16 flex-none overflow-hidden rounded-xl bg-gray-100">
+              <div className="relative h-16 w-16 flex-none overflow-hidden rounded-xl bg-surface-sunken">
                 {item.image_url ? (
                   <Image src={item.image_url} alt="" fill sizes="64px" className="object-cover" />
                 ) : (
-                  <span className="absolute inset-0 grid place-items-center text-micro font-black uppercase tracking-wider text-gray-400">
+                  <span className="absolute inset-0 grid place-items-center text-micro font-black uppercase tracking-wider text-text-faint">
                     {item.sku?.slice(0, 4) || 'SKU'}
                   </span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-base font-black tracking-tight text-gray-900">
+                <p className="text-base font-black tracking-tight text-text-default">
                   {item.item_name || 'Untitled item'}
                 </p>
-                <p className="mt-0.5 text-caption font-bold uppercase tracking-wider text-gray-500">
+                <p className="mt-0.5 text-caption font-bold uppercase tracking-wider text-text-soft">
                   {item.sku ? `SKU ${item.sku}` : 'No SKU'}
                 </p>
-                <p className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-caption font-bold text-gray-700">
+                <p className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-caption font-bold text-text-muted">
                   <span>{item.quantity_received}/{item.quantity_expected ?? '?'}</span>
                   {item.workflow_status ? (
                     <span
@@ -153,7 +153,7 @@ export default function MobilePurchaseOrderItemDetailPage(
       {/* Photos block */}
       <section className="px-4 py-4">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-caption font-black uppercase tracking-[0.18em] text-gray-700">
+          <p className="text-caption font-black uppercase tracking-[0.18em] text-text-muted">
             Photos ({photos.length})
           </p>
           {photos.length > 0 ? (
@@ -170,7 +170,7 @@ export default function MobilePurchaseOrderItemDetailPage(
           <Link
             href={captureHref}
             prefetch={false}
-            className="flex h-24 items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-caption font-black uppercase tracking-[0.18em] text-gray-500 active:bg-gray-100"
+            className="flex h-24 items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border-soft bg-surface-canvas text-caption font-black uppercase tracking-[0.18em] text-text-soft active:bg-surface-sunken"
           >
             <Camera className="h-5 w-5" /> Take first photo
           </Link>
@@ -181,7 +181,7 @@ export default function MobilePurchaseOrderItemDetailPage(
                 key={p.id}
                 href={galleryHref}
                 prefetch={false}
-                className="relative aspect-square overflow-hidden rounded-xl bg-gray-100"
+                className="relative aspect-square overflow-hidden rounded-xl bg-surface-sunken"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -197,8 +197,8 @@ export default function MobilePurchaseOrderItemDetailPage(
 
       {/* Details block */}
       {item ? (
-        <section className="border-t border-gray-100 px-4 py-4 text-label font-bold">
-          <p className="mb-2 text-caption font-black uppercase tracking-[0.18em] text-gray-700">
+        <section className="border-t border-border-hairline px-4 py-4 text-label font-bold">
+          <p className="mb-2 text-caption font-black uppercase tracking-[0.18em] text-text-muted">
             Details
           </p>
           <dl className="space-y-1.5">
@@ -227,10 +227,10 @@ export default function MobilePurchaseOrderItemDetailPage(
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <dt className="text-micro font-black uppercase tracking-wider text-gray-500">
+      <dt className="text-micro font-black uppercase tracking-wider text-text-soft">
         {label}
       </dt>
-      <dd className="truncate text-right text-label font-bold text-gray-900">{value}</dd>
+      <dd className="truncate text-right text-label font-bold text-text-default">{value}</dd>
     </div>
   );
 }

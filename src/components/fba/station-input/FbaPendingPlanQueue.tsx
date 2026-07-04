@@ -33,7 +33,7 @@ export function FbaPendingPlanQueue({
 }) {
   return (
     <>
-      <div className="divide-y divide-gray-200 overflow-y-auto">
+      <div className="divide-y divide-border-soft overflow-y-auto">
         {rows.map((r) => {
           const title = (r.product_title && String(r.product_title).trim()) || r.fnsku;
           return (
@@ -69,13 +69,13 @@ export function FbaPendingPlanQueue({
           );
         })}
       </div>
-      <div className="flex w-full min-w-0 items-center justify-between gap-3 bg-white px-3 py-2.5">
+      <div className="flex w-full min-w-0 items-center justify-between gap-3 bg-surface-card px-3 py-2.5">
         <Button
           variant="ghost"
           type="button"
           disabled={isLoading}
           onClick={() => onCancel()}
-          className="h-auto shrink-0 rounded-none px-0 text-eyebrow font-black uppercase tracking-[0.12em] text-gray-500 hover:bg-transparent hover:text-gray-900"
+          className="h-auto shrink-0 rounded-none px-0 text-eyebrow font-black uppercase tracking-[0.12em] text-text-soft hover:bg-transparent hover:text-text-default"
         >
           Cancel
         </Button>

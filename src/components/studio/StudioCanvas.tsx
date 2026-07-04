@@ -248,10 +248,10 @@ export function StudioCanvas({
     >
       <Background gap={18} size={1.2} color="#cbd5e1" />
       <Controls showInteractive={false} />
-      <MiniMap pannable zoomable className="!bg-slate-100" />
+      <MiniMap pannable zoomable className="!bg-surface-sunken" />
       {lens === 'static' && zoom === 1 && staticFlow && (
-        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-slate-200 bg-white/90 px-3 py-1.5 text-micro font-semibold text-slate-600 shadow-sm">
-          <span className="uppercase tracking-wide text-slate-400">Data flow</span>
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-border-soft bg-surface-card/90 px-3 py-1.5 text-micro font-semibold text-text-muted shadow-sm">
+          <span className="uppercase tracking-wide text-text-faint">Data flow</span>
           {(
             [
               [STATIC_ROLE.source.color, 'Sources', staticFlow.counts.sources],
@@ -261,7 +261,7 @@ export function StudioCanvas({
           ).map(([color, label, count]) => (
             <span key={label} className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-              {label} <span className="tabular-nums text-slate-400">{count}</span>
+              {label} <span className="tabular-nums text-text-faint">{count}</span>
             </span>
           ))}
         </div>

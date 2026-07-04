@@ -20,11 +20,11 @@ export function PageAccessCard({
   matrix, isAdmin, theme, borderClass, busy, hasOverrides, onToggle, onResetOverrides,
 }: PageAccessCardProps) {
   return (
-    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-white shadow-sm`}>
-      <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-surface-card shadow-sm`}>
+      <header className="flex items-center justify-between border-b border-border-hairline px-5 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">.access</h2>
-          <p className="mt-0.5 text-caption text-gray-500">
+          <h2 className="text-sm font-semibold text-text-default">.access</h2>
+          <p className="mt-0.5 text-caption text-text-soft">
             {isAdmin
               ? 'Admin role grants everything. Remove the admin role to customise.'
               : 'Toggle to grant or revoke individual pages on top of the role.'}
@@ -36,7 +36,7 @@ export function PageAccessCard({
           </Button>
         )}
       </header>
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-border-hairline">
         {matrix.rows.map((row) => (
           <PageAccessSwitch
             key={row.item.id}

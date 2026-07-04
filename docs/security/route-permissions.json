@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-02T17:58:44Z",
-  "totalRoutes": 738,
+  "generatedAt": "2026-07-04T18:21:20Z",
+  "totalRoutes": 754,
   "summary": {
-    "permissionGated": 633,
+    "permissionGated": 645,
     "authenticatedNoPermission": 36,
-    "anonymousIntentional": 67,
+    "anonymousIntentional": 71,
     "serviceToService": 2,
     "ungatedRead": 0,
     "ungatedWrite": 0
@@ -27,6 +27,15 @@
       ],
       "gate": "withAuth",
       "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/cache-stats/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
       "exemptReason": null
     },
     {
@@ -588,6 +597,16 @@
       "exemptReason": null
     },
     {
+      "path": "/api/ai/retrieve/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "ai.search",
+      "exemptReason": null
+    },
+    {
       "path": "/api/ai/search/route.ts",
       "methods": [
         "POST"
@@ -612,6 +631,15 @@
       ],
       "gate": "withAuth",
       "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/usage/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
       "exemptReason": null
     },
     {
@@ -698,6 +726,42 @@
       ],
       "gate": "withAuth",
       "permission": "work_orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/assistant/chat/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "assistant.chat",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/assistant/mutations/[id]/revert/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "studio.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/assistant/mutations/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "assistant.chat",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/assistant/mutations/stats/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.manage",
       "exemptReason": null
     },
     {
@@ -1273,6 +1337,15 @@
       "exemptReason": "cron endpoint"
     },
     {
+      "path": "/api/cron/feed-membership-projection/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
       "path": "/api/cron/google-sheets/transfer-orders/route.ts",
       "methods": [
         "GET"
@@ -1355,6 +1428,15 @@
       "exemptReason": "cron endpoint"
     },
     {
+      "path": "/api/cron/search-outbox/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
       "path": "/api/cron/shipping/metrics/route.ts",
       "methods": [
         "GET"
@@ -1374,6 +1456,24 @@
     },
     {
       "path": "/api/cron/shipping/sync-due/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/signal-insight-rollup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/signals/buyer-notes-heal/route.ts",
       "methods": [
         "GET"
       ],
@@ -1709,6 +1809,24 @@
       ],
       "gate": "withAuth",
       "permission": "orders.import",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/entity-signals/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/entity-signals/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.view",
       "exemptReason": null
     },
     {
@@ -2616,6 +2734,16 @@
       "exemptReason": null
     },
     {
+      "path": "/api/mcp/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "assistant.chat",
+      "exemptReason": null
+    },
+    {
       "path": "/api/nas-config/route.ts",
       "methods": [
         "GET"
@@ -2691,6 +2819,15 @@
       ],
       "gate": "withAuth",
       "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/operations/benchmarks/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.view",
       "exemptReason": null
     },
     {
@@ -4202,6 +4339,17 @@
       "path": "/api/receiving/po/list/route.ts",
       "methods": [
         "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/rail-exclusions/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "receiving.view",

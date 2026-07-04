@@ -44,12 +44,12 @@ export function ActionsSection({
 
   return (
     <div className="px-2 pb-2 pt-1">
-      <p className="px-2 pb-0.5 text-micro font-bold uppercase tracking-widest text-gray-400">Actions</p>
+      <p className="px-2 pb-0.5 text-micro font-bold uppercase tracking-widest text-text-faint">Actions</p>
       <div className="space-y-0.5">
         {showInbox ? (
           <Row
             icon={<Bell className="h-4 w-4" />}
-            iconBg="bg-gray-900"
+            iconBg="bg-surface-inverse"
             label="Recent activity"
             subLabel="Notifications and updates"
             trailing={
@@ -65,7 +65,7 @@ export function ActionsSection({
         {showPhoneHistory ? (
           <Row
             icon={<Smartphone className="h-4 w-4" />}
-            iconBg="bg-gray-900"
+            iconBg="bg-surface-inverse"
             label="Phone history"
             subLabel="Resume your recent packs"
             onClick={onOpenHistoryPopover}
@@ -74,7 +74,7 @@ export function ActionsSection({
         {showSync ? (
           <Row
             icon={<Activity className="h-4 w-4" />}
-            iconBg="bg-gray-900"
+            iconBg="bg-surface-inverse"
             label="Sync status"
             subLabel="System & cron health"
             onClick={onOpenSyncPopover}

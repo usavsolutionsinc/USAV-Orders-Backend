@@ -49,7 +49,7 @@ const TILE_TONE: Record<Tone, string> = {
     emerald: 'bg-emerald-50 text-emerald-600 ring-emerald-100',
     rose: 'bg-rose-50 text-rose-600 ring-rose-100',
     violet: 'bg-violet-50 text-violet-600 ring-violet-100',
-    gray: 'bg-gray-50 text-gray-500 ring-gray-100',
+    gray: 'bg-surface-canvas text-text-soft ring-border-hairline',
 };
 
 const PILL_TONE: Record<Tone, string> = {
@@ -58,7 +58,7 @@ const PILL_TONE: Record<Tone, string> = {
     emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     rose: 'bg-rose-50 text-rose-700 ring-rose-200',
     violet: 'bg-violet-50 text-violet-700 ring-violet-200',
-    gray: 'bg-gray-100 text-gray-600 ring-gray-200',
+    gray: 'bg-surface-sunken text-text-muted ring-border-soft',
 };
 
 const KIND_META: Record<ActivityInboxItemKind, { label: string; Icon: Glyph; tone: Tone }> = {
@@ -244,15 +244,15 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
         <div
             role="dialog"
             aria-label="Recent activity inbox"
-            className="flex max-h-[calc(100vh-6rem)] w-[360px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
+            className="flex max-h-[calc(100vh-6rem)] w-[360px] flex-col overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-xl"
         >
-            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5">
+            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border-hairline px-4 py-2.5">
                 <div className="flex items-center gap-2">
-                    <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+                    <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
                         Recent activity
                     </p>
                     {items.length > 0 && (
-                        <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-gray-900 px-1 text-mini font-bold leading-none text-white tabular-nums">
+                        <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-surface-inverse px-1 text-mini font-bold leading-none text-white tabular-nums">
                             {items.length}
                         </span>
                     )}
@@ -262,7 +262,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                         <Button
                             variant="ghost"
                             onClick={() => clear()}
-                            className="-my-1 h-auto px-1.5 py-1 text-mini font-bold uppercase tracking-wide text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                            className="-my-1 h-auto px-1.5 py-1 text-mini font-bold uppercase tracking-wide text-text-soft hover:bg-surface-sunken hover:text-text-default"
                         >
                             Clear all
                         </Button>
@@ -272,15 +272,16 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
             </header>
 
             {/* Segmented type filter — same pill track as GoalPopover (header goal chip). */}
-            <div className="shrink-0 border-b border-gray-100 px-3 py-2">
+            <div className="shrink-0 border-b border-border-hairline px-3 py-2">
                 <div
                     role="tablist"
                     aria-label="Inbox type"
-                    className="flex w-full items-center gap-0.5 rounded-xl bg-gray-100 p-0.5 ring-1 ring-gray-200"
+                    className="flex w-full items-center gap-0.5 rounded-xl bg-surface-sunken p-0.5 ring-1 ring-border-soft"
                 >
                     {tabItems.map((tabId) => {
                         const active = activeTab === tabId;
                         const count = tabId === 'all' ? tabCounts.all : tabCounts[tabId];
+                        // ds-raw-button
                         return (
                             <button
                                 key={tabId}
@@ -291,8 +292,8 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                 className={cn(
                                     'relative flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-micro font-bold transition-colors',
                                     active
-                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
-                                        : 'text-gray-500 hover:text-gray-900',
+                                        ? 'bg-surface-card text-text-default shadow-sm ring-1 ring-border-soft'
+                                        : 'text-text-soft hover:text-text-default',
                                 )}
                             >
                                 <span className="truncate">{INBOX_TAB_LABEL[tabId]}</span>
@@ -300,7 +301,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                     <span
                                         className={cn(
                                             'shrink-0 tabular-nums',
-                                            active ? 'text-gray-500' : 'text-gray-400',
+                                            active ? 'text-text-soft' : 'text-text-faint',
                                         )}
                                     >
                                         {count}
@@ -315,22 +316,22 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
             <div className="min-h-0 flex-1 overflow-y-auto">
                 {tabEmpty ? (
                     <div className="flex flex-col items-center px-6 py-10 text-center">
-                        <p className="text-mini font-medium text-gray-400">
+                        <p className="text-mini font-medium text-text-faint">
                             {TAB_EMPTY_COPY[activeTab] ?? `No ${INBOX_TAB_LABEL[activeTab].toLowerCase()} items`}
                         </p>
                     </div>
                 ) : items.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-300 ring-1 ring-inset ring-gray-100">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-canvas text-text-faint ring-1 ring-inset ring-border-hairline">
                             <Inbox className="h-5 w-5" />
                         </span>
-                        <p className="text-caption font-bold text-gray-700">You&apos;re all caught up</p>
-                        <p className="max-w-[14rem] text-mini font-medium leading-snug text-gray-400">
+                        <p className="text-caption font-bold text-text-muted">You&apos;re all caught up</p>
+                        <p className="max-w-[14rem] text-mini font-medium leading-snug text-text-faint">
                             New tech items, repair updates, and messages will land here.
                         </p>
                     </div>
                 ) : (
-                    <ul className="divide-y divide-gray-50">
+                    <ul className="divide-y divide-border-hairline">
                         {visibleItems.map((it) => {
                             const meta = KIND_META[it.kind];
                             const Icon = meta.Icon;
@@ -347,7 +348,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                             const undoing = pendingUndoId === it.id;
 
                             return (
-                                <li key={it.id} className="group relative hover:bg-gray-50/70">
+                                <li key={it.id} className="group relative hover:bg-surface-canvas/70">
                                     {navigable && (
                                         <Link
                                             href={href}
@@ -373,15 +374,15 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                             <p
                                                 className={`truncate text-caption font-black ${
                                                     navigable
-                                                        ? 'text-gray-900 group-hover:text-blue-700'
-                                                        : 'text-gray-900'
+                                                        ? 'text-text-default group-hover:text-blue-700'
+                                                        : 'text-text-default'
                                                 }`}
                                             >
                                                 {primary}
                                             </p>
 
                                             <div className="mt-1 flex flex-wrap items-center gap-1">
-                                                <span className="shrink-0 whitespace-nowrap text-mini font-semibold text-gray-400">
+                                                <span className="shrink-0 whitespace-nowrap text-mini font-semibold text-text-faint">
                                                     {inboxRelativeTime(it.createdAt)}
                                                 </span>
 
@@ -441,7 +442,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                                             {it.previousStatus ? (
                                                                 <Pill tone="gray">{it.previousStatus}</Pill>
                                                             ) : null}
-                                                            <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
+                                                            <ChevronRight className="h-3 w-3 shrink-0 text-text-faint" />
                                                             {it.nextStatus ? (
                                                                 <Pill tone={statusTone(it.nextStatus)}>
                                                                     {it.nextStatus}
@@ -461,7 +462,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
 
                                             {/* Message body — the one kind whose subtitle IS the content */}
                                             {it.kind === 'staff_message' && it.body && (
-                                                <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-mini font-medium leading-snug text-gray-500">
+                                                <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-mini font-medium leading-snug text-text-soft">
                                                     {it.body}
                                                 </p>
                                             )}
@@ -470,7 +471,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                             {it.kind === 'repair_status' && (it.undone || it.undoFailed) && (
                                                 <p
                                                     className={`mt-1 text-mini font-bold uppercase tracking-wide ${
-                                                        it.undoFailed ? 'text-rose-600' : 'text-gray-400'
+                                                        it.undoFailed ? 'text-rose-600' : 'text-text-faint'
                                                     }`}
                                                 >
                                                     {it.undoFailed ? 'Undo failed' : 'Reverted'}
@@ -485,7 +486,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                                     variant="ghost"
                                                     onClick={() => void undoItem(it.id)}
                                                     disabled={undoing}
-                                                    className="-my-1 h-auto gap-1 px-1.5 py-1 text-micro font-bold uppercase tracking-wide text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                                    className="-my-1 h-auto gap-1 px-1.5 py-1 text-micro font-bold uppercase tracking-wide text-text-soft hover:bg-surface-sunken hover:text-text-default"
                                                 >
                                                     {undoing ? (
                                                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -504,12 +505,12 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                                             if (!it.body) return;
                                                             void handleCopyBack(it.body, it.id);
                                                         }}
-                                                        className="group/copy flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100"
+                                                        className="group/copy flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface-sunken"
                                                         icon={
                                                             copiedId === it.id ? (
                                                                 <Check className="h-3.5 w-3.5 text-emerald-500" />
                                                             ) : (
-                                                                <Copy className="h-3.5 w-3.5 text-gray-400 group-hover/copy:text-gray-700" />
+                                                                <Copy className="h-3.5 w-3.5 text-text-faint group-hover/copy:text-text-muted" />
                                                             )
                                                         }
                                                     />
@@ -520,13 +521,13 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                                 <IconButton
                                                     ariaLabel="Dismiss"
                                                     onClick={() => dismissItem(it.id)}
-                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-gray-300 opacity-0 hover:bg-gray-100 hover:text-gray-600 focus-visible:opacity-100 group-hover:opacity-100"
+                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-text-faint opacity-0 hover:bg-surface-sunken hover:text-text-muted focus-visible:opacity-100 group-hover:opacity-100"
                                                     icon={<X className="h-3.5 w-3.5" />}
                                                 />
                                             </HoverTooltip>
 
                                             {navigable && (
-                                                <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-400" />
+                                                <ChevronRight className="h-4 w-4 shrink-0 text-text-faint group-hover:text-text-faint" />
                                             )}
                                         </div>
                                     </div>

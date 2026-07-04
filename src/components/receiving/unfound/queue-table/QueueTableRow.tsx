@@ -55,7 +55,7 @@ export function QueueTableRow({
     <tr
       onClick={handleRowClick}
       className={`cursor-pointer align-top transition-colors hover:bg-blue-50/40 ${
-        row.checked ? 'bg-gray-50/60 text-gray-500' : 'text-gray-900'
+        row.checked ? 'bg-surface-canvas/60 text-text-soft' : 'text-text-default'
       }`}
     >
       <td className="px-3 py-2 font-mono text-label">
@@ -101,7 +101,7 @@ export function QueueTableRow({
             <>
               <div className="text-left">{row.product_title || '—'}</div>
               {row.context && (
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro font-normal text-gray-500">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro font-normal text-text-soft">
                   {row.kind === 'unmatched_receiving' ? (
                     <TrackingChip
                       value={row.context}

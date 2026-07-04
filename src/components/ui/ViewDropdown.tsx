@@ -131,14 +131,14 @@ export function ViewDropdown<T extends string>({
           }}
           className={`ds-raw-button ${
             buttonClassName ||
-            `flex items-center ${isSm ? 'h-10 text-xs' : 'h-14 text-sm'} w-full border-b border-gray-400 bg-white px-4 pr-12 text-left ${caseClass} tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50 ${dmSans.className} font-bold`
+            `flex items-center ${isSm ? 'h-10 text-xs' : 'h-14 text-sm'} w-full border-b border-border-emphasis bg-surface-card px-4 pr-12 text-left ${caseClass} tracking-wide text-text-default outline-none transition-colors hover:bg-surface-hover ${dmSans.className} font-bold`
           }`}
         >
           {SelectedIcon ? <SelectedIcon className="mr-2 h-4 w-4 shrink-0 text-blue-600" /> : null}
           <span className="min-w-0 truncate">{selectedOption?.label || ''}</span>
         </button>
         <svg
-          className={`pointer-events-none absolute right-4 h-4 w-4 text-gray-500 transition-transform ${
+          className={`pointer-events-none absolute right-4 h-4 w-4 text-text-soft transition-transform ${
             isOpen ? 'rotate-180' : ''
           } top-1/2 -translate-y-1/2`}
           viewBox="0 0 24 24"
@@ -162,7 +162,7 @@ export function ViewDropdown<T extends string>({
               ...(backgroundColor ? { backgroundColor } : {}),
               ...(borderRadius ? { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius } : {}),
             }}
-            className={`w-full border border-gray-400 bg-white shadow-lg ${
+            className={`w-full border border-border-emphasis bg-surface-card shadow-lg ${
               isBoxy ? 'rounded-none border-t-0' : 'rounded-b-xl'
             }`}
           >
@@ -186,7 +186,7 @@ export function ViewDropdown<T extends string>({
                         isBoxy ? 'px-3' : 'px-4'
                       } text-left ${
                         optionClassName || (isSm ? 'text-xs font-bold tracking-wide' : 'text-sm font-bold tracking-wide')
-                      } ${caseClass} transition-colors ${dmSans.className} text-gray-800 hover:bg-gray-50`}
+                      } ${caseClass} transition-colors ${dmSans.className} text-text-default hover:bg-surface-hover`}
                     >
                       {OptionIcon ? <OptionIcon className="h-4 w-4 shrink-0 text-blue-600" /> : null}
                       <span className="truncate">{option.label}</span>

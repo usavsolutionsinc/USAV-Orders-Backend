@@ -80,7 +80,7 @@ export function MobileShell({
   return (
     <div
       className={cn(
-        'relative flex min-h-0 flex-col overflow-hidden bg-white h-full',
+        'relative flex min-h-0 flex-col overflow-hidden bg-surface-card h-full',
         className,
       )}
     >
@@ -115,7 +115,7 @@ export function MobileShell({
             <div className="pointer-events-auto">{bottomDock}</div>
           </div>
         ) : (
-          <div className="flex-shrink-0 border-t border-gray-100 bg-white">
+          <div className="flex-shrink-0 border-t border-border-hairline bg-surface-card">
             {bottomDock}
           </div>
         )

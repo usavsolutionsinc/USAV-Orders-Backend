@@ -22,6 +22,14 @@ export interface InventorySidebarFiltersProps {
     onBucketsChange: (next: AnyInventoryBucket[]) => void;
     /** Counts per bucket id, surfaced as a `(n)` tail when available. */
     counts?: Partial<Record<string, number>>;
+    /**
+     * AI-search rollout (plan §8.3 Phase 2): when true, the per-tab
+     * "Search By" grid collapses behind an Advanced disclosure — the default
+     * `'all'` field already searches every column, so the grid is a
+     * power-user narrowing tool, not the primary affordance. False (flag
+     * off) renders the grid exactly as before.
+     */
+    collapseFieldSelector?: boolean;
 }
 export function InventoryFilterDropdown({
     tab,
@@ -31,10 +39,15 @@ export function InventoryFilterDropdown({
     onBucketsChange,
     counts,
     onClose,
+    collapseFieldSelector = false,
 }: InventorySidebarFiltersProps & { onClose: () => void }) {
     const bucketOptions = INVENTORY_BUCKETS[tab];
     const fieldOptions = INVENTORY_SEARCH_FIELDS[tab];
     const selectedBuckets = new Set<string>(buckets);
+    // Auto-expand when a non-default field is already active so the current
+    // narrowing is never hidden from the user who applied it.
+    const [advancedOpen, setAdvancedOpen] = useState(field !== 'all');
+    const showFieldGrid = !collapseFieldSelector || advancedOpen;
 
     const toggleBucket = (id: string) => {
         const next = selectedBuckets.has(id)
@@ -48,33 +61,53 @@ export function InventoryFilterDropdown({
             {/* Section: Search Field */}
             <div>
                 <div className="mb-3 flex items-center justify-between">
-                    <p className={`${microBadge} text-gray-400 font-black uppercase tracking-[0.2em]`}>Search By</p>
+                    <p className={`${microBadge} text-text-faint font-black uppercase tracking-[0.2em]`}>Search By</p>
+                    {collapseFieldSelector ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAdvancedOpen((prev) => !prev)}
+                            className="-my-1.5 gap-1 px-1 text-text-soft"
+                        >
+                            <span className={`${microBadge}`}>Advanced</span>
+                            <ChevronDown
+                                className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+                            />
+                        </Button>
+                    ) : null}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                    {fieldOptions.map((f) => {
-                        const active = field === f.id;
-                        const Icon = FIELD_ICON[f.id];
-                        return (
-                            <Button
-                                key={f.id}
-                                variant={active ? 'primary' : 'secondary'}
-                                size="md"
-                                onClick={() => onFieldChange(f.id as AnyInventorySearchField)}
-                                icon={Icon ? <Icon className={active ? 'text-white' : 'text-gray-400'} /> : undefined}
-                                className="w-full justify-start gap-3 text-left"
-                            >
-                                <span className="truncate">{f.label}</span>
-                            </Button>
-                        );
-                    })}
-                </div>
+                {collapseFieldSelector && !advancedOpen ? (
+                    <p className={`${microBadge} text-text-soft`}>
+                        Searching all fields{field !== 'all' ? ' — a field filter is active' : ''}.
+                    </p>
+                ) : null}
+                {showFieldGrid ? (
+                    <div className="grid grid-cols-2 gap-2">
+                        {fieldOptions.map((f) => {
+                            const active = field === f.id;
+                            const Icon = FIELD_ICON[f.id];
+                            return (
+                                <Button
+                                    key={f.id}
+                                    variant={active ? 'primary' : 'secondary'}
+                                    size="md"
+                                    onClick={() => onFieldChange(f.id as AnyInventorySearchField)}
+                                    icon={Icon ? <Icon className={active ? 'text-white' : 'text-text-faint'} /> : undefined}
+                                    className="w-full justify-start gap-3 text-left"
+                                >
+                                    <span className="truncate">{f.label}</span>
+                                </Button>
+                            );
+                        })}
+                    </div>
+                ) : null}
             </div>
 
             {/* Section: Status Buckets */}
             {bucketOptions.length > 0 && (
                 <div>
-                    <div className="mb-3 flex items-center justify-between pt-4 border-t border-gray-100">
-                        <p className={`${microBadge} text-gray-400 font-black uppercase tracking-[0.2em]`}>Status Filters</p>
+                    <div className="mb-3 flex items-center justify-between pt-4 border-t border-border-hairline">
+                        <p className={`${microBadge} text-text-faint font-black uppercase tracking-[0.2em]`}>Status Filters</p>
                         {buckets.length > 0 ? (
                             <Button
                                 variant="ghost"
@@ -101,7 +134,7 @@ export function InventoryFilterDropdown({
                                 >
                                     <span>{b.label}</span>
                                     {typeof count === 'number' ? (
-                                        <span className={`ml-1.5 tabular-nums ${active ? 'text-white/70' : 'text-gray-400'}`}>
+                                        <span className={`ml-1.5 tabular-nums ${active ? 'text-white/70' : 'text-text-faint'}`}>
                                             {count}
                                         </span>
                                     ) : null}
@@ -162,7 +195,7 @@ export function InventorySidebarFilters({
                     'flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-sm font-semibold transition-colors',
                     activeBucketCount > 0 || field !== 'all'
                         ? 'border-blue-300 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-600',
+                        : 'border-border-soft bg-surface-card text-text-muted hover:border-blue-200 hover:text-blue-600',
                 ].join(' ')}
             >
                 <span className="flex items-center gap-2">
@@ -187,13 +220,13 @@ export function InventorySidebarFilters({
                 <div
                     role="dialog"
                     aria-label="Search filters"
-                    className="rounded-xl border border-gray-200 bg-white p-4 shadow-xl"
+                    className="rounded-xl border border-border-soft bg-surface-card p-4 shadow-xl"
                 >
                     <div className="space-y-4">
                         {/* Section: Search Field */}
                         <div>
                             <div className="mb-2 flex items-center justify-between">
-                                <p className={`${microBadge} text-gray-500 uppercase tracking-[0.1em]`}>Search By</p>
+                                <p className={`${microBadge} text-text-soft uppercase tracking-[0.1em]`}>Search By</p>
                             </div>
                             <div className="grid grid-cols-2 gap-1.5">
                                 {fieldOptions.map((f) => {
@@ -218,8 +251,8 @@ export function InventorySidebarFilters({
                         {/* Section: Status Buckets */}
                         {bucketOptions.length > 0 && (
                             <div>
-                                <div className="mb-2 flex items-center justify-between pt-1 border-t border-gray-100 mt-1">
-                                    <p className={`${microBadge} text-gray-500 uppercase tracking-[0.1em] pt-3`}>Status Filters</p>
+                                <div className="mb-2 flex items-center justify-between pt-1 border-t border-border-hairline mt-1">
+                                    <p className={`${microBadge} text-text-soft uppercase tracking-[0.1em] pt-3`}>Status Filters</p>
                                     {activeBucketCount > 0 ? (
                                         <Button
                                             variant="ghost"
@@ -246,7 +279,7 @@ export function InventorySidebarFilters({
                                             >
                                                 <span>{b.label}</span>
                                                 {typeof count === 'number' ? (
-                                                    <span className="ml-1 text-gray-400">({count})</span>
+                                                    <span className="ml-1 text-text-faint">({count})</span>
                                                 ) : null}
                                             </Button>
                                         );

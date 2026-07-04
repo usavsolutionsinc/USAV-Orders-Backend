@@ -59,8 +59,8 @@ export function PhotoCard({
         // (matching `rounded-lg`) so the hero-morph shared-layout transform
         // (see PhotoThumb `heroId`) isn't cut off by this ancestor mid-animation;
         // it stays visually ON TOP of this border rather than clipped behind it.
-        'group relative rounded-lg border bg-white text-left transition-colors',
-        selected ? 'border-primary ring-2 ring-inset ring-primary' : 'border-border hover:border-gray-300',
+        'group relative rounded-lg border bg-surface-card text-left transition-colors',
+        selected ? 'border-primary ring-2 ring-inset ring-primary' : 'border-border hover:border-border-default',
       )}
     >
       <SelectionMark
@@ -86,12 +86,12 @@ export function PhotoCard({
         {isDocument ? (
           <div
             className={cn(
-              'flex aspect-square flex-col items-center justify-center gap-2 bg-gray-50 px-3',
+              'flex aspect-square flex-col items-center justify-center gap-2 bg-surface-canvas px-3',
               showLabel ? 'rounded-t-lg' : 'rounded-lg',
             )}
           >
-            <FileText className="h-10 w-10 text-gray-400" />
-            <span className="text-center text-micro font-semibold text-gray-600">
+            <FileText className="h-10 w-10 text-text-faint" />
+            <span className="text-center text-micro font-semibold text-text-muted">
               {documentTypeLabel(photo.documentType)}
             </span>
           </div>
@@ -113,8 +113,8 @@ export function PhotoCard({
           <div className="space-y-1 px-2.5 py-2">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-caption font-semibold text-gray-900">{primaryLabel}</div>
-                <div className="truncate text-micro text-gray-500">{formatDateTimePST(photo.createdAt)}</div>
+                <div className="truncate text-caption font-semibold text-text-default">{primaryLabel}</div>
+                <div className="truncate text-micro text-text-soft">{formatDateTimePST(photo.createdAt)}</div>
               </div>
             </div>
             {!isDocument ? <PhotoLabelChips labels={photo.labels} max={3} /> : null}

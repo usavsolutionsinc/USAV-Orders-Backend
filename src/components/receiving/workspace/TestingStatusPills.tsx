@@ -31,7 +31,7 @@ const TEST_OPTS: Array<{
     label: 'Pass',
     tone: {
       active: 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 ring-emerald-700',
-      inactive: 'bg-white text-emerald-800 ring-emerald-200 hover:bg-emerald-50',
+      inactive: 'bg-surface-card text-emerald-800 ring-emerald-200 hover:bg-emerald-50',
     },
   },
   {
@@ -39,7 +39,7 @@ const TEST_OPTS: Array<{
     label: 'Test Again',
     tone: {
       active: 'bg-amber-500 text-white shadow-sm shadow-amber-200 ring-amber-600',
-      inactive: 'bg-white text-amber-800 ring-amber-200 hover:bg-amber-50',
+      inactive: 'bg-surface-card text-amber-800 ring-amber-200 hover:bg-amber-50',
     },
   },
   {
@@ -47,7 +47,7 @@ const TEST_OPTS: Array<{
     label: 'Testing Failed',
     tone: {
       active: 'bg-rose-600 text-white shadow-sm shadow-rose-200 ring-rose-700',
-      inactive: 'bg-white text-rose-800 ring-rose-200 hover:bg-rose-50',
+      inactive: 'bg-surface-card text-rose-800 ring-rose-200 hover:bg-rose-50',
     },
   },
 ];

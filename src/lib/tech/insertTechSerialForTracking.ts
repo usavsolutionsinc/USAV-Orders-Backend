@@ -7,6 +7,8 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { resolveTechSerialInsertContextFromSal } from '@/lib/tech/resolveTechSerialInsertContextFromSal';
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
+import { recordOriginProvenance } from '@/lib/neon/serial-units-queries';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type TechSerialInsertDb = Pick<Pool, 'query'>;
 
@@ -41,16 +43,17 @@ async function linkTechSerialToInventoryV2(
     //    downgrade an existing unit's lifecycle state (a unit STOCKED
     //    from receiving stays STOCKED when tech scans it; the dedicated
     //    /api/tech/test-result endpoint is what moves IN_TEST/GRADED).
+    // Phase 4: origin_* columns dropped — the TECH_SERIAL provenance edge is
+    // written app-side (recordOriginProvenance) after the id resolves.
     const upsert = await db.query(
       `INSERT INTO serial_units (
         serial_number, normalized_serial, sku,
-        current_status, origin_source, origin_tsn_id, organization_id
+        current_status, organization_id
       )
       VALUES ($1, UPPER(TRIM($1)), $2,
-              'UNKNOWN'::serial_status_enum, 'tech.add-serial', $3, $4::uuid)
+              'UNKNOWN'::serial_status_enum, $4::uuid)
       ON CONFLICT (organization_id, normalized_serial) DO UPDATE SET
         sku = COALESCE(serial_units.sku, EXCLUDED.sku),
-        origin_tsn_id = COALESCE(serial_units.origin_tsn_id, EXCLUDED.origin_tsn_id),
         updated_at = NOW()
       RETURNING id`,
       [args.upperSerial, args.sku, args.techSerialNumberId, args.organizationId],
@@ -58,6 +61,15 @@ async function linkTechSerialToInventoryV2(
     const serialUnitId: number | null = upsert.rows[0]?.id
       ? Number(upsert.rows[0].id)
       : null;
+    if (serialUnitId != null && args.techSerialNumberId != null) {
+      await recordOriginProvenance(
+        db,
+        args.organizationId,
+        serialUnitId,
+        { origin_source: 'tsn', origin_tsn_id: args.techSerialNumberId },
+        new Date().toISOString(),
+      );
+    }
 
     // 2. Stamp the new FK on tech_serial_numbers so historical joins work.
     if (serialUnitId != null && args.techSerialNumberId != null) {

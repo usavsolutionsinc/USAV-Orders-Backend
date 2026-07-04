@@ -28,14 +28,14 @@ export function AdminPickerRow({
       className={`group flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-all ${
         selected
           ? 'border-blue-200 bg-blue-50 ring-1 ring-blue-500/30 shadow-sm shadow-blue-200/40'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+          : 'border-border-soft bg-surface-card hover:border-border-default hover:bg-surface-hover'
       }`}
     >
       {leading ? <div className="flex-shrink-0">{leading}</div> : null}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-gray-900">{title}</div>
+        <div className="truncate text-sm font-semibold text-text-default">{title}</div>
         {subtitle ? (
-          <div className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
+          <div className="truncate text-micro font-medium uppercase tracking-wider text-text-soft">
             {subtitle}
           </div>
         ) : null}

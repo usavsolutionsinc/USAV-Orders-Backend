@@ -65,7 +65,7 @@ export function IncomingPaneHeader({ total, page }: IncomingPaneHeaderProps) {
   return (
     <PaneHeader
       className="border-b-0"
-      rowClassName="border-b border-gray-300"
+      rowClassName="border-b border-border-default"
       leftSlot={<PaneHeaderTitle>Incoming POs</PaneHeaderTitle>}
       rightSlot={
         <PaneHeaderPagination

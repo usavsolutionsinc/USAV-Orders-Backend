@@ -102,7 +102,7 @@ export function OrderCard({
               eyebrowTrailing: (
                 <span
                   aria-hidden
-                  className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-gray-400 transition-opacity ${
+                  className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-text-faint transition-opacity ${
                     isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                   }`}
                 >

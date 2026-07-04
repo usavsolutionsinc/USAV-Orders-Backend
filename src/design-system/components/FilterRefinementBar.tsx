@@ -65,15 +65,15 @@ export function FilterRefinementBar({
   const isSidebar = variant === 'sidebar';
 
   const triggerClasses = isSidebar
-    ? `flex h-[40px] w-full items-center gap-2.5 bg-white px-3 transition-colors hover:bg-gray-50 ${
-        isOpen || hasActive ? 'text-blue-600' : 'text-gray-500'
+    ? `flex h-[40px] w-full items-center gap-2.5 bg-surface-card px-3 transition-colors hover:bg-surface-hover ${
+        isOpen || hasActive ? 'text-blue-600' : 'text-text-soft'
       }`
     : `flex w-full items-center gap-3 rounded-2xl border px-5 py-3 text-[13px] font-bold tracking-tight transition-all ${
         isOpen
-          ? 'border-blue-500/50 bg-white shadow-[0_0_20px_rgba(59,130,246,0.12)] ring-1 ring-blue-500/20'
+          ? 'border-blue-500/50 bg-surface-card shadow-[0_0_20px_rgba(59,130,246,0.12)] ring-1 ring-blue-500/20'
           : hasActive
           ? 'border-blue-200 bg-blue-50/50 text-blue-700 hover:border-blue-300 hover:bg-blue-50'
-          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 shadow-sm'
+          : 'border-border-soft bg-surface-card text-text-muted hover:border-border-default hover:bg-surface-hover shadow-sm'
       }`;
 
   return (
@@ -88,7 +88,7 @@ export function FilterRefinementBar({
         className={`${triggerClasses} ${barClassName}`}
       >
         <div className={isSidebar ? 'shrink-0' : `flex h-6 w-6 items-center justify-center rounded-lg transition-colors ${
-          isOpen || hasActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'
+          isOpen || hasActive ? 'bg-blue-600 text-white' : 'bg-surface-sunken text-text-faint'
         }`}>
           <Filter className={isSidebar ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
         </div>
@@ -112,7 +112,7 @@ export function FilterRefinementBar({
         <ChevronDown 
           className={`shrink-0 transition-transform duration-300 ease-[0.22,1,0.36,1] ${
             isSidebar ? 'h-3.5 w-3.5' : 'h-4 w-4'
-          } ${isOpen ? 'rotate-180 text-blue-600' : 'text-gray-400'}`} 
+          } ${isOpen ? 'rotate-180 text-blue-600' : 'text-text-faint'}`} 
         />
       </motion.button>
 
@@ -143,7 +143,7 @@ export function FilterRefinementBar({
           initial={{ opacity: 0, y: 12, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30, mass: 0.8 }}
-          className="overflow-hidden rounded-3xl border border-white/40 bg-white/80 p-1 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.18)] backdrop-blur-xl ring-1 ring-black/[0.08]"
+          className="overflow-hidden rounded-3xl border border-white/40 bg-surface-card/80 p-1 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.18)] backdrop-blur-xl ring-1 ring-black/[0.08]"
         >
           <div className="max-h-[70vh] overflow-y-auto px-5 py-6">
             {renderDropdown(() => setIsOpen(false))}
@@ -174,7 +174,7 @@ export function FilterRefinementBar({
                 className={cn(
                   'group inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-label font-bold shadow-sm ring-1 ring-inset transition-all',
                   ref.pillClassName ??
-                    'bg-white text-gray-900 ring-gray-200 hover:ring-blue-300',
+                    'bg-surface-card text-text-default ring-border-soft hover:ring-blue-300',
                 )}
               >
                 {ref.pillClassName ? null : (
@@ -186,7 +186,7 @@ export function FilterRefinementBar({
                     'h-3 w-3 transition-colors',
                     ref.pillClassName
                       ? 'text-current opacity-50 group-hover:opacity-80'
-                      : 'text-gray-300 group-hover:text-gray-900',
+                      : 'text-text-faint group-hover:text-text-default',
                   )}
                 />
               </motion.button>
@@ -197,7 +197,7 @@ export function FilterRefinementBar({
                 layout
                 type="button"
                 onClick={onClearAll}
-                className="ml-1 text-caption font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors"
+                className="ml-1 text-caption font-black uppercase tracking-widest text-text-faint hover:text-red-500 transition-colors"
               >
                 Clear all
               </motion.button>

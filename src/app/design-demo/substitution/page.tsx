@@ -49,15 +49,15 @@ export default function SubstitutionDemoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-10" data-testid="substitution-demo">
-      <h1 className="mb-6 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+    <div className="min-h-screen bg-surface-canvas p-10" data-testid="substitution-demo">
+      <h1 className="mb-6 text-eyebrow font-black uppercase tracking-widest text-text-soft">
         Fulfillment substitution — panel + amendments timeline
       </h1>
 
       <div className="grid max-w-5xl grid-cols-1 gap-8 lg:grid-cols-2">
         {/* Advisory panel (live, mock submit) */}
         <div className="space-y-2">
-          <p className="text-eyebrow font-bold uppercase tracking-widest text-gray-400">Advisory · interactive</p>
+          <p className="text-eyebrow font-bold uppercase tracking-widest text-text-faint">Advisory · interactive</p>
           <SubstitutePanel
             orderLabel="#A-10472"
             original={{ sku: 'SKU-BLK-200', condition: 'USED_A', serial: 'SN-ORD-100' }}
@@ -75,7 +75,7 @@ export default function SubstitutionDemoPage() {
         {/* Block-until-approved + error states + timeline */}
         <div className="space-y-6">
           <div className="space-y-2">
-            <p className="text-eyebrow font-bold uppercase tracking-widest text-gray-400">Block-until-approved · error</p>
+            <p className="text-eyebrow font-bold uppercase tracking-widest text-text-faint">Block-until-approved · error</p>
             <SubstitutePanel
               orderLabel="#A-10488"
               original={{ sku: 'SKU-9', condition: 'USED_A', serial: 'SN-ORD-200' }}
@@ -85,12 +85,12 @@ export default function SubstitutionDemoPage() {
             />
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="rounded-xl border border-border-soft bg-surface-card p-4">
             <OrderAmendmentsSection rows={AMENDMENTS} />
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="mb-2 text-eyebrow font-bold uppercase tracking-widest text-gray-400">Empty state</p>
+          <div className="rounded-xl border border-border-soft bg-surface-card p-4">
+            <p className="mb-2 text-eyebrow font-bold uppercase tracking-widest text-text-faint">Empty state</p>
             <OrderAmendmentsSection rows={[]} />
           </div>
         </div>

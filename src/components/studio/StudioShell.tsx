@@ -27,6 +27,10 @@ import { StudioSimulatePanel } from './StudioSimulatePanel';
 import { StudioStationPreview } from './StudioStationPreview';
 import { StudioNodeStationEditor } from './StudioNodeStationEditor';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { useAssistantContext } from '@/hooks/useAssistantContext';
+import { useAssistantDockOpen } from '@/components/assistant/AssistantProvider';
+import { cn } from '@/utils/_cn';
+import { STUDIO_SKILL } from '@/lib/assistant/page-skills';
 
 export function StudioShell() {
   const {
@@ -70,6 +74,21 @@ export function StudioShell() {
     discardDraft,
   } = useStudioWorkspace();
 
+  // Global-assistant context: flow-display skill + focused-node selection (plan §-2.2).
+  useAssistantContext({
+    page: 'studio',
+    mode: lens,
+    selection: focus ? { kind: 'workflow_node', id: focus } : null,
+    skill: STUDIO_SKILL,
+  });
+
+  // AI-first refactor (plan §4): when the assistant dock is OPEN it ABSORBS the
+  // inspector — focused-node detail renders in the dock instead of the standalone
+  // w-72 aside. Gated on the dock actually being open (not just permissioned):
+  // a closed dock must leave the classic aside/rail, else a permissioned user
+  // who never opened it would have no inspector at all at ≥lg.
+  const dockAbsorbsInspector = useAssistantDockOpen();
+
   // Inspector is a workspace preference (not shareable view state) → localStorage.
   const [inspectorOpen, setInspectorOpen] = useLocalStorage('studio:inspector-open', true);
 
@@ -84,12 +103,12 @@ export function StudioShell() {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-slate-50">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface-canvas">
       {/* ─── Header: title · version switcher · draft controls · in-flight count ─── */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-4 py-2.5">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border-soft bg-surface-card px-4 py-2.5">
         <div className="min-w-0">
-          <h1 className="text-sm font-bold tracking-tight text-slate-900">Operations Studio</h1>
-          <p className="text-caption text-slate-400">
+          <h1 className="text-sm font-bold tracking-tight text-text-default">Operations Studio</h1>
+          <p className="text-caption text-text-faint">
             {editing ? 'Editing a draft — changes go live on publish' : 'Viewing · edits happen on a draft'}
           </p>
         </div>
@@ -98,7 +117,7 @@ export function StudioShell() {
           <select
             value={String(graph.definition?.id ?? '')}
             onChange={(e) => setParams({ v: e.target.value || null, focus: null })}
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+            className="rounded-md border border-border-soft bg-surface-card px-2 py-1 text-xs font-medium text-text-muted"
             aria-label="Workflow version"
           >
             {graph.definitions.map((d) => (
@@ -147,7 +166,7 @@ export function StudioShell() {
                 'h-auto gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold',
                 simulateOpen
                   ? 'border-violet-300 bg-violet-100 text-violet-700'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                  : 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover',
               ].join(' ')}
             >
               Simulate
@@ -200,7 +219,7 @@ export function StudioShell() {
                   disabled={!dirty || busy !== null}
                   className={[
                     'h-auto rounded-md px-3 py-1 text-xs font-semibold shadow-sm',
-                    dirty ? 'bg-slate-900 text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-400',
+                    dirty ? 'bg-surface-inverse text-white hover:bg-surface-inverse-hover' : 'bg-surface-sunken text-text-faint',
                   ].join(' ')}
                 >
                   {busy === 'saving' ? 'Saving…' : dirty ? 'Save draft' : 'Saved'}
@@ -246,11 +265,11 @@ export function StudioShell() {
           {error ? (
             <div className="flex h-full items-center justify-center p-8 text-sm text-rose-600">{error}</div>
           ) : !graph ? (
-            <div className="flex h-full items-center justify-center p-8 text-sm text-slate-400">
+            <div className="flex h-full items-center justify-center p-8 text-sm text-text-faint">
               Loading the operations graph…
             </div>
           ) : !graph.definition ? (
-            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-slate-500">
+            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-text-soft">
               No workflow definition yet — seed one to see your operation here.
             </div>
           ) : z === 2 ? (
@@ -301,22 +320,32 @@ export function StudioShell() {
 
         {/* ─── Simulate panel (ST6) — its own slot, orthogonal to the inspector ─── */}
         {simulateOpen && (
-          <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 bg-white md:flex">
+          <aside className="hidden w-72 shrink-0 flex-col border-l border-border-soft bg-surface-card md:flex">
             <StudioSimulatePanel sim={sim} nodes={nodes} edges={edges} editing={editing} onClose={closeSimulate} />
           </aside>
         )}
 
+        {/* An OPEN dock absorbs the inspector (plan §4). But the dock/FAB are
+            desktop-lg only, so at 768–1024px keep the aside (lg:hidden) as the
+            fallback — otherwise that band would have no inspector at all. A
+            closed dock leaves the aside/rail everywhere (dockAbsorbsInspector
+            is false), so a permissioned first-run user still gets an inspector. */}
         {inspectorOpen ? (
-          <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 bg-white md:flex">
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2">
-              <span className="text-micro font-bold uppercase tracking-wider text-slate-400">Inspector</span>
+          <aside
+            className={cn(
+              'hidden w-72 shrink-0 flex-col border-l border-border-soft bg-surface-card md:flex',
+              dockAbsorbsInspector && 'lg:hidden',
+            )}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-3 py-2">
+              <span className="text-micro font-bold uppercase tracking-wider text-text-faint">Inspector</span>
               <HoverTooltip label="Hide inspector" asChild>
                 <IconButton
                   type="button"
                   onClick={() => setInspectorOpen(false)}
                   ariaLabel="Hide inspector panel"
                   icon={<ChevronRight className="h-4 w-4" />}
-                  className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                  className="rounded p-1 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
                 />
               </HoverTooltip>
             </div>
@@ -352,7 +381,10 @@ export function StudioShell() {
               type="button"
               onClick={() => setInspectorOpen(true)}
               aria-label="Show inspector panel"
-              className="relative hidden w-8 shrink-0 flex-col items-center gap-2 border-l border-slate-200 bg-white py-3 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 md:flex"
+              className={cn(
+                'relative hidden w-8 shrink-0 flex-col items-center gap-2 border-l border-border-soft bg-surface-card py-3 text-text-faint transition-colors hover:bg-surface-hover hover:text-text-muted md:flex',
+                dockAbsorbsInspector && 'lg:hidden',
+              )}
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="text-micro font-semibold uppercase tracking-wider [writing-mode:vertical-rl]">

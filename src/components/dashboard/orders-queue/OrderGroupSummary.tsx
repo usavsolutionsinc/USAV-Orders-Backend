@@ -38,7 +38,7 @@ export function OrderGroupSummary({ rows, isMobile }: { rows: ShippedOrder[]; is
   const isFba = isFbaOrder(orderId, first.account_source);
   const productPageUrl = getExternalUrlByItemNumber(String(first.item_number || '').trim());
   const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
-  const platformIconClass = platformLabel && productPageUrl ? platformColor : 'text-gray-500';
+  const platformIconClass = platformLabel && productPageUrl ? platformColor : 'text-text-soft';
 
   const qtySum = rows.reduce((sum, r) => sum + (parseInt(String(r.quantity || '1'), 10) || 1), 0);
   const conditions = new Set(rows.map((r) => String(r.condition || '').trim()).filter(Boolean));
@@ -88,13 +88,13 @@ export function OrderGroupSummary({ rows, isMobile }: { rows: ShippedOrder[]; is
         <RowTitle
           // Structural group marker (N products share one order#), not a status —
           // neutral gray so it never collides with a pipeline-state dot hue.
-          dot="bg-gray-300"
+          dot="bg-surface-strong"
           dotTitle={`${rows.length} products`}
           title={platformLabel ? `${platformLabel} · Order ${orderId}` : `Order ${orderId}`}
         />
         <RowMetaColumns
-          qty={<span className={qtySum > 1 ? 'text-yellow-600' : 'text-gray-500'}>{qtySum}</span>}
-          condition={<span className="text-gray-400">{conditionText}</span>}
+          qty={<span className={qtySum > 1 ? 'text-yellow-600' : 'text-text-soft'}>{qtySum}</span>}
+          condition={<span className="text-text-faint">{conditionText}</span>}
           rest={groupPrice ? <span className="normal-case tracking-normal text-emerald-600">{groupPrice}</span> : null}
         />
       </div>

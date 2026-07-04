@@ -35,12 +35,12 @@ export function MobilePhotoCountBadge({
       className={cn(
         'inline-flex shrink-0 items-center gap-0.5 font-black tabular-nums',
         textSize,
-        hasPhotos ? 'text-blue-600' : 'text-gray-300',
+        hasPhotos ? 'text-blue-600' : 'text-text-faint',
         className,
       )}
       aria-label={`${safeCount} photo${safeCount === 1 ? '' : 's'}`}
     >
-      <Camera className={cn(iconSize, hasPhotos ? 'text-blue-600' : 'text-gray-300')} />
+      <Camera className={cn(iconSize, hasPhotos ? 'text-blue-600' : 'text-text-faint')} />
       x{safeCount}
     </span>
   );

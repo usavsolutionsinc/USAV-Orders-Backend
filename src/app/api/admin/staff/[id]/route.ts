@@ -11,6 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { audit } from '@/lib/auth/audit';
 import { revokeAllSessionsForStaff, SESSION_POLICIES, type SessionPolicy } from '@/lib/auth/session';
 import { tenantQuery } from '@/lib/tenancy/db';
@@ -103,6 +105,7 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     await revokeAllSessionsForStaff(id);
   }
 
+  await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.staffOverrides]);
   return NextResponse.json({ staff: r.rows[0] });
 }, { permission: 'admin.manage_staff' });
 
@@ -128,5 +131,6 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
     event: 'staff.disabled', result: 'ok',
     detail: { targetStaffId: id },
   });
+  await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.staffOverrides]);
   return NextResponse.json({ ok: true });
 }, { permission: 'admin.manage_staff' });

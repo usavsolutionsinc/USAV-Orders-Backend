@@ -25,7 +25,7 @@ function BinRedirectInner() {
   }, [barcode, router, searchParams]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-bold text-slate-500">
+    <div className="flex min-h-screen items-center justify-center bg-surface-canvas text-sm font-bold text-text-soft">
       Opening bin…
     </div>
   );
@@ -33,7 +33,7 @@ function BinRedirectInner() {
 
 export default function LegacyBinPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+    <Suspense fallback={<div className="min-h-screen bg-surface-canvas" />}>
       <BinRedirectInner />
     </Suspense>
   );

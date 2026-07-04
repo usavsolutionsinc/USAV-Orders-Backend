@@ -15,16 +15,16 @@ interface RolesCardProps {
 
 export function RolesCard({ roles, availableRoles, borderClass, busyRoles, onSetRoles }: RolesCardProps) {
   return (
-    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-white shadow-sm`}>
-      <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-surface-card shadow-sm`}>
+      <header className="flex items-center justify-between border-b border-border-hairline px-5 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Roles</h2>
-          <p className="mt-0.5 text-caption text-gray-500">
+          <h2 className="text-sm font-semibold text-text-default">Roles</h2>
+          <p className="mt-0.5 text-caption text-text-soft">
             Staff can hold many roles. Effective permissions = UNION of every role&apos;s set,
             then layered with the per-page overrides below.
           </p>
         </div>
-        <div className="text-caption text-gray-500">
+        <div className="text-caption text-text-soft">
           {roles.length} role{roles.length === 1 ? '' : 's'}
         </div>
       </header>
@@ -60,7 +60,7 @@ export function RolesCard({ roles, availableRoles, borderClass, busyRoles, onSet
           </span>
         ))}
         {roles.length === 0 && (
-          <span className="text-caption italic text-gray-400">No roles assigned — staff has no role-granted permissions.</span>
+          <span className="text-caption italic text-text-faint">No roles assigned — staff has no role-granted permissions.</span>
         )}
         <AddRolePopover
           roles={availableRoles.filter((r) => !roles.some((x) => x.id === r.id))}
@@ -68,11 +68,11 @@ export function RolesCard({ roles, availableRoles, borderClass, busyRoles, onSet
           disabled={busyRoles}
         />
       </div>
-      <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-2 text-micro text-gray-600">
+      <div className="border-t border-border-hairline bg-surface-canvas/60 px-5 py-2 text-micro text-text-muted">
         Primary role: <b>{roles[0]?.label ?? '—'}</b>
         {roles.length > 1 && ` · ${roles.length - 1} additional`}
         {' · '}
-        <span className="text-gray-500">Edit role permissions in <a href="/settings/roles" className="text-blue-600 hover:underline">Roles</a>.</span>
+        <span className="text-text-soft">Edit role permissions in <a href="/settings/roles" className="text-blue-600 hover:underline">Roles</a>.</span>
       </div>
     </section>
   );

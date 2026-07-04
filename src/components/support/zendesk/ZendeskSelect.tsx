@@ -45,7 +45,7 @@ export function ZendeskSelect({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'ds-raw-button flex w-full items-center justify-between gap-2 border border-gray-300 bg-white text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50',
+          'ds-raw-button flex w-full items-center justify-between gap-2 border border-border-default bg-surface-card text-text-default transition-colors hover:bg-surface-hover disabled:opacity-50',
           isField
             ? 'h-10 min-h-10 rounded-xl px-3 text-[13px] font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
             : 'inline-flex max-w-[180px] gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold',
@@ -53,7 +53,7 @@ export function ZendeskSelect({
       >
         <span className="truncate">{selected ? selected.label : placeholder}</span>
         <svg
-          className={`h-3 w-3 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`h-3 w-3 shrink-0 text-text-soft transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -69,7 +69,7 @@ export function ZendeskSelect({
         placement={align === 'right' ? 'bottom-end' : 'bottom-start'}
         gap={4}
       >
-        <div className="max-h-64 w-max min-w-[150px] overflow-auto rounded-lg border border-gray-200 bg-white p-1 shadow-xl">
+        <div className="max-h-64 w-max min-w-[150px] overflow-auto rounded-lg border border-border-soft bg-surface-card p-1 shadow-xl">
           {options.map((o) => (
             <button
               key={o.value}
@@ -78,12 +78,12 @@ export function ZendeskSelect({
                 onChange(o.value);
                 setOpen(false);
               }}
-              className={`ds-raw-button flex w-full flex-col items-start rounded-md px-2.5 py-1.5 text-left hover:bg-gray-50 ${
-                o.value === value ? 'bg-gray-50' : ''
+              className={`ds-raw-button flex w-full flex-col items-start rounded-md px-2.5 py-1.5 text-left hover:bg-surface-hover ${
+                o.value === value ? 'bg-surface-canvas' : ''
               }`}
             >
-              <span className="text-caption font-bold text-gray-800">{o.label}</span>
-              {o.sublabel ? <span className="text-micro text-gray-500">{o.sublabel}</span> : null}
+              <span className="text-caption font-bold text-text-default">{o.label}</span>
+              {o.sublabel ? <span className="text-micro text-text-soft">{o.sublabel}</span> : null}
             </button>
           ))}
         </div>

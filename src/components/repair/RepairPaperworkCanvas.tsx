@@ -24,10 +24,10 @@ export function RepairPaperworkCanvas({
     <div className={cn('overflow-x-auto', isFull && 'w-full')}>
       <div
         className={cn(
-          'bg-white',
+          'bg-surface-card',
           isBordered
             ? 'border border-black'
-            : 'shadow-lg ring-1 ring-gray-300',
+            : 'shadow-lg ring-1 ring-border-default',
           isFull ? 'w-full' : 'mx-auto w-fit',
         )}
       >

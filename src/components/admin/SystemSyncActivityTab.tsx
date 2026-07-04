@@ -21,7 +21,7 @@ const DOT: Record<JobHealth, string> = {
   stale: 'bg-amber-500',
   failed: 'bg-rose-500',
   running: 'bg-blue-500 animate-pulse',
-  never: 'bg-gray-300',
+  never: 'bg-surface-strong',
 };
 
 function rel(iso: string | null): string {
@@ -58,10 +58,10 @@ export function SystemSyncActivityTab() {
     <div className="mx-auto w-full max-w-5xl space-y-5 px-6 py-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-black tracking-tight text-gray-900">
-            <Activity className="h-5 w-5 text-gray-400" /> System sync activity
+          <h1 className="flex items-center gap-2 text-xl font-black tracking-tight text-text-default">
+            <Activity className="h-5 w-5 text-text-faint" /> System sync activity
           </h1>
-          <p className="mt-0.5 text-caption text-gray-500">
+          <p className="mt-0.5 text-caption text-text-soft">
             Cron health, last runs, and history across every scheduled job.
           </p>
         </div>
@@ -77,7 +77,7 @@ export function SystemSyncActivityTab() {
 
       {/* Health cards */}
       {summary.isLoading ? (
-        <div className="flex items-center gap-2 p-8 text-caption text-gray-400">
+        <div className="flex items-center gap-2 p-8 text-caption text-text-faint">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading jobs…
         </div>
       ) : summary.isError || !summary.data ? (
@@ -98,9 +98,9 @@ export function SystemSyncActivityTab() {
       )}
 
       {/* Run history */}
-      <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
+      <section className="rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60">
         <header className="flex items-center justify-between px-5 py-4">
-          <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500">
+          <h3 className="text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft">
             Run history {jobFilter ? `· ${jobFilter}` : ''}
           </h3>
           {jobFilter && (
@@ -115,13 +115,13 @@ export function SystemSyncActivityTab() {
           )}
         </header>
         {list.isLoading ? (
-          <div className="flex items-center gap-2 border-t border-gray-100 px-5 py-4 text-caption text-gray-400">
+          <div className="flex items-center gap-2 border-t border-border-hairline px-5 py-4 text-caption text-text-faint">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : !list.data || list.data.runs.length === 0 ? (
-          <p className="border-t border-gray-100 px-5 py-3 text-caption text-gray-400">No runs recorded yet.</p>
+          <p className="border-t border-border-hairline px-5 py-3 text-caption text-text-faint">No runs recorded yet.</p>
         ) : (
-          <ul className="border-t border-gray-100 divide-y divide-gray-100">
+          <ul className="border-t border-border-hairline divide-y divide-border-hairline">
             {list.data.runs.map((r) => (
               <RunRow key={r.id} run={r} />
             ))}
@@ -148,16 +148,16 @@ function JobCard({
   const last = job.lastRun;
   return (
     <div
-      className={`rounded-xl bg-white p-3 shadow-sm ring-1 transition ${
-        active ? 'ring-blue-300' : 'ring-gray-200/60 hover:ring-gray-300'
+      className={`rounded-xl bg-surface-card p-3 shadow-sm ring-1 transition ${
+        active ? 'ring-blue-300' : 'ring-border-soft/60 hover:ring-border-default'
       }`}
     >
       <div className="flex items-start gap-2">
         <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${DOT[job.health]}`} aria-hidden />
         {/* ds-raw-button: text-left multi-line master-detail select row (label + schedule meta) */}
         <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
-          <div className="truncate text-label font-bold text-gray-900">{job.label}</div>
-          <div className="truncate text-mini text-gray-500">
+          <div className="truncate text-label font-bold text-text-default">{job.label}</div>
+          <div className="truncate text-mini text-text-soft">
             {job.schedule ?? 'unscheduled'} · {rel(last?.finishedAt ?? last?.startedAt ?? null)}
           </div>
         </button>
@@ -167,7 +167,7 @@ function JobCard({
             onClick={onRun}
             disabled={running}
             ariaLabel="Run now"
-            className="shrink-0 rounded-md p-1.5 hover:bg-gray-100"
+            className="shrink-0 rounded-md p-1.5 hover:bg-surface-sunken"
           />
         </HoverTooltip>
       </div>
@@ -195,15 +195,15 @@ function RunRow({ run }: { run: CronRunRow }) {
         <span className={`rounded-full px-1.5 py-0.5 text-mini font-bold ${syncRunStatusChipClass(run.status)}`}>
           {run.status}
         </span>
-        <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-800">{run.job}</span>
+        <span className="min-w-0 flex-1 truncate text-label font-bold text-text-default">{run.job}</span>
         {run.trigger === 'manual' && (
-          <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-mini font-bold text-gray-500">manual</span>
+          <span className="shrink-0 rounded bg-surface-sunken px-1.5 py-0.5 text-mini font-bold text-text-soft">manual</span>
         )}
-        <span className="shrink-0 text-mini tabular-nums text-gray-400">{dur(run.duration_ms)}</span>
-        <span className="shrink-0 text-mini tabular-nums text-gray-400">{rel(run.started_at)}</span>
+        <span className="shrink-0 text-mini tabular-nums text-text-faint">{dur(run.duration_ms)}</span>
+        <span className="shrink-0 text-mini tabular-nums text-text-faint">{rel(run.started_at)}</span>
       </button>
       {open && hasDetail && (
-        <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-gray-50 p-2.5 text-mini text-gray-600">
+        <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-surface-canvas p-2.5 text-mini text-text-muted">
           {run.error ? `ERROR: ${run.error}\n` : ''}
           {run.summary && typeof run.summary === 'object' ? JSON.stringify(run.summary, null, 2) : ''}
         </pre>

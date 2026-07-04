@@ -37,7 +37,7 @@ const DOT_TONE: Record<TimelineTone, string> = {
   success: 'bg-emerald-500',
   warning: 'bg-amber-500',
   danger: 'bg-rose-500',
-  muted: 'bg-gray-300',
+  muted: 'bg-surface-strong',
 };
 
 // Soft static halo behind the latest dot (calm, not an animated ping).
@@ -51,12 +51,12 @@ const DOT_HALO: Record<TimelineTone, string> = {
 };
 
 const BADGE_TONE: Record<TimelineTone, string> = {
-  default: 'bg-gray-100 text-gray-600',
+  default: 'bg-surface-sunken text-text-muted',
   info: 'bg-blue-50 text-blue-700',
   success: 'bg-emerald-50 text-emerald-700',
   warning: 'bg-amber-50 text-amber-700',
   danger: 'bg-rose-50 text-rose-700',
-  muted: 'bg-gray-100 text-gray-600',
+  muted: 'bg-surface-sunken text-text-muted',
 };
 
 type Density = 'comfortable' | 'compact';
@@ -257,17 +257,17 @@ function groupBySerial(
 function DefaultGroupHeader({ group }: { group: SerialGroup }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
+      <span className="text-mini font-bold uppercase tracking-[0.12em] text-text-faint">
         {group.ref ? `${REF_KIND_LABEL[group.ref.kind]} ` : ''}
       </span>
       {group.ref ? (
         <TimelineRefChip refItem={group.ref} />
       ) : (
-        <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
+        <span className="text-mini font-bold uppercase tracking-[0.12em] text-text-faint">
           {group.label}
         </span>
       )}
-      <span className="text-micro font-medium text-gray-300">
+      <span className="text-micro font-medium text-text-faint">
         {group.items.length} {group.items.length === 1 ? 'event' : 'events'}
       </span>
     </div>
@@ -280,9 +280,9 @@ function GroupLatestPeek({ items, richTime }: { items: TimelineItem[]; richTime:
   if (!latest) return null;
   const when = richTime ? relTime(latest.at) : fmt(latest.at, 'h:mma').toLowerCase();
   return (
-    <span className="ml-auto hidden min-w-0 shrink items-center gap-1.5 truncate text-micro font-medium text-gray-400 sm:flex">
+    <span className="ml-auto hidden min-w-0 shrink items-center gap-1.5 truncate text-micro font-medium text-text-faint sm:flex">
       <span className="truncate">{latest.title}</span>
-      <span className="shrink-0 whitespace-nowrap tabular-nums text-gray-300">· {when}</span>
+      <span className="shrink-0 whitespace-nowrap tabular-nums text-text-faint">· {when}</span>
     </span>
   );
 }
@@ -308,7 +308,7 @@ export function EventTimeline({
 
   if (items.length === 0) {
     return (
-      <div className="flex h-28 items-center justify-center px-4 text-center text-caption font-medium text-gray-400">
+      <div className="flex h-28 items-center justify-center px-4 text-center text-caption font-medium text-text-faint">
         {emptyMessage}
       </div>
     );
@@ -372,10 +372,10 @@ export function EventTimeline({
                   }
                 }}
                 aria-expanded={open}
-                className="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               >
                 <ChevronRight
-                  className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+                  className={`h-3.5 w-3.5 shrink-0 text-text-faint transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
                 />
                 <div className="min-w-0 flex-1">{header}</div>
                 {!open ? <GroupLatestPeek items={g.items} richTime={richTime} /> : null}
@@ -410,7 +410,7 @@ export function EventTimeline({
           hard-stops against the first/last dot. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute left-[5px] top-1 bottom-1 w-px bg-gray-200"
+        className="pointer-events-none absolute left-[5px] top-1 bottom-1 w-px bg-surface-strong"
         style={{
           maskImage:
             'linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent)',
@@ -430,7 +430,7 @@ export function EventTimeline({
           <motion.li key={item.id} variants={row} className="relative pl-5">
             {showDay ? (
               <div
-                className={`${d.day} mb-1.5 pl-px text-mini font-bold uppercase tracking-[0.12em] text-gray-400`}
+                className={`${d.day} mb-1.5 pl-px text-mini font-bold uppercase tracking-[0.12em] text-text-faint`}
               >
                 {dayKey}
               </div>
@@ -439,7 +439,7 @@ export function EventTimeline({
             <div className={`relative ${d.pb} last:pb-0`}>
               {/* Dot / icon — the only color in the row. */}
               {item.icon ? (
-                <span className={`absolute -left-5 ${d.dotTop} flex h-3.5 w-3.5 items-center justify-center text-gray-400`}>
+                <span className={`absolute -left-5 ${d.dotTop} flex h-3.5 w-3.5 items-center justify-center text-text-faint`}>
                   {item.icon}
                 </span>
               ) : (
@@ -450,34 +450,34 @@ export function EventTimeline({
               )}
 
               {/* Hover surface — bleeds slightly past the text, never under the dot. */}
-              <div className="-mx-2 rounded-lg px-2 py-0.5 transition-colors duration-150 hover:bg-gray-50/80">
+              <div className="-mx-2 rounded-lg px-2 py-0.5 transition-colors duration-150 hover:bg-surface-canvas/80">
                 <div className="flex items-baseline justify-between gap-3">
                   <span
                     className={`text-caption tracking-tight ${
-                      isLatest ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'
+                      isLatest ? 'font-bold text-text-default' : 'font-semibold text-text-muted'
                     }`}
                   >
                     {item.title}
                   </span>
-                  <span className="shrink-0 whitespace-nowrap text-micro font-medium tabular-nums text-gray-400">
+                  <span className="shrink-0 whitespace-nowrap text-micro font-medium tabular-nums text-text-faint">
                     {richTime ? (
                       <HoverTooltip
                         label={absTimestamp(item.at)}
                         focusable={false}
-                        className="cursor-default border-b border-dotted border-gray-300"
+                        className="cursor-default border-b border-dotted border-border-default"
                       >
                         {time}
                       </HoverTooltip>
                     ) : (
                       time
                     )}
-                    {item.actor ? <span className="text-gray-300"> · </span> : null}
-                    {item.actor ? <span className="text-gray-500">{item.actor}</span> : null}
+                    {item.actor ? <span className="text-text-faint"> · </span> : null}
+                    {item.actor ? <span className="text-text-soft">{item.actor}</span> : null}
                   </span>
                 </div>
 
                 {item.subtitle ? (
-                  <div className="mt-0.5 text-micro font-medium tabular-nums text-gray-400">
+                  <div className="mt-0.5 text-micro font-medium tabular-nums text-text-faint">
                     {item.subtitle}
                   </div>
                 ) : null}

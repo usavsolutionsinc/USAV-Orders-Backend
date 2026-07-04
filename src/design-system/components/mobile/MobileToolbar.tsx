@@ -56,7 +56,7 @@ export function MobileToolbar({
     <Wrapper
       {...motionProps}
       className={`
-        flex-shrink-0 bg-white/95 backdrop-blur-sm border-b border-gray-100
+        flex-shrink-0 bg-surface-card/95 backdrop-blur-sm border-b border-border-hairline
         pt-[max(0.5rem,env(safe-area-inset-top))]
         ${className}
       `.trim()}
@@ -71,11 +71,11 @@ export function MobileToolbar({
 
         {/* Title block */}
         <div className="flex-1 min-w-0">
-          <h1 className="text-base font-black text-gray-900 tracking-tight truncate">
+          <h1 className="text-base font-black text-text-default tracking-tight truncate">
             {title}
           </h1>
           {subtitle && (
-            <p className="text-eyebrow font-bold uppercase tracking-[0.2em] text-gray-500 truncate">
+            <p className="text-eyebrow font-bold uppercase tracking-[0.2em] text-text-soft truncate">
               {subtitle}
             </p>
           )}

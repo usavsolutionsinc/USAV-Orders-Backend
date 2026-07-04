@@ -8,10 +8,17 @@ import {
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { queryWithRetry } from '@/lib/db-retry';
 import { isPackerLogEnrichmentRead } from '@/lib/feature-flags';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type PackerLogsTrackingFilter = 'all' | 'orders' | 'sku' | 'fba';
 
 export interface FetchPackerLogRowsOptions {
+  /**
+   * Tenant scope (REQUIRED). Every row is filtered by `sal.organization_id`
+   * and the org id is part of the cache key — without it this loader returned
+   * every tenant's PACK rows to any caller (tenant-isolation bug, 2026-07-01).
+   */
+  organizationId: OrgId;
   packerId?: number | null;
   testedBy?: number | null;
   /**
@@ -56,10 +63,15 @@ export async function fetchPackerLogRows(
   const weekEnd = opts.weekEnd ?? '';
   const trackingTypeFilter: PackerLogsTrackingFilter = opts.trackingTypeFilter ?? 'all';
 
+  const orgId = opts.organizationId;
+
   const staffFilterId =
     opts.staffId != null && Number.isFinite(opts.staffId) && opts.staffId > 0 ? opts.staffId : null;
 
   const cacheLookup = createCacheLookupKey({
+    // Org id FIRST so the cache is per-tenant — never share a PACK-log page
+    // across organizations.
+    organizationId: orgId,
     packerId: opts.packerId ?? '',
     testedBy: opts.testedBy ?? '',
     staffId: staffFilterId ?? '',
@@ -80,6 +92,11 @@ export async function fetchPackerLogRows(
 
   const params: any[] = [];
   const conditions: string[] = [`sal.station = 'PACK'`];
+
+  // Tenant scope — bounds the whole page CTE (and therefore both the legacy and
+  // enriched queries, which share these conditions) to the caller's org.
+  params.push(orgId);
+  conditions.push(`sal.organization_id = $${params.length}`);
 
   if (opts.packerId != null && !Number.isNaN(opts.packerId)) {
     params.push(opts.packerId);
@@ -168,7 +185,7 @@ export async function fetchPackerLogRows(
                 ord.id DESC
             LIMIT 1
         ) order_match ON TRUE
-        LEFT JOIN orders o ON o.id = order_match.id
+        LEFT JOIN orders o ON o.id = order_match.id AND o.organization_id = sal.organization_id
         LEFT JOIN LATERAL (
             SELECT wa.assigned_tech_id
             FROM work_assignments wa
@@ -355,7 +372,7 @@ export async function fetchPackerLogRows(
             ord.id DESC
         LIMIT 1
     ) order_match ON TRUE
-    LEFT JOIN orders o ON o.id = order_match.id
+    LEFT JOIN orders o ON o.id = order_match.id AND o.organization_id = sal.organization_id
     LEFT JOIN orders_exceptions oe ON oe.id = sal.orders_exception_id
     LEFT JOIN LATERAL (
         SELECT COALESCE(
@@ -364,8 +381,10 @@ export async function fetchPackerLogRows(
         ) AS ecwid_product_title
         FROM sku_platform_ids sp_e
         LEFT JOIN sku_catalog sc_e ON sc_e.id = sp_e.sku_catalog_id
+          AND sc_e.organization_id = sal.organization_id
         WHERE sp_e.platform = 'ecwid'
           AND sp_e.is_active = true
+          AND sp_e.organization_id = sal.organization_id
           AND EXISTS (
             SELECT 1
             FROM UNNEST(ARRAY[
@@ -399,7 +418,8 @@ export async function fetchPackerLogRows(
     LEFT JOIN LATERAL (
         SELECT sc.product_title AS catalog_product_title
         FROM sku_catalog sc
-        WHERE EXISTS (
+        WHERE sc.organization_id = sal.organization_id
+          AND EXISTS (
             SELECT 1
             FROM UNNEST(ARRAY[
                 NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
@@ -434,7 +454,8 @@ export async function fetchPackerLogRows(
     LEFT JOIN LATERAL (
         SELECT ss.product_title AS stock_product_title
         FROM sku_stock ss
-        WHERE EXISTS (
+        WHERE ss.organization_id = sal.organization_id
+          AND EXISTS (
             SELECT 1
             FROM UNNEST(ARRAY[
                 NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
@@ -653,7 +674,7 @@ export async function fetchPackerLogRows(
     LEFT JOIN staff shipped_out_staff ON shipped_out_staff.id = ship_out.shipped_out_by
     LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
     LEFT JOIN staff packed_staff ON packed_staff.id = sal.staff_id
-    LEFT JOIN orders o ON o.id = enr.order_row_id
+    LEFT JOIN orders o ON o.id = enr.order_row_id AND o.organization_id = sal.organization_id
     LEFT JOIN orders_exceptions oe ON oe.id = sal.orders_exception_id
     LEFT JOIN LATERAL (
         SELECT wa.deadline_at
@@ -728,8 +749,9 @@ export async function fetchPackerLogRows(
           WHERE l.entity_type = 'PACKER_LOG'
             AND l.link_role = 'primary'
             AND l.entity_id = ANY($1)
+            AND l.organization_id = $2
           GROUP BY l.entity_id`,
-        [packerLogIds],
+        [packerLogIds, orgId],
       );
       for (const row of photosResult.rows) {
         photosMap[row.entity_id] = row.photos;

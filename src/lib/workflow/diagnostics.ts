@@ -61,7 +61,8 @@ export interface Diagnostic {
     | 'station-unknown-action'
     | 'port-fan-out'
     | 'decision-no-rules'
-    | 'decision-port-undeclared';
+    | 'decision-port-undeclared'
+    | 'invalid-config';
   nodeId?: string;
   edgeId?: string;
   message: string;

@@ -98,8 +98,8 @@ export function LinearWorkflowStepper({
             s === 'done'
               ? 'text-blue-600'
               : s === 'active'
-                ? 'text-gray-900'
-                : 'text-gray-400';
+                ? 'text-text-default'
+                : 'text-text-faint';
           const disabled = isStepDisabled?.(step.key) ?? false;
           const clickable = !!onStepClick && !disabled;
 
@@ -118,7 +118,7 @@ export function LinearWorkflowStepper({
                 <li aria-hidden className={`min-w-0 flex-1 self-start ${connectorPt}`}>
                   <span
                     className={`block h-px w-full ${
-                      prevState === 'done' ? 'bg-blue-300' : 'bg-gray-200'
+                      prevState === 'done' ? 'bg-blue-300' : 'bg-surface-strong'
                     }`}
                   />
                 </li>
@@ -207,7 +207,7 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
   }
 
   return (
-    <div className={`${receivingScanBandClass} bg-white`}>
+    <div className={`${receivingScanBandClass} bg-surface-card`}>
       <LinearWorkflowStepper
         steps={STEPS}
         states={states}
@@ -243,7 +243,7 @@ function StepDot({
   if (state === 'active') {
     return (
       <span
-        className={`flex shrink-0 items-center justify-center rounded-full bg-white font-black text-blue-700 ring-2 ring-blue-500 ${sizeClass}`}
+        className={`flex shrink-0 items-center justify-center rounded-full bg-surface-card font-black text-blue-700 ring-2 ring-blue-500 ${sizeClass}`}
       >
         {index}
       </span>
@@ -251,7 +251,7 @@ function StepDot({
   }
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full bg-white font-black text-gray-400 ring-2 ring-gray-200 ${sizeClass}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-surface-card font-black text-text-faint ring-2 ring-border-soft ${sizeClass}`}
     >
       {index}
     </span>

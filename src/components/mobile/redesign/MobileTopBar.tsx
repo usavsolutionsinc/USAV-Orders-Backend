@@ -31,14 +31,14 @@ export const MobileTopBar = ({
   /** Page-specific controls, placed left of the global actions. */
   actions?: ReactNode;
 }) => (
-  <header className="sticky top-0 z-header flex w-full shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80">
+  <header className="sticky top-0 z-header flex w-full shrink-0 items-center justify-between gap-2 border-b border-border-soft bg-surface-card/90 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-surface-card/80">
     <div className="flex min-w-0 items-center gap-2">
       {onMenu && (
         <IconButton
           onClick={onMenu}
           ariaLabel="Open menu"
           icon={<Menu className="h-5 w-5" />}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all active:scale-90"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-soft bg-surface-card text-text-muted shadow-sm transition-all active:scale-90"
         />
       )}
       {onBack && (
@@ -46,7 +46,7 @@ export const MobileTopBar = ({
           onClick={onBack}
           ariaLabel="Back"
           icon={<ChevronLeft className="h-5 w-5" />}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-500 shadow-sm transition-all active:scale-90"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-surface-card text-blue-500 shadow-sm transition-all active:scale-90"
         />
       )}
       {/* Daily-goal chip pinned to the far left of every mobile page. */}

@@ -100,13 +100,13 @@ export function OperationsGoalHero({ staffProgress, isLoading }: OperationsGoalH
 
   if (isLoading && rows.length === 0) {
     return (
-      <section className="h-[180px] animate-pulse rounded-[28px] border border-border-soft bg-white/60" />
+      <section className="h-[180px] animate-pulse rounded-[28px] border border-border-soft bg-surface-card/60" />
     );
   }
 
   return (
     <section
-      className="overflow-hidden rounded-[28px] border border-border-soft bg-white
+      className="overflow-hidden rounded-[28px] border border-border-soft bg-surface-card
                  shadow-[0_4px_24px_rgba(161,140,90,0.06)]"
     >
       <div className="flex flex-col gap-6 p-5 sm:p-7 lg:flex-row lg:items-center">

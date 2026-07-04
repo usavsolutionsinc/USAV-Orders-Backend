@@ -92,6 +92,11 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
   zendesk: { provider: 'zendesk', authKind: 'vault', capabilities: [] },
   ably: { provider: 'ably', authKind: 'vault', capabilities: [] },
   ollama: { provider: 'ollama', authKind: 'vault', capabilities: [] },
+  // AI search providers (BYOK, OpenAI wire format) — resolved per request by
+  // src/lib/ai/org-provider.ts; 'ollama' doubles as the self-hosted slot.
+  ai_gateway: { provider: 'ai_gateway', authKind: 'vault', capabilities: [] },
+  openai: { provider: 'openai', authKind: 'vault', capabilities: [] },
+  anthropic: { provider: 'anthropic', authKind: 'vault', capabilities: [] },
   // Voice — business phone (call log + voicemail follow-ups + click-to-call).
   // authKind is confirmed in the Phase 0 spike; vault is the default. sync() is
   // the catch-up poll (webhooks are the realtime path) — lazy-imported so the

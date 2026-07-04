@@ -20,7 +20,7 @@ export function OrdersFirstRunEmptyState({
 }) {
   return (
     <EmptyState
-      icon={<Inbox className="h-6 w-6 text-gray-400" />}
+      icon={<Inbox className="h-6 w-6 text-text-faint" />}
       title={title}
       description={description}
       action={

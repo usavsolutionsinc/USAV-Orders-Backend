@@ -109,18 +109,18 @@ export function SendPhotoNoteModal({
       className="-mt-8 h-[min(86vh,44rem)] w-[min(94vw,52rem)]"
       aria-label="Send photos as an internal note"
     >
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border-soft px-4 py-3">
         <div className="min-w-0">
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-gray-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
             Send photos to ticket
           </p>
-          <p className="truncate text-xs font-semibold text-gray-900">{poLabel}</p>
+          <p className="truncate text-xs font-semibold text-text-default">{poLabel}</p>
         </div>
         <IconButton
           onClick={onClose}
           ariaLabel="Close"
           icon={<X className="h-4 w-4" />}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          className="rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
         />
       </div>
 
@@ -132,7 +132,7 @@ export function SendPhotoNoteModal({
         <div>
           <label
             htmlFor="photo-note-body"
-            className="mb-1.5 block text-micro font-black uppercase tracking-[0.14em] text-gray-500"
+            className="mb-1.5 block text-micro font-black uppercase tracking-[0.14em] text-text-soft"
           >
             Internal note
           </label>
@@ -142,13 +142,13 @@ export function SendPhotoNoteModal({
             onChange={(e) => setNote(e.target.value)}
             rows={4}
             placeholder="Add an internal note for the team (private — not emailed to the customer)…"
-            className="block w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-label font-medium text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            className="block w-full resize-y rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-label font-medium text-text-default outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-4 py-3">
-        <p className="min-w-0 text-micro font-medium text-gray-400">
+      <div className="flex items-center justify-between gap-3 border-t border-border-soft px-4 py-3">
+        <p className="min-w-0 text-micro font-medium text-text-faint">
           Posts as an internal note (private).
           {selectedTicket ? ` → #${selectedTicket.id}` : ' Pick a ticket.'}
           {photoCount ? ` · ${photoCount} photo${photoCount === 1 ? '' : 's'}` : ''}

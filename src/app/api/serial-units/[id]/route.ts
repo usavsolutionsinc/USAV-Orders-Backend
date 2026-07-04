@@ -32,13 +32,18 @@ export async function GET(
       );
     }
 
-    const SELECT_COLS = `id, serial_number, normalized_serial, sku, sku_catalog_id,
-                unit_uid,
-                zoho_item_id, current_status::text AS current_status,
-                current_location, condition_grade::text AS condition_grade,
-                origin_source, origin_receiving_line_id,
-                received_at, received_by,
-                created_at, updated_at`;
+    // Phase 3: origin_source / origin_receiving_line_id come from the
+    // reconstruction view (single-row lookups below, so the join is cheap).
+    // origin_source is the semantic label ('tsn' where the column held
+    // 'legacy_tsn_backfill') — display-only, accepted.
+    const SELECT_COLS = `su.id, su.serial_number, su.normalized_serial, su.sku, su.sku_catalog_id,
+                su.unit_uid,
+                su.zoho_item_id, su.current_status::text AS current_status,
+                su.current_location, su.condition_grade::text AS condition_grade,
+                vo.origin_source, vo.origin_receiving_line_id,
+                su.received_at, su.received_by,
+                su.created_at, su.updated_at`;
+    const SELECT_FROM = `FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id`;
 
     // Resolve in order: numeric id → normalized serial → minted unit_uid.
     // The unit_uid branch is what makes a scanned products-label QR resolve
@@ -47,7 +52,7 @@ export async function GET(
     if (/^\d+$/.test(raw)) {
       const r = await tenantQuery(
         orgId,
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.id = $1 AND su.organization_id = $2 LIMIT 1`,
         [Number(raw), orgId],
       );
       unit = r.rows[0] ?? null;
@@ -55,7 +60,7 @@ export async function GET(
     if (!unit) {
       const r = await tenantQuery(
         orgId,
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) AND organization_id = $2 LIMIT 1`,
+        `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.normalized_serial = UPPER(TRIM($1)) AND su.organization_id = $2 LIMIT 1`,
         [raw, orgId],
       );
       unit = r.rows[0] ?? null;
@@ -63,7 +68,7 @@ export async function GET(
     if (!unit) {
       const r = await tenantQuery(
         orgId,
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE unit_uid = $1 AND organization_id = $2 LIMIT 1`,
+        `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.unit_uid = $1 AND su.organization_id = $2 LIMIT 1`,
         [raw, orgId],
       );
       unit = r.rows[0] ?? null;

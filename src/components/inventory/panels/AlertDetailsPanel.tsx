@@ -87,7 +87,7 @@ export function AlertDetailsPanel({ alertId, onClose }: AlertDetailsPanelProps) 
             onClose={onClose}
         >
             {loading ? (
-                <div className="flex items-center justify-center py-16 text-gray-400">
+                <div className="flex items-center justify-center py-16 text-text-faint">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="ml-2 text-sm">Loading alert…</span>
                 </div>
@@ -101,19 +101,19 @@ export function AlertDetailsPanel({ alertId, onClose }: AlertDetailsPanelProps) 
                 <div className="mx-auto max-w-3xl space-y-6 px-5 py-5">
                     <header className="flex items-center gap-3">
                         <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                            alert.resolved_at ? 'bg-gray-100 text-gray-500' : alert.severity === 'critical' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                            alert.resolved_at ? 'bg-surface-sunken text-text-soft' : alert.severity === 'critical' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
                         }`}>
                             <AlertTriangle className="h-5 w-5" />
                         </div>
                         <div>
-                            <p className={`${microBadge} ${alert.resolved_at ? 'text-gray-500' : 'text-red-600'}`}>
+                            <p className={`${microBadge} ${alert.resolved_at ? 'text-text-soft' : 'text-red-600'}`}>
                                 {alert.resolved_at ? 'Resolved' : alert.severity}
                             </p>
-                            <p className="text-sm text-gray-700">{alert.rule}</p>
+                            <p className="text-sm text-text-muted">{alert.rule}</p>
                         </div>
                     </header>
 
-                    <section className="rounded-xl border border-gray-200 bg-white">
+                    <section className="rounded-xl border border-border-soft bg-surface-card">
                         <div className="grid grid-cols-2 gap-4 px-5 py-4 text-sm">
                             <Field label="SKU" value={alert.sku ?? '—'} />
                             <Field label="Bin" value={alert.bin_barcode ?? '—'} />
@@ -125,7 +125,7 @@ export function AlertDetailsPanel({ alertId, onClose }: AlertDetailsPanelProps) 
                         </div>
                     </section>
 
-                    <section className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                    <section className="rounded-xl border border-border-soft bg-surface-card px-5 py-4">
                         <p className={sectionLabel}>Resolve</p>
                         {alert.resolved_at ? (
                             <p className={`${microBadge} mt-2 text-emerald-700`}>
@@ -138,7 +138,7 @@ export function AlertDetailsPanel({ alertId, onClose }: AlertDetailsPanelProps) 
                                     onChange={(e) => setNote(e.target.value)}
                                     placeholder="Optional note (what changed, who handled it)"
                                     rows={2}
-                                    className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none"
+                                    className="w-full resize-none rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-sm text-text-default focus:border-blue-400 focus:bg-surface-card focus:outline-none"
                                 />
                                 {ackError ? (
                                     <p className={`${microBadge} text-red-600`}>{ackError}</p>
@@ -167,8 +167,8 @@ export function AlertDetailsPanel({ alertId, onClose }: AlertDetailsPanelProps) 
 function Field({ label, value }: { label: string; value: string }) {
     return (
         <div>
-            <dt className={`${microBadge} text-gray-500`}>{label}</dt>
-            <dd className="mt-0.5 text-gray-900">{value}</dd>
+            <dt className={`${microBadge} text-text-soft`}>{label}</dt>
+            <dd className="mt-0.5 text-text-default">{value}</dd>
         </div>
     );
 }

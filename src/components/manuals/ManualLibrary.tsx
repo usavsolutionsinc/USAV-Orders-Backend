@@ -56,8 +56,8 @@ function statusBadgeClass(status: string): string {
   switch (status) {
     case 'unassigned': return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'assigned':   return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'archived':   return 'bg-gray-100 text-gray-500 border-gray-200';
-    default:           return 'bg-gray-50 text-gray-600 border-gray-200';
+    case 'archived':   return 'bg-surface-sunken text-text-soft border-border-soft';
+    default:           return 'bg-surface-canvas text-text-muted border-border-soft';
   }
 }
 
@@ -66,7 +66,7 @@ function typeBadgeClass(type: string | null): string {
     case 'manual':       return 'bg-blue-50 text-blue-700 border-blue-200';
     case 'packing-list': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'pl-plus-m':    return 'bg-violet-50 text-violet-700 border-violet-200';
-    default:             return 'bg-gray-50 text-gray-600 border-gray-200';
+    default:             return 'bg-surface-canvas text-text-muted border-border-soft';
   }
 }
 
@@ -144,16 +144,16 @@ export function ManualLibrary() {
   if (!id) return <EmptyViewer />;
   if (loading && !manual) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-50">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      <div className="flex h-full w-full items-center justify-center bg-surface-canvas">
+        <Loader2 className="h-6 w-6 animate-spin text-text-faint" />
       </div>
     );
   }
   if (!manual) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center bg-gray-50 px-8 text-center">
-        <FileText className="mb-3 h-10 w-10 text-gray-300" />
-        <p className={`${tableHeader} text-gray-500`}>Manual not found</p>
+      <div className="flex h-full w-full flex-col items-center justify-center bg-surface-canvas px-8 text-center">
+        <FileText className="mb-3 h-10 w-10 text-text-faint" />
+        <p className={`${tableHeader} text-text-soft`}>Manual not found</p>
       </div>
     );
   }
@@ -239,19 +239,19 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
   }, [manual.id, manual.display_name, router, searchParams]);
 
   return (
-    <div className="flex h-full w-full flex-col bg-gray-50">
-      <div className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 bg-white px-6 py-4">
+    <div className="flex h-full w-full flex-col bg-surface-canvas">
+      <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border-soft bg-surface-card px-6 py-4">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-black text-gray-900">
+          <p className="truncate text-sm font-black text-text-default">
             {manual.display_name || manual.file_name || `Manual #${manual.id}`}
           </p>
           {manual.product_title && (
-            <p className="mt-0.5 truncate text-caption font-medium text-gray-500">
+            <p className="mt-0.5 truncate text-caption font-medium text-text-soft">
               {manual.product_title}
             </p>
           )}
           {manual.folder_path && (
-            <p className="mt-1 truncate font-mono text-micro text-gray-400">{manual.folder_path}</p>
+            <p className="mt-1 truncate font-mono text-micro text-text-faint">{manual.folder_path}</p>
           )}
           {deleteError && (
             <p className="mt-1 text-micro font-semibold text-red-600">{deleteError}</p>
@@ -306,7 +306,7 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-surface-inverse px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-surface-inverse-hover"
             >
               <ExternalLink className="h-3 w-3" />
               Open
@@ -322,7 +322,7 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
         replaceTarget={replaceTarget}
       />
 
-      <div className="min-h-0 flex-1 overflow-hidden bg-gray-100">
+      <div className="min-h-0 flex-1 overflow-hidden bg-surface-sunken">
         {isBlobPdf && href ? (
           // Key on id + source_url so a Replace (new URL) forces a fresh mount.
           // The cache-bust param on the URL itself handles the Edit-only case
@@ -334,25 +334,25 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
             key={`${manual.id}::${manual.source_url || ''}`}
             src={appendCacheBust(href, manual.updated_at || String(manual.id))}
             title={manual.display_name || `Manual ${manual.id}`}
-            className="h-full w-full border-0 bg-white"
+            className="h-full w-full border-0 bg-surface-card"
           />
         ) : href ? (
           <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-            <FileText className="mb-3 h-10 w-10 text-gray-300" />
-            <p className={`${tableHeader} text-gray-500`}>Preview unavailable for this source</p>
+            <FileText className="mb-3 h-10 w-10 text-text-faint" />
+            <p className={`${tableHeader} text-text-soft`}>Preview unavailable for this source</p>
             <a
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-surface-inverse px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-surface-inverse-hover"
             >
               <ExternalLink className="h-3 w-3" /> Open in new tab
             </a>
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-            <FileText className="mb-3 h-10 w-10 text-gray-300" />
-            <p className={`${tableHeader} text-gray-500`}>No file URL on this manual</p>
+            <FileText className="mb-3 h-10 w-10 text-text-faint" />
+            <p className={`${tableHeader} text-text-soft`}>No file URL on this manual</p>
           </div>
         )}
       </div>
@@ -362,12 +362,12 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
 
 function EmptyViewer() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-gray-50 px-8 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
-        <FileText className="h-6 w-6 text-gray-300" />
+    <div className="flex h-full w-full flex-col items-center justify-center bg-surface-canvas px-8 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-hairline">
+        <FileText className="h-6 w-6 text-text-faint" />
       </div>
-      <p className="text-sm font-black text-gray-900">Select a manual to preview</p>
-      <p className="mt-1 max-w-sm text-caption font-medium text-gray-500">
+      <p className="text-sm font-black text-text-default">Select a manual to preview</p>
+      <p className="mt-1 max-w-sm text-caption font-medium text-text-soft">
         Use the sidebar to search by product title, folder, or file name. PDFs render inline.
       </p>
     </div>

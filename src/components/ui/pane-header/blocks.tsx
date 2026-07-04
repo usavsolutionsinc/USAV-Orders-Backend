@@ -24,10 +24,10 @@ interface PaneHeaderLabelProps {
 }
 
 export const paneHeaderLabelEyebrowClass =
-  'text-eyebrow font-black uppercase tracking-widest text-gray-400';
+  'text-eyebrow font-black uppercase tracking-widest text-text-faint';
 
 export const paneHeaderLabelValueClass =
-  'truncate text-sm font-black tracking-tight text-gray-900';
+  'truncate text-sm font-black tracking-tight text-text-default';
 
 export function PaneHeaderLabel({
   eyebrow,
@@ -51,7 +51,7 @@ export function PaneHeaderLabel({
 // Single bold title — matches the WeekHeader "today" / sticky-date display.
 
 const paneHeaderHighContrastTitleClass =
-  'text-sm font-black uppercase tracking-widest text-gray-900';
+  'text-sm font-black uppercase tracking-widest text-text-default';
 
 interface PaneHeaderTitleProps {
   children: ReactNode;
@@ -138,7 +138,7 @@ export function PaneHeaderCloseButton({
         onClick={onClick}
         ariaLabel={ariaLabel}
         className={cn(
-          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-gray-100 active:scale-95',
+          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-surface-sunken active:scale-95',
           className,
         )}
         icon={<X className="h-4 w-4" />}
@@ -155,7 +155,7 @@ export function PaneHeaderCloseButton({
 type StatusTone = 'neutral' | 'blue' | 'emerald' | 'amber' | 'yellow' | 'rose' | 'red' | 'purple';
 
 const STATUS_TONE_CLASS: Record<StatusTone, string> = {
-  neutral: 'bg-slate-100 text-slate-700 ring-slate-200',
+  neutral: 'bg-surface-sunken text-text-muted ring-border-soft',
   blue: 'bg-blue-50 text-blue-700 ring-blue-200',
   emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   amber: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -236,7 +236,7 @@ export function PaneHeaderTabs<TValue extends string>({
     <div
       role="tablist"
       className={cn(
-        'flex items-center gap-1 bg-white px-2 py-1',
+        'flex items-center gap-1 bg-surface-card px-2 py-1',
         className,
       )}
     >
@@ -253,8 +253,8 @@ export function PaneHeaderTabs<TValue extends string>({
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
               active
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                ? 'bg-surface-inverse text-white'
+                : 'text-text-muted hover:bg-surface-sunken hover:text-text-default',
             )}
           >
             <span>{tab.label}</span>
@@ -262,7 +262,7 @@ export function PaneHeaderTabs<TValue extends string>({
               <span
                 className={cn(
                   'tabular-nums',
-                  active ? 'text-white/70' : 'text-gray-400',
+                  active ? 'text-white/70' : 'text-text-faint',
                 )}
               >
                 {tab.count}
@@ -322,10 +322,10 @@ interface PaneHeaderActionBarProps {
 }
 
 const PANE_HEADER_ACTION_BTN_CLASS =
-  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-micro font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
+  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-micro font-bold uppercase tracking-widest text-text-soft transition-colors hover:bg-surface-hover hover:text-text-default disabled:cursor-not-allowed disabled:opacity-40';
 
 const PANE_HEADER_ACTION_NAV_CLASS =
-  'inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
+  'inline-flex h-7 w-7 items-center justify-center rounded-md text-text-soft transition-colors hover:bg-surface-hover hover:text-text-default disabled:cursor-not-allowed disabled:opacity-40';
 
 export function PaneHeaderActionBar({
   actions,
@@ -343,7 +343,7 @@ export function PaneHeaderActionBar({
 }: PaneHeaderActionBarProps) {
   const shell =
     variant === 'card'
-      ? 'flex items-center gap-2 rounded-xl border border-gray-200/70 bg-white px-3 py-1.5 shadow-sm'
+      ? 'flex items-center gap-2 rounded-xl border border-border-soft/70 bg-surface-card px-3 py-1.5 shadow-sm'
       : 'flex items-center gap-2 px-2 py-1.5';
 
   const renderText = (value: ReactNode): string | undefined =>
@@ -368,7 +368,7 @@ export function PaneHeaderActionBar({
               PANE_HEADER_ACTION_BTN_CLASS,
               iconOnly && 'h-7 w-7 justify-center gap-0 px-0',
               action.active &&
-                'bg-slate-100 text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-100',
+                'bg-surface-sunken text-text-default ring-1 ring-inset ring-border-default hover:bg-surface-sunken',
             )}
           >
             <span className={cn('inline-flex items-center', action.toneClassName)}>{action.icon}</span>
@@ -419,7 +419,7 @@ export function PaneHeaderActionBar({
   // and chevrons (right) line up with the rest of the workspace.
   if (variant === 'header') {
     return (
-      <div className={cn('flex h-[40px] w-full shrink-0 items-center bg-white', receivingHeaderHairlineClass, className)}>
+      <div className={cn('flex h-[40px] w-full shrink-0 items-center bg-surface-card', receivingHeaderHairlineClass, className)}>
         <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-6 sm:px-8">
           {content}
         </div>
@@ -459,33 +459,33 @@ export function PaneHeaderPagination({
 
   return (
     <div className="flex items-center gap-3">
-      <span className="tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-500">
+      <span className="tabular-nums text-eyebrow font-black uppercase tracking-wider text-text-soft">
         {total > 0 ? (
           <>
-            <span className="text-gray-900">
+            <span className="text-text-default">
               {rangeStart}–{rangeEnd}
             </span>{' '}
-            <span className="text-gray-400">/</span>{' '}
-            <span className="text-gray-400">{total.toLocaleString()}</span>
+            <span className="text-text-faint">/</span>{' '}
+            <span className="text-text-faint">{total.toLocaleString()}</span>
           </>
         ) : (
           '—'
         )}
       </span>
-      <div className="flex items-center gap-0.5 rounded-md border border-gray-200 bg-white p-0.5">
+      <div className="flex items-center gap-0.5 rounded-md border border-border-soft bg-surface-card p-0.5">
         <HoverTooltip label="Previous page" asChild>
           <IconButton
             type="button"
             onClick={() => canPrev && onPrev()}
             disabled={!canPrev}
             ariaLabel="Previous page"
-            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             icon={<ChevronLeft className="h-3.5 w-3.5" />}
           />
         </HoverTooltip>
-        <span className="px-1 tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-500">
-          <span className="text-gray-900">{safePage}</span>
-          <span className="text-gray-400"> / {totalPages}</span>
+        <span className="px-1 tabular-nums text-eyebrow font-black uppercase tracking-wider text-text-soft">
+          <span className="text-text-default">{safePage}</span>
+          <span className="text-text-faint"> / {totalPages}</span>
         </span>
         <HoverTooltip label="Next page" asChild>
           <IconButton
@@ -493,7 +493,7 @@ export function PaneHeaderPagination({
             onClick={() => canNext && onNext()}
             disabled={!canNext}
             ariaLabel="Next page"
-            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             icon={<ChevronRight className="h-3.5 w-3.5" />}
           />
         </HoverTooltip>

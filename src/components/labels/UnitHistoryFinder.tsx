@@ -160,7 +160,7 @@ export function UnitHistoryFinder() {
       {/* Scan/paste input lives in the sidebar's top SearchBar now; we only
           surface lookup errors here. */}
       {error && (
-        <div className={`shrink-0 border-b border-gray-100 bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
+        <div className={`shrink-0 border-b border-border-hairline bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
           <p className="text-micro font-semibold text-amber-700">{error}</p>
         </div>
       )}
@@ -169,30 +169,30 @@ export function UnitHistoryFinder() {
       <div className="flex-1 overflow-y-auto">
         {!hasRecents ? (
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-            <Clock className="mb-3 h-8 w-8 text-gray-300" />
-            <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+            <Clock className="mb-3 h-8 w-8 text-text-faint" />
+            <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">
               No history yet
             </p>
-            <p className="mt-2 max-w-[240px] text-caption font-medium text-gray-500">
+            <p className="mt-2 max-w-[240px] text-caption font-medium text-text-soft">
               Scan a unit's DataMatrix above — its full timeline appears in the workspace.
             </p>
           </div>
         ) : (
           <>
-            <div className={`flex items-center justify-between bg-gray-50 ${SIDEBAR_GUTTER} py-1.5`}>
-              <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
+            <div className={`flex items-center justify-between bg-surface-canvas ${SIDEBAR_GUTTER} py-1.5`}>
+              <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-soft">
                 {recentsLabel}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={clearRecents}
-                className="h-auto px-0 text-micro font-semibold text-gray-400 hover:bg-transparent hover:text-gray-600"
+                className="h-auto px-0 text-micro font-semibold text-text-faint hover:bg-transparent hover:text-text-muted"
               >
                 Clear
               </Button>
             </div>
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-border-hairline">
               {recents.map((r) => (
                 <li key={`${r.key}-${r.at}`}>
                   {/* ds-raw-button: text-left master-detail picker row, not a DS Button */}
@@ -203,12 +203,12 @@ export function UnitHistoryFinder() {
                       currentId === r.key ? 'bg-blue-50' : ''
                     }`}
                   >
-                    <Clock className="h-3.5 w-3.5 shrink-0 text-gray-300" />
+                    <Clock className="h-3.5 w-3.5 shrink-0 text-text-faint" />
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate font-mono text-caption font-semibold text-gray-900">
+                      <span className="truncate font-mono text-caption font-semibold text-text-default">
                         {r.key}
                       </span>
-                      <span className="truncate text-micro text-gray-400">{r.raw}</span>
+                      <span className="truncate text-micro text-text-faint">{r.raw}</span>
                     </span>
                   </button>
                 </li>

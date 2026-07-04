@@ -66,8 +66,8 @@ export function NasBreadcrumb({
     'shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider transition-colors';
   const inactive = dark
     ? 'text-white/60 hover:bg-white/10 hover:text-white'
-    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700';
-  const active = dark ? 'bg-white text-black' : 'bg-gray-900 text-white';
+    : 'text-text-soft hover:bg-surface-sunken hover:text-text-muted';
+  const active = dark ? 'bg-surface-card text-black' : 'bg-surface-inverse text-white';
 
   return (
     <div className="flex items-center gap-1 overflow-x-auto">
@@ -80,7 +80,7 @@ export function NasBreadcrumb({
         const isLast = i === segments.length - 1;
         return (
           <span key={i} className="flex shrink-0 items-center gap-1">
-            <ChevronRightTiny className={`h-2.5 w-2.5 ${dark ? 'text-white/25' : 'text-gray-300'}`} />
+            <ChevronRightTiny className={`h-2.5 w-2.5 ${dark ? 'text-white/25' : 'text-text-faint'}`} />
             {/* ds-raw-button: breadcrumb depth nav crumb (active = current depth) — not a DS Button */}
             <button
               type="button"
@@ -118,7 +118,7 @@ export function NasFolderCard({
       className={`ds-raw-button group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md active:translate-y-0 active:shadow-sm ${
         dark
           ? 'border-white/10 bg-white/[0.04] hover:border-indigo-400/40 hover:bg-white/[0.07]'
-          : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
+          : 'border-border-soft bg-surface-card hover:border-indigo-200 hover:bg-indigo-50/30'
       }`}
     >
       <span
@@ -130,12 +130,12 @@ export function NasFolderCard({
       >
         <FolderIcon className="h-4 w-4" />
       </span>
-      <span className={`min-w-0 flex-1 truncate text-label font-black ${dark ? 'text-white' : 'text-gray-900'}`}>
+      <span className={`min-w-0 flex-1 truncate text-label font-black ${dark ? 'text-white' : 'text-text-default'}`}>
         {name}
       </span>
       <ChevronRightTiny
         className={`h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 ${
-          dark ? 'text-white/30 group-hover:text-indigo-300' : 'text-gray-300 group-hover:text-indigo-400'
+          dark ? 'text-white/30 group-hover:text-indigo-300' : 'text-text-faint group-hover:text-indigo-400'
         }`}
       />
     </button>
@@ -146,7 +146,7 @@ export function NasFolderCard({
 export function NasSectionLabel({ children, tone = 'light' }: { children: React.ReactNode; tone?: Tone }) {
   const dark = tone === 'dark';
   return (
-    <p className={`px-1 text-eyebrow font-black uppercase tracking-wider ${dark ? 'text-white/40' : 'text-gray-400'}`}>
+    <p className={`px-1 text-eyebrow font-black uppercase tracking-wider ${dark ? 'text-white/40' : 'text-text-faint'}`}>
       {children}
     </p>
   );

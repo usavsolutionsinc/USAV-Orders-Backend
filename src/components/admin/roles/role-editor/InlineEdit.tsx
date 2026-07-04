@@ -26,7 +26,7 @@ export function InlineEdit({ value, onSave, displayClassName }: { value: string;
           if (e.key === 'Enter') { onSave(draft.trim() || value); setEditing(false); }
           if (e.key === 'Escape') { setDraft(value); setEditing(false); }
         }}
-        className="h-9 min-w-[200px] flex-1 rounded-md border border-gray-300 px-2 text-base font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+        className="h-9 min-w-[200px] flex-1 rounded-md border border-border-default px-2 text-base font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
       />
     </div>
   );

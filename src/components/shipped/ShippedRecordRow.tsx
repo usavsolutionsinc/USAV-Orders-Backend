@@ -85,8 +85,8 @@ export function ShippedRecordRow({
       tabIndex={0}
       aria-checked={selectMode ? checked : undefined}
       aria-pressed={selectMode ? undefined : selected}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-4 py-2 transition-colors cursor-pointer hover:bg-blue-50/50 ${
-        (selectMode ? checked : selected) ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-border-hairline px-4 py-2 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+        (selectMode ? checked : selected) ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-surface-canvas/40' : 'bg-surface-card'
       }`}
     >
       <div className="flex flex-col min-w-0">
@@ -95,7 +95,7 @@ export function ShippedRecordRow({
             selectMode ? (
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                  checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                  checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-border-default bg-surface-card'
                 }`}
               >
                 {checked && <Check className="h-3 w-3" />}
@@ -113,8 +113,8 @@ export function ShippedRecordRow({
         />
         <RowMetaColumns
           indent={selectMode ? `calc(${META_COL.indent} + 1.5rem)` : undefined}
-          qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
-          condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>{displayValues.condition || 'N/A'}</span>}
+          qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-text-soft'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
+          condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-text-faint'}>{displayValues.condition || 'N/A'}</span>}
           rest={<div className="flex items-center gap-2">
             {techDisplay !== '---' ? <HoverTooltip label={`Tested by ${techDisplay}`}><StaffInitials staffId={techStaffId} name={techDisplay} /></HoverTooltip> : <StaffInitials staffId={techStaffId} name={techDisplay} />}
             {packerDisplay !== '---' ? <HoverTooltip label={`Packed by ${packerDisplay}`}><StaffInitials staffId={packerStaffId} name={packerDisplay} /></HoverTooltip> : <StaffInitials staffId={packerStaffId} name={packerDisplay} />}
@@ -127,7 +127,7 @@ export function ShippedRecordRow({
           <PlatformChip
             label={platformLabel}
             underlineClass={getOrderPlatformBorderColor(platformLabel)}
-            iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'}
+            iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-text-soft'}
             onClick={() => {
               if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
             }}

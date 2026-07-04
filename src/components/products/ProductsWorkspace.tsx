@@ -10,7 +10,7 @@ import { parseLabelsView } from '@/components/sidebar/ProductsSidebarPanel';
 // Manuals view.
 const MultiSkuSnBarcode = dynamic(() => import('@/components/MultiSkuSnBarcode'), {
   ssr: false,
-  loading: () => <div className="p-6 text-sm text-gray-400">Loading labels…</div>,
+  loading: () => <div className="p-6 text-sm text-text-faint">Loading labels…</div>,
 });
 
 // Lazy-load the pairing shell — pulls in the Product Hub graph + suggestion
@@ -19,7 +19,7 @@ const ProductsPairingShell = dynamic(
   () => import('./pairing/ProductsPairingShell').then((m) => m.ProductsPairingShell),
   {
     ssr: false,
-    loading: () => <div className="p-6 text-sm text-gray-400">Loading pairing workspace…</div>,
+    loading: () => <div className="p-6 text-sm text-text-faint">Loading pairing workspace…</div>,
   },
 );
 
@@ -31,7 +31,7 @@ const UnitDetailWorkspace = dynamic(
   () => import('@/components/labels/unit-detail/UnitDetailWorkspace').then((m) => m.UnitDetailWorkspace),
   {
     ssr: false,
-    loading: () => <div className="p-6 text-sm text-gray-400">Loading unit detail…</div>,
+    loading: () => <div className="p-6 text-sm text-text-faint">Loading unit detail…</div>,
   },
 );
 
@@ -40,7 +40,7 @@ const QcChecklistWorkspace = dynamic(
   () => import('./QcChecklistWorkspace').then((m) => m.QcChecklistWorkspace),
   {
     ssr: false,
-    loading: () => <div className="p-6 text-sm text-gray-400">Loading QC checklist…</div>,
+    loading: () => <div className="p-6 text-sm text-text-faint">Loading QC checklist…</div>,
   },
 );
 
@@ -49,7 +49,7 @@ const KitPartsWorkspace = dynamic(
   () => import('./KitPartsWorkspace').then((m) => m.KitPartsWorkspace),
   {
     ssr: false,
-    loading: () => <div className="p-6 text-sm text-gray-400">Loading kit parts…</div>,
+    loading: () => <div className="p-6 text-sm text-text-faint">Loading kit parts…</div>,
   },
 );
 

@@ -296,14 +296,14 @@ function SellerMessagePanel({
     <div
       role="dialog"
       aria-label="Seller message"
-      className="flex max-h-[420px] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+      className="flex max-h-[420px] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-xl"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2">
+      <header className="flex items-center justify-between gap-2 border-b border-border-hairline px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold text-gray-800">Seller message</div>
-            <div className="truncate text-micro text-gray-400">Plain text — no links (marketplace TOS)</div>
+            <div className="truncate text-[13px] font-semibold text-text-default">Seller message</div>
+            <div className="truncate text-micro text-text-faint">Plain text — no links (marketplace TOS)</div>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>
@@ -322,7 +322,7 @@ function SellerMessagePanel({
           </p>
         ) : !data && !draft.trim() ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <p className="max-w-[260px] text-sm text-gray-400">
+            <p className="max-w-[260px] text-sm text-text-faint">
               No seller message yet for this ticket.
             </p>
             <Button
@@ -340,13 +340,13 @@ function SellerMessagePanel({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={10}
-            className="block w-full resize-y rounded-lg border border-blue-100 bg-white px-3 py-2 text-[13px] leading-snug text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+            className="block w-full resize-y rounded-lg border border-blue-100 bg-surface-card px-3 py-2 text-[13px] leading-snug text-text-default outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             placeholder="Seller-facing message…"
           />
         )}
       </div>
 
-      <footer className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
+      <footer className="flex items-center justify-between gap-2 border-t border-border-hairline bg-surface-canvas/60 px-3 py-2.5">
         <Button
           variant="secondary"
           size="sm"

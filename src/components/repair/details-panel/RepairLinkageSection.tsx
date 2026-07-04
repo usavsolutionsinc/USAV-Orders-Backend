@@ -28,7 +28,7 @@ export function RepairLinkageSection({ c }: { c: RepairDetailsController }) {
         {/* Order # — live Ecwid order lookup (shipped + unshipped), not a raw
             text field. Resolves the real order number before save. */}
         <div>
-          <span className="text-xs text-gray-500 font-semibold block mb-1">Order #</span>
+          <span className="text-xs text-text-soft font-semibold block mb-1">Order #</span>
           <RepairOrderLinkSearch
             value={c.linkOrderId}
             onChange={c.setLinkOrderId}
@@ -41,14 +41,14 @@ export function RepairLinkageSection({ c }: { c: RepairDetailsController }) {
           { label: 'Catalog SKU', value: c.linkSku, set: c.setLinkSku, placeholder: 'Source SKU' },
         ].map((f) => (
           <div key={f.label}>
-            <span className="text-xs text-gray-500 font-semibold block mb-1">{f.label}</span>
+            <span className="text-xs text-text-soft font-semibold block mb-1">{f.label}</span>
             <input
               type="text"
               value={f.value}
               onChange={(e) => f.set(e.target.value)}
               placeholder={f.placeholder}
               disabled={c.savingLink}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+              className="w-full px-3 py-2 border border-border-soft rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
             />
           </div>
         ))}

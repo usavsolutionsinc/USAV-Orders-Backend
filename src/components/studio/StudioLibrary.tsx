@@ -17,7 +17,7 @@ import type { Diagnostic, StudioGraphResponse, StudioTemplateSummary } from './s
 const SEVERITY_GLYPH: Record<Diagnostic['severity'], { glyph: string; cls: string }> = {
   error: { glyph: '✖', cls: 'text-rose-600' },
   warning: { glyph: '⚠', cls: 'text-amber-600' },
-  info: { glyph: 'ⓘ', cls: 'text-slate-400' },
+  info: { glyph: 'ⓘ', cls: 'text-text-faint' },
 };
 
 const CATEGORY_ORDER = ['intake', 'process', 'fulfill', 'logic', 'custom'] as const;
@@ -58,14 +58,14 @@ export function StudioLibrary({
   return (
     <div className="space-y-5 p-4">
       <section>
-        <h3 className="mb-2 text-micro font-bold uppercase tracking-wider text-slate-400">Node types</h3>
+        <h3 className="mb-2 text-micro font-bold uppercase tracking-wider text-text-faint">Node types</h3>
         {palette.length === 0 ? (
-          <p className="text-xs text-slate-400">No node types registered.</p>
+          <p className="text-xs text-text-faint">No node types registered.</p>
         ) : (
           <div className="space-y-3">
             {CATEGORY_ORDER.filter((cat) => palette.some((p) => p.category === cat)).map((cat) => (
               <div key={cat}>
-                <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-slate-300">
+                <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-text-faint">
                   {CATEGORY_LABELS[cat]}
                 </p>
                 <ul className="space-y-1">
@@ -76,9 +76,9 @@ export function StudioLibrary({
                         (icons as Record<string, React.ComponentType<{ className?: string }>>)[p.icon] || icons.Box;
                       const row = (
                         <>
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                          <span className="truncate text-xs font-semibold text-slate-700">{p.label}</span>
-                          <span className="ml-auto truncate font-mono text-eyebrow text-slate-400">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-text-soft" />
+                          <span className="truncate text-xs font-semibold text-text-muted">{p.label}</span>
+                          <span className="ml-auto truncate font-mono text-eyebrow text-text-faint">
                             {editable ? '+ add' : p.type}
                           </span>
                         </>
@@ -89,12 +89,12 @@ export function StudioLibrary({
                           {editable && onAddNode ? (
                             <button
                               onClick={() => onAddNode(p.type)}
-                              className="ds-raw-button flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50"
+                              className="ds-raw-button flex w-full items-center gap-2 rounded-lg border border-border-soft bg-surface-card px-2 py-1.5 text-left shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50"
                             >
                               {row}
                             </button>
                           ) : (
-                            <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-1.5">
+                            <div className="flex items-center gap-2 rounded-lg border border-border-hairline bg-surface-canvas/60 px-2 py-1.5">
                               {row}
                             </div>
                           )}
@@ -107,19 +107,19 @@ export function StudioLibrary({
             ))}
           </div>
         )}
-        <p className="mt-2 text-micro text-slate-300">
+        <p className="mt-2 text-micro text-text-faint">
           {editable ? 'Click a type to add it to the draft.' : 'Adding nodes unlocks on a draft.'}
         </p>
       </section>
 
       <section>
-        <h3 className="mb-2 text-micro font-bold uppercase tracking-wider text-slate-400">Stations</h3>
+        <h3 className="mb-2 text-micro font-bold uppercase tracking-wider text-text-faint">Stations</h3>
         <ul className="space-y-1">
           {STATIONS.map((s) => (
             <HoverTooltip key={s.key} label={s.blurb} asChild>
               <li className="flex items-center gap-2 px-1 py-0.5">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                <span className="truncate text-xs font-medium text-slate-600">{s.label}</span>
+                <span className="truncate text-xs font-medium text-text-muted">{s.label}</span>
               </li>
             </HoverTooltip>
           ))}
@@ -128,26 +128,26 @@ export function StudioLibrary({
 
       {/* ─── Templates (ST6 / Phase E4) — system blueprints to clone ─── */}
       {templates.length > 0 && (
-        <section className="border-t border-slate-100 pt-4">
-          <h3 className="mb-2 text-micro font-bold uppercase tracking-wider text-slate-400">Templates</h3>
+        <section className="border-t border-border-hairline pt-4">
+          <h3 className="mb-2 text-micro font-bold uppercase tracking-wider text-text-faint">Templates</h3>
           <ul className="space-y-1.5">
             {templates.map((t) => {
               const importing = importingTemplateId === t.id;
               return (
                 <li
                   key={t.id}
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm"
+                  className="rounded-lg border border-border-soft bg-surface-card px-2.5 py-2 shadow-sm"
                 >
                   <div className="flex items-start gap-2">
                     <icons.LayoutTemplate className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-slate-700">{t.name}</p>
+                      <p className="truncate text-xs font-semibold text-text-muted">{t.name}</p>
                       {t.description && (
-                        <p className="mt-0.5 line-clamp-2 text-micro leading-snug text-slate-400">
+                        <p className="mt-0.5 line-clamp-2 text-micro leading-snug text-text-faint">
                           {t.description}
                         </p>
                       )}
-                      <p className="mt-1 font-mono text-eyebrow text-slate-400">
+                      <p className="mt-1 font-mono text-eyebrow text-text-faint">
                         {t.nodeCount} step{t.nodeCount === 1 ? '' : 's'} · {t.edgeCount} link
                         {t.edgeCount === 1 ? '' : 's'}
                       </p>
@@ -172,7 +172,7 @@ export function StudioLibrary({
             })}
           </ul>
           {!canManage && (
-            <p className="mt-1.5 text-micro text-slate-300">
+            <p className="mt-1.5 text-micro text-text-faint">
               Importing a template needs the manage permission.
             </p>
           )}
@@ -180,8 +180,8 @@ export function StudioLibrary({
       )}
 
       {/* ─── Issues rail (ST3) — the operation's linter output ─── */}
-      <section className="border-t border-slate-100 pt-4">
-        <h3 className="mb-2 flex items-center gap-1.5 text-micro font-bold uppercase tracking-wider text-slate-400">
+      <section className="border-t border-border-hairline pt-4">
+        <h3 className="mb-2 flex items-center gap-1.5 text-micro font-bold uppercase tracking-wider text-text-faint">
           Issues
           <span
             className={[
@@ -206,11 +206,11 @@ export function StudioLibrary({
                 <li key={d.id}>
                   <button
                     onClick={() => d.nodeId && onFocusIssue(d.nodeId)}
-                    className="ds-raw-button w-full rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-1.5 text-left transition-colors hover:border-slate-200 hover:bg-slate-100"
+                    className="ds-raw-button w-full rounded-lg border border-border-hairline bg-surface-canvas/60 px-2 py-1.5 text-left transition-colors hover:border-border-soft hover:bg-surface-sunken"
                   >
                     <span className={`mr-1.5 text-caption font-bold ${g.cls}`}>{g.glyph}</span>
-                    <span className="text-caption leading-tight text-slate-600">{d.message}</span>
-                    {d.fix && <span className="mt-0.5 block text-micro text-slate-400">↳ {d.fix}</span>}
+                    <span className="text-caption leading-tight text-text-muted">{d.message}</span>
+                    {d.fix && <span className="mt-0.5 block text-micro text-text-faint">↳ {d.fix}</span>}
                   </button>
                 </li>
               );

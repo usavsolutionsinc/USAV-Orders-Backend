@@ -12,10 +12,10 @@ interface Props {
 /** Modal header — claim eyebrow + carton/PO title + cancel affordance. */
 export function ClaimModalHeader({ row, submitting, archiveSubmitting, onClose }: Props) {
   return (
-    <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gradient-to-r from-rose-50 to-amber-50 px-4 py-3">
+    <div className="flex shrink-0 items-center justify-between border-b border-border-hairline bg-gradient-to-r from-rose-50 to-amber-50 px-4 py-3">
       <div>
         <p className="text-micro font-black uppercase tracking-[0.14em] text-rose-700">File a claim</p>
-        <p className="mt-0.5 text-sm font-extrabold tracking-tight text-gray-900">
+        <p className="mt-0.5 text-sm font-extrabold tracking-tight text-text-default">
           {row.receiving_source === 'unmatched'
             ? 'Unfound'
             : row.zoho_purchaseorder_number
@@ -28,7 +28,7 @@ export function ClaimModalHeader({ row, submitting, archiveSubmitting, onClose }
         disabled={submitting || archiveSubmitting}
         ariaLabel="Cancel"
         icon={<X className="h-4 w-4" />}
-        className="rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-gray-700 disabled:opacity-50"
+        className="rounded-lg p-1.5 text-text-faint hover:bg-surface-card hover:text-text-muted disabled:opacity-50"
       />
     </div>
   );

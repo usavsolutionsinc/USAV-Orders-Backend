@@ -33,14 +33,14 @@ export function SkuGraphToolbar({
   canAdd,
 }: SkuGraphToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-4 py-3">
+    <div className="flex flex-wrap items-center gap-3 border-b border-border-soft bg-surface-card px-4 py-3">
       {/* Focused SKU */}
-      <span className="text-[13px] font-semibold text-gray-900">
-        {focusedLabel ?? <span className="font-medium text-gray-400">No SKU focused</span>}
+      <span className="text-[13px] font-semibold text-text-default">
+        {focusedLabel ?? <span className="font-medium text-text-faint">No SKU focused</span>}
       </span>
 
       {/* Mode toggle */}
-      <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-0.5">
+      <div className="inline-flex rounded-xl border border-border-soft bg-surface-canvas p-0.5">
         {MODES.map((m) => (
           <button
             key={m.id}
@@ -48,7 +48,7 @@ export function SkuGraphToolbar({
             onClick={() => onModeChange(m.id)}
             className={cn(
               'ds-raw-button rounded-lg px-3 py-1.5 text-label font-medium transition-colors',
-              mode === m.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
+              mode === m.id ? 'bg-surface-card text-text-default shadow-sm' : 'text-text-soft hover:text-text-default',
             )}
           >
             {m.label}

@@ -20,6 +20,7 @@
  * double-writing.
  */
 import { withTenantTransaction } from '@/lib/tenancy/db';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 
 export interface CompleteTriageInput {
   receivingId: number;
@@ -46,10 +47,14 @@ export interface TxClient {
 
 export interface CompleteTriageDeps {
   runTx: <T>(orgId: string, fn: (client: TxClient) => Promise<T>) => Promise<T>;
+  /** Optional "why" signal emitter (plan §2.3 emitter #2, triage outcome);
+   *  fire-and-forget by contract, never throws. */
+  emitSignal?: typeof emitEntitySignalSafe;
 }
 
 const defaultDeps: CompleteTriageDeps = {
   runTx: (orgId, fn) => withTenantTransaction(orgId, (client) => fn(client as unknown as TxClient)),
+  emitSignal: emitEntitySignalSafe,
 };
 
 export async function completeTriage(
@@ -83,15 +88,20 @@ export async function completeTriage(
       }
     }
 
+    // Self-join FROM captures the PRIOR triage_complete so the signal below
+    // fires only on the first genuine transition (re-stamp semantics of a
+    // repeat click are unchanged — only the emit is gated).
     const res = await client.query(
-      `UPDATE receiving
+      `UPDATE receiving r
           SET triage_complete = true,
               triage_completed_at = NOW(),
               triage_completed_by = $3,
-              triage_client_event_id = COALESCE($4, triage_client_event_id)
-        WHERE id = $1 AND organization_id = $2
-          AND staging_location_id IS NOT NULL AND priority_lane IS NOT NULL
-        RETURNING triage_completed_at::text AS triage_completed_at`,
+              triage_client_event_id = COALESCE($4, r.triage_client_event_id)
+         FROM (SELECT id, triage_complete AS was_complete FROM receiving
+                WHERE id = $1 AND organization_id = $2 FOR UPDATE) prev
+        WHERE r.id = prev.id AND r.organization_id = $2
+          AND r.staging_location_id IS NOT NULL AND r.priority_lane IS NOT NULL
+        RETURNING r.triage_completed_at::text AS triage_completed_at, prev.was_complete`,
       [receivingId, orgId, staffId, clientEventId],
     );
 
@@ -121,6 +131,23 @@ export async function completeTriage(
         triageCompletedAt: null,
         idempotent: false,
       };
+    }
+
+    // Triage-outcome signal (plan §2.3 emitter #2). Rides this transaction via
+    // `client` under recordEntitySignal's SAVEPOINT guard. Emitted only on the
+    // FIRST completion (prev.was_complete false) — clientEventId replays return
+    // earlier, and clientEventId-less re-clicks re-stamp but never re-emit.
+    const wasComplete = Boolean(res.rows[0].was_complete);
+    if (!wasComplete) {
+      await (deps.emitSignal ?? emitEntitySignalSafe)({
+        organizationId: orgId,
+        entityType: 'RECEIVING',
+        entityId: receivingId,
+        signalKind: 'triage_outcome',
+        notes: 'triage complete — staged for unbox',
+        actorStaffId: staffId,
+        client,
+      });
     }
 
     return {

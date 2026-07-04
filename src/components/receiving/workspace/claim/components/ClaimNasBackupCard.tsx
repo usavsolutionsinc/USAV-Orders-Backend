@@ -60,7 +60,7 @@ export function ClaimNasBackupCard({
                 loading={c.archiveSubmitting}
                 disabled={c.archiveSubmitting || !c.row.receiving_id}
                 onClick={c.archiveToNas}
-                className="mt-2 border-blue-200 bg-white text-blue-700 hover:bg-blue-100"
+                className="mt-2 border-blue-200 bg-surface-card text-blue-700 hover:bg-blue-100"
               >
                 {c.archiveSubmitting ? 'Saving…' : 'Back up locally'}
               </Button>
@@ -126,7 +126,7 @@ export function ClaimNasBackupCard({
                   loading={c.archiveSubmitting}
                   disabled={c.archiveSubmitting || !c.row.receiving_id}
                   onClick={c.archiveToNas}
-                  className="mt-2 border-blue-200 bg-white text-blue-700 hover:bg-blue-100"
+                  className="mt-2 border-blue-200 bg-surface-card text-blue-700 hover:bg-blue-100"
                 >
                   {c.archiveSubmitting ? 'Saving…' : 'Back up again'}
                 </Button>
@@ -139,7 +139,7 @@ export function ClaimNasBackupCard({
                 loading={c.archiveSubmitting}
                 disabled={c.archiveSubmitting || !c.row.receiving_id}
                 onClick={c.archiveToNas}
-                className="mt-2 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                className="mt-2 border-amber-300 bg-surface-card text-amber-800 hover:bg-amber-100"
               >
                 {c.archiveSubmitting ? 'Saving…' : 'Retry backup'}
               </Button>

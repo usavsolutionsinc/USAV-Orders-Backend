@@ -19,14 +19,14 @@ export const REWORK_PORTS = new Set(['fail', 'repaired']);
 /** Static-lens role styling — accent border + header pill per data-flow role. */
 export const STATIC_ROLE: Record<FlowRole, { label: string; color: string; pill: string }> = {
   source: { label: 'Source', color: '#0284c7', pill: 'bg-sky-50 text-sky-700' },
-  transform: { label: 'Transform', color: '#64748b', pill: 'bg-slate-100 text-slate-600' },
+  transform: { label: 'Transform', color: '#64748b', pill: 'bg-surface-sunken text-text-muted' },
   sink: { label: 'Sink', color: '#059669', pill: 'bg-emerald-50 text-emerald-700' },
 };
 
 /** Live-lens heat → card tone (border + ring + wash), count badge, text & dot tints. */
 export const HEAT_TONE: Record<HeatLevel, string> = {
-  idle: 'border-slate-200 bg-white',
-  active: 'border-slate-200 bg-white',
+  idle: 'border-border-soft bg-surface-card',
+  active: 'border-border-soft bg-surface-card',
   warm: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50',
   hot: 'border-rose-400 ring-2 ring-rose-200 bg-rose-50',
 };

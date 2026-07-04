@@ -37,7 +37,7 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
       {/* Hero: zone tile + subtitle */}
       <div className="flex items-start gap-3 px-4 py-4">
         <BigZoneTile letter={trimmedLetter} placeholder={creating && !trimmedLetter} />
-        <p className="max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
+        <p className="max-w-[60ch] text-[12.5px] leading-snug text-text-soft">
           {subtitle}
         </p>
       </div>
@@ -52,7 +52,7 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
 
       {/* Name field */}
       <WorkspaceCard label="Room name">
-        <p className="mb-2 text-caption text-gray-500">
+        <p className="mb-2 text-caption text-text-soft">
           The friendly label your team sees in pickers, scanners, and reports.
         </p>
         <input
@@ -61,10 +61,10 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           placeholder="e.g. Zone 1 – New"
           autoComplete="off"
-          className={`h-12 w-full rounded-2xl border bg-gray-50 px-4 text-base font-semibold text-gray-900 outline-none transition-colors focus:bg-white focus:ring-2 ${
+          className={`h-12 w-full rounded-2xl border bg-surface-canvas px-4 text-base font-semibold text-text-default outline-none transition-colors focus:bg-surface-card focus:ring-2 ${
             (nameTaken || renameTaken)
               ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
-              : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+              : 'border-border-soft focus:border-blue-500 focus:ring-blue-200'
           }`}
         />
         {(nameTaken || renameTaken) && (
@@ -83,7 +83,7 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
           </span>
         }
       >
-        <p className="mb-3 text-caption text-gray-500">
+        <p className="mb-3 text-caption text-text-soft">
           One A–Z letter per room. Locked letters are already in use by
           another room.
         </p>
@@ -102,8 +102,8 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
                   isSelected
                     ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                     : isLocked
-                      ? 'bg-gray-100 text-gray-300'
-                      : 'border border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50'
+                      ? 'bg-surface-sunken text-text-faint'
+                      : 'border border-border-soft bg-surface-card text-text-muted hover:border-blue-300 hover:bg-blue-50'
                 }`}
               >
                 {l}
@@ -120,7 +120,7 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
 
       {/* Description */}
       <WorkspaceCard label="Notes (optional)">
-        <p className="mb-2 text-caption text-gray-500">
+        <p className="mb-2 text-caption text-text-soft">
           Anything pickers should know — e.g. “fragile only” or “overflow cage.”
         </p>
         <textarea
@@ -128,10 +128,10 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
           onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
           rows={3}
           placeholder="Add a short note…"
-          className="w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-[13.5px] text-gray-900 outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
+          className="w-full resize-none rounded-2xl border border-border-soft bg-surface-canvas px-4 py-3 text-[13.5px] text-text-default outline-none transition-colors focus:border-blue-500 focus:bg-surface-card focus:ring-2 focus:ring-blue-200"
         />
         {!creating && (
-          <p className="mt-1 text-[10.5px] text-gray-400">
+          <p className="mt-1 text-[10.5px] text-text-faint">
             Note storage lands in the next update — name + zone letter save
             today.
           </p>
@@ -143,10 +143,10 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
         <WorkspaceCard tone="red" label="Danger zone">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-sm font-semibold text-text-default">
                 Delete this room
               </p>
-              <p className="mt-0.5 text-[11.5px] text-gray-500">
+              <p className="mt-0.5 text-[11.5px] text-text-soft">
                 Soft delete — bins stay in history and you can recreate the
                 room by printing labels under that name again.
               </p>

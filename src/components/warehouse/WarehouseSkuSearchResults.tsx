@@ -16,16 +16,16 @@ export function WarehouseSkuSearchResults({
 }: WarehouseSkuSearchResultsProps) {
   if (loading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="px-3 py-3 text-xs text-gray-400">Searching…</div>
+      <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-card">
+        <div className="px-3 py-3 text-xs text-text-faint">Searching…</div>
       </div>
     );
   }
 
   if (hits && hits.length === 0) {
     return (
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="px-3 py-3 text-xs text-gray-500">
+      <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-card">
+        <div className="px-3 py-3 text-xs text-text-soft">
           No SKUs or products match.
         </div>
       </div>
@@ -34,30 +34,30 @@ export function WarehouseSkuSearchResults({
 
   if (hits && hits.length > 0) {
     return (
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
-        <ul className="max-h-72 divide-y divide-gray-100 overflow-y-auto">
+      <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-lg">
+        <ul className="max-h-72 divide-y divide-border-hairline overflow-y-auto">
           {hits.map((h) => (
             <li key={h.sku}>
               <Link
                 href={`/inventory?sku=${encodeURIComponent(h.sku)}`}
                 onClick={onSelect}
-                className="flex items-baseline justify-between gap-2 px-3 py-2 transition-colors hover:bg-gray-50"
+                className="flex items-baseline justify-between gap-2 px-3 py-2 transition-colors hover:bg-surface-hover"
               >
                 <div className="min-w-0">
                   <div className="truncate font-mono text-xs text-blue-700">
                     {h.sku}
                   </div>
                   {h.product_title && (
-                    <div className="mt-0.5 line-clamp-1 text-caption text-gray-600">
+                    <div className="mt-0.5 line-clamp-1 text-caption text-text-muted">
                       {h.product_title}
                     </div>
                   )}
-                  <div className="mt-0.5 text-micro text-gray-400">
+                  <div className="mt-0.5 text-micro text-text-faint">
                     {h.bin_count} bin{h.bin_count === 1 ? '' : 's'} ·{' '}
                     {h.total_qty} unit{h.total_qty === 1 ? '' : 's'}
                   </div>
                 </div>
-                <div className="shrink-0 font-mono text-sm font-semibold tabular-nums text-gray-900">
+                <div className="shrink-0 font-mono text-sm font-semibold tabular-nums text-text-default">
                   {h.stock}
                 </div>
               </Link>

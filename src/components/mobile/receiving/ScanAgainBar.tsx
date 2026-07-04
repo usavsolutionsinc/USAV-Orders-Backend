@@ -30,7 +30,7 @@ export function ScanAgainBar({ className = '' }: { className?: string }) {
         icon={<X className="h-4 w-4" />}
         ariaLabel="Exit to home"
         onClick={() => router.push('/m/home')}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 active:bg-slate-200"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-sunken text-text-soft active:bg-surface-strong"
       />
     </div>
   );

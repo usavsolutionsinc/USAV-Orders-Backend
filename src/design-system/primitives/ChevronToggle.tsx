@@ -15,7 +15,7 @@ const TONE_CLASSES: Record<string, string> = {
   emerald: 'border-emerald-200 text-emerald-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(34,197,94,0.16)]',
   orange:  'border-orange-200 text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(234,88,12,0.16)]',
   purple:  'border-purple-200 text-purple-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(147,51,234,0.16)]',
-  gray:    'border-gray-200 text-gray-500 shadow-sm',
+  gray:    'border-border-soft text-text-soft shadow-sm',
 };
 
 export function ChevronToggle({ isExpanded, tone = 'emerald', className = '' }: ChevronToggleProps) {

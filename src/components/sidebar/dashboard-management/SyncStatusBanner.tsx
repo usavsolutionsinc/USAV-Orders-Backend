@@ -69,7 +69,7 @@ export function SyncStatusBanner({ status, onDismiss }: { status: ImportStatus |
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.25 + i * 0.05 }}
-                      className="text-center rounded-xl bg-white/60 border border-emerald-100/60 py-1.5"
+                      className="text-center rounded-xl bg-surface-card/60 border border-emerald-100/60 py-1.5"
                     >
                       <p className="text-sm font-black text-emerald-700 tabular-nums">{stat.value}</p>
                       <p className={`${microBadge} text-emerald-500`}>{stat.label}</p>

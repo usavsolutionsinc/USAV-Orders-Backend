@@ -51,7 +51,7 @@ const PLATFORM_COLORS: Record<string, { text: string; border: string }> = {
   shopify: { text: 'text-black', border: 'border-black' },
 };
 
-const DEFAULT_PLATFORM_COLOR = { text: 'text-gray-400', border: 'border-gray-400' };
+const DEFAULT_PLATFORM_COLOR = { text: 'text-text-faint', border: 'border-border-emphasis' };
 
 export function getOrderPlatformColor(label: string): string {
   const key = label.toLowerCase().split(/\s*-\s*/)[0].trim();

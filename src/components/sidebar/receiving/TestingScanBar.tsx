@@ -96,7 +96,7 @@ export function TestingScanBar({
         icon={
           <StationScanLeadingIcon
             Icon={ActiveIcon}
-            tintClassName={active?.iconClass ?? 'text-gray-400'}
+            tintClassName={active?.iconClass ?? 'text-text-faint'}
             ariaLabel={armedMode ? `Armed: ${active?.label}` : 'Auto-detect'}
             title={
               armedMode

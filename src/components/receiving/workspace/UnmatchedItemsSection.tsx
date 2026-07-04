@@ -49,7 +49,7 @@ const INTAKE_ACTIVE: Record<IntakeTone, string> = {
   emerald: 'border-emerald-600 bg-emerald-600 text-white',
 };
 const INTAKE_INACTIVE: Record<IntakeTone, string> = {
-  slate: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
+  slate: 'border-border-soft bg-surface-card text-text-muted hover:border-border-default hover:bg-surface-hover',
   blue: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
   rose: 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
   amber: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100',
@@ -71,7 +71,7 @@ function IntakeClassifyRow({
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Receiving as</p>
+      <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Receiving as</p>
       <div
         role="radiogroup"
         aria-label="Receiving as"
@@ -272,7 +272,7 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
               // On success the imported line row below (and the bound PO# /
               // platform chips above) ARE the result; no match band.
               c.returnScanBusy ? (
-                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-caption font-bold uppercase tracking-wider text-gray-600">
+                <div className="flex items-center gap-2 rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-caption font-bold uppercase tracking-wider text-text-muted">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
                   Matching serial — importing the sales order…
                 </div>
@@ -326,7 +326,7 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
             PO items · {c.lines.length}
           </h3>
           <div className="flex items-center gap-1.5">

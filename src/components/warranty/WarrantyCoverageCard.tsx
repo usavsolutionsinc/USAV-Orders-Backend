@@ -27,7 +27,7 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 border-b border-gray-100 bg-white px-4 py-3 text-sm text-gray-400">
+      <div className="flex items-center gap-2 border-b border-border-hairline bg-surface-card px-4 py-3 text-sm text-text-faint">
         <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
         Checking warranty coverage for “{q}”…
       </div>
@@ -36,9 +36,9 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 
   if (!data || !data.found) {
     return (
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3">
-        <p className="text-sm text-gray-500">
-          No shipped order matches “<span className="font-medium text-gray-700">{q}</span>”.
+      <div className="flex items-center justify-between gap-3 border-b border-border-hairline bg-surface-card px-4 py-3">
+        <p className="text-sm text-text-soft">
+          No shipped order matches “<span className="font-medium text-text-muted">{q}</span>”.
         </p>
         <Button
           variant="secondary"
@@ -79,17 +79,17 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
   const title = data.productTitle || data.sku || data.serialNumber || data.sourceOrderId || 'Shipped order';
 
   return (
-    <div className={cn('border-b', tone.ring, 'border-gray-100 bg-white')}>
+    <div className={cn('border-b', tone.ring, 'border-border-hairline bg-surface-card')}>
       <div className={cn('m-3 rounded-xl ring-1 ring-inset p-4', tone.ring, tone.bg)}>
         <div className="flex items-start gap-3">
-          <span className={cn('mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-inset', tone.ring, tone.text)}>
+          <span className={cn('mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-card ring-1 ring-inset', tone.ring, tone.text)}>
             <Icon className="h-5 w-5" />
           </span>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className={cn('text-sm font-semibold', tone.text)}>{headline}</span>
-              <span className={cn('rounded-full px-2 py-0.5 text-caption font-semibold tabular-nums ring-1 ring-inset', tone.ring, tone.text, 'bg-white')}>
+              <span className={cn('rounded-full px-2 py-0.5 text-caption font-semibold tabular-nums ring-1 ring-inset', tone.ring, tone.text, 'bg-surface-card')}>
                 {sub}
               </span>
               {provisional && (
@@ -102,10 +102,10 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
                   </span>
                 </HoverTooltip>
               )}
-              {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-300" />}
+              {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" />}
             </div>
 
-            <p className="mt-1 truncate text-[15px] font-medium text-gray-900">{title}</p>
+            <p className="mt-1 truncate text-[15px] font-medium text-text-default">{title}</p>
 
             <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-label sm:grid-cols-3">
               <Fact label="Order #" value={data.sourceOrderId} mono />
@@ -127,7 +127,7 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
                   >
                     View claim {data.existingClaim.claimNumber}
                   </Button>
-                  <span className="text-caption text-gray-400">
+                  <span className="text-caption text-text-faint">
                     Already logged · {WARRANTY_STATUS_LABEL[data.existingClaim.status]}
                   </span>
                 </>
@@ -164,9 +164,9 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 function Fact({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <dt className="text-micro font-medium uppercase tracking-wide text-gray-400">{label}</dt>
-      <dd className={cn('truncate text-gray-700', mono && 'font-mono text-caption')}>
-        {value || <span className="text-gray-300">—</span>}
+      <dt className="text-micro font-medium uppercase tracking-wide text-text-faint">{label}</dt>
+      <dd className={cn('truncate text-text-muted', mono && 'font-mono text-caption')}>
+        {value || <span className="text-text-faint">—</span>}
       </dd>
     </div>
   );

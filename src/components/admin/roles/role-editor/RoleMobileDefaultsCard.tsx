@@ -74,11 +74,11 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+    <section className="overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-sm">
+      <header className="flex items-center justify-between border-b border-border-hairline px-5 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Mobile defaults</h2>
-          <p className="mt-0.5 text-caption text-gray-500">
+          <h2 className="text-sm font-semibold text-text-default">Mobile defaults</h2>
+          <p className="mt-0.5 text-caption text-text-soft">
             Every staff with the <b style={{ color: roleColor }}>{roleLabel}</b> role inherits these — unless overridden in <a href="/settings/access" className="text-blue-600 hover:underline">Access</a>.
           </p>
         </div>
@@ -101,8 +101,8 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
       <div className="space-y-4 px-5 py-4">
         <label className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-semibold text-gray-900">Bottom navigation bar</div>
-            <p className="mt-0.5 text-caption text-gray-500">
+            <div className="text-sm font-semibold text-text-default">Bottom navigation bar</div>
+            <p className="mt-0.5 text-caption text-text-soft">
               When off, staff in this role are locked to a single page on their phone.
             </p>
           </div>
@@ -114,11 +114,11 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
             onClick={() => setDraftEnabled((v) => !v)}
             disabled={busy}
             className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-              draftEnabled ? 'bg-blue-600' : 'bg-gray-200'
+              draftEnabled ? 'bg-blue-600' : 'bg-surface-strong'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-surface-card shadow ring-0 transition duration-200 ${
                 draftEnabled ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -126,8 +126,8 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
         </label>
 
         <div>
-          <div className="text-sm font-semibold text-gray-900">Tabs</div>
-          <p className="mb-2 mt-0.5 text-caption text-gray-500">
+          <div className="text-sm font-semibold text-text-default">Tabs</div>
+          <p className="mb-2 mt-0.5 text-caption text-text-soft">
             Tap to toggle. Scan stays centre and raised when included.
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -143,7 +143,7 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
                   className={`rounded-full px-2.5 py-1 text-caption font-semibold ring-1 ring-inset transition ${
                     on
                       ? 'bg-blue-100 text-blue-800 ring-blue-300'
-                      : 'bg-gray-50 text-gray-500 ring-gray-200 hover:bg-gray-100'
+                      : 'bg-surface-canvas text-text-soft ring-border-soft hover:bg-surface-sunken'
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {TAB_LABELS[id]}
@@ -153,8 +153,8 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div className="text-micro text-gray-500">
+        <div className="flex items-center justify-between gap-3 border-t border-border-hairline pt-3">
+          <div className="text-micro text-text-soft">
             {hasDefaults ? 'Role defaults active.' : 'No defaults set — using system default.'}
           </div>
           <Button

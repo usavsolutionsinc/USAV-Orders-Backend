@@ -88,11 +88,11 @@ export function TriageUnfoundList({
           return (
             <>
               {ctx ? (
-                <div className="flex items-center gap-2 border-t border-gray-100 pt-2.5">
+                <div className="flex items-center gap-2 border-t border-border-hairline pt-2.5">
                   <HoverTooltip label={exceptionTooltipLabel(ctx)} asChild>
                     <span className="inline-flex items-center gap-1.5">
                       <span className={`h-2 w-2 shrink-0 rounded-full ${exceptionDotClass(ctx)}`} />
-                      <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+                      <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
                         Zoho sync pending · {ctx.retryCount}×
                       </span>
                     </span>

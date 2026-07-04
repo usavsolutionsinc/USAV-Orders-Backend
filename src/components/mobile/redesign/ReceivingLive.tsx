@@ -25,12 +25,12 @@ function ModeStarter({
   blurb: string;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 bg-white px-6 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3 bg-surface-card px-6 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 ring-1 ring-inset ring-blue-100">
         <Icon className="h-7 w-7" />
       </div>
-      <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-800">{title}</p>
-      <p className="max-w-[280px] text-caption font-semibold text-gray-500">{blurb}</p>
+      <p className="text-sm font-black uppercase tracking-[0.18em] text-text-default">{title}</p>
+      <p className="max-w-[280px] text-caption font-semibold text-text-soft">{blurb}</p>
     </div>
   );
 }

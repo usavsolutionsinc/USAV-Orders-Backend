@@ -109,17 +109,17 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
               <p className="text-micro font-black uppercase tracking-[0.14em] text-purple-800">
                 Station FNSKU scan
               </p>
-              <p className="mt-0.5 truncate font-mono text-caption font-black text-gray-900">
+              <p className="mt-0.5 truncate font-mono text-caption font-black text-text-default">
                 {detail.fnsku}
               </p>
               {detail.productTitle ? (
-                <p className="mt-0.5 truncate text-micro text-gray-600">{detail.productTitle}</p>
+                <p className="mt-0.5 truncate text-micro text-text-muted">{detail.productTitle}</p>
               ) : null}
 
               {addedMsg ? (
                 <p className="mt-1.5 text-micro font-bold text-emerald-700">{addedMsg}</p>
               ) : pendingPlans.length === 0 ? (
-                <p className="mt-1.5 text-micro text-gray-500">No open plans to add to.</p>
+                <p className="mt-1.5 text-micro text-text-soft">No open plans to add to.</p>
               ) : pendingPlans.length === 1 ? (
                 <Button
                   type="button"
@@ -127,7 +127,7 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
                   size="sm"
                   onClick={handleAdd}
                   loading={adding}
-                  className={`mt-1.5 rounded-full border border-purple-300 bg-white px-2.5 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 ring-0 hover:bg-purple-100 ${chrome.cardFocusRing}`}
+                  className={`mt-1.5 rounded-full border border-purple-300 bg-surface-card px-2.5 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 ring-0 hover:bg-purple-100 ${chrome.cardFocusRing}`}
                 >
                   Add to {pendingPlans[0].shipment_ref || 'plan'}
                 </Button>
@@ -136,7 +136,7 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
                   <select
                     value={selectedPlanId}
                     onChange={(e) => setSelectedPlanId(e.target.value)}
-                    className="rounded-lg border border-purple-200 bg-white px-2 py-1 text-micro font-bold text-gray-900 outline-none focus:border-purple-400"
+                    className="rounded-lg border border-purple-200 bg-surface-card px-2 py-1 text-micro font-bold text-text-default outline-none focus:border-purple-400"
                   >
                     <option value="">Pick plan…</option>
                     {pendingPlans.map((p) => (
@@ -151,7 +151,7 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
                     size="sm"
                     onClick={handleAdd}
                     disabled={adding || !selectedPlanId}
-                    className={`rounded-full border border-purple-300 bg-white px-2.5 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 ring-0 hover:bg-purple-100 disabled:opacity-40 ${chrome.cardFocusRing}`}
+                    className={`rounded-full border border-purple-300 bg-surface-card px-2.5 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 ring-0 hover:bg-purple-100 disabled:opacity-40 ${chrome.cardFocusRing}`}
                   >
                     {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add'}
                   </Button>

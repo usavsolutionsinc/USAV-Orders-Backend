@@ -81,10 +81,10 @@ export function RepairActionTimeline({ repairId, refreshKey }: Props) {
   return (
     <section>
       <div className="px-1 mb-2 flex items-baseline justify-between">
-        <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+        <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
           What was repaired
         </p>
-        <span className="text-micro font-bold text-slate-400">
+        <span className="text-micro font-bold text-text-faint">
           {actions.length} action{actions.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -96,13 +96,13 @@ export function RepairActionTimeline({ repairId, refreshKey }: Props) {
       )}
 
       {loading && actions.length === 0 && (
-        <p className="text-center text-sm font-semibold text-slate-500 py-6">Loading…</p>
+        <p className="text-center text-sm font-semibold text-text-soft py-6">Loading…</p>
       )}
 
       {!loading && actions.length === 0 && !error && (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center">
-          <p className="text-sm font-bold text-slate-700">No actions logged yet.</p>
-          <p className="mt-1 text-caption text-slate-500">
+        <div className="rounded-lg border border-dashed border-border-default bg-surface-card p-6 text-center">
+          <p className="text-sm font-bold text-text-muted">No actions logged yet.</p>
+          <p className="mt-1 text-caption text-text-soft">
             Tap the + button to record the first one.
           </p>
         </div>
@@ -125,13 +125,13 @@ export function RepairActionTimeline({ repairId, refreshKey }: Props) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="text-sm font-black text-slate-900">
+                      <p className="text-sm font-black text-text-default">
                         {TYPE_LABEL[a.action_type] || a.action_type}
                         {a.part_name ? (
-                          <span className="ml-1.5 font-bold text-slate-700">— {a.part_name}</span>
+                          <span className="ml-1.5 font-bold text-text-muted">— {a.part_name}</span>
                         ) : null}
                       </p>
-                      <span className="text-micro font-bold text-slate-500 shrink-0">
+                      <span className="text-micro font-bold text-text-soft shrink-0">
                         {formatAgo(a.created_at)}
                       </span>
                     </div>
@@ -144,7 +144,7 @@ export function RepairActionTimeline({ repairId, refreshKey }: Props) {
                           </span>
                         )}
                         {(a.old_sku || a.old_serial) && (a.new_sku || a.new_serial) && (
-                          <span className="text-slate-400">→</span>
+                          <span className="text-text-faint">→</span>
                         )}
                         {a.new_sku && (
                           <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">
@@ -155,24 +155,24 @@ export function RepairActionTimeline({ repairId, refreshKey }: Props) {
                     )}
 
                     {(a.old_serial || a.new_serial) && (
-                      <div className="mt-1 flex items-center gap-1.5 text-micro font-mono text-slate-600">
+                      <div className="mt-1 flex items-center gap-1.5 text-micro font-mono text-text-muted">
                         {a.old_serial && <span>SN: {a.old_serial}</span>}
-                        {a.old_serial && a.new_serial && <span className="text-slate-400">→</span>}
+                        {a.old_serial && a.new_serial && <span className="text-text-faint">→</span>}
                         {a.new_serial && <span>SN: {a.new_serial}</span>}
                       </div>
                     )}
 
                     {a.notes && (
-                      <p className="mt-1.5 text-label text-slate-700 leading-snug whitespace-pre-wrap">
+                      <p className="mt-1.5 text-label text-text-muted leading-snug whitespace-pre-wrap">
                         {a.notes}
                       </p>
                     )}
 
-                    <div className="mt-2 flex items-center gap-2 text-micro font-bold text-slate-500">
+                    <div className="mt-2 flex items-center gap-2 text-micro font-bold text-text-soft">
                       {a.staff_name && <span>{a.staff_name}</span>}
                       {a.duration_min != null && (
                         <>
-                          {a.staff_name && <span className="text-slate-300">·</span>}
+                          {a.staff_name && <span className="text-text-faint">·</span>}
                           <span>{a.duration_min} min</span>
                         </>
                       )}

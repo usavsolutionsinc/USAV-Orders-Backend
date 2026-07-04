@@ -129,7 +129,7 @@ export function ReceivingQaActionSheet({ open, onClose, receivingId, lines, onMu
           >
             Mark FAILED — return
           </button>
-          <Button variant="ghost" onClick={onClose} className="mt-2 h-12 w-full text-gray-600">
+          <Button variant="ghost" onClick={onClose} className="mt-2 h-12 w-full text-text-muted">
             Cancel
           </Button>
         </div>

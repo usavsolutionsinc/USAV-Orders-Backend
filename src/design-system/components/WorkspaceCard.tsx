@@ -30,7 +30,7 @@ const TONE_RAIL: Record<WorkspaceCardTone, string> = {
   orange: 'bg-orange-500',
   violet: 'bg-violet-500',
   red: 'bg-rose-500',
-  gray: 'bg-gray-300',
+  gray: 'bg-surface-strong',
 };
 
 /**
@@ -53,7 +53,7 @@ export function WorkspaceCard({
   const overflowClass = overflow === 'visible' ? 'overflow-visible' : 'overflow-hidden';
   return (
     <section
-      className={`relative ${overflowClass} rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60 ${
+      className={`relative ${overflowClass} rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60 ${
         className ?? ''
       }`}
     >
@@ -66,7 +66,7 @@ export function WorkspaceCard({
       {(label || actions) && (
         <header className="flex items-center justify-between gap-2 overflow-visible px-5 pb-1 pt-4">
           {label ? (
-            <h3 className="min-w-0 shrink text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+            <h3 className="min-w-0 shrink text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
               {label}
             </h3>
           ) : (
