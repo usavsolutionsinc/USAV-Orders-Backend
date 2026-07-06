@@ -194,6 +194,14 @@ export function useReceivingSelection({
       const detail = (e as CustomEvent<{ row?: ReceivingLineRow } | null>).detail;
       const row = detail?.row;
       if (!row || typeof row.id !== 'number') return;
+      // History/Incoming are table-only — never mirror a workspace pick into
+      // sidebar selection while those modes are active (prevents a stale open
+      // event from re-arming the unbox bridge after a mode flip).
+      const liveMode =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('mode')
+          : modeRef.current;
+      if (liveMode === 'history' || liveMode === 'incoming') return;
       setSelectedLine((prev) => (prev?.id === row.id ? prev : row));
     };
     window.addEventListener('receiving-select-line', handleSelect);

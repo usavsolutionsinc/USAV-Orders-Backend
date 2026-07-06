@@ -1,8 +1,16 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
-import { ListingResizePanel } from '@/components/listing/ListingResizePanel';
+import {
+  useMotionPresence,
+  useMotionTransition,
+} from '@/design-system/foundations/motion-framer-hooks';
+import {
+  staggerRevealContainer,
+  staggerRevealRiseItem,
+  STAGGER_REVEAL_STEP,
+} from '@/design-system/primitives/StaggerReveal';
 import { Barcode, MapPin, Package, Settings } from '@/components/Icons';
 import {
   PaneHeader,
@@ -12,11 +20,8 @@ import {
 } from '@/components/ui/pane-header';
 import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
-import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
-import { isElectron } from '@/utils/isElectron';
-import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { UpNextActionDock } from './UpNextActionDock';
 import { OrderPreviewPanel } from './OrderPreviewPanel';
 import { ActiveOrderBody } from './ActiveOrderBody';
@@ -52,33 +57,15 @@ function getVariantIcon(activeOrder: ActiveStationOrder) {
 }
 
 /**
- * FBA → Amazon keyword search by FNSKU; Repair → external URL by SKU;
- * everything else → external URL by item number.
- */
-function getListingUrl(activeOrder: ActiveStationOrder): string | null {
-  const source = activeOrder.sourceType;
-  if (
-    source === 'fba' ||
-    String(activeOrder.orderId || '').toUpperCase() === 'FNSKU' ||
-    looksLikeFnsku(String(activeOrder.fnsku || ''))
-  ) {
-    const fnsku = String(activeOrder.fnsku || '').trim();
-    if (fnsku) return `https://www.amazon.com/s?k=${encodeURIComponent(fnsku)}`;
-    return null;
-  }
-  if (source === 'repair' || /^RS-/i.test(String(activeOrder.orderId || ''))) {
-    return getExternalUrlByItemNumber(activeOrder.sku);
-  }
-  return getExternalUrlByItemNumber(activeOrder.itemNumber);
-}
-
-/**
  * Focused work-item view rendered in the `/tech` right pane while an order is
  * active. Crossfades in over the global `TechTable` history (see TechDashboard)
  * — this is the master-detail "detail" surface for the tech station.
  *
  * The scan bar lives in the sidebar and stays focused; this surface should not
  * steal focus. Closing returns the pane to the history view.
+ *
+ * Preview mode reuses the receiving triage / testing workspace shell: a
+ * stagger-revealed card column with bottom padding for the floating CTA.
  */
 export function ActiveOrderWorkspace({
   activeOrder,
@@ -92,25 +79,28 @@ export function ActiveOrderWorkspace({
   const orderIdDisplay = (activeOrder.orderId || '').trim() || trackingDisplay;
   const isPreview = mode === 'preview';
   const stateLabel = isPreview ? 'Preview' : 'Active';
-  const listingUrl = getListingUrl(activeOrder);
-  // <webview> only works in Electron; for the browser build we degrade to a
-  // "open externally" affordance so the section still has value.
-  const canEmbedListing = listingUrl != null && isElectron();
-
-  // Listing iframe dimensions are controlled by the resize handle. The
-  // listing pane itself manages its height + collapsed state; this parent
-  // just decides whether to render the section.
+  const reduceMotion = useReducedMotion();
+  // Station crossfade — route the active-card preset through the reduced-motion
+  // bridge so `prefers-reduced-motion` collapses the y-slide to a pure opacity
+  // crossfade automatically (motion-crossfade.md: don't consume framerPresence.*
+  // raw on a user-facing surface). The parent `TechRightPane` owns the
+  // `AnimatePresence mode="wait"` + stable per-entity key.
+  const cardPresence = useMotionPresence(framerPresence.stationCard);
+  const cardTransition = useMotionTransition(framerTransition.stationCardMount);
+  const revealContainer = staggerRevealContainer(reduceMotion ? 0 : STAGGER_REVEAL_STEP);
+  const revealItem: Variants = reduceMotion
+    ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.001 } } }
+    : staggerRevealRiseItem;
 
   return (
     <motion.div
       key={activeOrder.tracking || activeOrder.orderId}
-      initial={framerPresence.stationCard.initial}
-      animate={framerPresence.stationCard.animate}
-      exit={framerPresence.stationCard.exit}
-      transition={framerTransition.stationCardMount}
-      className={`flex h-full w-full flex-col ${isPreview ? 'bg-emerald-50/30' : 'bg-surface-canvas'}`}
+      initial={cardPresence.initial}
+      animate={cardPresence.animate}
+      exit={cardPresence.exit}
+      transition={cardTransition}
+      className="relative flex h-full w-full flex-col bg-surface-canvas"
     >
-      {/* Sticky header — identifies the order, gives a way back to history. */}
       <PaneHeader
         className={cn(
           'bg-surface-card',
@@ -132,8 +122,6 @@ export function ActiveOrderWorkspace({
         }
         rightSlot={
           <>
-            {/* "Scan next" pill is misleading in preview (nothing has been
-                scanned yet) — only show during active testing. */}
             {!isPreview && (
               <span className="hidden items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-eyebrow font-black uppercase tracking-widest text-emerald-600 ring-1 ring-inset ring-emerald-200 md:inline-flex">
                 <Barcode className="h-3 w-3" />
@@ -149,40 +137,28 @@ export function ActiveOrderWorkspace({
         }
       />
 
-      {/* ── Workspace body — split into two siblings so the detail panel
-            scrolls independently above a pinned, resizable listing iframe.
-            Click-and-hold the splitter to drag the iframe height. ── */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-4">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={revealContainer}
+            className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6"
+          >
             {isPreview && previewOrder ? (
-              <OrderPreviewPanel order={previewOrder} />
+              <OrderPreviewPanel order={previewOrder} revealItem={revealItem} />
             ) : (
               <ActiveOrderBody
                 activeOrder={activeOrder}
                 onRemoveSerial={onRemoveSerial}
+                revealItem={revealItem}
               />
             )}
-          </div>
+          </motion.div>
         </div>
 
-        {listingUrl ? (
-          <ListingResizePanel
-            url={listingUrl}
-            canEmbed={canEmbedListing}
-            storageNamespace="tech"
-          />
-        ) : null}
+        {isPreview && previewOrder ? <UpNextActionDock order={previewOrder} /> : null}
       </div>
-
-      {/* ── Action dock — preview mode only. Hosts Start + Out of Stock so
-            the sidebar card stays calm. The dock dispatches events that
-            `UpNextOrder` routes to its existing handlers, preserving the
-            sidebar-Start side-effects (clear active order, scan resolver). ── */}
-      {isPreview && previewOrder ? (
-        <UpNextActionDock order={previewOrder} />
-      ) : null}
     </motion.div>
   );
 }
-

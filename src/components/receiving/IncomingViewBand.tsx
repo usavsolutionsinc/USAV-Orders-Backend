@@ -11,7 +11,8 @@
  */
 
 import { useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { receivingSurfaceBasePath } from '@/lib/receiving/surface-path';
 import { IncomingViewSwitcher, useIncomingEmailCount } from '@/components/receiving/EmailTriagePanel';
 import type { IncomingView } from '@/components/receiving/EmailTriagePanel';
 import { useIncomingTableTotal } from '@/components/sidebar/receiving/incoming/useIncomingTableTotal';
@@ -19,6 +20,8 @@ import { useIncomingTableTotal } from '@/components/sidebar/receiving/incoming/u
 export function IncomingViewBand() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const base = receivingSurfaceBasePath(pathname);
   const value: IncomingView = searchParams.get('incview') === 'email' ? 'email' : 'pos';
 
   const onChange = useCallback(
@@ -27,9 +30,9 @@ export function IncomingViewBand() {
       // `pos` is the default — drop it from the URL to keep deep links clean.
       if (next === 'pos') params.delete('incview');
       else params.set('incview', next);
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${base}?${params.toString()}`);
     },
-    [router, searchParams],
+    [router, searchParams, base],
   );
 
   // Same filtered line total the right-pane table + pagination use (not the

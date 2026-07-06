@@ -333,7 +333,7 @@ export function MobilePackerSpamCamera({
       animate={framerPresenceMobile.camera.animate}
       exit={framerPresenceMobile.camera.exit}
       transition={framerTransitionMobile.cameraEnter}
-      className={`${embedded ? 'absolute' : 'fixed'} inset-0 z-modal overflow-hidden bg-black select-none`}
+      className={`${embedded ? 'absolute' : 'fixed'} inset-0 z-modal overflow-hidden bg-stage select-none`}
     >
       {/* ── Full-bleed viewfinder ── */}
       <div ref={viewfinderRef} className="absolute inset-0">
@@ -347,7 +347,7 @@ export function MobilePackerSpamCamera({
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-            <div className="h-16 w-16 rounded-full bg-white/10 flex items-center justify-center mb-4">
+            <div className="h-16 w-16 rounded-full bg-glass/10 flex items-center justify-center mb-4">
               <Camera className="h-8 w-8 text-white/50" />
             </div>
             <p className="text-sm font-bold text-white mb-1">Camera unavailable</p>
@@ -387,7 +387,7 @@ export function MobilePackerSpamCamera({
             animate={{ opacity: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="absolute inset-0 z-20 bg-black pointer-events-none"
+            className="absolute inset-0 z-20 bg-stage pointer-events-none"
           />
         )}
       </AnimatePresence>
@@ -411,7 +411,7 @@ export function MobilePackerSpamCamera({
             type="button"
             onClick={handleCancel}
             ariaLabel="Close camera"
-            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm active:bg-black/60 transition-colors"
+            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-full bg-scrim/40 backdrop-blur-sm active:bg-scrim/60 transition-colors"
             icon={<X className="h-5 w-5 text-white" />}
           />
         </div>
@@ -439,7 +439,7 @@ export function MobilePackerSpamCamera({
               onClick={openGallery}
               disabled={gallerySlides.length === 0}
               aria-label="View photos"
-              className="relative h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/40 bg-black/40 shadow-lg active:scale-95 transition-transform disabled:opacity-0 disabled:pointer-events-none"
+              className="relative h-12 w-12 rounded-full overflow-hidden ring-2 ring-glass/40 bg-scrim/40 shadow-lg active:scale-95 transition-transform disabled:opacity-0 disabled:pointer-events-none"
             >
               {lastSlide && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -462,7 +462,7 @@ export function MobilePackerSpamCamera({
               aria-label="Capture photo"
               className="h-[72px] w-[72px] rounded-full border-4 border-white bg-transparent active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center"
             >
-              <span className="block h-14 w-14 rounded-full bg-surface-card active:bg-surface-card/80 transition-colors" />
+              <span className="block h-14 w-14 rounded-full bg-stage-contrast active:bg-stage-contrast/80 transition-colors" />
             </button>
           </div>
 

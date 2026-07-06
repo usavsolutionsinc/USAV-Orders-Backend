@@ -159,16 +159,11 @@ export function LinearWorkflowStepper({
  * steps render as done, later steps render as pending.
  */
 export function ReceivingProgressStepper({ row, photoCount, serialCount, isComplete, labelPrinted = false }: Props) {
-  // Track whether the operator has actively picked a condition for THIS
-  // line. We can't rely on row.condition_grade alone because the column
-  // defaults to 'BRAND_NEW' for every newly inserted line, which used to
-  // make Condition auto-mark itself done before the operator even saw
-  // the carton. Falls back to workflow_status for back-compat.
-  const [conditionSet, setConditionSet] = useState(() =>
-    hasConditionBeenSet(row.id),
+  const [conditionSet, setConditionSet] = useState(
+    () => !!row.condition_set_at || hasConditionBeenSet(row.id),
   );
   useEffect(() => {
-    setConditionSet(hasConditionBeenSet(row.id));
+    setConditionSet(!!row.condition_set_at || hasConditionBeenSet(row.id));
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ line_id: number }>).detail;
       if (!detail || detail.line_id !== row.id) return;
@@ -176,7 +171,7 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
     };
     window.addEventListener('receiving-condition-set', handler);
     return () => window.removeEventListener('receiving-condition-set', handler);
-  }, [row.id]);
+  }, [row.id, row.condition_set_at]);
   const isCondDone = conditionSet || isComplete;
   const expected = row.quantity_expected ?? 0;
   const isSerialDone = expected > 0 ? serialCount >= expected : serialCount > 0;

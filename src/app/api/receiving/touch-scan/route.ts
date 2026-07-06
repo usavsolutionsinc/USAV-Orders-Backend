@@ -44,6 +44,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           ? row.carrier
           : getCarrier(trackingNumber);
     const source = row.source === 'zoho_po' ? 'zoho_po' : 'unmatched';
+    const intakeSurface =
+      String(body?.intakeSurface ?? '').trim().toLowerCase() === 'unbox' ? 'unbox' : 'triage';
 
     const scanId = await recordReceivingScan(
       receivingId,
@@ -51,9 +53,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       carrier,
       ctx.staffId,
       source,
+      { intakeSurface },
     );
 
-    const intakeSurface = String(body?.intakeSurface ?? '').trim().toLowerCase();
     if (intakeSurface === 'unbox') {
       await recordUnboxScanOpened(
         ctx.organizationId,

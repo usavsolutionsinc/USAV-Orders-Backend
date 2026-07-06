@@ -48,6 +48,7 @@ const PLATFORM_COLORS: Record<string, { text: string; border: string }> = {
   zoho: { text: 'text-red-600', border: 'border-red-600' },
   walmart: { text: 'text-amber-800', border: 'border-amber-800' },
   mercari: { text: 'text-purple-600', border: 'border-purple-600' },
+  // ds-allow-raw-neutral: identity hue — Shopify brand black among colored platform siblings
   shopify: { text: 'text-black', border: 'border-black' },
 };
 

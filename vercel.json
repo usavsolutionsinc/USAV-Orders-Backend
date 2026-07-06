@@ -137,6 +137,10 @@
       "schedule": "30 4 * * *"
     },
     {
+      "path": "/api/cron/documents/nas-mirror?limit=25",
+      "schedule": "45 4 * * *"
+    },
+    {
       "path": "/api/cron/photos/drive-mirror?limit=25",
       "schedule": "0 5 * * *"
     },

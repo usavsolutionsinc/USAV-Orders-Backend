@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { receivingSurfaceBasePath } from '@/lib/receiving/surface-path';
 import {
   PaneHeader,
   PaneHeaderTitle,
@@ -48,6 +49,8 @@ export interface IncomingPaneHeaderProps {
 export function IncomingPaneHeader({ total, page }: IncomingPaneHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const base = receivingSurfaceBasePath(pathname);
 
   const totalPages = Math.max(1, Math.ceil(total / INCOMING_PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -57,9 +60,9 @@ export function IncomingPaneHeader({ total, page }: IncomingPaneHeaderProps) {
       const params = new URLSearchParams(searchParams.toString());
       if (next <= 1) params.delete('page');
       else params.set('page', String(next));
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${base}?${params.toString()}`);
     },
-    [router, searchParams],
+    [router, searchParams, base],
   );
 
   return (

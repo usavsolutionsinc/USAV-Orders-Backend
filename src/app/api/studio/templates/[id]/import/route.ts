@@ -6,6 +6,7 @@ import { errorResponse } from '@/lib/api/errors';
 import { parseBody } from '@/lib/schemas/parse';
 import { StudioTemplateImportBody } from '@/lib/schemas/studio';
 import { createDraftFromTemplate } from '@/lib/studio/templates';
+import { buildTemplateSurfaceSeeds, seedTemplateSurfaces } from '@/lib/studio/template-surfaces';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
@@ -43,15 +44,32 @@ export const POST = withAuth(async (request, ctx) => {
   if (parsed instanceof NextResponse) return parsed;
 
   try {
-    const outcome = await withTenantTransaction(ctx.organizationId, (client) =>
-      createDraftFromTemplate({
+    const { outcome, surfacesSeeded } = await withTenantTransaction(ctx.organizationId, async (client) => {
+      const result = await createDraftFromTemplate({
         client,
         orgId: ctx.organizationId,
         staffId: ctx.staffId,
         templateId,
         name: parsed.name,
-      }),
-    );
+      });
+
+      // Templates seed their associated UI surfaces too (Phase 5): read the new
+      // draft's nodes (already re-minted global ids) and seed a node-bound,
+      // draft ('legacy'-config) station_definition for each surface those node
+      // types imply — same tx, so it's atomic with the graph import.
+      let seeded = 0;
+      if (result.status === 200) {
+        const { rows } = await client.query<{ id: string; type: string }>(
+          `SELECT id, type FROM workflow_nodes WHERE workflow_definition_id = $1`,
+          [result.body.id],
+        );
+        const nodes = rows.map((n) => ({ id: n.id, type: n.type, x: 0, y: 0 }));
+        const identityMap = new Map(nodes.map((n) => [n.id, n.id]));
+        const seeds = buildTemplateSurfaceSeeds(nodes, identityMap);
+        seeded = await seedTemplateSurfaces(client, ctx.organizationId, ctx.staffId, seeds);
+      }
+      return { outcome: result, surfacesSeeded: seeded };
+    });
 
     if (outcome.status === 200 && 'audit' in outcome) {
       await recordAudit(pool, ctx, request, {
@@ -67,11 +85,15 @@ export const POST = withAuth(async (request, ctx) => {
           version: outcome.audit.version,
           nodes: outcome.audit.nodes,
           edges: outcome.audit.edges,
+          surfacesSeeded,
         },
       });
     }
 
-    return NextResponse.json(outcome.body, { status: outcome.status });
+    return NextResponse.json(
+      outcome.status === 200 ? { ...outcome.body, surfacesSeeded } : outcome.body,
+      { status: outcome.status },
+    );
   } catch (err) {
     console.error('[POST /api/studio/templates/[id]/import] error:', err);
     return errorResponse(err, 'studio.template.import');

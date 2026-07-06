@@ -214,7 +214,7 @@ function ListingPhotoPicker({
     });
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/40 p-4" onClick={onClose}>
       <div
         className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-surface-card shadow-xl ring-1 ring-black/5"
         onClick={(e) => e.stopPropagation()}

@@ -8,7 +8,7 @@
  */
 
 import { useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { TESTING_SELECTION_SCOPE } from '@/components/tech/TestingHistoryList';
 import {
   useReceivingLineBulkSelection,
@@ -42,6 +42,7 @@ export interface TechTestingSelection {
 
 export function useTechTestingSelection(isTestingHistory: boolean): TechTestingSelection {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const { selectMode, selectedRows, claimRow, setClaimRow, exitSelectMode, bulkActions } =
@@ -55,8 +56,10 @@ export function useTechTestingSelection(isTestingHistory: boolean): TechTestingS
     // Clicking a history row opens it in the workspace → switch to Testing mode.
     const params = new URLSearchParams(searchParams.toString());
     params.set('view', 'testing');
-    router.replace(`/tech?${params.toString()}`);
-  }, [router, searchParams]);
+    // Stay on the current Testing surface route (`/test` canonical, `/tech`
+    // legacy) — operator-surfaces refactor Phase 8 graduated /tech → /test.
+    router.replace(`${pathname || '/test'}?${params.toString()}`);
+  }, [router, pathname, searchParams]);
 
   return {
     testingSelectMode: selectMode,

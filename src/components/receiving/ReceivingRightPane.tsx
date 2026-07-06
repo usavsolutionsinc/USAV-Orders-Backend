@@ -18,9 +18,9 @@ import { RECEIVING_SELECTION_SCOPE } from '@/components/station/ReceivingLinesTa
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import { EmptyState } from '@/design-system/primitives';
-import { Barcode } from '@/components/Icons';
 import { ReceivingLineWorkspace } from '@/components/receiving/workspace/ReceivingLineWorkspace';
 import { ReceivingScanLoader } from '@/components/receiving/workspace/ReceivingScanLoader';
+import { ReceivingWorkspaceSkeleton } from '@/components/receiving/workspace/ReceivingWorkspaceSkeleton';
 import { IncomingDetailsPanel } from '@/components/sidebar/receiving/IncomingDetailsPanel';
 import { EmailTriagePanel } from '@/components/receiving/EmailTriagePanel';
 import type { IncomingView } from '@/components/receiving/EmailTriagePanel';
@@ -43,10 +43,6 @@ const RECEIVING_EMPTY_STATE: Partial<Record<string, { title: string; description
     title: 'No carton selected',
     description:
       'Pick a carton from the Unfound or Prioritize list, or scan a tracking number to triage it.',
-  },
-  receive: {
-    title: 'Scan to start',
-    description: 'Scan a tracking number or pick a carton from the rail to open its PO here.',
   },
 };
 
@@ -97,14 +93,22 @@ export function ReceivingRightPane({
   // gap before the matched workspace crossfades in).
   const showScanLoader = !!scanInFlight && !isTableOnlyMode && !isTriageMode;
   const emptyState = RECEIVING_EMPTY_STATE[mode];
+  const showIdleSkeleton = mode === 'receive' && !isTableOnlyMode && !showWorkspace && !showScanLoader;
   // Heavy line-workspace overlay crossfade. Uses the slower, opacity-led
   // `workbenchPaneSettle` (not the snappy `workbenchPane`): a carton→carton swap
   // dissolves — the incoming pane rises + fades in over a static, fading-out
   // outgoing pane, so two full-bleed panes never slide in opposite directions
   // (the old double-image jitter). The hook collapses it to opacity-only under
   // prefers-reduced-motion (no local branching).
+  // Key on table-only vs workspace mode so a flip to History/Incoming OR between
+  // Triage/Unbox remounts the presence host — the exiting panel is torn down
+  // immediately instead of crossfading for ~300ms over the now-visible surface
+  // (the bleed). Including `mode` prevents TriagePanel ↔ LineEditPanel ghosting.
+  const workspacePresenceKey = isTableOnlyMode ? 'table-only' : `workspace-${mode}`;
   const workspacePane = useMotionPresence(framerPresence.workbenchPaneSettle);
-  const workspaceTransition = useMotionTransition(framerTransition.workbenchPaneSettle);
+  const workspaceTransition = useMotionTransition(
+    isTableOnlyMode ? { duration: 0 } : framerTransition.workbenchPaneSettle,
+  );
   // Incoming Email-Triage sub-view swap keeps the snappy canonical crossfade —
   // it fades in over the (display:none) table, so there is no second pane to
   // ghost against and no need for the slower settle.
@@ -151,13 +155,19 @@ export function ReceivingRightPane({
         ) : null}
       </AnimatePresence>
 
+      {/* Idle Unbox right pane — workspace-shaped skeleton instead of empty copy. */}
+      {showIdleSkeleton ? (
+        <div className="absolute inset-0 overflow-hidden">
+          <ReceivingWorkspaceSkeleton />
+        </div>
+      ) : null}
+
       {/* Empty right pane — per-mode copy from RECEIVING_EMPTY_STATE. Sits under
           the workspace/loader overlays (no z), so it only shows when neither is
           mounted. */}
-      {!isTableOnlyMode && !showWorkspace && !showScanLoader && emptyState ? (
+      {!isTableOnlyMode && !showWorkspace && !showScanLoader && !showIdleSkeleton && emptyState ? (
         <div className="absolute inset-0 flex items-center justify-center">
           <EmptyState
-            icon={<Barcode className="h-7 w-7 text-text-faint" />}
             title={emptyState.title}
             description={emptyState.description}
           />
@@ -183,7 +193,7 @@ export function ReceivingRightPane({
       ) : null}
 
       {/* Workspace — overlays everything when a line is active in Receiving. */}
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} key={workspacePresenceKey}>
         {showWorkspace ? (
           <motion.div
             // Key on the CARTON, not the line. Switching between sibling lines of

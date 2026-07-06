@@ -18,8 +18,9 @@ import { IconButton } from '@/design-system/primitives';
  *   - **Left / center (contextual):** whatever the active page pushes through
  *     {@link useHeader} / {@link usePageHeader} — title, "Select" toggle,
  *     filters, bulk-action triggers. Empty on pages that don't set it.
- *   - **Right (persistent):** {@link GlobalHeaderActions} — search, notifications,
- *     staff switcher, account. Identical on every page.
+ *   - **Right (persistent):** {@link GlobalHeaderActions} — inline search (420px
+ *     expand-on-focus, Enter → `/search`; contextual when a page registers via
+ *     {@link usePageHeaderSearch}), notifications, staff switcher, account.
  *
  * Mobile keeps its own chrome (MobileAppHeader); this bar is desktop-only.
  */
@@ -90,8 +91,10 @@ export function GlobalHeader({
       {/* Contextual zone — fed per page via useHeader()/usePageHeader(). */}
       <div className="flex min-w-0 flex-1 items-center">{panelContent}</div>
 
-      {/* Persistent zone — same on every page. */}
-      <GlobalHeaderActions />
+      {/* Persistent zone — right inset keeps the staff avatar off the viewport edge. */}
+      <div className="flex shrink-0 items-center pr-0.5 sm:pr-1">
+        <GlobalHeaderActions />
+      </div>
     </header>
   );
 }

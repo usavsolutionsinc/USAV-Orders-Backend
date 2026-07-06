@@ -95,7 +95,7 @@ export const WORKFLOW_STAGES: Record<string, WorkflowStageMeta> = {
   },
   SCRAP: {
     status: 'SCRAP', order: 7, phase: 'TERMINAL', label: 'Scrap',
-    dot: 'bg-slate-600', badge: 'bg-surface-strong text-text-muted',
+    dot: 'bg-slate-600', badge: 'bg-surface-strong text-text-muted', // ds-allow-raw-neutral: identity/tone hue — SCRAP's slate dot among colored lifecycle dots
     description: 'Scrapped / claimed — removed from sellable stock.',
   },
   DONE: {

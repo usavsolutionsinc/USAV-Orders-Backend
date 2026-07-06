@@ -48,6 +48,7 @@ import { PoTriageTemplate } from './PoTriageTemplate';
 import { ReturnTriageTemplate } from './ReturnTriageTemplate';
 import { isReturnIntake } from '@/lib/receiving/triage-intake-kind';
 import { useTriageStaging } from './useTriageStaging';
+import { WorkflowRecommendationsStrip } from '../WorkflowRecommendationsStrip';
 import { deriveTriageFocusFacts, resolveTriageFocus, TRIAGE_SECTION_ID } from '@/lib/receiving/triage-focus';
 
 export function TriagePanel({
@@ -206,6 +207,7 @@ export function TriagePanel({
                 the same underlying cards (pairing hub UNCHANGED); only layout,
                 copy, and the unfound-todo framing differ. No serial scan and no
                 editable lines here — that's the unbox pass. */}
+            <WorkflowRecommendationsStrip row={row} surface="triage" />
             <Template
               row={row}
               staffId={staffId}
@@ -257,6 +259,7 @@ export function TriagePanel({
             receivingId={row.receiving_id}
             staffId={Number(staffId) || 0}
             poRef={row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || null}
+            photoIntent="package"
           />
         ) : null}
       </div>

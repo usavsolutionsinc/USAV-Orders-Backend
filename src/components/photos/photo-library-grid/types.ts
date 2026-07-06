@@ -28,6 +28,7 @@ export interface PhotoGridViewProps {
   selectionActive: boolean;
   selected: Set<number>;
   onSelectTile: (id: number, mods: TileSelectMods) => void;
+  onToggleGroupSelection?: (ids: number[]) => void;
   onPhotoContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
   /** Open the shared fullscreen viewer at this photo. */
   openAt: (id: number) => void;

@@ -44,7 +44,6 @@ export function TestingCartonHeader({
       zendeskHref={c.zendeskHref}
       zendeskChipDisplay={c.zendeskChipDisplay}
       providerTicketId={c.providerTicketId}
-      ticketLookupPending={c.ticketLookupPending}
       onTicketUnlinked={() => {
         c.setZendesk('');
         dispatchLineUpdated({ id: row.id, zendesk_ticket: null, notes: row.notes });

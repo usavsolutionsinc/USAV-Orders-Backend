@@ -126,7 +126,7 @@ export function MobileReceivingSwipeGallery({
       <GalleryShell>
         <div className="flex flex-col items-center gap-4" aria-busy aria-label="Loading photos">
           <motion.div
-            className="h-1 w-20 overflow-hidden rounded-full bg-white/10"
+            className="h-1 w-20 overflow-hidden rounded-full bg-glass/10"
             initial={reduce ? false : { opacity: 0, scaleX: 0.6 }}
             animate={{ opacity: 1, scaleX: 1 }}
             transition={framerTransitionMobile.cameraEnter}

@@ -83,7 +83,7 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]"
+        className="fixed inset-0 z-40 bg-scrim/30 backdrop-blur-[1px]"
         onClick={onClose}
         aria-hidden
       />

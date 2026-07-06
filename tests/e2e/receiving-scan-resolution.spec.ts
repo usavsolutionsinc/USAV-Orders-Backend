@@ -177,7 +177,7 @@ test.describe('Receiving unbox scan-resolution ladder', () => {
 
       // networkidle = the initial rail fetches have resolved and React Query has
       // committed them to the ['receiving-lines-table'] cache that Phase 0 scans.
-      await page.goto('/receiving', { waitUntil: 'networkidle' });
+      await page.goto('/unbox', { waitUntil: 'networkidle' });
 
       const scanInput = page.getByPlaceholder(/Tracking, PO/i);
       await scanInput.fill(MATCHED_PO_NUMBER);
@@ -209,7 +209,7 @@ test.describe('Receiving unbox scan-resolution ladder', () => {
         });
       });
 
-      await page.goto('/receiving');
+      await page.goto('/unbox');
 
       const scanInput = page.getByPlaceholder(/Tracking, PO/i);
       await scanInput.fill(MATCHED_PO_NUMBER);
@@ -236,7 +236,7 @@ test.describe('Receiving unbox scan-resolution ladder', () => {
         });
       });
 
-      await page.goto('/receiving');
+      await page.goto('/unbox');
 
       const scanInput = page.getByPlaceholder(/Tracking, PO/i);
       await scanInput.fill(MATCHED_PO_NUMBER);
@@ -280,7 +280,7 @@ test.describe('Receiving unbox scan-resolution ladder', () => {
         }
       });
 
-      await page.goto('/receiving');
+      await page.goto('/unbox');
 
       const scanInput = page.getByPlaceholder(/Tracking, PO/i);
       await scanInput.fill(MATCHED_PO_NUMBER);
@@ -314,7 +314,7 @@ test.describe('Receiving unbox scan-resolution ladder', () => {
         });
       });
 
-      await page.goto('/receiving');
+      await page.goto('/unbox');
 
       const scanInput = page.getByPlaceholder(/Tracking, PO/i);
       await scanInput.fill(MATCHED_PO_NUMBER);
@@ -387,7 +387,7 @@ test.describe('Receiving unbox scan-resolution ladder', () => {
         });
       });
 
-      await page.goto('/receiving');
+      await page.goto('/unbox');
 
       const scanInput = page.getByPlaceholder(/Tracking, PO/i);
       await scanInput.fill(UNFOUND_TRACKING);

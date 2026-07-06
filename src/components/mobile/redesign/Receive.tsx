@@ -45,6 +45,7 @@ const INTAKE_STORAGE_KEY = 'receive.intakeClassification.v1';
 /** Pill colors for the "Receiving as" selector + scan-row chip. */
 function intakeToneClass(tone: IntakeTone, active: boolean): string {
   const A: Record<IntakeTone, string> = {
+    // ds-allow-raw-neutral: identity/tone hue — slate IS the IntakeTone key among colored siblings, not chrome
     slate: 'bg-slate-600 text-white border-slate-600',
     blue: 'bg-blue-600 text-white border-blue-600',
     rose: 'bg-rose-600 text-white border-rose-600',
@@ -70,7 +71,13 @@ const FILTERS: { key: TriageFilter; label: string }[] = [
   { key: 'normal', label: 'Normal' },
 ];
 
-export default function RedesignedMobileReceive() {
+export default function RedesignedMobileReceive({
+  surface = 'triage',
+  title = 'Triage',
+}: {
+  surface?: 'triage' | 'unbox';
+  title?: string;
+}) {
   const [cameraActive, setCameraActive] = useState(false);
   const [input, setInput] = useState('');
   const [scans, setScans] = useState<ScanResult[]>([]);
@@ -126,8 +133,10 @@ export default function RedesignedMobileReceive() {
           credentials: 'include',
           body: JSON.stringify({
             trackingNumber: tracking,
-            // Tag the carton with the sticky intake default (omit UNKNOWN).
-            ...(intakeForScan !== 'UNKNOWN' ? { classification: intakeForScan } : {}),
+            intakeSurface: surface,
+            ...(intakeForScan !== 'UNKNOWN' && surface === 'triage'
+              ? { classification: intakeForScan }
+              : {}),
           }),
         });
         const data = await res.json().catch(() => null);
@@ -177,7 +186,7 @@ export default function RedesignedMobileReceive() {
         inFlight.current = false;
       }
     },
-    [],
+    [surface],
   );
 
   // Feed camera-decoded values into the same lookup path. Start/stop strictly
@@ -263,10 +272,10 @@ export default function RedesignedMobileReceive() {
     <div className={`h-full ${TOKENS.colors.background} flex flex-col`}>
       {/* Input Section */}
       <div className="px-6 pt-4 pb-4">
+        <h1 className="mb-4 text-xl font-black tracking-tight text-blue-950">{title}</h1>
         {/* Input Bar */}
         <div className="flex flex-col gap-4">
-          {/* "Receiving as" — sticky intake default applied to every scan, so a
-              whole pallet of FBA returns can be tagged with one pick. */}
+          {surface === 'triage' ? (
           <div>
             <p className="mb-1.5 px-1 text-micro font-black uppercase tracking-widest text-blue-300">
               Receiving as
@@ -275,7 +284,6 @@ export default function RedesignedMobileReceive() {
               {INTAKE_CLASSIFICATION_OPTS.map((o) => {
                 const active = intake === o.value;
                 return (
-                  // ds-raw-button: segmented "Receiving as" intake toggle pill — not a DS Button
                   <button
                     key={o.value}
                     onClick={() => selectIntake(o.value)}
@@ -287,6 +295,7 @@ export default function RedesignedMobileReceive() {
               })}
             </div>
           </div>
+          ) : null}
 
           <div className="relative group">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -337,7 +346,7 @@ export default function RedesignedMobileReceive() {
               muted
             />
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-64 h-36 rounded-2xl border-2 border-white/40 bg-white/5 backdrop-blur-[1px] relative">
+              <div className="w-64 h-36 rounded-2xl border-2 border-glass/40 bg-glass/5 backdrop-blur-[1px] relative">
                 <motion.div
                   animate={{ top: ['5%', '95%', '5%'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}

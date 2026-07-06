@@ -2,7 +2,7 @@
 
 import { Fragment } from 'react';
 import { Calendar, ChevronRight } from '@/components/Icons';
-import { describePhotoDatePath } from '@/lib/photos/date-hierarchy';
+import { describePhotoDatePath, dayLabel } from '@/lib/photos/date-hierarchy';
 import type { PhotoLibraryFilterState } from '@/lib/photos/library-filter-state';
 import { claimsTicketLabel } from '@/lib/photos/display-names';
 import { cn } from '@/utils/_cn';
@@ -22,12 +22,6 @@ interface PhotoDateBreadcrumbProps {
   folderLeafLabel?: string;
   /** @deprecated Leaf is shown in the path by default; pass `folderLeafLabel` instead. */
   hideFolderLeaf?: boolean;
-}
-
-/** `Mon, Jun 23` from a `YYYY-MM-DD` PST date string. */
-function dayChipLabel(ymd: string): string {
-  const date = new Date(`${ymd}T00:00:00`);
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
 }
 
 /**
@@ -123,7 +117,7 @@ export function PhotoDateBreadcrumb({
           ) : null}
           {showRecent && mostRecentDay ? (
             <DateQuickChip
-              label={`Recent · ${dayChipLabel(mostRecentDay)}`}
+              label={`Recent · ${dayLabel(mostRecentDay)}`}
               onClick={() => onNavigate({ dateFrom: mostRecentDay, dateTo: mostRecentDay })}
             />
           ) : null}

@@ -9,9 +9,20 @@ import type { OutboundDocumentType } from '@/lib/documents/types';
 import { loadOutboundOrderContext } from './order-context';
 import { ebayDocumentAdapter } from './ebay-documents';
 import { generatedDocumentAdapter } from './generated-documents';
+import {
+  amazonDocumentAdapter,
+  ecwidDocumentAdapter,
+  walmartDocumentAdapter,
+} from './platform-documents';
 import type { MarketplaceDocumentAdapter } from './types';
 
-const ADAPTERS: MarketplaceDocumentAdapter[] = [ebayDocumentAdapter, generatedDocumentAdapter];
+const ADAPTERS: MarketplaceDocumentAdapter[] = [
+  ebayDocumentAdapter,
+  amazonDocumentAdapter,
+  ecwidDocumentAdapter,
+  walmartDocumentAdapter,
+  generatedDocumentAdapter,
+];
 
 function adapterForOrder(
   order: NonNullable<Awaited<ReturnType<typeof loadOutboundOrderContext>>>,

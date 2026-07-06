@@ -130,7 +130,7 @@ export default function EmbeddedBrowser({ url, onNavigate, className = '' }: Emb
           onChange={(e) => setCurrentUrl(e.target.value)}
           onKeyDown={handleAddressKeyDown}
           placeholder="Enter URL…"
-          className="flex-1 px-2 py-1 text-xs bg-surface-inverse border border-gray-600 rounded text-text-inverse-soft focus:outline-none focus:border-blue-500"
+          className="flex-1 px-2 py-1 text-xs bg-surface-inverse border border-border-inverse rounded text-text-inverse-soft focus:outline-none focus:border-blue-500"
           spellCheck={false}
         />
 

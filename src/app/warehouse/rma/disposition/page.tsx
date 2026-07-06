@@ -66,6 +66,7 @@ const DISPOSITIONS: Array<{
     label: 'Hold',
     hint: 'Needs more review before a decision',
     icon: Lock,
+    // ds-allow-raw-neutral: identity/tone hue — HOLD's slate among colored disposition siblings, not chrome
     activeClass: 'bg-slate-600 hover:bg-slate-700',
   },
   {

@@ -36,6 +36,11 @@ export interface RenderDataMatrixOptions {
 
 export function renderDataMatrixSvg(opts: RenderDataMatrixOptions): string {
   const pad = opts.quietZone ?? 2;
+  const bg = opts.backgroundcolor ?? 'FFFFFF';
+  // A transparent background lets the surface behind the symbol show through
+  // (used by on-screen previews that recolour the code per theme). bwip-js draws
+  // no background rect when `backgroundcolor` is omitted.
+  const transparent = bg.toLowerCase() === 'transparent' || bg.toLowerCase() === 'none';
   return bwipjs.toSVG({
     bcid: opts.symbology ?? 'gs1datamatrix',
     text: opts.value,
@@ -44,7 +49,7 @@ export function renderDataMatrixSvg(opts: RenderDataMatrixOptions): string {
     paddingwidth: pad,
     paddingheight: pad,
     rotate: 'N',
-    backgroundcolor: opts.backgroundcolor ?? 'FFFFFF',
     barcolor: opts.barcolor ?? '000000',
+    ...(transparent ? {} : { backgroundcolor: bg }),
   });
 }

@@ -33,6 +33,7 @@ function typeBadgeClass(type: string): string {
     case 'ADAPTER': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
     case 'REMOTE': return 'bg-purple-50 text-purple-700 border-purple-200';
     case 'MANUAL': return 'bg-amber-50 text-amber-700 border-amber-200';
+    // ds-allow-raw-neutral: identity tone — deliberate warm stone chip, distinct from the gray default
     case 'PACKAGING': return 'bg-stone-50 text-stone-600 border-stone-200';
     default: return 'bg-surface-canvas text-text-muted border-border-soft';
   }

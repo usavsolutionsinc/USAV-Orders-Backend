@@ -61,7 +61,7 @@ export function RoleColorPicker({ value, onChange, disabled }: RoleColorPickerPr
               disabled={disabled}
               aria-label={`${p.label} (${p.hex})${selected ? ' — selected' : ''}`}
               className={`relative h-7 w-7 rounded-full ring-2 transition disabled:cursor-not-allowed ${
-                selected ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
+                selected ? 'ring-border-strong ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
               }`}
               style={{ backgroundColor: p.hex }}
             />
@@ -78,7 +78,7 @@ export function RoleColorPicker({ value, onChange, disabled }: RoleColorPickerPr
           disabled={disabled}
           aria-label="Pick a custom color"
           className={`relative h-7 w-7 overflow-hidden rounded-full ring-2 transition disabled:cursor-not-allowed ${
-            isCustom ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
+            isCustom ? 'ring-border-strong ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
           }`}
           style={{
             background: isCustom

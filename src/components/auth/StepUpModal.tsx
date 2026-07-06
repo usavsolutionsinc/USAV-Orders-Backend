@@ -91,7 +91,7 @@ export function StepUpModal({ scope, open, onResolved, onCancel, reason }: StepU
 
   return (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/60 p-4"
       onClick={onCancel}
     >
       <div

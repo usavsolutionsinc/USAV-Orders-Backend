@@ -88,9 +88,7 @@ function buildUnboxRailMatchedRow(
     ...buildMatchedStubRow(receivingId, tracking, line),
     client_event_id: receivingRailCartonKey(receivingId),
     scanned_at: now,
-    // Stamp the UNBOXED milestone the rail now sorts/labels by (first unbox scan =
-    // unboxed), so a just-scanned carton reads "just now" instead of its door scan.
-    unboxed_at: now,
+    // Unbox-open milestone for the rail — unboxed_at is set by the Unboxed action.
     unbox_opened_at: now,
     last_activity_at: now,
   };

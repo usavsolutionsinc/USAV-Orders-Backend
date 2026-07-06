@@ -48,6 +48,7 @@ const THEME_ROW: Record<StationTheme, {
   blue:      { hoverBg: 'hover:bg-blue-50',     hoverRing: 'hover:ring-blue-200',    chevron: 'text-blue-600',    avatarRing: 'ring-blue-100',     recentDot: 'bg-blue-400',     nameHover: 'group-hover:text-blue-900' },
   purple:    { hoverBg: 'hover:bg-purple-50',   hoverRing: 'hover:ring-purple-200',  chevron: 'text-purple-600',  avatarRing: 'ring-purple-100',   recentDot: 'bg-purple-400',   nameHover: 'group-hover:text-purple-900' },
   yellow:    { hoverBg: 'hover:bg-amber-50',    hoverRing: 'hover:ring-amber-200',   chevron: 'text-amber-600',   avatarRing: 'ring-amber-100',    recentDot: 'bg-amber-400',    nameHover: 'group-hover:text-amber-900' },
+  // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
   black:     { hoverBg: 'hover:bg-surface-sunken',   hoverRing: 'hover:ring-border-default',   chevron: 'text-text-muted',   avatarRing: 'ring-border-soft',    recentDot: 'bg-slate-500',    nameHover: 'group-hover:text-text-default' },
   red:       { hoverBg: 'hover:bg-red-50',      hoverRing: 'hover:ring-red-200',     chevron: 'text-red-600',     avatarRing: 'ring-red-100',      recentDot: 'bg-red-400',      nameHover: 'group-hover:text-red-900' },
   lightblue: { hoverBg: 'hover:bg-sky-50',      hoverRing: 'hover:ring-sky-200',     chevron: 'text-sky-600',     avatarRing: 'ring-sky-100',      recentDot: 'bg-sky-400',      nameHover: 'group-hover:text-sky-900' },

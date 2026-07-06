@@ -10,7 +10,7 @@ export const FBA_SCAN_FOCUS_RING: Record<StationTheme, string> = {
   blue: 'focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500',
   purple: 'focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500',
   yellow: 'focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500',
-  black: 'focus:ring-4 focus:ring-slate-700/10 focus:border-slate-700',
+  black: 'focus:ring-4 focus:ring-slate-700/10 focus:border-slate-700', // ds-allow-raw-neutral: identity/tone hue — black staff-theme ring among colored themes
   red: 'focus:ring-4 focus:ring-red-500/10 focus:border-red-500',
   lightblue: 'focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500',
   pink: 'focus:ring-4 focus:ring-pink-500/10 focus:border-pink-500',

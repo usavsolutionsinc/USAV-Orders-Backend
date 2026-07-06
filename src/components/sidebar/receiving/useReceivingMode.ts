@@ -11,8 +11,16 @@
  */
 
 import { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { clearReceivingHistoryUrlParams } from '@/lib/receiving-history-search';
+import {
+  UNBOX_SURFACE_ROUTE,
+  TRIAGE_SURFACE_ROUTE,
+  INCOMING_SURFACE_ROUTE,
+  PICKUP_SURFACE_ROUTE,
+  HISTORY_SURFACE_ROUTE,
+  receivingSurfaceBasePath,
+} from '@/lib/receiving/surface-path';
 import type { ReceivingMode } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import {
   resolveTriageView,
@@ -71,21 +79,68 @@ export interface ReceivingModeState {
   updateTriageQuery: (next: string) => void;
 }
 
+/**
+ * Canonical base path for a receiving mode. `receive` (Unbox) and `triage`
+ * (Receiving) have graduated to their own top-level surface routes; every other
+ * mode still lives on `/receiving` as a `?mode=` sub-view during the migration.
+ * Extend this map as each surface graduates (Phase 5).
+ */
+function basePathForMode(mode: ReceivingMode): string {
+  if (mode === 'receive') return UNBOX_SURFACE_ROUTE;
+  if (mode === 'triage') return TRIAGE_SURFACE_ROUTE;
+  if (mode === 'incoming') return INCOMING_SURFACE_ROUTE;
+  if (mode === 'pickup') return PICKUP_SURFACE_ROUTE;
+  if (mode === 'history') return HISTORY_SURFACE_ROUTE;
+  return '/receiving';
+}
+
+/** True for a mode whose own route carries no `?mode=` — being there IS the mode. */
+function isGraduatedMode(mode: ReceivingMode): boolean {
+  return (
+    mode === 'receive' ||
+    mode === 'triage' ||
+    mode === 'incoming' ||
+    mode === 'pickup' ||
+    mode === 'history'
+  );
+}
+
 export function useReceivingMode(): ReceivingModeState {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
+  // Being on a graduated surface route IS that mode — those routes carry no
+  // `?mode=` param. Off them, derive the mode from `?mode=` as before.
+  const onUnboxRoute = (pathname ?? '').startsWith(UNBOX_SURFACE_ROUTE);
+  const onTriageRoute = (pathname ?? '').startsWith(TRIAGE_SURFACE_ROUTE);
+  const onIncomingRoute = (pathname ?? '').startsWith(INCOMING_SURFACE_ROUTE);
+  const onPickupRoute = (pathname ?? '').startsWith(PICKUP_SURFACE_ROUTE);
+  const onHistoryRoute = (pathname ?? '').startsWith(HISTORY_SURFACE_ROUTE);
   const rawMode = searchParams.get('mode');
-  const mode: ReceivingMode =
-    rawMode === 'pickup'
-      ? 'pickup'
-      : rawMode === 'history'
-        ? 'history'
-        : rawMode === 'incoming'
-          ? 'incoming'
-          : rawMode === 'triage'
-            ? 'triage'
-            : 'receive';
+  const mode: ReceivingMode = onUnboxRoute
+    ? 'receive'
+    : onTriageRoute
+      ? 'triage'
+      : onIncomingRoute
+        ? 'incoming'
+        : onPickupRoute
+          ? 'pickup'
+          : onHistoryRoute
+            ? 'history'
+            : rawMode === 'pickup'
+              ? 'pickup'
+              : rawMode === 'history'
+                ? 'history'
+                : rawMode === 'incoming'
+                  ? 'incoming'
+                  : rawMode === 'triage'
+                    ? 'triage'
+                    : 'receive';
+
+  // In-surface param updates (staff, sub-views) must stay on the current
+  // surface's route, not hardcode `/receiving`.
+  const currentBasePath = receivingSurfaceBasePath(pathname);
 
   // Triage (label "Receiving") shares the scan-bar + recent-rail sidebar body
   // with the Unbox workspace (`receive`); only the right pane differs.
@@ -117,20 +172,30 @@ export function useReceivingMode(): ReceivingModeState {
 
   const updateMode = (nextMode: ReceivingMode) => {
     const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.set('mode', nextMode);
     // Strip mode-scoped sub-view/filter params so the target mode starts at its
     // own clean default — a stale `unboxview`/`triview`/Incoming filter must not
     // ride along into a different mode.
     for (const key of MODE_SCOPED_PARAMS) nextParams.delete(key);
+    const base = basePathForMode(nextMode);
+    if (isGraduatedMode(nextMode)) {
+      // Unbox/Triage are their own surface routes now; being there IS the mode,
+      // so drop the `mode` param rather than carrying `?mode=receive|triage`.
+      nextParams.delete('mode');
+      const cleared = clearReceivingHistoryUrlParams(nextParams);
+      const qs = cleared.toString();
+      router.replace(qs ? `${base}?${qs}` : base);
+      return;
+    }
+    nextParams.set('mode', nextMode);
     const finalParams =
       nextMode !== 'history' ? clearReceivingHistoryUrlParams(nextParams) : nextParams;
-    router.replace(`/receiving?${finalParams.toString()}`);
+    router.replace(`${base}?${finalParams.toString()}`);
   };
 
   const updateStaff = (id: number) => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('staffId', String(id));
-    router.replace(`/receiving?${nextParams.toString()}`);
+    router.replace(`${currentBasePath}?${nextParams.toString()}`);
   };
 
   const updateUnboxView = (next: UnboxView, opts?: { clearLine?: boolean }) => {
@@ -144,7 +209,7 @@ export function useReceivingMode(): ReceivingModeState {
     const nextParams = new URLSearchParams(searchParams.toString());
     if (next === 'recent') nextParams.delete('unboxview');
     else nextParams.set('unboxview', next);
-    router.replace(`/receiving?${nextParams.toString()}`);
+    router.replace(`${currentBasePath}?${nextParams.toString()}`);
   };
 
   const updateTriageView = (next: TriageView) => {
@@ -153,7 +218,7 @@ export function useReceivingMode(): ReceivingModeState {
     const nextParams = new URLSearchParams(searchParams.toString());
     if (next === 'triage') nextParams.delete('triview');
     else nextParams.set('triview', next);
-    router.replace(`/receiving?${nextParams.toString()}`);
+    router.replace(`${currentBasePath}?${nextParams.toString()}`);
   };
 
   const updateTriageQuery = (next: string) => {
@@ -162,7 +227,7 @@ export function useReceivingMode(): ReceivingModeState {
     const nextParams = new URLSearchParams(searchParams.toString());
     if (!trimmed) nextParams.delete('triq');
     else nextParams.set('triq', trimmed);
-    router.replace(`/receiving?${nextParams.toString()}`);
+    router.replace(`${currentBasePath}?${nextParams.toString()}`);
   };
 
   return {

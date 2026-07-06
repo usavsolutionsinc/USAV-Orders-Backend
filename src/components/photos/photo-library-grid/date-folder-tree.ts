@@ -1,6 +1,6 @@
 import type { LibraryPhoto } from '../photo-library-types';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
-import { describePhotoDatePath, isoWeekNumber, weekRange, weekRangeLabel } from '@/lib/photos/date-hierarchy';
+import { describePhotoDatePath, dayLabel, isoWeekNumber, weekRange, weekRangeLabel } from '@/lib/photos/date-hierarchy';
 import {
   photoGroupHeaderLabel,
   photoGroupKey,
@@ -136,10 +136,7 @@ export function weekTileLabel(w: WeekBucket): string {
 }
 
 /** `June 23` from a `YYYY-MM-DD` string. */
-export function dayTileLabel(ymd: string): string {
-  const [, m, d] = ymd.split('-');
-  return `${MONTH_NAMES[Number(m) - 1] ?? m} ${Number(d)}`;
-}
+export const dayTileLabel = dayLabel;
 
 export type FolderBrowseLevel = 'root' | 'year' | 'month' | 'week' | 'day' | 'custom';
 

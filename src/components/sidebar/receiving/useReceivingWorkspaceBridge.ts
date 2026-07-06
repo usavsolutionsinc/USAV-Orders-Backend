@@ -22,8 +22,11 @@ import {
   dispatchReceivingWorkspaceNavState,
 } from '@/utils/events';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import type { ReceivingMode } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 
 interface UseReceivingWorkspaceBridgeArgs {
+  /** Active sidebar mode — table-only modes must not dispatch workspace-open. */
+  mode: ReceivingMode;
   selectedLine: ReceivingLineRow | null;
   lineAccordionBootstrap: 'default' | 'all';
   scanDriven: boolean;
@@ -34,6 +37,7 @@ interface UseReceivingWorkspaceBridgeArgs {
 }
 
 export function useReceivingWorkspaceBridge({
+  mode,
   selectedLine,
   lineAccordionBootstrap,
   scanDriven,
@@ -42,19 +46,22 @@ export function useReceivingWorkspaceBridge({
   canPrev,
   canNext,
 }: UseReceivingWorkspaceBridgeArgs): void {
+  const isTableOnlyMode = mode === 'history' || mode === 'incoming';
+
   // Open / close: dispatch whenever the selected line, scan-driven flag, or
-  // bootstrap mode changes. Null clears the workspace pane.
+  // bootstrap mode changes. Null clears the workspace pane. History/Incoming
+  // are table-only — never push workspace-open while those modes are active.
   useEffect(() => {
-    if (selectedLine) {
-      dispatchReceivingWorkspaceOpen({
-        row: selectedLine,
-        accordionBootstrap: lineAccordionBootstrap,
-        scanDriven,
-      });
-    } else {
+    if (isTableOnlyMode || !selectedLine) {
       dispatchReceivingWorkspaceClose();
+      return;
     }
-  }, [selectedLine, lineAccordionBootstrap, scanDriven]);
+    dispatchReceivingWorkspaceOpen({
+      row: selectedLine,
+      accordionBootstrap: lineAccordionBootstrap,
+      scanDriven,
+    });
+  }, [isTableOnlyMode, selectedLine, lineAccordionBootstrap, scanDriven]);
 
   // Nav state mirror: workspace header reads prev/next + Line N of M from these
   // events instead of having scanMatchedRows lifted up.

@@ -115,6 +115,27 @@ const REWRITES: ReadonlyArray<{ prefix: string; target: string }> = [
 const MOBILE_UA_REWRITES: ReadonlyMap<string, string> = new Map([
   ['/receiving', '/m/receiving'],
   ['/receiving/', '/m/receiving'],
+  // Unbox + Triage surfaces (operator-surfaces refactor) → the mobile receiving
+  // shell, whose bottom nav already labels itself "Unbox".
+  ['/unbox', '/m/receiving'],
+  ['/unbox/', '/m/receiving'],
+  ['/triage', '/m/receiving'],
+  ['/triage/', '/m/receiving'],
+  ['/incoming', '/m/receiving'],
+  ['/incoming/', '/m/receiving'],
+  // Local Pickup + Receiving History surfaces (operator-surfaces refactor Phase 9)
+  // → the mobile receiving shell (same feed, its bottom nav labels itself).
+  ['/pickup', '/m/receiving'],
+  ['/pickup/', '/m/receiving'],
+  ['/receiving/history', '/m/receiving'],
+  ['/receiving/history/', '/m/receiving'],
+  // Pack surface (operator-surfaces refactor Phase 7) → the redesigned mobile
+  // packing shell. Both the canonical `/pack` and the legacy `/packer` land here
+  // on phones (the bottom nav already labels it "Packing").
+  ['/pack', '/m/pack'],
+  ['/pack/', '/m/pack'],
+  ['/packer', '/m/pack'],
+  ['/packer/', '/m/pack'],
   ['/signin', '/m/signin'],
   ['/signin/', '/m/signin'],
 ]);
@@ -164,6 +185,69 @@ function resolveMobileUaRewrite(pathname: string, ua: string | null): string | n
   // Don't double-rewrite if the client already navigated to /m/*.
   if (pathname.startsWith('/m/')) return null;
   return MOBILE_UA_REWRITES.get(pathname) ?? null;
+}
+
+/**
+ * Surface-migration redirect (Studio-driven operator surfaces refactor). The
+ * Unbox + Triage + Incoming + Pickup + History receiving modes graduated to their
+ * own first-class routes (`/unbox`, `/triage`, `/incoming`, `/pickup`,
+ * `/receiving/history`), so the address bar names the operator's job. Bare
+ * `/receiving` (the Unbox default) and each `/receiving?mode=…` normalize to the
+ * new canonical URL, dropping the now-redundant `mode` param (mode-specific
+ * search params like History's `?q=`/`?field=`/`?scope=` ride along). Exact path
+ * only — sub-routes (`/receiving/lines/[id]`, `/receiving/history`,
+ * `/receiving/unfound`, …) keep their URLs.
+ */
+function resolveReceivingSurfaceRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  if (url.pathname !== '/receiving') return null;
+  const mode = url.searchParams.get('mode');
+  const dest =
+    mode === null || mode === 'receive'
+      ? '/unbox'
+      : mode === 'triage'
+        ? '/triage'
+        : mode === 'incoming'
+          ? '/incoming'
+          : mode === 'pickup'
+            ? '/pickup'
+            : mode === 'history'
+              ? '/receiving/history'
+              : null;
+  if (!dest) return null;
+  const next = url.clone();
+  next.pathname = dest;
+  next.searchParams.delete('mode'); // being on the surface route IS the mode
+  return next;
+}
+
+/**
+ * Pack-surface redirect (operator-surfaces refactor Phase 7). The packing station
+ * graduated from `/packer` to the first-class `/pack` route, so the address bar
+ * names the operator's job. Bare `/packer` (and `/packer/`) normalize to `/pack`,
+ * preserving the `?packMode=` sub-view param. Exact path only — no `/packer`
+ * sub-routes exist, but guard against a future one leaking. Desktop only; phones
+ * fall through to the `/m/pack` UA rewrite computed above.
+ */
+function resolvePackSurfaceRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  if (url.pathname !== '/packer' && url.pathname !== '/packer/') return null;
+  const next = url.clone();
+  next.pathname = '/pack';
+  return next;
+}
+
+/**
+ * Test-surface redirect (operator-surfaces refactor Phase 8). The testing station
+ * graduated from `/tech` to the first-class `/test` route, so the address bar
+ * names the operator's job. `/tech` (and `/tech/`) normalize to `/test`,
+ * preserving the `?view=testing` / `?view=testing-history` sub-mode params (they
+ * ride along unchanged — the Shipping/Testing/History top-mode is param-based).
+ * Exact path only — the `/tech/*` sub-routes (none today) keep their URLs.
+ */
+function resolveTestSurfaceRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  if (url.pathname !== '/tech' && url.pathname !== '/tech/') return null;
+  const next = url.clone();
+  next.pathname = '/test';
+  return next;
 }
 
 /**
@@ -240,6 +324,19 @@ export function proxy(req: NextRequest): NextResponse {
     }
     return applySecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }));
   };
+
+  // Normalize legacy receiving-surface URLs to their first-class routes
+  // (`/receiving` → `/unbox`, `?mode=triage` → `/triage`). Desktop only —
+  // phones fall through to the `/m/*` rewrite computed above (rewriteTarget set).
+  if (!rewriteTarget) {
+    const surfaceRedirect =
+      resolveReceivingSurfaceRedirect(req.nextUrl) ??
+      resolvePackSurfaceRedirect(req.nextUrl) ??
+      resolveTestSurfaceRedirect(req.nextUrl);
+    if (surfaceRedirect) {
+      return applySecurityHeaders(NextResponse.redirect(surfaceRedirect));
+    }
+  }
 
   if (isPublic(pathname)) {
     return applyRewriteOrNext();

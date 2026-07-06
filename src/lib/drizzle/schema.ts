@@ -1078,7 +1078,10 @@ export const photoEntityLinks = pgTable('photo_entity_links', {
 
 // Receiving table - work_assignments linked via entity_type='RECEIVING', entity_id=receiving.id
 // BEFORE DELETE trigger trg_cancel_wa_on_receiving_delete auto-cancels related work_assignments
-export const receiving = pgTable('receiving', {
+// Base table renamed to receiving_carton (2026-07-05d); the `receiving` VIEW
+// (security_invoker compat shim) still serves legacy raw SQL. JS export name kept
+// as `receiving` so importers are unchanged; the model targets the real table.
+export const receiving = pgTable('receiving_carton', {
   id: serial('id').primaryKey(),
   // receiving_tracking_number dropped — tracking lives in shipping_tracking_numbers
   // (via shipmentId). See migration 2026-06-28_drop_receiving_tracking_number.sql.
@@ -1135,8 +1138,8 @@ export const receiving = pgTable('receiving', {
   zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
   zohoPurchaseOrderNumber: text('zoho_purchaseorder_number'),
   listingUrl: text('listing_url'),
-  /** License plate — stable carton identity (unified inbound model Phase 3). 2026-06-08. */
-  lpn: text('lpn'),
+  // lpn dropped 2026-07-05e — dead 'RC-<id>' alias of the PK (carton identity is
+  // id / handling_unit_id). See migration 2026-07-05e_receiving_drop_dead_lpn.sql.
   /** Legacy denormalized intake timestamp. 2026-03-05. */
   receivingDateTime: timestamp('receiving_date_time', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1215,7 +1218,10 @@ export const localPickupItems = pgTable('local_pickup_items', {
  * receiving_lines is the authoritative operational unit.
  * Every tech-facing action resolves to one or more receiving_lines rows.
  */
-export const receivingLines = pgTable('receiving_lines', {
+// Base table renamed to receiving_line (2026-07-05d); the `receiving_lines` VIEW
+// (security_invoker compat shim) still serves legacy raw SQL. JS export name kept
+// as `receivingLines` so importers are unchanged; the model targets the real table.
+export const receivingLines = pgTable('receiving_line', {
   id: serial('id').primaryKey(),
   /** NULL until a physical scan is matched (Zoho PO pre-staging rows start NULL) */
   receivingId: integer('receiving_id').references(() => receiving.id, { onDelete: 'cascade' }),
@@ -1391,6 +1397,8 @@ export const receivingLineTesting = pgTable('receiving_line_testing', {
   conditionGrade: conditionGradeEnum('condition_grade').notNull().default('BRAND_NEW'),
   dispositionFinal: text('disposition_final'),
   dispositionAudit: jsonb('disposition_audit').notNull().default([]),
+  /** When the operator explicitly picked condition_grade (distinct from the DB default). Moved from receiving_lines (2026-07-05c). */
+  conditionSetAt: timestamp('condition_set_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -1444,6 +1452,51 @@ export const receivingLineFacts = pgTable('receiving_line_facts', {
   lineKindIdx: uniqueIndex('ux_receiving_line_facts_line_kind').on(table.organizationId, table.receivingLineId, table.factKind),
   orgKindIdx: index('idx_receiving_line_facts_org_kind').on(table.organizationId, table.factKind),
   lineIdx: index('idx_receiving_line_facts_line').on(table.receivingLineId),
+}));
+
+// ─── Receiving polymorphic refactor — carton-grain street ops (step 3b) ──────
+// Triage and Unbox are INDEPENDENT operator streets on one carton. Their state
+// leaves the wide `receiving` spine into these 1:1 side-tables. Interim shadow of
+// the receiving.* triage/unbox columns; kept live by the trg_sync_receiving_street
+// dual-write trigger. RLS armed (not forced). Migration 2026-07-05c; plan §4.2(a).
+
+/** Carton-grain TRIAGE street ops (door received, staging, pairing, save-for-unbox). 1:1 with receiving. */
+export const receivingTriage = pgTable('receiving_triage', {
+  receivingId: integer('receiving_id').primaryKey().references(() => receiving.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  /** Mirror of receiving.received_at — first triage door scan. */
+  doorReceivedAt: timestamp('door_received_at', { withTimezone: true }),
+  doorReceivedBy: integer('door_received_by').references(() => staff.id, { onDelete: 'set null' }),
+  stagingLocationId: integer('staging_location_id').references(() => locations.id),
+  priorityLane: text('priority_lane'),
+  /** CHECK: UNFOUND | MATCHED | WAIVED (nullable). */
+  pairingState: text('pairing_state'),
+  triageComplete: boolean('triage_complete').notNull().default(false),
+  triageCompletedAt: timestamp('triage_completed_at', { withTimezone: true }),
+  triageCompletedBy: integer('triage_completed_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgCompleteIdx: index('idx_receiving_triage_org_complete').on(table.organizationId, table.triageCompletedAt).where(sql`triage_complete`),
+  stagingIdx: index('idx_receiving_triage_staging').on(table.stagingLocationId).where(sql`staging_location_id IS NOT NULL`),
+}));
+
+/** Carton-grain UNBOX street ops (bench opened, unboxed milestone, intake_path). 1:1 with receiving. */
+export const receivingUnbox = pgTable('receiving_unbox', {
+  receivingId: integer('receiving_id').primaryKey().references(() => receiving.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  /** Mirror of receiving.unbox_opened_at — bench queue entry. */
+  openedAt: timestamp('opened_at', { withTimezone: true }),
+  openedBy: integer('opened_by').references(() => staff.id, { onDelete: 'set null' }),
+  /** Operator "Unboxed" action (NOT scan-owned). */
+  unboxedAt: timestamp('unboxed_at', { withTimezone: true }),
+  unboxedBy: integer('unboxed_by').references(() => staff.id, { onDelete: 'set null' }),
+  /** CHECK: triage_first | unbox_only | unknown. Mirrors receiving.unbox_only_intake / received_at. */
+  intakePath: text('intake_path').notNull().default('unknown'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  intakePathIdx: index('idx_receiving_unbox_intake_path').on(table.organizationId, table.intakePath).where(sql`intake_path = 'unbox_only'`),
 }));
 
 // ─── Universal Incoming — polymorphic purchase identity ─────────────────────
@@ -3703,7 +3756,8 @@ export const feedMemberships = pgTable('feed_memberships', {
   workflowDefinitionId: integer('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
   /** No FK by design — workflow_nodes rows are replaced wholesale on draft save. */
   nodeId: text('node_id'),
-  /** CHECK: active | needs_match | done */
+  /** CHECK: active | needs_match | done | pending | tested | blocked
+   *  (orders_unshipped stores its fulfillment lane in `state` — migration 2026-07-04a). */
   state: text('state').notNull().default('active'),
   /** Tier-0 = priority (mirrors receiving.priority_tier convention). */
   priorityTier: smallint('priority_tier'),

@@ -144,7 +144,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
 
   // ── Realtime & AI ──
   { key: 'ollama', label: 'Self-hosted AI (Ollama / custom)', description: 'Any OpenAI-compatible endpoint you run (Ollama, LM Studio, vLLM). Payload: {"baseUrl","model","embedModel"?,"apiKey"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-surface-strong text-text-muted' },
-  { key: 'ai_gateway', label: 'Vercel AI Gateway', description: 'One key, every model — powers AI search + Ask AI. Payload: {"apiKey","chatModel"?,"embedModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-gray-900 text-white' },
+  { key: 'ai_gateway', label: 'Vercel AI Gateway', description: 'One key, every model — powers AI search + Ask AI. Payload: {"apiKey","chatModel"?,"embedModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-surface-inverse text-white' },
   { key: 'openai', label: 'OpenAI', description: 'Direct key for AI-search embeddings + Ask AI. Payload: {"apiKey","chatModel"?,"embedModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-emerald-100 text-emerald-700' },
   { key: 'anthropic', label: 'Anthropic', description: 'Claude for Ask AI (chat only — embeddings need another provider). Payload: {"apiKey","chatModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-amber-100 text-amber-700' },
 ];

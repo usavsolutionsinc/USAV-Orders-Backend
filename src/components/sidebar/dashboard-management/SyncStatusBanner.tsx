@@ -33,7 +33,7 @@ export function SyncStatusBanner({ status, onDismiss }: { status: ImportStatus |
               type="button"
               onClick={onDismiss}
               ariaLabel="Dismiss"
-              className="shrink-0 p-1 rounded-lg hover:bg-black/5"
+              className="shrink-0 p-1 rounded-lg hover:bg-scrim/5"
               icon={<X className={`w-3 h-3 opacity-50 ${status.type === 'success' ? 'text-emerald-700' : 'text-red-700'}`} />}
             />
           </div>

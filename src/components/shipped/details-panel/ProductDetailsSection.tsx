@@ -46,11 +46,11 @@ const PLATFORM_STYLE: Record<
   ebay:    { label: 'eBay',    underline: 'border-yellow-500',  chip: 'border-yellow-200 bg-yellow-50 text-yellow-800' },
   walmart: { label: 'Walmart', underline: 'border-amber-500',   chip: 'border-amber-200  bg-amber-50  text-amber-800' },
   mercari: { label: 'Mercari', underline: 'border-purple-500',  chip: 'border-purple-200 bg-purple-50 text-purple-700' },
-  shopify: { label: 'Shopify', underline: 'border-slate-500',   chip: 'border-border-default  bg-surface-canvas  text-text-default' },
+  shopify: { label: 'Shopify', underline: 'border-border-emphasis',   chip: 'border-border-default  bg-surface-canvas  text-text-default' },
 };
 const DEFAULT_STYLE = {
   label: 'Other',
-  underline: 'border-slate-500',
+  underline: 'border-border-emphasis',
   chip: 'border-border-soft bg-surface-canvas text-text-muted',
 };
 

@@ -42,6 +42,7 @@ import type { UnmatchedItemsSectionProps } from './unmatched-items/unmatched-ite
 const INTAKE_PILL_BASE =
   'inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 text-eyebrow font-black uppercase tracking-widest transition-colors';
 const INTAKE_ACTIVE: Record<IntakeTone, string> = {
+  // ds-allow-raw-neutral: identity/tone hue — slate IS the IntakeTone key among colored siblings, not chrome
   slate: 'border-slate-600 bg-slate-600 text-white',
   blue: 'border-blue-600 bg-blue-600 text-white',
   rose: 'border-rose-600 bg-rose-600 text-white',

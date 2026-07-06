@@ -1,7 +1,17 @@
 {
-  "generatedAt": "2026-07-04T20:22:30.918Z",
+  "generatedAt": "2026-07-06T04:52:26.490Z",
   "count": 198,
   "commits": [
+    {
+      "sha": "9ff06ae22d4ceb36e0606eca9529e716df56631e",
+      "shortSha": "9ff06ae2",
+      "date": "2026-07-04T15:50:42-07:00",
+      "author": "DENSENSE8",
+      "subject": "Ship AI hybrid search, assistant/MCP, entity signals, and theme system rollout.",
+      "body": "Adds entity search docs with outbox indexing, hybrid retrieval and /search UI, in-app assistant with reversible mutations, signals feed and rollups, Upstash caching, feed-membership projection, serial-unit provenance migrations, receiving rail exclusions, and semantic color tokens with multi-theme support across the app.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Ship AI hybrid search, assistant/MCP, entity signals, and theme system rollout."
+    },
     {
       "sha": "95f39f692f043ad25976898f1e017227a979a9fc",
       "shortSha": "95f39f69",
@@ -1971,16 +1981,6 @@
       "body": "",
       "type": "other",
       "title": "receiving udpate adn the testing sub page update"
-    },
-    {
-      "sha": "55fd66e4bad66d32c4a0c2c0e20e70e34ef3f5e7",
-      "shortSha": "55fd66e4",
-      "date": "2026-05-26T16:59:57-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "added a testing pipeline to the testing page and updated the receiving pipeline",
-      "body": "",
-      "type": "other",
-      "title": "added a testing pipeline to the testing page and updated the receiving pipeline"
     }
   ]
 }

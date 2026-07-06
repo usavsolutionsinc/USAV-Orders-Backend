@@ -8,10 +8,8 @@
  */
 
 import { Suspense } from 'react';
-import { DashboardShippedTable } from '@/components/shipped';
+import dynamic from 'next/dynamic';
 import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
-import FBAShipmentsTable from '@/components/dashboard/FBAShipmentsTable';
-import { WarrantyWorkspace } from '@/components/warranty/WarrantyWorkspace';
 import { Loader2 } from '@/components/Icons';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
@@ -19,9 +17,36 @@ import type { SelectionAction } from '@/lib/selection/selection-actions';
 import type { DashboardOrderView } from '@/utils/dashboard-search-state';
 import type { DashSelectableRow } from '@/hooks/useDashboardBulkSelection';
 
+// Phase 4 (bundle deferral): the three NON-default order views are code-split so
+// their chunks load only when the user switches to that mode — the default
+// Unshipped view (`UnshippedTable`, imported eagerly above) stays in the initial
+// bundle so its first paint isn't gated on a second round-trip. `ssr: false`: the
+// dashboard is a client shell behind BootGate, so there's no SSR to preserve.
+function TableFallback() {
+  return (
+    <div className="flex-1 flex items-center justify-center bg-surface-canvas">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+    </div>
+  );
+}
+const DashboardShippedTable = dynamic(
+  () => import('@/components/shipped').then((m) => m.DashboardShippedTable),
+  { ssr: false, loading: TableFallback },
+);
+const FBAShipmentsTable = dynamic(() => import('@/components/dashboard/FBAShipmentsTable'), {
+  ssr: false,
+  loading: TableFallback,
+});
+const WarrantyWorkspace = dynamic(
+  () => import('@/components/warranty/WarrantyWorkspace').then((m) => m.WarrantyWorkspace),
+  { ssr: false, loading: TableFallback },
+);
+
 interface DashboardOrdersViewProps {
   orderView: DashboardOrderView;
   selectMode: boolean;
+  /** Flip select-mode — handed to each order board's in-toolbar Select toggle. */
+  onToggleSelectMode: () => void;
   selectionEnabled: boolean;
   selectedRows: DashSelectableRow[];
   selectionActions: SelectionAction<DashSelectableRow>[];
@@ -30,6 +55,7 @@ interface DashboardOrdersViewProps {
 export function DashboardOrdersView({
   orderView,
   selectMode,
+  onToggleSelectMode,
   selectionEnabled,
   selectedRows,
   selectionActions,
@@ -45,14 +71,14 @@ export function DashboardOrdersView({
           }
         >
           {orderView === 'shipped' ? (
-            <DashboardShippedTable selectMode={selectMode} />
+            <DashboardShippedTable selectMode={selectMode} onToggleSelectMode={onToggleSelectMode} />
           ) : orderView === 'fba' ? (
             <FBAShipmentsTable />
           ) : orderView === 'warranty' ? (
             <WarrantyWorkspace />
           ) : (
             // 'unshipped' (the merged pre-ship backlog) + the default.
-            <UnshippedTable strictSearchScope selectMode={selectMode} />
+            <UnshippedTable strictSearchScope selectMode={selectMode} onToggleSelectMode={onToggleSelectMode} />
           )}
         </Suspense>
       </div>

@@ -50,12 +50,21 @@ export function photoGridTileProps(
   };
 }
 
-/** Grid density + refresh only apply when actual photos are on screen. */
+/** Grid density + refresh — grid tile views only (not list). */
 export function photoLibraryShowsGridControls(
   view: PhotoLibraryViewMode,
   folderIsLeaf: boolean,
 ): boolean {
   if (view === 'list') return false;
+  if (view === 'folders') return folderIsLeaf;
+  return true;
+}
+
+/** Folders/List toggle in the primary header — photo surfaces, not folder drill tiles. */
+export function photoLibraryShowsSecondHeaderControls(
+  view: PhotoLibraryViewMode,
+  folderIsLeaf: boolean,
+): boolean {
   if (view === 'folders') return folderIsLeaf;
   return true;
 }

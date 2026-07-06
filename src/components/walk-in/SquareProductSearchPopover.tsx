@@ -161,7 +161,7 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-panelPopover bg-gray-900/50 backdrop-blur-sm"
+        className="fixed inset-0 z-panelPopover bg-scrim/50 backdrop-blur-sm"
         onClick={onClose}
       />
       <motion.div

@@ -37,7 +37,7 @@ const EASE_IN = [0.4, 0, 1, 1] as const;
 
 /** Shared frosted pill for viewer chrome controls. */
 const GLASS_CHROME =
-  'rounded-full bg-black/45 border border-white/10 shadow-lg backdrop-blur-md transition-all active:scale-95';
+  'rounded-full bg-scrim/45 border border-glass/10 shadow-lg backdrop-blur-md transition-all active:scale-95';
 
 export interface SwipePhotoSlide {
   id: string;

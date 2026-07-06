@@ -31,7 +31,9 @@ export interface InlinePillOption {
 const PILL_BASE =
   'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors';
 const DEFAULT_ACTIVE = 'border-blue-600 bg-blue-600 text-white';
-const DEFAULT_INACTIVE = 'border-border-soft bg-surface-card text-text-muted hover:border-border-default hover:bg-surface-hover';
+// Slightly translucent at rest so inactive pills sit INTO the frosted card
+// instead of stamping opaque tiles onto it; hover restores a solid wash.
+const DEFAULT_INACTIVE = 'border-border-soft bg-surface-card/70 text-text-muted hover:border-border-default hover:bg-surface-hover';
 
 export function InlinePillPicker({
   ariaLabel,

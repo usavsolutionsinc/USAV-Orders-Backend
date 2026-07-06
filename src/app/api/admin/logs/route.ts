@@ -155,8 +155,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
                 WHEN al.entity_type = 'REPAIR_SERVICE' THEN '/repair'
                 WHEN al.entity_type = 'FBA_SHIPMENT' THEN '/fba'
                 WHEN al.entity_type = 'FBA_SHIPMENT_ITEM' THEN '/fba'
-                WHEN al.entity_type = 'PACKER_LOG' THEN '/packer'
-                WHEN al.entity_type = 'TECH_SERIAL' THEN '/tech'
+                WHEN al.entity_type = 'PACKER_LOG' THEN '/pack'
+                WHEN al.entity_type = 'TECH_SERIAL' THEN '/test'
                 ELSE NULL
               END AS detail_route,
               al.metadata
@@ -221,8 +221,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
                 ELSE COALESCE(sal.notes, sal.scan_ref, sal.fnsku)
               END AS detail_value,
               CASE
-                WHEN sal.packer_log_id IS NOT NULL THEN '/packer'
-                WHEN sal.tech_serial_number_id IS NOT NULL THEN '/tech'
+                WHEN sal.packer_log_id IS NOT NULL THEN '/pack'
+                WHEN sal.tech_serial_number_id IS NOT NULL THEN '/test'
                 WHEN sal.shipment_id IS NOT NULL THEN '/dashboard'
                 WHEN sal.fba_shipment_id IS NOT NULL OR sal.fba_shipment_item_id IS NOT NULL THEN '/fba'
                 WHEN sal.orders_exception_id IS NOT NULL THEN '/dashboard'

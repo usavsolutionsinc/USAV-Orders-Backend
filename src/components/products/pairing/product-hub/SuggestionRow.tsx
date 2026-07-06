@@ -98,7 +98,7 @@ export function SuggestionRow({
               type="button"
               onClick={() => onReject(candidate)}
               className={`ds-raw-button rounded p-1 transition-colors ${
-                pending === 'reject' ? 'bg-gray-700 text-white hover:bg-gray-800' : 'text-text-faint hover:bg-surface-card hover:text-text-muted'
+                pending === 'reject' ? 'bg-surface-inverse-raised text-white hover:bg-surface-inverse' : 'text-text-faint hover:bg-surface-card hover:text-text-muted'
               }`}
               aria-label="Reject"
             >

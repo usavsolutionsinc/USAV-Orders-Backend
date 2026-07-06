@@ -47,21 +47,31 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
   receivingId,
   staffId,
   poRef,
+  photoIntent = 'all',
 }: {
   receivingId: number;
   staffId: number;
   /** PO# for the info panel source ref + library deep link. */
   poRef?: string | null;
+  /** Triage shows package/box shots; unbox shows item interior shots. */
+  photoIntent?: 'package' | 'item' | 'all';
 }) {
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => receivingPhotosQueryKey(receivingId), [receivingId]);
+  const queryKey = useMemo(
+    () => [...receivingPhotosQueryKey(receivingId), photoIntent] as const,
+    [receivingId, photoIntent],
+  );
 
   const { data } = useQuery<PhotosPayload>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`, { cache: 'no-store' });
+      const params = new URLSearchParams({
+        receivingId: String(receivingId),
+        photoIntent,
+      });
+      const res = await fetch(`/api/receiving-photos?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },

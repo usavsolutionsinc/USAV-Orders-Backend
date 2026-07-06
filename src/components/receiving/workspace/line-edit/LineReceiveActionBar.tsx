@@ -101,7 +101,7 @@ export function LineReceiveActionBar({
           onClick: isLocalReceive ? onLocalReceive : onReceive,
           disabled: isLocalReceive ? !canReceive : !canZohoReceive,
           title: isLocalReceive
-            ? 'Receive all open lines locally — Zoho is not touched'
+            ? 'Receive all open lines locally — external inventory is not touched'
             : receiveMenuTitle,
         },
       ]}

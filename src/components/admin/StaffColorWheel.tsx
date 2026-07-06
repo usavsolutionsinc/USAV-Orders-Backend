@@ -42,7 +42,7 @@ export function StaffColorWheel({ value, onChange, disabled, size = 72 }: StaffC
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
           aria-label={`Pick staff color (current ${value})`}
-          className="group relative flex flex-shrink-0 items-center justify-center rounded-full p-[6px] shadow-md shadow-gray-900/15 transition hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="group relative flex flex-shrink-0 items-center justify-center rounded-full p-[6px] shadow-md shadow-gray-900/15 transition hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-border-strong/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
             width: size,
             height: size,

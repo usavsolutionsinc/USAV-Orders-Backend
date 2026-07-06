@@ -85,7 +85,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
       {/* ds-raw-button: full-screen scrim/backdrop, not a content control */}
       <button
         type="button"
-        className="absolute inset-0 bg-black/35"
+        className="absolute inset-0 bg-scrim/35"
         aria-label="Close quick add FNSKU popup"
         onClick={() => {
           if (saving) return;

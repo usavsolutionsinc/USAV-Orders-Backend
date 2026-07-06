@@ -198,14 +198,16 @@ export async function ensureReceivingForPo(params: {
   organizationId: string;
 }): Promise<number> {
   const result = await pool.query<{ id: number }>(
-    `INSERT INTO receiving
+    // Base table (not the `receiving` compat view): ON CONFLICT is unsupported on
+    // auto-updatable views. 2026-07-05d.
+    `INSERT INTO receiving_carton
        (source, zoho_purchaseorder_id, zoho_purchaseorder_number, qa_status, needs_test, updated_at, organization_id)
      VALUES ('zoho_po', $1, $2, 'PENDING', true, NOW(), $3::uuid)
      ON CONFLICT (zoho_purchaseorder_id) WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
      DO UPDATE SET
        updated_at = NOW(),
-       zoho_purchaseorder_number = COALESCE(receiving.zoho_purchaseorder_number, EXCLUDED.zoho_purchaseorder_number),
-       organization_id = COALESCE(receiving.organization_id, EXCLUDED.organization_id)
+       zoho_purchaseorder_number = COALESCE(receiving_carton.zoho_purchaseorder_number, EXCLUDED.zoho_purchaseorder_number),
+       organization_id = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id)
      RETURNING id`,
     [params.poId, params.poNumber ?? null, params.organizationId],
   );

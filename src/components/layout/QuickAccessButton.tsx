@@ -11,7 +11,6 @@ import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { useQuickAccessHotkey } from '@/lib/quick-access/use-hotkey';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
 import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopover';
-import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
 import { FeedbackPopover } from '@/components/quick-access/FeedbackWidget';
 import { useAuth } from '@/contexts/AuthContext';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
@@ -36,12 +35,11 @@ export function QuickAccessButton({
   compact = false,
 }: QuickAccessButtonProps) {
   const pathname = usePathname();
-  const { settings, recordVisit } = useQuickAccess();
+  const { settings } = useQuickAccess();
   const { user: authUser } = useAuth();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [inboxOpen, setInboxOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +66,6 @@ export function QuickAccessButton({
   useEffect(() => {
     setMenuOpen(false);
     setHistoryOpen(false);
-    setInboxOpen(false);
     setFeedbackOpen(false);
   }, [pathname]);
 
@@ -77,7 +74,6 @@ export function QuickAccessButton({
       const next = !prev;
       if (next) {
         setHistoryOpen(false);
-        setInboxOpen(false);
         setFeedbackOpen(false);
       }
       return next;
@@ -88,22 +84,13 @@ export function QuickAccessButton({
 
   const handleOpenHistory = useCallback(() => {
     setMenuOpen(false);
-    setInboxOpen(false);
     setFeedbackOpen(false);
     setHistoryOpen(true);
-  }, []);
-
-  const handleOpenInbox = useCallback(() => {
-    setMenuOpen(false);
-    setHistoryOpen(false);
-    setFeedbackOpen(false);
-    setInboxOpen(true);
   }, []);
 
   const handleOpenFeedback = useCallback(() => {
     setMenuOpen(false);
     setHistoryOpen(false);
-    setInboxOpen(false);
     setFeedbackOpen(true);
   }, []);
 
@@ -126,7 +113,6 @@ export function QuickAccessButton({
         <QuickAccessPopover
           onClose={() => setMenuOpen(false)}
           onOpenHistoryPopover={handleOpenHistory}
-          onOpenInboxPopover={handleOpenInbox}
           onOpenFeedbackPopover={handleOpenFeedback}
         />
       </AnchoredLayer>
@@ -139,16 +125,6 @@ export function QuickAccessButton({
         gap={2}
       >
         <PhoneHistoryPopover onClose={() => setHistoryOpen(false)} />
-      </AnchoredLayer>
-
-      <AnchoredLayer
-        open={inboxOpen}
-        onClose={() => setInboxOpen(false)}
-        anchorRef={wrapperRef}
-        placement={popoverPlacement}
-        gap={2}
-      >
-        <ActivityInboxPopover onClose={() => setInboxOpen(false)} />
       </AnchoredLayer>
 
       <AnchoredLayer
@@ -181,7 +157,7 @@ export function QuickAccessButton({
               ? 'h-9 w-9 min-h-0 min-w-0 shrink-0 rounded-full ring-1 ring-border-soft/90'
               : 'h-10 w-10 rounded-xl',
             menuOpen
-              ? 'bg-gray-700 hover:bg-gray-600'
+              ? 'bg-surface-inverse-raised hover:bg-surface-inverse-soft'
               : staffChipActive && staffColorHex
                 ? 'hover:brightness-110'
                 : 'bg-surface-inverse hover:bg-surface-inverse-hover',

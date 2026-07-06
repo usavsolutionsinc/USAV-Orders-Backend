@@ -394,3 +394,18 @@ export async function isAiSearchCommandbar(orgId: OrgId): Promise<boolean> {
   return resolveForOrg(orgId, 'ai_search_commandbar', 'AI_SEARCH_COMMANDBAR');
 }
 
+/**
+ * Studio-driven operator-surface composed rendering (operator-surfaces refactor
+ * Phase 3b). When ON, an operator surface (Unbox first) that has an ACTIVE
+ * `station_definitions` composition renders through the SurfaceRenderer instead
+ * of its hard-coded legacy tree; when OFF (or no composition is published), the
+ * surface renders its legacy tree unchanged — the `'legacy'` escape hatch. So
+ * the composed path requires BOTH this flag AND a published composition, making
+ * 'legacy' the safe per-org default. Enable per org
+ * (organization_feature_flags(flag='surface_composed_render')) or globally via
+ * SURFACE_COMPOSED_RENDER=true. Default OFF.
+ */
+export async function isSurfaceComposedRender(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'surface_composed_render', 'SURFACE_COMPOSED_RENDER');
+}
+

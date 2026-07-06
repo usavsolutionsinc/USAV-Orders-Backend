@@ -24,6 +24,7 @@ import { OrdersQueueTableRow } from '@/components/dashboard/orders-queue/OrdersQ
 import { QueueTableBanner } from '@/components/dashboard/orders-queue/QueueTableBanner';
 import { QueueDateSection } from '@/components/dashboard/orders-queue/QueueDateSection';
 import { useOrdersQueueRows } from '@/components/dashboard/orders-queue/useOrdersQueueRows';
+import { VirtualQueueSections } from '@/components/dashboard/orders-queue/VirtualQueueSections';
 import { useOrdersQueueSelection } from '@/components/dashboard/orders-queue/useOrdersQueueSelection';
 import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
 import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
@@ -95,6 +96,13 @@ export interface OrdersQueueTableProps {
   /** When true, skip the internal {@link TableColumnConfigProvider} — a parent
    *  (e.g. {@link UnshippedShelfBoard}) owns the provider + Columns control. */
   inheritColumnConfig?: boolean;
+  /** Window the day-banded body via {@link VirtualQueueSections} so the DOM stays
+   *  ∝ viewport regardless of row count (mirrors the Shipped board). Off by
+   *  default → other callers keep the all-rows-mounted body unchanged. Requires
+   *  the body to be a real scroll container (the `autoHeight` capped case); in
+   *  `growToContent` (1-up lanes) the ancestor owns the scroll, so windowing
+   *  degrades to rendering all rows — same as today, no regression. */
+  virtualized?: boolean;
 }
 
 export function OrdersQueueTable({
@@ -131,6 +139,7 @@ export function OrdersQueueTable({
   maxBodyHeightPx,
   growToContent = false,
   inheritColumnConfig = false,
+  virtualized = false,
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
@@ -215,10 +224,12 @@ export function OrdersQueueTable({
           getStaffName(r.packed_by as number | null | undefined) ||
           getStaffName(r.packer_id as number | null | undefined);
       const outOfStockValue = String(r.out_of_stock || '').trim();
+      const notesValue = String(r.notes || '').trim();
       const rowStatus = resolveRowStatus(r, queueMode);
       return (
         <OrdersQueueTableRow
           key={record.id}
+          disableEnterAnimation={virtualized}
           record={r}
           isSelected={selectMode ? selectedIds.has(Number(record.id)) : selectedRecord?.id === record.id}
           selectMode={selectMode}
@@ -233,12 +244,13 @@ export function OrdersQueueTable({
           trackingAction={queueMode === 'labels' ? <AddTrackingPopover record={record} /> : undefined}
           hasOutOfStock={outOfStockValue !== ''}
           outOfStockValue={outOfStockValue}
+          notesValue={notesValue}
           daysLate={getDaysLateNullable(r.deadline_at as string | null | undefined)}
           onRowClick={handleRowAction}
         />
       );
     },
-    [getStaffName, useWaForDisplay, selectMode, selectedIds, selectedRecord, isMobile, handleRowAction, queueMode],
+    [getStaffName, useWaForDisplay, selectMode, selectedIds, selectedRecord, isMobile, handleRowAction, queueMode, virtualized],
   );
 
   const wrapColumnConfig = (node: ReactNode) =>
@@ -325,6 +337,13 @@ export function OrdersQueueTable({
                 </div>
               )}
             </div>
+          ) : virtualized ? (
+            <VirtualQueueSections
+              orderGroupsByDate={orderGroupsByDate}
+              scrollParentRef={scrollRef}
+              isMobile={isMobile}
+              renderRow={renderRow}
+            />
           ) : (
             <div className="flex flex-col w-full">
               {orderGroupsByDate.map(([date, groups]) => (

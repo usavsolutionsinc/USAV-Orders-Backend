@@ -68,9 +68,9 @@ export function RepairIntakeStepper({
             state === 'done'
               ? 'border-border-strong bg-surface-inverse text-white'
               : state === 'active'
-                ? 'border-border-strong bg-surface-card text-text-default ring-2 ring-gray-900/10'
+                ? 'border-border-strong bg-surface-card text-text-default ring-2 ring-border-strong/10'
                 : 'border-border-soft bg-surface-card text-text-faint'
-          } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
+          } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-border-strong/10' : 'cursor-default'}`}
           aria-current={state === 'active' ? 'step' : undefined}
           aria-label={step.label}
         >
@@ -158,9 +158,9 @@ export function RepairIntakeStepper({
                       state === 'done'
                         ? 'border-border-strong bg-surface-inverse text-white'
                         : state === 'active'
-                          ? 'border-border-strong bg-surface-card text-text-default ring-2 ring-gray-900/10'
+                          ? 'border-border-strong bg-surface-card text-text-default ring-2 ring-border-strong/10'
                           : 'border-border-soft bg-surface-card text-text-faint'
-                    } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
+                    } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-border-strong/10' : 'cursor-default'}`}
                     aria-current={state === 'active' ? 'step' : undefined}
                     aria-label={step.label}
                   >

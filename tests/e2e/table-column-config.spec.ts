@@ -143,7 +143,7 @@ test.describe('Configurable table columns (shared primitive)', () => {
   test('Receiving lines table', async ({ page }) => {
     // History mode is the table-only receiving view whose WeekHeader hosts the
     // Columns control (triage/unbox keep the table mounted but display:none).
-    await exerciseColumnConfig(page, '/receiving?mode=history');
+    await exerciseColumnConfig(page, '/receiving/history');
   });
 
   test('Dashboard unshipped board (status lanes)', async ({ page }) => {
@@ -158,7 +158,7 @@ test.describe('Configurable table columns (shared primitive)', () => {
   });
 
   test('Tech station table', async ({ page }) => {
-    await page.goto('/tech');
+    await page.goto('/test');
     await page.waitForLoadState('networkidle').catch(() => {});
     const trigger = visibleTrigger(page);
     // Tech/packer right panes can require a staff selection first; if the table
@@ -170,7 +170,7 @@ test.describe('Configurable table columns (shared primitive)', () => {
   });
 
   test('Packer station table', async ({ page }) => {
-    await page.goto('/packer');
+    await page.goto('/pack');
     await page.waitForLoadState('networkidle').catch(() => {});
     const trigger = visibleTrigger(page);
     if (!(await trigger.isVisible().catch(() => false))) {

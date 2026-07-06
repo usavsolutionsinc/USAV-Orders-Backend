@@ -13,6 +13,11 @@ import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { linkShipment } from '@/lib/shipping/shipment-links';
 import { fetchEcwidTransferRows } from '@/lib/ecwid/fetch-transfer-rows';
+import {
+  batchPlatformItemIdsByCatalogIds,
+  batchResolveSkuCatalogByTitles,
+  type SkuCatalogTitleMatch,
+} from '@/lib/neon/sku-catalog-queries';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
 /**
@@ -123,26 +128,26 @@ const FIXED_COL_INDICES_DEFAULT = {
   currency: -1,
 };
 
-/** Sheet row 1 headers mapped to ingestion fields (same candidates as findHeaderIndex uses). */
-const SHEET_HEADER_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; candidates: string[] }[] = [
-  { field: 'shipByDate', candidates: ['Ship by date'] },
-  { field: 'orderNumber', candidates: ['Order Number', 'Order - Number'] },
-  { field: 'itemNumber', candidates: ['Item Number'] },
-  { field: 'itemTitle', candidates: ['Item title', 'Item Title'] },
-  { field: 'quantity', candidates: ['Quantity'] },
-  { field: 'usavSku', candidates: ['USAV SKU'] },
+/** Sheet row 1 headers that MUST be present (minimal small-business import). */
+const REQUIRED_SHEET_HEADER_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; candidates: string[] }[] = [
+  { field: 'orderNumber', candidates: ['Order Number', 'Order - Number', 'Order #', 'Order ID'] },
+  { field: 'itemTitle', candidates: ['Item title', 'Item Title', 'Product Title', 'Product', 'Title', 'Description'] },
+];
+
+/** Optional columns — missing headers leave index at -1 (absent), not a sync failure. */
+const OPTIONAL_SHEET_COLUMN_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; candidates: string[] }[] = [
+  { field: 'shipByDate', candidates: ['Ship by date', 'Ship Date', 'Due Date'] },
+  { field: 'itemNumber', candidates: ['Item Number', 'Item ID', 'Listing ID'] },
+  { field: 'quantity', candidates: ['Quantity', 'Qty'] },
+  { field: 'usavSku', candidates: ['USAV SKU', 'SKU', 'Internal SKU'] },
   { field: 'condition', candidates: ['Condition'] },
   { field: 'tracking', candidates: ['Tracking', 'Shipment - Tracking Number'] },
   { field: 'note', candidates: ['Note', 'Notes'] },
   { field: 'platform', candidates: ['Platform', 'Account Source', 'Channel'] },
 ];
 
-/**
- * Optional header bindings — resolved like SHEET_HEADER_BINDINGS but NOT
- * required: a missing column here leaves the index at -1 (treated as absent)
- * instead of failing the whole sync. Used for sale price + currency.
- */
-const OPTIONAL_SHEET_HEADER_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; candidates: string[] }[] = [
+/** Sale price + currency — optional, never required for sync. */
+const OPTIONAL_SALE_HEADER_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; candidates: string[] }[] = [
   { field: 'salePrice', candidates: ['Sale Price', 'Price', 'Amount', 'Order Total', 'Item Total', 'Sale Amount'] },
   { field: 'currency', candidates: ['Currency', 'Currency Code'] },
 ];
@@ -383,15 +388,15 @@ export async function runGoogleSheetsTransferOrders(
 
       const headerRow = sourceRows[0];
       colIndices = { ...FIXED_COL_INDICES_DEFAULT };
-      for (const { field, candidates } of SHEET_HEADER_BINDINGS) {
-        colIndices[field] = findHeaderIndex(headerRow, candidates);
-      }
-      // Optional columns: resolve but never treat as missing (default -1).
-      for (const { field, candidates } of OPTIONAL_SHEET_HEADER_BINDINGS) {
+      for (const { field, candidates } of [
+        ...REQUIRED_SHEET_HEADER_BINDINGS,
+        ...OPTIONAL_SHEET_COLUMN_BINDINGS,
+        ...OPTIONAL_SALE_HEADER_BINDINGS,
+      ]) {
         colIndices[field] = findHeaderIndex(headerRow, candidates);
       }
 
-      const missingBindings = SHEET_HEADER_BINDINGS.filter((b) => colIndices[b.field] === -1);
+      const missingBindings = REQUIRED_SHEET_HEADER_BINDINGS.filter((b) => colIndices[b.field] === -1);
       if (missingBindings.length > 0) {
         const headersReceived = headerRow.map((cell) => String(cell ?? '').trim());
         const missingExplain = missingBindings
@@ -420,12 +425,11 @@ export async function runGoogleSheetsTransferOrders(
       sheetTotalRows = sourceRows.length - 1;
       eligibleSourceRows = sourceRows.slice(1).filter((row) => {
         const orderId = String(row[colIndices.orderNumber] || '').trim();
+        if (!orderId) return false;
+        // Ecwid orders are now fetched directly from the Ecwid API — skip them in the sheet.
         const platform = colIndices.platform >= 0
           ? String(row[colIndices.platform] || '').trim()
           : '';
-        if (!orderId) return false;
-        if (colIndices.platform >= 0 && !platform) return false;
-        // Ecwid orders are now fetched directly from the Ecwid API — skip them in the sheet.
         if (platform.toLowerCase() === 'ecwid') return false;
         return true;
       });
@@ -720,36 +724,37 @@ export async function runGoogleSheetsTransferOrders(
       groupedSourceByOrderId.set(orderId, current);
     });
 
-    // Hydrate blank product titles from sku_catalog so newly-inserted orders
-    // don't display "Unknown Product" in the dashboard. We look up by USAV SKU
-    // first (sheet col 5), then fall back to platform SKU mappings keyed by
-    // item_number (sheet col 2) — Ecwid item_id often lives there.
+    // Hydrate product identity from sku_catalog:
+    //   • blank titles → fill from SKU / platform item# crosswalk (USAV full sheet)
+    //   • title-only rows → match catalog by product_title (small-business minimal sheet)
     const titleBySku = new Map<string, string>();
+    const catalogByLookupKey = new Map<string, SkuCatalogTitleMatch>();
+    const catalogByTitle = new Map<string, SkuCatalogTitleMatch>();
     {
       const lookupSkus = new Set<string>();
       const lookupItemNumbers = new Set<string>();
+      const titlesNeedingCatalog = new Set<string>();
       eligibleSourceRows.forEach((row) => {
         const itemTitle = String(row[colIndices.itemTitle] || '').trim();
-        if (itemTitle) return;
-        const sku = String(row[colIndices.usavSku] || '').trim();
-        const itemNumber = String(row[colIndices.itemNumber] || '').trim();
+        const sku = colIndices.usavSku >= 0 ? String(row[colIndices.usavSku] || '').trim() : '';
+        const itemNumber = colIndices.itemNumber >= 0 ? String(row[colIndices.itemNumber] || '').trim() : '';
         if (sku) lookupSkus.add(sku);
         if (itemNumber) lookupItemNumbers.add(itemNumber);
+        if (itemTitle && !sku && !itemNumber) titlesNeedingCatalog.add(itemTitle);
       });
 
       if (lookupSkus.size > 0) {
-        // sku_catalog is org-bearing → add AND organization_id = $2 when scoped.
         const result = orgId
           ? await tenantQuery(
               orgId,
-              `SELECT sku, product_title
+              `SELECT id, sku, product_title
                  FROM sku_catalog
                 WHERE sku = ANY($1::text[]) AND product_title IS NOT NULL AND product_title <> ''
                   AND organization_id = $2`,
               [Array.from(lookupSkus), orgId],
             )
           : await pool.query(
-              `SELECT sku, product_title
+              `SELECT id, sku, product_title
                  FROM sku_catalog
                 WHERE sku = ANY($1::text[]) AND product_title IS NOT NULL AND product_title <> ''`,
               [Array.from(lookupSkus)],
@@ -757,18 +762,18 @@ export async function runGoogleSheetsTransferOrders(
         for (const row of result.rows) {
           const sku = String(row.sku || '').trim();
           const title = String(row.product_title || '').trim();
-          if (sku && title) titleBySku.set(sku, title);
+          const id = Number(row.id);
+          if (!sku || !title || !Number.isFinite(id)) continue;
+          titleBySku.set(sku, title);
+          catalogByLookupKey.set(sku, { id, sku, productTitle: title });
         }
       }
 
       if (lookupItemNumbers.size > 0) {
-        // sku_platform_ids + sku_catalog both org-bearing. The join is on the
-        // integer surrogate FK (sc.id = spi.sku_catalog_id) so it's safe bare;
-        // we still scope both sides to the org and align their org keys.
         const result = orgId
           ? await tenantQuery(
               orgId,
-              `SELECT spi.platform_sku, spi.platform_item_id, sc.product_title, sc.sku
+              `SELECT spi.platform_sku, spi.platform_item_id, sc.id, sc.product_title, sc.sku
                  FROM sku_platform_ids spi
                  JOIN sku_catalog sc ON sc.id = spi.sku_catalog_id
                   AND sc.organization_id = spi.organization_id
@@ -778,7 +783,7 @@ export async function runGoogleSheetsTransferOrders(
               [Array.from(lookupItemNumbers), orgId],
             )
           : await pool.query(
-              `SELECT spi.platform_sku, spi.platform_item_id, sc.product_title, sc.sku
+              `SELECT spi.platform_sku, spi.platform_item_id, sc.id, sc.product_title, sc.sku
                  FROM sku_platform_ids spi
                  JOIN sku_catalog sc ON sc.id = spi.sku_catalog_id
                 WHERE (spi.platform_sku = ANY($1::text[]) OR spi.platform_item_id = ANY($1::text[]))
@@ -787,14 +792,37 @@ export async function runGoogleSheetsTransferOrders(
             );
         for (const row of result.rows) {
           const title = String(row.product_title || '').trim();
-          if (!title) continue;
+          const id = Number(row.id);
+          const sku = String(row.sku || '').trim();
+          if (!title || !Number.isFinite(id) || !sku) continue;
           const platformSku = String(row.platform_sku || '').trim();
           const platformItemId = String(row.platform_item_id || '').trim();
-          if (platformSku && !titleBySku.has(platformSku)) titleBySku.set(platformSku, title);
-          if (platformItemId && !titleBySku.has(platformItemId)) titleBySku.set(platformItemId, title);
+          const match: SkuCatalogTitleMatch = { id, sku, productTitle: title };
+          if (platformSku) {
+            if (!titleBySku.has(platformSku)) titleBySku.set(platformSku, title);
+            if (!catalogByLookupKey.has(platformSku)) catalogByLookupKey.set(platformSku, match);
+          }
+          if (platformItemId) {
+            if (!titleBySku.has(platformItemId)) titleBySku.set(platformItemId, title);
+            if (!catalogByLookupKey.has(platformItemId)) catalogByLookupKey.set(platformItemId, match);
+          }
         }
       }
+
+      if (titlesNeedingCatalog.size > 0) {
+        const byTitle = await batchResolveSkuCatalogByTitles(Array.from(titlesNeedingCatalog), orgId);
+        byTitle.forEach((match, title) => catalogByTitle.set(title, match));
+      }
     }
+
+    const platformItemIdByCatalogId = await batchPlatformItemIdsByCatalogIds(
+      Array.from(new Set([
+        ...Array.from(catalogByLookupKey.values()).map((m) => m.id),
+        ...Array.from(catalogByTitle.values()).map((m) => m.id),
+      ])),
+      orgId,
+    );
+
     const resolveProductTitle = (
       sheetTitle: string,
       sku: string,
@@ -807,6 +835,57 @@ export async function runGoogleSheetsTransferOrders(
       const byItem = itemNumber && titleBySku.get(itemNumber);
       if (byItem) return { title: byItem, source: 'platform_lookup' };
       return { title: '', source: 'none' };
+    };
+
+    const resolveCatalogLink = (
+      sheetTitle: string,
+      sku: string,
+      itemNumber: string,
+    ): {
+      sku: string;
+      itemNumber: string;
+      skuCatalogId: number | null;
+      titleSource: TransferOrderDetail['titleSource'];
+      productTitle: string;
+    } => {
+      let resolvedSku = sku.trim();
+      let resolvedItemNumber = itemNumber.trim();
+      let skuCatalogId: number | null = null;
+      let titleSource: TransferOrderDetail['titleSource'] = 'sheet';
+      let productTitle = sheetTitle.trim();
+
+      const fromKey = (key: string) => catalogByLookupKey.get(key) ?? null;
+      const bySku = resolvedSku ? fromKey(resolvedSku) : null;
+      const byItem = !bySku && resolvedItemNumber ? fromKey(resolvedItemNumber) : null;
+      const byTitle = !bySku && !byItem && productTitle ? catalogByTitle.get(productTitle) ?? null : null;
+      const match = bySku ?? byItem ?? byTitle;
+
+      if (match) {
+        resolvedSku = resolvedSku || match.sku;
+        skuCatalogId = match.id;
+        if (!productTitle) {
+          productTitle = match.productTitle;
+          titleSource = byTitle ? 'title_catalog_match' : (byItem ? 'platform_lookup' : 'sku_catalog');
+        } else if (byTitle) {
+          titleSource = 'title_catalog_match';
+        }
+      } else {
+        const titleResolved = resolveProductTitle(sheetTitle, resolvedSku, resolvedItemNumber);
+        productTitle = titleResolved.title;
+        titleSource = titleResolved.source;
+      }
+
+      if (!resolvedItemNumber && skuCatalogId) {
+        resolvedItemNumber = platformItemIdByCatalogId.get(skuCatalogId) ?? '';
+      }
+
+      return {
+        sku: resolvedSku,
+        itemNumber: resolvedItemNumber,
+        skuCatalogId,
+        titleSource,
+        productTitle,
+      };
     };
 
     const ordersToInsert: Array<{
@@ -833,20 +912,25 @@ export async function runGoogleSheetsTransferOrders(
     for (const [orderId, group] of Array.from(groupedSourceByOrderId.entries())) {
       const row = group.row;
       const existingOrder = latestOrderByOrderId.get(orderId);
-      const rawShipByDate = row[colIndices.shipByDate] || '';
+      const rawShipByDate = colIndices.shipByDate >= 0 ? (row[colIndices.shipByDate] || '') : '';
       const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
       const sheetShipByDate = parsedShipByDate && !Number.isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
       const effectiveShipByDate = sheetShipByDate ?? getTodayDate();
-      const sheetItemNumber = String(row[colIndices.itemNumber] || '').trim();
       const rawSheetTitle = String(row[colIndices.itemTitle] || '').trim();
-      const sheetQuantity = String(row[colIndices.quantity] || '').trim() || '1';
-      const sheetSku = String(row[colIndices.usavSku] || '').trim();
-      const resolvedTitle = resolveProductTitle(rawSheetTitle, sheetSku, sheetItemNumber);
-      const sheetProductTitle = resolvedTitle.title;
-      const titleSource = resolvedTitle.source;
-      const sheetCondition = String(row[colIndices.condition] || '').trim();
-      const sheetNotes = String(row[colIndices.note] || '').trim();
-      const sheetPlatform = String(row[colIndices.platform] || '').trim();
+      const rawSheetSku = colIndices.usavSku >= 0 ? String(row[colIndices.usavSku] || '').trim() : '';
+      const rawSheetItemNumber = colIndices.itemNumber >= 0 ? String(row[colIndices.itemNumber] || '').trim() : '';
+      const catalogLink = resolveCatalogLink(rawSheetTitle, rawSheetSku, rawSheetItemNumber);
+      const sheetProductTitle = catalogLink.productTitle;
+      const sheetSku = catalogLink.sku;
+      const sheetItemNumber = catalogLink.itemNumber;
+      const sheetSkuCatalogId = catalogLink.skuCatalogId;
+      const titleSource = catalogLink.titleSource;
+      const sheetQuantity = colIndices.quantity >= 0
+        ? (String(row[colIndices.quantity] || '').trim() || '1')
+        : '1';
+      const sheetCondition = colIndices.condition >= 0 ? String(row[colIndices.condition] || '').trim() : '';
+      const sheetNotes = colIndices.note >= 0 ? String(row[colIndices.note] || '').trim() : '';
+      const sheetPlatform = colIndices.platform >= 0 ? String(row[colIndices.platform] || '').trim() : '';
       // Optional sale price + currency (columns may be absent → index -1).
       const rawSalePrice =
         colIndices.salePrice >= 0 ? String(row[colIndices.salePrice] || '').trim() : '';
@@ -955,6 +1039,12 @@ export async function runGoogleSheetsTransferOrders(
         if (isBlank(orderToKeep.sku) && sheetSku) updateValues.sku = sheetSku;
         if (isBlank(orderToKeep.condition) && sheetCondition) updateValues.condition = sheetCondition;
         if (isBlank(orderToKeep.notes) && sheetNotes) updateValues.notes = sheetNotes;
+        if (
+          sheetSkuCatalogId != null
+          && (isBlank(orderToKeep.sku) || isBlank(orderToKeep.itemNumber))
+        ) {
+          updateValues.skuCatalogId = sheetSkuCatalogId;
+        }
         const shipmentIdList = Array.from(shipmentIds.values());
         const primaryShipmentId =
           (orderToKeep.shipmentId != null ? Number(orderToKeep.shipmentId) : null)
@@ -1013,6 +1103,7 @@ export async function runGoogleSheetsTransferOrders(
             accountSource: sheetPlatform || '',
             saleAmount: sheetSaleAmount,
             currency: sheetCurrency,
+            skuCatalogId: sheetSkuCatalogId,
           },
         });
       }

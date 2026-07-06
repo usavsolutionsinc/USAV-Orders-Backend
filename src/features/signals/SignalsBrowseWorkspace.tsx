@@ -7,8 +7,9 @@
  * right pane, keyed on `?signalId=`). Durable, URL-addressable selection — the
  * Workbench contract, distinct from the Monitor timeline at `?mode=timeline`.
  *
- * Self-contained two-pane (the /signals page has no contextual sidebar): list
- * left, detail right; below md the list fills the pane until a row is selected.
+ * Workbench half of Operations ▸ Signals: searchable list (master) + selected
+ * signal detail (crossfading right pane, keyed on `?signalId=`). Search lives
+ * in the global header; filters/selection are URL-driven.
  */
 
 import { useMemo } from 'react';
@@ -21,6 +22,7 @@ import { SIGNAL_KINDS, SURFACE_ENTITY_TYPES } from '@/lib/surfaces/registry';
 import type { EntitySignalTimelineRow } from '@/lib/timeline';
 import type { EntitySignalDetail } from '@/lib/surfaces/entity-signals-read';
 import { cn } from '@/utils/_cn';
+import { replaceOperationsSignalsUrl } from './signals-url';
 
 function kindLabel(kind: string): string {
   return (SIGNAL_KINDS as Record<string, { label: string } | undefined>)[kind]?.label ?? kind;
@@ -44,11 +46,11 @@ export function SignalsBrowseWorkspace() {
   const paneTransition = useMotionTransition(framerTransition.workbenchPaneMount);
 
   const select = (id: number | null) => {
-    const sp = new URLSearchParams(searchParams.toString());
-    if (id) sp.set('signalId', String(id));
-    else sp.delete('signalId');
-    const qs = sp.toString();
-    router.replace(qs ? `/signals?${qs}` : '/signals', { scroll: false });
+    replaceOperationsSignalsUrl(router, searchParams, (sp) => {
+      sp.set('signalsView', 'browse');
+      if (id) sp.set('signalId', String(id));
+      else sp.delete('signalId');
+    });
   };
 
   const { data: rows, isLoading: listLoading } = useQuery<EntitySignalTimelineRow[]>({
@@ -82,24 +84,6 @@ export function SignalsBrowseWorkspace() {
     <div className="flex h-full min-h-0 w-full">
       {/* Master list */}
       <div className={cn('flex w-full flex-col border-r border-border-hairline md:w-80 md:shrink-0', signalId != null && 'hidden md:flex')}>
-        <div className="border-b border-border-hairline p-2">
-          <input
-            type="search"
-            defaultValue={q}
-            placeholder="Search notes…"
-            aria-label="Search signal notes"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const sp = new URLSearchParams(searchParams.toString());
-                const v = (e.target as HTMLInputElement).value;
-                if (v) sp.set('q', v);
-                else sp.delete('q');
-                router.replace(`/signals?${sp.toString()}`, { scroll: false });
-              }
-            }}
-            className="w-full rounded-md border border-border-soft bg-surface-card px-2 py-1 text-caption font-semibold text-text-muted focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-          />
-        </div>
         <div className="min-h-0 flex-1 divide-y divide-border-hairline overflow-y-auto">
           {listLoading ? (
             <p className="p-3 text-caption text-text-faint">Loading…</p>

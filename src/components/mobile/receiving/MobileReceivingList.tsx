@@ -39,7 +39,13 @@ interface ApiResponse {
 // staff-keyed key) because this query returns a plain array while the rail
 // caches the full ApiResponse object — same key would collide on shape. Still
 // under the 'receiving-lines-table' prefix so broad invalidations refresh it.
-const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive', 'unboxed_newest'] as const;
+// Mirror the desktop Unbox-mode rail (view=unbox_opened) or Triage Prioritize
+// (view=scanned, sort=priority). Distinct query keys so the two mobile surfaces
+// never share a stale cache entry.
+const queryKeyForSurface = (surface: 'triage' | 'unbox') =>
+  surface === 'triage'
+    ? (['receiving-lines-table', 'rail', 'scanned', 'mobile-triage'] as const)
+    : (['receiving-lines-table', 'rail', 'unbox-opened', 'mobile-unbox'] as const);
 
 /**
  * Mobile receiving surface — single scrollable list of receiving lines, newest
@@ -47,14 +53,17 @@ const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive', 'unbo
  * row to open MobileCartonSheet; the expanded card's camera CTA jumps to the
  * capture route.
  *
- * Display logic (windowing, bottom-anchored scroll, fresh-row pulse, realtime
- * refetch) now lives in the shared {@link useMobileFeedQuery}/{@link useFeedWindow}
- * + {@link MobileFeed} primitives so every mobile feed behaves identically.
- *
- * `limit` controls how many recent rows render — default 8 (one phone screen);
- * the dedicated /receiving page passes a larger value.
+ * `surface` selects which desktop rail this feed mirrors:
+ *   • triage — door-scanned cartons awaiting unbox (package photos)
+ *   • unbox  — cartons opened on the bench (item photos)
  */
-export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
+export function MobileReceivingList({
+  limit = 8,
+  surface = 'unbox',
+}: {
+  limit?: number;
+  surface?: 'triage' | 'unbox';
+} = {}) {
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
@@ -64,24 +73,27 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   // Seed runtime NAS base (/api/nas) before capture routes or the carton sheet open.
   useNasConfig();
 
+  const queryKey = queryKeyForSurface(surface);
+
   const { data, isLoading, refetch } = useMobileFeedQuery<ReceivingLineRow>({
-    queryKey: QUERY_KEY,
+    queryKey,
     // Capture navigates to a fullscreen (immersive) route and back, so the
     // realtime photo push fires while this list is unmounted (no rewind). Always
     // refetch on return so the camera ×N badge reconciles past the staleTime
     // window — the optimistic bump in notifyReceivingPhotoChanged covers the gap.
     refetchOnMount: 'always',
     queryFn: async () => {
-      // Mirror ReceivingRecentRail (the unbox-mode "Unboxed" rail): the UNBOXING
-      // pipeline (view=activity) with serials, sorted by unboxed_at DESC, so this
-      // feed shows the exact same lines in the same order as the desktop rail.
       const params = new URLSearchParams({
         limit: '500',
         offset: '0',
-        view: 'activity',
         include: 'serials',
-        sort: 'unboxed_newest',
       });
+      if (surface === 'triage') {
+        params.set('view', 'scanned');
+        params.set('sort', 'priority');
+      } else {
+        params.set('view', 'unbox_opened');
+      }
       const res = await fetch(`/api/receiving-lines?${params.toString()}`);
       if (!res.ok) throw new Error('fetch failed');
       const json = (await res.json()) as ApiResponse;

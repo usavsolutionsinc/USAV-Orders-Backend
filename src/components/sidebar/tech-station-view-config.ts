@@ -6,10 +6,9 @@ import { History, ShieldCheck, Truck } from '@/components/Icons';
  * receiving page — primary affordance is the big pill row at the top, and
  * each mode owns a completely different sidebar body.
  *
- *   shipping → StationTesting (scan bar + UpNext). The right pane is fixed to
- *              the tech's History feed (the active/preview order crossfades
- *              over it); there is no sub-mode switcher.
- *   testing  → TestingSidebarPanel (scan bar + recent rail; no welcome/goal)
+ *   shipping → {@link ShippingSidebarPanel} (order scan + Up Next rail + filter).
+ *              Right pane = shipping History feed.
+ *   testing  → {@link TestingSidebarPanel} (receiving scan + To Test rail + filter)
  *   history  → TestingHistoryList in the right pane (browse + bulk-select feed
  *              of this tech's tested lines). Promoted from the old Recent/History
  *              sub-tab to its own top-level mode (`view=testing-history`).

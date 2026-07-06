@@ -25,13 +25,13 @@ export function CandidateCard({
   const unresolved = !c.resolved;
 
   return (
-    <div className={`rounded-2xl p-3 ${primary ? 'bg-white/[0.06] ring-1 ring-emerald-500/40' : 'bg-white/[0.03]'}`}>
+    <div className={`rounded-2xl p-3 ${primary ? 'bg-glass/[0.06] ring-1 ring-emerald-500/40' : 'bg-glass/[0.03]'}`}>
       <div className="flex items-center gap-3">
         {c.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={c.image_url} alt="" className="h-12 w-12 rounded-lg object-cover" />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 text-white/40">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-glass/10 text-white/40">
             <Camera className="h-5 w-5" />
           </div>
         )}
@@ -51,7 +51,7 @@ export function CandidateCard({
             disabled={!canAdd || adding}
             onClick={() => onAdd(c)}
             className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold ${
-              primary ? 'bg-emerald-500 text-black' : 'bg-white/10 text-white'
+              primary ? 'bg-emerald-500 text-black' : 'bg-glass/10 text-white'
             } disabled:opacity-40`}
           >
             {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
@@ -77,7 +77,7 @@ export function CandidateCard({
                 disabled={adding}
                 onClick={() => onFlagMissing(c)}
                 icon={<AlertTriangle />}
-                className="bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                className="bg-glass/10 text-white/80 hover:bg-glass/20 hover:text-white"
               >
                 Flag missing
               </Button>
@@ -90,7 +90,7 @@ export function CandidateCard({
                 inputMode="text"
                 autoFocus
                 placeholder="New SKU (e.g. AWRCC1)"
-                className="w-full rounded-xl bg-white/[0.06] px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full rounded-xl bg-glass/[0.06] px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
               <div className="flex gap-2">
                 {/* ds-raw-button: solid-emerald CTA (emerald-500/text-black) — no green Button variant */}
@@ -105,7 +105,7 @@ export function CandidateCard({
                   variant="ghost"
                   disabled={adding}
                   onClick={() => setExpand(false)}
-                  className="bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+                  className="bg-glass/10 text-white/70 hover:bg-glass/20 hover:text-white"
                 >
                   Cancel
                 </Button>

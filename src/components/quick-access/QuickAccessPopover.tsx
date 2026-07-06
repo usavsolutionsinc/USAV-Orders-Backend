@@ -2,10 +2,7 @@
 
 import Link from 'next/link';
 import { Settings } from '@/components/Icons';
-import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { qk } from '@/queries/keys';
 import { ActionsSection } from './ActionsSection';
 import { PinnedSection } from './PinnedSection';
 import { RecentSection } from './RecentSection';
@@ -23,61 +20,33 @@ function initials(name: string): string {
 interface QuickAccessPopoverProps {
   onClose: () => void;
   onOpenHistoryPopover: () => void;
-  onOpenInboxPopover: () => void;
-  /** Admin-only: opens the system/cron sync-status popover. Omitted for
-   *  non-admins, hiding the Sync status action row. */
-  onOpenSyncPopover?: () => void;
   /** Opens the report-an-issue feedback popover. */
   onOpenFeedbackPopover?: () => void;
   /**
    * Mobile: collapse the popover to just the staff identity row (avatar, name,
-   * settings, sign-out). The actions / pinned / recent / install-app sections
-   * are desktop-only — on a phone the bottom row is the only relevant content.
+   * settings, sign-out). The pinned / recent / action sections are desktop-only.
    */
   compact?: boolean;
 }
 
 /**
- * Body order: common-pages chips → actions → pinned → recent.
- * The signed-in staff card lives at the very bottom, just above the
- * "Manage in Settings" footer, with sign-out only (no staff switch).
+ * Body order: pinned → recent → compact actions.
+ * Signed-in staff card lives at the bottom.
  */
-export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover, onOpenSyncPopover, onOpenFeedbackPopover, compact = false }: QuickAccessPopoverProps) {
+export function QuickAccessPopover({
+  onClose,
+  onOpenHistoryPopover,
+  onOpenFeedbackPopover,
+  compact = false,
+}: QuickAccessPopoverProps) {
   const { settings } = useQuickAccess();
   const router = useRouter();
-  const { user, signOut, has } = useAuth();
+  const { user, signOut } = useAuth();
 
-  const queryClient = useQueryClient();
-  // Subscribes to the module-level color cache. When self or admin updates
-  // a color, this hook bumps and the avatar + wheel re-render with the new hex.
   useStaffColorVersion();
 
-  // Name comes from the auth session envelope (single source of truth, present
-  // synchronously) — not a per-mount `/api/staff` fetch. The server coalesces a
-  // blank name to `Staff #id`, so this is always a usable display string.
   const staffName = user?.name ?? '';
-
   const staffColorHex = user ? getStaffColorHex({ id: user.staffId }) : '#10b981';
-
-  // Self-serve color update — staff can change their own identity color from
-  // the FAB without admin access. PUT /api/staff with own id + new hex;
-  // invalidate ['staff'] so StaffColorsProvider refreshes the cache → every
-  // staff-colored surface in the app re-renders.
-  const updateColorMutation = useMutation({
-    mutationFn: async (hex: string) => {
-      if (!user) return null;
-      const r = await fetch('/api/staff', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: user.staffId, color_hex: hex }),
-      });
-      if (!r.ok) throw new Error('Failed to update color');
-      return r.json();
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.staff.all });
-    },
-  });
 
   return (
     <div
@@ -85,59 +54,42 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
       aria-label="Quick access"
       className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-xl"
     >
-      {/* Mobile: staff card only, plus report-an-issue when available. */}
       {compact && onOpenFeedbackPopover ? (
         <ActionsSection
           actions={{ phoneHistory: false }}
-          onAction={onClose}
           onOpenHistoryPopover={() => {}}
-          onOpenInboxPopover={() => {}}
           onOpenFeedbackPopover={onOpenFeedbackPopover}
         />
       ) : null}
 
-      {/* Desktop-only sections — hidden on mobile, where the staff row below is
-          the only relevant content. */}
       {!compact && (
-        <>
-          <div className="min-h-0 flex-1 divide-y divide-border-hairline overflow-y-auto overscroll-contain">
-            <ActionsSection
-              actions={{
-                ...settings.actions,
-                warrantyCheckin: has('warranty.manage'),
-              }}
-              onAction={onClose}
-              onOpenHistoryPopover={onOpenHistoryPopover}
-              onOpenInboxPopover={onOpenInboxPopover}
-              onOpenSyncPopover={onOpenSyncPopover}
-              onWarrantyCheckin={() => {
-                router.push('/dashboard?warranty=');
-                onClose();
-              }}
-              onOpenFeedbackPopover={onOpenFeedbackPopover}
-            />
-            <PinnedSection onNavigate={onClose} />
-            {settings.showRecent && <RecentSection onNavigate={onClose} />}
-          </div>
-        </>
+        <div className="min-h-0 flex-1 divide-y divide-border-hairline overflow-y-auto overscroll-contain">
+          <PinnedSection onNavigate={onClose} />
+          {settings.showRecent ? <RecentSection onNavigate={onClose} /> : null}
+          <ActionsSection
+            actions={settings.actions}
+            onOpenHistoryPopover={onOpenHistoryPopover}
+            onOpenFeedbackPopover={onOpenFeedbackPopover}
+          />
+        </div>
       )}
 
-      {/* Staff sign-in section — moved to the bottom, just above the footer. */}
       {user ? (
         <div className="flex shrink-0 items-center gap-3 border-t border-border-hairline bg-surface-canvas/60 px-4 py-3">
-          <SelfColorWheel
+          <StaffIdentityAvatar
             value={staffColorHex}
             initials={staffName ? initials(staffName) : '·'}
-            disabled={updateColorMutation.isPending}
-            onChange={(hex) => updateColorMutation.mutate(hex)}
           />
           <div className="min-w-0 flex-1">
-            {/* Passive tenant-identity signal: which workspace this session is
-                scoped to. Switching is a deliberate action in Settings →
-                Organization, never from here. */}
-            <div className="truncate text-eyebrow font-bold uppercase tracking-[0.14em] text-text-faint">{user.organizationName}</div>
-            <div className="truncate text-sm font-semibold text-text-default">{staffName || `Staff #${user.staffId}`}</div>
-            <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-text-soft">{user.role.replace(/_/g, ' ')}</div>
+            <div className="truncate text-eyebrow font-bold uppercase tracking-[0.14em] text-text-faint">
+              {user.organizationName}
+            </div>
+            <div className="truncate text-sm font-semibold text-text-default">
+              {staffName || `Staff #${user.staffId}`}
+            </div>
+            <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-text-soft">
+              {user.role.replace(/_/g, ' ')}
+            </div>
           </div>
           <Link
             href="/settings?section=quick-access"
@@ -161,7 +113,6 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
         <button
           type="button"
           onClick={() => { onClose(); router.push('/signin'); }}
-          /* ds-raw-button — full-width text-left identity row, not a Button/IconButton shape. */
           className="ds-raw-button flex shrink-0 items-center justify-between border-t border-border-hairline bg-surface-canvas/60 px-4 py-3 text-left transition hover:bg-surface-sunken"
         >
           <span className="text-sm font-semibold text-text-default">Sign in</span>
@@ -172,66 +123,15 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
   );
 }
 
-
-/**
- * Avatar circle that doubles as a color-wheel trigger for the signed-in
- * staff. Tapping anywhere on the avatar opens the native OS color picker
- * (which presents a wheel/spectrum) — on change the parent mutation persists
- * to /api/staff so all surfaces (sidebar, picker, FAB) snap to the new hue.
- *
- * A conic-gradient hue ring around the avatar hints that it's interactive,
- * without dominating the chrome.
- */
-function SelfColorWheel({
-  value, initials, disabled, onChange,
-}: {
-  value: string;
-  initials: string;
-  disabled?: boolean;
-  onChange: (hex: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+/** Quiet staff initials — color editing lives in Settings → Staff profile. */
+function StaffIdentityAvatar({ value, initials }: { value: string; initials: string }) {
   return (
-    <HoverTooltip label="Tap to change your color" asChild>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => inputRef.current?.click()}
-        aria-label={`Change my color (current ${value})`}
-        /* ds-raw-button — conic-gradient avatar/color-wheel tile wrapping a color input; bespoke. */
-        className="ds-raw-button group relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full p-[5px] shadow-lg shadow-gray-900/15 transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-        style={{
-          background:
-            'conic-gradient(from 90deg, #ef4444, #f59e0b, #eab308, #22c55e, #10b981, #06b6d4, #3b82f6, #6366f1, #a855f7, #ec4899, #ef4444)',
-        }}
-      >
-        {/* Inner avatar — white ring separates it from the conic hue ring */}
-        <span
-          className="relative flex h-full w-full items-center justify-center rounded-full text-sm font-bold text-white ring-2 ring-white"
-          style={{ backgroundColor: value }}
-        >
-          {initials}
-          {/* Tiny pencil hint in the corner — appears on hover, hints "editable" */}
-          <span
-            className="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-surface-card text-text-muted shadow ring-1 ring-border-soft transition group-hover:scale-110"
-            aria-hidden
-          >
-            <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-            </svg>
-          </span>
-        </span>
-        <input
-          ref={inputRef}
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          aria-hidden
-        />
-      </button>
-    </HoverTooltip>
+    <span
+      aria-hidden
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-caption font-bold text-white ring-1 ring-border-soft"
+      style={{ backgroundColor: value }}
+    >
+      {initials}
+    </span>
   );
 }

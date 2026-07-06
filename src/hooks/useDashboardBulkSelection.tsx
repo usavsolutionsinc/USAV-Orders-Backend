@@ -1,19 +1,19 @@
 'use client';
 
 /**
- * Dashboard bulk-selection (the global-header pencil) for the Unshipped +
+ * Dashboard bulk-selection (the in-board "Select" toggle) for the Unshipped +
  * Shipped order tables.
  *
  * The two tables share one selection scope (only one mounts per `?view`); FBA +
  * Warranty opt out. This hook owns the select-mode state, the view-flip resets,
- * the header pencil wiring, and the Copy / Print / Send / Delete bulk actions.
- * The bar itself is rendered by the page from `selectionActions`. Extracted from
- * the dashboard page; behaviour is unchanged.
+ * and the Copy / Print / Send / Delete bulk actions. The toggle now lives in
+ * each board's own top-right toolbar (via {@link BoardSelectToggle}) rather than
+ * the global header, so this hook exposes `toggleSelectMode` for the board to
+ * drive; the floating action bar is rendered by the page from `selectionActions`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, Printer, Smartphone, Trash2, User } from '@/components/Icons';
-import { usePageSelection } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
 import { useDeleteOrderRow } from '@/hooks/useDeleteOrderRow';
 import { emitToggleAll } from '@/lib/selection/table-selection';
@@ -40,8 +40,10 @@ export type DashSelectableRow = {
 export interface DashboardBulkSelection {
   /** True on the surfaces that support selection (Unshipped / Shipped). */
   selectionEnabled: boolean;
-  /** Whether the pencil is currently armed. */
+  /** Whether select-mode is currently armed. */
   selectMode: boolean;
+  /** Flip select-mode on/off — driven by each board's in-toolbar Select toggle. */
+  toggleSelectMode: () => void;
   /** The currently checked rows for the shared dashboard scope. */
   selectedRows: DashSelectableRow[];
   /** Copy / Print / Send / Delete actions for the contextual selection bar. */
@@ -65,8 +67,15 @@ export function useDashboardBulkSelection(
     setSelectMode(false);
   }, []);
 
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode((armed) => {
+      if (armed) emitToggleAll(DASHBOARD_ORDERS_SELECTION_SCOPE, 'none');
+      return !armed;
+    });
+  }, []);
+
   // Switching view (or losing the selectable surface) exits select mode so a
-  // stale pencil never lingers on FBA/Warranty.
+  // stale toggle never lingers on FBA/Warranty.
   useEffect(() => {
     if (!selectionEnabled && selectMode) exitSelectMode();
   }, [selectionEnabled, selectMode, exitSelectMode]);
@@ -74,13 +83,6 @@ export function useDashboardBulkSelection(
     // Reset on any view flip — the row types + delete semantics differ.
     setSelectMode(false);
   }, [orderView]);
-
-  usePageSelection(
-    selectionEnabled
-      ? { active: selectMode, onToggle: () => (selectMode ? exitSelectMode() : setSelectMode(true)) }
-      : null,
-    [selectionEnabled, selectMode, exitSelectMode],
-  );
 
   const handleCopyDetails = useCallback((rows: DashSelectableRow[]) => {
     const text = rows
@@ -167,5 +169,5 @@ export function useDashboardBulkSelection(
     [handleCopyDetails, handlePrintLabels, handleDelete],
   );
 
-  return { selectionEnabled, selectMode, selectedRows, selectionActions };
+  return { selectionEnabled, selectMode, toggleSelectMode, selectedRows, selectionActions };
 }

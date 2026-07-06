@@ -84,7 +84,11 @@ function nextId(ts: number): string {
  */
 export function recordCopy(
   value: string | null | undefined,
-  meta?: { kind?: string; display?: string; sellerMessageId?: number },
+  meta?: {
+    kind?: string;
+    display?: string;
+    sellerMessageId?: number;
+  },
 ): void {
   if (!isBrowser()) return;
   const v = (value ?? '').trim();

@@ -241,7 +241,7 @@ export function SupportChatComposer({
             >
               <img src={s.thumbUrl || s.previewUrl} alt={s.name} className="h-full w-full object-cover" />
               {s.status === 'uploading' ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                <div className="absolute inset-0 flex items-center justify-center bg-scrim/30">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                 </div>
               ) : null}
@@ -254,7 +254,8 @@ export function SupportChatComposer({
                 onClick={() => staging.remove(s.tempId)}
                 ariaLabel="Remove"
                 icon={<X className="h-2.5 w-2.5" />}
-                className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/70 text-white hover:bg-gray-900"
+                // ds-allow-raw-neutral: glass overlay pinned on an image thumbnail — photo doesn't theme, stays dark
+                className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-scrim/70 text-white hover:bg-gray-900"
               />
             </div>
           ))}

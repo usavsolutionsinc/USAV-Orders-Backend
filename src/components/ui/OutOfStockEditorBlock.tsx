@@ -23,6 +23,7 @@ export function OutOfStockEditorBlock({
   onChange,
   onCancel,
   onSubmit,
+  isSaving = false,
   autoFocus = false,
   autoSaveOnChange = true,
   saveHint,
@@ -67,6 +68,7 @@ export function OutOfStockEditorBlock({
             <IconButton
               type="button"
               onClick={onCancel}
+              disabled={isSaving}
               ariaLabel="Cancel"
               icon={<X className="w-3.5 h-3.5" />}
               className="flex h-5 w-5 items-center justify-center text-red-400 hover:text-red-600"
@@ -79,8 +81,15 @@ export function OutOfStockEditorBlock({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              if (!isSaving) onSubmit();
+            }
+          }}
           placeholder="Describe missing parts…"
           autoFocus={autoFocus}
+          disabled={isSaving}
           className={`w-full bg-transparent text-sm font-normal text-text-default outline-none placeholder:text-text-soft ${dmSans.className}`}
         />
       </div>

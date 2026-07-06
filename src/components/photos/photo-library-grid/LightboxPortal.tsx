@@ -40,13 +40,22 @@ export function LightboxPortal({
 
   useEffect(() => {
     if (viewerOpen) openedRef.current = true;
-    else if (openedRef.current) onClose();
-  }, [viewerOpen, onClose]);
+  }, [viewerOpen]);
 
   if (!gallery.mounted || typeof document === 'undefined') return null;
   return createPortal(
-    <AnimatePresence mode="wait">
-      {viewerOpen ? <PhotoViewerModal g={gallery} /> : null}
+    <AnimatePresence
+      onExitComplete={() => {
+        // Keep the portal mounted through the exit fade so AnimatePresence can
+        // finish; only then tell the parent to unmount (avoids a ghost overlay
+        // that blocks clicks on the grid underneath).
+        if (openedRef.current && !viewerOpen) {
+          openedRef.current = false;
+          onClose();
+        }
+      }}
+    >
+      {viewerOpen ? <PhotoViewerModal key="photo-lightbox" g={gallery} /> : null}
     </AnimatePresence>,
     document.body,
   );

@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
+import { unshippedQueueCountsQuery } from '@/lib/queries/dashboard-queries';
 import { useAuth } from '@/contexts/AuthContext';
 import { emitAppEvent, useEventBridge } from '@/hooks';
 import type { ShippedFormData } from '@/components/shipped';
@@ -115,17 +115,18 @@ export function useStationDetailsPanel(onActivate?: () => void): void {
 }
 
 /**
- * Unshipped-orders badge count. Reuses the exact query the UnshippedTable /
- * Sidebar mounts, so React Query deduplicates the fetch (no extra request).
+ * Unshipped-orders badge count. Reads the lightweight queue-counts endpoint
+ * (Phase 2) — total only, NO row download — and dedupes with the sidebar's own
+ * counts query (same key).
  *
  * @param enabled Gate the query (typically `routeKey === 'dashboard'`).
  */
 export function useUnshippedCount(enabled = true): number {
   const { data } = useQuery({
-    ...unshippedOrdersQuery({ searchQuery: '', strictSearchScope: true }),
+    ...unshippedQueueCountsQuery({}),
     enabled,
   });
-  return data?.length ?? 0;
+  return data?.total ?? 0;
 }
 
 /**

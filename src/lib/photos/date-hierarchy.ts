@@ -2,7 +2,7 @@
  * Date-hierarchy breadcrumb model for the photo library.
  *
  * The library's "folder breadcrumb" IS the active date filter rendered as a
- * clickable Year → Month → Week → Day path (e.g. `2026 / June / Week 25 / Jun 17`).
+ * clickable Year → Month → Week → Day path (e.g. `2026 / June / Jun 15-21 / June 17`).
  * Each crumb carries the date range that clicking it applies, so the breadcrumb
  * doubles as a widen-the-filter navigator.
  *
@@ -103,6 +103,13 @@ function shortLabel(ymd: string): string {
   return `${MONTHS[dt.getUTCMonth()].slice(0, 3)} ${dt.getUTCDate()}`;
 }
 
+/** `June 23` from a `YYYY-MM-DD` string — full month name (folder tiles + day crumbs). */
+export function dayLabel(ymd: string): string {
+  const dt = ymdToUtc(ymd);
+  if (!dt) return ymd;
+  return `${MONTHS[dt.getUTCMonth()]} ${dt.getUTCDate()}`;
+}
+
 /** `Jun 15-21` or `Jun 29 - Jul 5` when the span crosses a month boundary. */
 export function weekRangeLabel(dateFrom: string, dateTo: string): string {
   const fromDt = ymdToUtc(dateFrom);
@@ -149,7 +156,8 @@ export function describePhotoDatePath(filters: {
   else level = 'custom';
 
   if (level === 'custom') {
-    const label = from === to ? shortLabel(from) : `${shortLabel(from)} – ${shortLabel(to)}`;
+    const label =
+      from === to ? dayLabel(from) : `${dayLabel(from)} – ${dayLabel(to)}`;
     return [{ key: 'custom', label, range: { dateFrom: from, dateTo: to }, current: true }];
   }
 
@@ -173,7 +181,7 @@ export function describePhotoDatePath(filters: {
     });
   }
   if (level === 'day') {
-    crumbs.push({ key: 'day', label: shortLabel(from), range: day, current: true });
+    crumbs.push({ key: 'day', label: dayLabel(from), range: day, current: true });
   }
   return crumbs;
 }

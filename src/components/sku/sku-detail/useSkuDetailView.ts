@@ -6,6 +6,7 @@ import { deactivateSkuCatalog, fetchSkuDetail, patchSkuStock } from './sku-detai
 import type { SkuDetailData, SkuDetailViewProps } from './sku-detail-types';
 import { useReasonVocabulary } from '@/hooks/useReasonVocabulary';
 import { SKU_STOCK_REASONS } from '@/lib/sku/sku-stock-reasons';
+import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 
 /**
  * Controller for the SKU detail view: loads the SKU's stock/catalog/ecwid/history
@@ -35,8 +36,11 @@ export function useSkuDetailView({ sku, variant = 'page', onClose }: SkuDetailVi
   const [editingLocation, setEditingLocation] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState('');
 
-  // Photo lightbox
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Photo lightbox — the shared fullscreen viewer (read-only: url-only inputs
+  // keep the delete affordance off, matching the old single-image lightbox).
+  const gallery = usePhotoGallery({
+    photos: (data?.photos ?? []).map((photo) => ({ url: photo.url })),
+  });
 
   // Copied feedback
   const [copiedField, setCopiedField] = useState('');
@@ -140,8 +144,8 @@ export function useSkuDetailView({ sku, variant = 'page', onClose }: SkuDetailVi
     setEditingLocation,
     selectedLocation,
     setSelectedLocation,
-    lightboxUrl,
-    setLightboxUrl,
+    gallery,
+    openPhoto: gallery.openViewer,
     copiedField,
     handleCopy,
     deactivateError,

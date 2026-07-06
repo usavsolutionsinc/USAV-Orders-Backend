@@ -1,6 +1,6 @@
 # Outbound Documents × Media Library — Integration Plan
 
-**Status:** Phase A + B + C (core) shipped (2026-07-01); Phase D polish pending  
+**Status:** Phase A + B + C + D (core) shipped (2026-07-01)  
 **Created:** 2026-07-01  
 **Depends on:** [outbound-documents-plan.md](./outbound-documents-plan.md), [media-library-modernization-plan.md](./media-library-modernization-plan.md)
 
@@ -52,9 +52,16 @@ Pack-station **photos** (`PACKER_LOG` → `packing` scope) remain separate.
 
 Wire `fetchOutboundDocuments` → adapters → `storeOutboundDocumentBytes`. Feature flag `OUTBOUND_MARKETPLACE_FETCH`.
 
-### Phase D — Polish (later)
+### Phase D — Polish
 
-NAS→GCS backfill, PDF thumbs, pack-photo union in outbound scope, ZIP bulk for PDFs, saved views presets.
+GCS→NAS cold mirror (`/api/cron/documents/nas-mirror`), platform adapters (Amazon/ECWID/Walmart generated slips), E2E coverage. PDF thumbs and saved-view presets remain optional follow-ups.
+
+| Task | File(s) |
+|------|---------|
+| GCS→NAS mirror cron | `src/lib/documents/mirror-nas.ts`, `/api/cron/documents/nas-mirror` |
+| Platform slip adapters | `marketplace/platform-documents.ts` |
+| E2E attach + library | `tests/e2e/outbound-documents.spec.ts` |
+| PDF thumbs, saved views | future |
 
 ## Data flow
 
@@ -75,7 +82,7 @@ Manual NAS PUT / Marketplace fetch / Server upload
 - Unit: `library-filter-state.test.ts` (outbound scope parse/serialize)
 - Unit: `documents/queries/library.test.ts` (WHERE builder)
 - Unit: `store-bytes.test.ts` (path + idempotent attach)
-- E2E: attach label → appears under Outbound scope (future)
+- E2E: attach label → appears under Outbound scope (`tests/e2e/outbound-documents.spec.ts`)
 
 ## Success metrics
 

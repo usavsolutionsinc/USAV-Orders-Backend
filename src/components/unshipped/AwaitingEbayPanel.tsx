@@ -222,7 +222,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
             icon={<ShieldCheck className={integrityCheckMutation.isPending ? 'animate-pulse' : ''} />}
             onClick={() => integrityCheckMutation.mutate(false)}
             disabled={integrityCheckMutation.isPending}
-            className="shrink-0 bg-gray-600 hover:bg-gray-700"
+            className="shrink-0 bg-surface-inverse-soft hover:bg-surface-inverse-raised"
           >
             Run
           </Button>

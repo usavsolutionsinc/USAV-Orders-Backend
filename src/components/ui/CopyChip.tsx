@@ -80,7 +80,7 @@ export const HashIcon = () => (
 export const CHIP_TONES = {
   id: {
     icon: <HashIcon />,
-    underline: 'border-gray-500',
+    underline: 'border-border-emphasis',
     iconClass: 'text-text-soft',
     dot: 'bg-border-emphasis',
   },
@@ -212,7 +212,7 @@ export function CopyChip({
 
   const toneDef = tone ? CHIP_TONES[tone] : undefined;
   const resolvedIcon = icon === undefined ? toneDef?.icon : icon;
-  const resolvedUnderline = underlineClass ?? toneDef?.underline ?? 'border-gray-500';
+  const resolvedUnderline = underlineClass ?? toneDef?.underline ?? 'border-border-emphasis';
   const resolvedIconClass = iconClass ?? toneDef?.iconClass;
 
   // The site tooltip anchors to this wrapper's bounding rect. A block `div` with
@@ -725,7 +725,7 @@ export const PlatformChip = ({
     tooltipAction: 'external-link',
   });
 
-  const resolvedUnderline = isEmpty ? 'border-gray-500' : underlineClass;
+  const resolvedUnderline = isEmpty ? 'border-border-emphasis' : underlineClass;
   const resolvedIconClass = isEmpty ? 'text-text-soft' : iconClass;
   const labelClass =
     labelTransform === 'none'

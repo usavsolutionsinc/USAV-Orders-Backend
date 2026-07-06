@@ -214,7 +214,7 @@ export function TabSwitch({
                         : isActive
                           ? 'bg-current/[0.12] text-current'
                           : highContrast
-                            ? 'bg-neutral-600/20 text-text-default'
+                            ? 'bg-surface-inverse-soft/20 text-text-default'
                             : 'bg-surface-strong/70 text-text-muted'
                     }`}
                   >

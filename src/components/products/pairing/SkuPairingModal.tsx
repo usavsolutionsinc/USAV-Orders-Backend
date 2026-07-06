@@ -46,7 +46,7 @@ export function SkuPairingModal({ open, onClose, skuCatalogId, headerTitle }: Pr
       {/* Light scrim — click to dismiss. Kept subtle so the workspace stays
           visible behind the right-anchored panel. */}
       <div
-        className="fixed inset-0 z-modal bg-black/20"
+        className="fixed inset-0 z-modal bg-scrim/20"
         onClick={onClose}
       />
       <div className="pointer-events-none fixed inset-y-0 right-0 z-modal flex w-full max-w-md p-0 sm:p-3">

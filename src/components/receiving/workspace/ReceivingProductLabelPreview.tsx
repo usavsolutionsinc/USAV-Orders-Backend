@@ -59,7 +59,8 @@ export function ReceivingProductLabelPreview({ sku, title, serialNumber, embedde
         ) : null}
       </div>
       <div className="shrink-0 self-center">
-        <canvas ref={canvasRef} className="max-w-[min(100%,9rem)]" />
+        {/* label-preview-matrix → inverted to light bars in a dark scheme (globals.css). */}
+        <canvas ref={canvasRef} className="label-preview-matrix max-w-[min(100%,9rem)]" />
       </div>
     </div>
   );

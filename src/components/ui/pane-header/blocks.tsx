@@ -198,7 +198,7 @@ export function PaneHeaderStatusPill({
             tone === 'rose' && 'bg-rose-500',
             tone === 'red' && 'bg-red-500',
             tone === 'purple' && 'bg-purple-500',
-            tone === 'neutral' && 'bg-slate-500',
+            tone === 'neutral' && 'bg-slate-500', // ds-allow-raw-neutral: identity/tone hue — neutral pulse dot among colored tones
           )}
         />
       ) : null}

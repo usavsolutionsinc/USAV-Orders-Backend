@@ -35,6 +35,8 @@ export interface PhotoSelection {
    * id-based bulk actions (share/ZIP/delete) should read `selected` directly.
    */
   selectIds: (ids: number[]) => void;
+  /** Toggle every id in a group — select all if any are unselected, else clear the group. */
+  toggleGroupSelection: (ids: number[]) => void;
   /** Clear the whole selection. */
   clear: () => void;
   /** Ensure `id` is part of the selection set used for a drag payload: returns
@@ -136,6 +138,23 @@ export function usePhotoSelection(photos: LibraryPhoto[]): PhotoSelection {
     setAnchorSelecting(true);
   }, []);
 
+  const toggleGroupSelection = useCallback(
+    (ids: number[]) => {
+      if (ids.length === 0) return;
+      const next = new Set(selected);
+      const allSelected = ids.every((id) => next.has(id));
+      if (allSelected) {
+        for (const id of ids) next.delete(id);
+      } else {
+        for (const id of ids) next.add(id);
+      }
+      setSelected(next);
+      setBaseline(next);
+      setAnchorId(null);
+    },
+    [selected],
+  );
+
   const clear = useCallback(() => {
     setSelected(new Set());
     setBaseline(new Set());
@@ -156,6 +175,7 @@ export function usePhotoSelection(photos: LibraryPhoto[]): PhotoSelection {
     selectTile,
     selectAll,
     selectIds,
+    toggleGroupSelection,
     clear,
     resolveDragIds,
   };

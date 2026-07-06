@@ -243,6 +243,8 @@ function docRowToHit(row: DocHitRow, score: number, matchField: string): SearchH
       status: row.status,
       condition_grade: row.condition_grade,
       source_platform: row.source_platform,
+      // ISO string so the row can render a relative date (formatRelativeTime).
+      happened_at: row.happened_at ? new Date(row.happened_at).toISOString() : null,
     },
   };
 }

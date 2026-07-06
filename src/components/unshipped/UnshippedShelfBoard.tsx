@@ -11,12 +11,10 @@
  * structural (bubbles, drag-reorder, drag-resize, 1/2-up toggle, 40px header
  * band, per-staff persistence under `unshippedBoard`) lives in `SwimlaneBoard`.
  *
- * Two header controls are Unshipped-specific and ride in the board's header
- * slots: the shared {@link ColumnConfigButton} (start) and {@link BoardStaffFilter}
- * (each lane header, beside sort + date). Column visibility is owned here via {@link TableColumnConfigProvider}
- * `tableId="orders"`, wrapping the board so every lane's mini table honors the
- * same hidden-key set as the dense table; the board's `inheritColumnConfig`
- * embed keeps them in sync.
+ * The board's own top toolbar (the header band) hosts Unshipped-specific controls:
+ * {@link BoardStaffFilter} on the left (contextual scope), and on the right the
+ * shared {@link ColumnConfigButton} plus (when the page arms it) {@link
+ * BoardSelectToggle} beside the column-layout toggles.
  *
  * Add a fulfillment lane → extend FULFILLMENT_BOARD_LANES (order-lifecycle.ts)
  * + FULFILLMENT_STATE_META; the bubble appears with no change here.
@@ -36,6 +34,8 @@ import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scop
 import { useStaffFilter } from '@/hooks/useStaffFilter';
 import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
 import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
+import { BoardSelectToggle } from '@/components/board/BoardSelectToggle';
+import { ToolbarButton } from '@/components/ui/ToolbarButton';
 import {
   deriveFulfillmentState,
   FULFILLMENT_STATE_META,
@@ -43,6 +43,15 @@ import {
 } from '@/lib/unshipped-state';
 import { FULFILLMENT_BOARD_LANES, type FulfillmentLaneIconKey } from '@/lib/order-lifecycle';
 import type { ShippedOrder } from '@/types/orders';
+
+/**
+ * Phase-0 virtualization canary (kill-switch). The lane bodies window their rows
+ * via `@tanstack/react-virtual` (mirroring the Shipped board, which virtualizes
+ * unconditionally), so a lane's DOM stays ∝ viewport regardless of queue depth.
+ * ON by default; set `NEXT_PUBLIC_UNSHIPPED_VIRTUAL_LIST=0` to fall back to the
+ * all-rows-mounted body. Remove the gate after bake-in.
+ */
+const VIRTUAL_LANES = process.env.NEXT_PUBLIC_UNSHIPPED_VIRTUAL_LIST !== '0';
 
 /** Icon binding — maps the lib's lane icon key to a concrete glyph (React stays here). */
 const LANE_ICON: Record<FulfillmentLaneIconKey, React.ComponentType<{ className?: string }>> = {
@@ -121,23 +130,15 @@ function BoardStaffFilter() {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label={`Filter by staff: ${label}`}
-          className={`ds-raw-button inline-flex h-7 max-w-[160px] shrink-0 items-center gap-1.5 rounded-md border px-2 text-eyebrow font-bold uppercase tracking-widest transition-colors ${
-            active
-              ? 'border-blue-300 bg-blue-50 text-blue-700'
-              : 'border-border-soft bg-surface-card text-text-muted hover:border-blue-300 hover:bg-blue-50/40'
-          }`}
-        >
+        <ToolbarButton active={active} aria-label={`Filter by staff: ${label}`} className="max-w-[160px]">
           <User className="h-3.5 w-3.5 shrink-0 opacity-70" />
-          <span className="truncate">{label}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
-        </button>
+          <span className="min-w-0 truncate">{label}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        </ToolbarButton>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          align="end"
+          align="start"
           sideOffset={6}
           className="z-dropdown max-h-[60vh] w-52 overflow-y-auto rounded-lg border border-border-soft bg-surface-card p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
@@ -163,6 +164,10 @@ export interface UnshippedShelfBoardProps {
   clearSearchLabel?: string;
   /** Pencil multi-select: lane rows render checkboxes; the page owns the bar. */
   selectMode?: boolean;
+  /** Flip select-mode. When set, the board toolbar shows a Select toggle. */
+  onToggleSelectMode?: () => void;
+  /** Optional "Load more" footer (Phase 2), rendered below the grid. */
+  footer?: React.ReactNode;
 }
 
 export function UnshippedShelfBoard({
@@ -175,6 +180,8 @@ export function UnshippedShelfBoard({
   searchResultLabel = 'unshipped orders',
   clearSearchLabel = 'Show All Unshipped Orders',
   selectMode = false,
+  onToggleSelectMode,
+  footer,
 }: UnshippedShelfBoardProps) {
   // Each lane body is the real queue table — header suppressed, vertical-only,
   // sized to content up to the lane's cap (preset class or drag-resized px).
@@ -198,6 +205,7 @@ export function UnshippedShelfBoard({
         hideHeader
         inheritColumnConfig
         noHorizontalScroll
+        virtualized={VIRTUAL_LANES}
         autoHeight
         maxBodyHeightClass={maxBodyHeightClass}
         maxBodyHeightPx={maxBodyHeightPx}
@@ -224,10 +232,22 @@ export function UnshippedShelfBoard({
   // Filter the per-lane date picker on the order's created/deadline date.
   const getRowDate = useCallback((r: ShippedOrder) => r.created_at || r.deadline_at, []);
 
-  // Icon-only column config, pinned top-right of the header band (matches the
-  // Shipped board). No left-side label/title text.
-  const headerEndSlot = useMemo(() => <ColumnConfigButton iconOnly />, []);
-  const laneHeaderSlot = useMemo(() => <BoardStaffFilter />, []);
+  // Contextual staff scope sits on the LEFT — it narrows the whole board before
+  // layout/view controls. Column config + select stay on the right with the column
+  // toggles. Staff filter is board-wide (`?staff=`), so one instance filters every lane.
+  const headerStartSlot = useMemo(() => <BoardStaffFilter />, []);
+
+  const headerEndSlot = useMemo(
+    () => (
+      <div className="flex items-center gap-2">
+        <ColumnConfigButton variant="toolbar" />
+        {onToggleSelectMode ? (
+          <BoardSelectToggle active={selectMode} onToggle={onToggleSelectMode} />
+        ) : null}
+      </div>
+    ),
+    [selectMode, onToggleSelectMode],
+  );
 
   return (
     <TableColumnConfigProvider tableId="orders">
@@ -239,10 +259,11 @@ export function UnshippedShelfBoard({
         maxColumns={2}
         sortOptions={UNSHIPPED_SORT_OPTIONS}
         defaultSort="priority"
+        headerStartSlot={headerStartSlot}
         headerEndSlot={headerEndSlot}
-        laneHeaderSlot={laneHeaderSlot}
         getRowDate={getRowDate}
         renderLaneBody={renderLaneBody}
+        footerSlot={footer}
       />
     </TableColumnConfigProvider>
   );

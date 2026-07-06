@@ -267,7 +267,7 @@ export function StudioCanvas({
         </div>
       )}
       {editable && (
-        <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-slate-900/80 px-3 py-1 text-micro font-medium text-white">
+        <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-surface-inverse/80 px-3 py-1 text-micro font-medium text-white">
           drag nodes to move · drag a port to wire it · click an edge to remove it
         </div>
       )}

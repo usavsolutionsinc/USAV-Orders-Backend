@@ -89,7 +89,7 @@ export default function InviteAcceptPage() {
       <div className="w-full max-w-sm rounded-2xl border border-border-soft bg-surface-card p-6 shadow-sm">
         {preview.state === 'loading' && (
           <div className="flex flex-col items-center gap-3 py-8 text-text-soft">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-soft border-t-gray-700" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-soft border-t-text-muted" />
             <p className="text-sm">Loading invitation…</p>
           </div>
         )}

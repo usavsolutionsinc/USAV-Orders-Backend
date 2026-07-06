@@ -37,13 +37,17 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import * as Popover from '@radix-ui/react-popover';
+import { LayoutGroup, motion } from 'framer-motion';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ArrowUpDown, Check, ChevronDown, ChevronUp, ColumnsOne, ColumnsThree, ColumnsTwo, GripVertical } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { ToolbarSegmentGroup, type ToolbarSegmentItem } from '@/components/ui/ToolbarButton';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
+import { zIndex } from '@/design-system/tokens/z-index';
 import { useStaffPreferences } from '@/hooks/useStaffPreferences';
 import type { BoardLanePref, BoardPrefs, BoardPrefsKey } from '@/lib/neon/staff-preferences-queries';
 import type { StaffPreferencesPutBody } from '@/lib/schemas/staff-preferences';
@@ -117,11 +121,14 @@ export interface SwimlaneBoardProps<Row, LaneId extends string, SortId extends s
   getRowDate?: (row: Row) => string | null | undefined;
   /** Render the lane's embedded table (header suppressed, vertical-only). */
   renderLaneBody: (ctx: SwimlaneLaneBodyContext<Row, LaneId, SortId>) => ReactNode;
+  /** Optional slot rendered once below the whole grid, inside the board's scroll
+   *  region — e.g. a global "Load more" (Phase 2). Omit for no footer. */
+  footerSlot?: ReactNode;
 }
 
 /** Board layout — bubbles stacked 1-up, or laid 2-up / 3-up side by side. */
 type ColumnCount = 1 | 2 | 3;
-const COLUMN_ITEMS: HorizontalSliderItem[] = [
+const COLUMN_ITEMS: ToolbarSegmentItem[] = [
   { id: '1', label: '1 column', icon: ColumnsOne },
   { id: '2', label: '2 columns', icon: ColumnsTwo },
   { id: '3', label: '3 columns', icon: ColumnsThree },
@@ -317,22 +324,36 @@ function SwimlaneBubble<Row, LaneId extends string, SortId extends string>({
 
   // Drag-to-reorder the lane (the whole bubble) — order persists per staffer.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lane.id });
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  };
+  const [layoutReady, setLayoutReady] = useState(false);
+  useEffect(() => {
+    setLayoutReady(true);
+  }, []);
+  const laneLayoutTransition = useMotionTransition(framerTransition.boardLaneLayout);
+  const dragStyle: React.CSSProperties | undefined = isDragging
+    ? {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: 0.5,
+        zIndex: zIndex.raised,
+      }
+    : undefined;
 
   return (
-    <section
+    <motion.div
       ref={setNodeRef}
-      style={style}
+      layout={layoutReady && !isDragging ? 'position' : false}
+      layoutScroll
+      layoutDependency={colCount}
+      style={dragStyle}
+      transition={{ layout: laneLayoutTransition }}
+      className="min-w-0 w-full"
+    >
+    <section
       // Stacked lanes use `overflow-clip` (clips for rounded corners but is NOT a
       // scroll container) so the body's sticky DateGroupHeader escapes up to the
       // board scroll region and sticks at the top of the page. Grid lanes keep
       // `overflow-hidden` (their body scrolls internally, sticking within the lane).
-      className={`flex flex-col rounded-xl border border-border-soft bg-surface-card ${
+      className={`flex w-full min-w-0 flex-col rounded-xl border border-border-soft bg-surface-card ${
         stacked ? 'overflow-clip' : 'overflow-hidden'
       }`}
     >
@@ -424,6 +445,7 @@ function SwimlaneBubble<Row, LaneId extends string, SortId extends string>({
         </>
       ) : null}
     </section>
+    </motion.div>
   );
 }
 
@@ -437,6 +459,7 @@ export function SwimlaneBoard<Row, LaneId extends string, SortId extends string>
   defaultSort,
   headerStartSlot,
   headerEndSlot,
+  footerSlot,
   laneHeaderSlot,
   getRowDate,
   renderLaneBody,
@@ -569,51 +592,76 @@ export function SwimlaneBoard<Row, LaneId extends string, SortId extends string>
   }, [records, laneMap, bucket, canonicalOrder, getRowDate]);
 
   const isGrid = columns >= 2;
+  /** Always a full-width grid so lanes stretch to each column track and FLIP on toggle. */
   const gridClass =
     columns === 3
-      ? 'grid grid-cols-3 items-start gap-4'
+      ? 'grid w-full grid-cols-3 items-start gap-4'
       : columns === 2
-        ? 'grid grid-cols-2 items-start gap-4'
-        : 'space-y-4';
+        ? 'grid w-full grid-cols-2 items-start gap-4'
+        : 'grid w-full grid-cols-1 items-start gap-4';
+
+  /** Layout slider (1-up / 2-up / 3-up) + `headerEndSlot` (columns config, select pencil). */
+  const headerControls = (
+    <>
+      {columnItems.length > 1 ? (
+        <ToolbarSegmentGroup
+          items={columnItems}
+          value={String(columns)}
+          onChange={(id) => changeColumns(Number(id) as ColumnCount)}
+          aria-label="Board columns"
+        />
+      ) : null}
+      {headerEndSlot}
+    </>
+  );
+
+  /** Mirror the lane grid in the 40px toolbar so contextual slots (e.g. the
+   *  dashboard staff filter on the left, select pencil on the right) share the
+   *  same column tracks as the bubble cards below. */
+  const headerGridClass =
+    columns === 3
+      ? 'grid w-full grid-cols-3 items-center gap-4'
+      : columns === 2
+        ? 'grid w-full grid-cols-2 items-center gap-4'
+        : null;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-surface-canvas">
-      {/* Dedicated 40px right-panel header — matches the sidebar master-nav modes
-          band (h-[40px] + border + flush controls). Sits ABOVE the scroll region
-          so each bubble's sticky `DateGroupHeader` still docks correctly. */}
-      <div className="flex h-[40px] shrink-0 items-center gap-3 border-b border-border-default bg-surface-card/90 px-3 backdrop-blur-md">
-        {headerStartSlot}
-        <div className="ml-auto flex items-center gap-2">
-          {columnItems.length > 1 ? (
-            <HorizontalButtonSlider
-              items={columnItems}
-              value={String(columns)}
-              onChange={(id) => changeColumns(Number(id) as ColumnCount)}
-              variant="nav"
-              navIconOnly
-              dense
-              aria-label="Board columns"
-            />
-          ) : null}
-          {/* Column-config button sits at the far right (most top-right). */}
-          {headerEndSlot}
-        </div>
+      {/* Dedicated 40px board toolbar — matches the sidebar master-nav band
+          (h-[40px] + border + flush controls). Sits ABOVE the scroll region so
+          each bubble's sticky `DateGroupHeader` still docks correctly. Horizontal
+          px-4 matches the scroll region's padding so the pencil flush-aligns with
+          the top-right lane table corner. */}
+      <div className="flex h-[40px] shrink-0 items-center border-b border-border-default bg-surface-card/90 px-4 backdrop-blur-md">
+        {isGrid && headerGridClass ? (
+          <div className={headerGridClass}>
+            <div className="flex min-w-0 items-center gap-3">{headerStartSlot}</div>
+            {columns === 3 ? <div aria-hidden="true" /> : null}
+            <div className="flex min-w-0 items-center justify-end gap-2">{headerControls}</div>
+          </div>
+        ) : (
+          <>
+            {headerStartSlot}
+            <div className="ml-auto flex items-center gap-2">{headerControls}</div>
+          </>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto scrollbar-hide p-4">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderLanes}>
           <SortableContext items={effectiveOrder} strategy={isGrid ? rectSortingStrategy : verticalListSortingStrategy}>
-            <div className={gridClass}>
-              {effectiveOrder.map((id) => {
-                const lane = laneById.get(id);
-                if (!lane) return null;
-                const laneState = laneMap[id] ?? defaultLaneMap[id];
-                return (
-                  <SwimlaneBubble
-                    key={id}
-                    lane={lane}
-                    rows={lanesRows[id] ?? []}
-                    colCount={columns}
+            <LayoutGroup id={`swimlane-board-${prefsKey}`}>
+              <div className={gridClass}>
+                {effectiveOrder.map((id) => {
+                  const lane = laneById.get(id);
+                  if (!lane) return null;
+                  const laneState = laneMap[id] ?? defaultLaneMap[id];
+                  return (
+                    <SwimlaneBubble
+                      key={id}
+                      lane={lane}
+                      rows={lanesRows[id] ?? []}
+                      colCount={columns}
                     sort={laneState.sort}
                     sortOptions={sortOptions ?? []}
                     showSortMenu={showSortMenu}
@@ -629,11 +677,13 @@ export function SwimlaneBoard<Row, LaneId extends string, SortId extends string>
                     onResize={(px) => mutateLane(id, { height: px })}
                     renderBody={renderLaneBody}
                   />
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </LayoutGroup>
           </SortableContext>
         </DndContext>
+        {footerSlot}
       </div>
     </div>
   );

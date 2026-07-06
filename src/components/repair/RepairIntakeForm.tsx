@@ -546,7 +546,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                         }));
                                     }}
                                     disabled={loadingTechs}
-                                    className="h-11 w-full rounded-xl border border-border-soft bg-surface-card px-3.5 text-sm font-semibold text-text-default outline-none transition-all focus:border-border-strong focus:ring-2 focus:ring-gray-900/10 disabled:opacity-50"
+                                    className="h-11 w-full rounded-xl border border-border-soft bg-surface-card px-3.5 text-sm font-semibold text-text-default outline-none transition-all focus:border-border-strong focus:ring-2 focus:ring-border-strong/10 disabled:opacity-50"
                                 >
                                     <option value="">Unassigned</option>
                                     {techs.map(tech => (
@@ -647,9 +647,11 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
 
                     {currentStep === 'review' && (
                         <div className="w-full">
+                            {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
                             <div className="w-full border border-black bg-surface-card">
                                 <RepairServiceForm {...receiptProps} density="compact" />
 
+                                {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
                                 <div className="border-t border-black px-4 py-3">
                                     <p className="text-xs leading-relaxed text-text-soft">
                                         By signing below, the customer consents to conduct this transaction electronically
@@ -666,6 +668,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     )}
                                 </div>
 
+                                {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
                                 <div className="h-[200px] overflow-hidden border-t border-black bg-surface-card">
                                     <SignaturePad
                                         onSignatureChange={(data) => {

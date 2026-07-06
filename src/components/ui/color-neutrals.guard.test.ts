@@ -14,19 +14,17 @@ import { test } from 'node:test';
  * Raw neutrals bypass the theme registry: they only look right in light mode
  * and force the dark-scheme remap (globals.css) to grow forever.
  *
- * ~10,900 raw neutrals were converted by scripts/codemods/color-tokens.mjs.
- * The remainder is deliberate:
- *   - alpha-modified classes (`bg-white/90`) — hex-var tokens can't take
- *     Tailwind alpha modifiers, so these stay raw until tokens move to
- *     RGB-triple vars;
- *   - deliberate dark chrome (camera UI, inverted pills) and light text on it;
- *   - focus-emphasis neutral ramps and 400-step underline affordances that
- *     have no token yet.
+ * ~11,600 raw neutrals were converted (codemod + context sweeps). The count is
+ * now ZERO: themed tokens take alpha modifiers (function colors → color-mix),
+ * media/overlay chrome uses the fixed stage/scrim/glass vocabulary, mid-dark
+ * fills use the surface-inverse ladder, and the deliberately-literal remainder
+ * (print ink, identity-hue registries, photo-overlay badges) carries explicit
+ * `ds-allow-raw-neutral` markers.
  *
- * This guard RATCHETS the count — it may only shrink. A genuinely-needed raw
- * neutral is exempt with a `ds-allow-raw-neutral` comment on the same line or
- * the line above. `text-white` is out of scope (text on saturated fills is
- * scheme-independent), as are chart/dataviz hex arrays.
+ * This guard RATCHETS the count — it must stay at zero. A genuinely-needed raw
+ * neutral is exempt with a `ds-allow-raw-neutral` comment (same line or the
+ * line above) stating WHY. `text-white` is out of scope (text on saturated
+ * fills is scheme-independent), as are chart/dataviz hex arrays.
  */
 
 const SRC_ROOT = join(process.cwd(), 'src');
@@ -35,12 +33,13 @@ const SRC_ROOT = join(process.cwd(), 'src');
 // 2026-07-04: 1151, down from ~12,100 before the Wave-3 codemod. The bulk of
 // the remainder is alpha washes (bg-white/10, bg-gray-50/60), deliberate dark
 // chrome (bg-gray-900, text-gray-300 on it), and 300-step decorative fills.
-// 2026-07-04b: 454 after the inverse-chrome sweep (bg-surface-inverse /
-// text-text-inverse-soft / border-border-inverse / border-border-strong /
-// ring-surface-inverse fill-matched rings / text-text-faint adoption).
-// Remainder = alpha scrims + glass, camera/media UI, print zones, staff/tone
-// color registries, and chart constants — all deliberate.
-const RAW_NEUTRAL_BASELINE = 454;
+// 2026-07-04b: 454 after the inverse-chrome sweep.
+// 2026-07-04c: ZERO. Alpha washes now token-ized (function colors + color-mix),
+// media chrome moved to the fixed stage/scrim/glass vocabulary, mid-dark fills
+// to the surface-inverse ladder, and every deliberately-literal site (print
+// ink, identity hues, photo overlays) carries an explicit ds-allow-raw-neutral
+// marker. Every NEW raw neutral must be a token or carry a justified marker.
+const RAW_NEUTRAL_BASELINE = 0;
 
 const ESCAPE_MARKER = 'ds-allow-raw-neutral';
 const RAW_NEUTRAL_RE =

@@ -299,16 +299,18 @@ async function syncPurchaseOrderLines(
     // survives the loud-fail org default once receiving has FORCE isolation,
     // and so a re-sync from another tenant can never adopt this PO's carton.
     await client.query(
-      `INSERT INTO receiving
+      // Base table (not the `receiving` compat view): ON CONFLICT is unsupported
+      // on auto-updatable views. 2026-07-05d.
+      `INSERT INTO receiving_carton
          (source, zoho_purchaseorder_id, zoho_purchaseorder_number,
           shipment_id, organization_id, created_at, updated_at)
        VALUES ('zoho_po', $1, $2, $3, $4, NOW(), NOW())
        ON CONFLICT (zoho_purchaseorder_id)
          WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
        DO UPDATE SET
-         zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, receiving.zoho_purchaseorder_number),
-         shipment_id               = COALESCE(receiving.shipment_id, EXCLUDED.shipment_id),
-         organization_id           = COALESCE(receiving.organization_id, EXCLUDED.organization_id),
+         zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, receiving_carton.zoho_purchaseorder_number),
+         shipment_id               = COALESCE(receiving_carton.shipment_id, EXCLUDED.shipment_id),
+         organization_id           = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id),
          updated_at                = NOW()`,
       [normalizedPoId, poNumber, shipmentId, orgId],
     );

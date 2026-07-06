@@ -394,8 +394,6 @@ export function useReceivingLineCore(
         : '';
   const ticketHref = supportTicket?.openUrl ?? null;
   const providerTicketId = supportTicket?.providerTicketId ?? null;
-  const ticketLookupPending =
-    supportTicketQuery.isLoading || supportTicketQuery.isFetching;
 
   const handleCopyAll = useCallback(async () => {
     if (!row.receiving_id) {
@@ -483,7 +481,7 @@ export function useReceivingLineCore(
     // derived
     poNumber, listingOpenHref, poOpenHref,
     zendeskTrimmed, zendeskHref, zendeskChipDisplay,
-    supportTicket, providerTicketId, ticketLookupPending,
+    supportTicket, providerTicketId,
     invalidateSupportTicket: () => void supportTicketQuery.refetch(),
     primaryTrackingTrimmed, filledExtraTrackingsCount, trackingOpenHref,
   };

@@ -73,7 +73,7 @@ export default function MobilePoPhotoCapturePage(
   props: { params: Promise<{ poId: string }> },
 ) {
   return (
-    <Suspense fallback={<div className="min-h-[100dvh] bg-black" />}>
+    <Suspense fallback={<div className="min-h-[100dvh] bg-stage" />}>
       <PoPhotoPageInner params={props.params} />
     </Suspense>
   );

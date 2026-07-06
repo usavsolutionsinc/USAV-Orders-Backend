@@ -7,6 +7,7 @@
 
 import RedesignedMobileReceive from '@/components/mobile/redesign/Receive';
 
+/** @deprecated Prefer `/m/triage` — kept for deep links. */
 export default function MobileReceivePage() {
-  return <RedesignedMobileReceive />;
+  return <RedesignedMobileReceive surface="triage" title="Triage" />;
 }

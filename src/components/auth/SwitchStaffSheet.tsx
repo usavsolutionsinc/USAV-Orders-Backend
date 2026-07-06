@@ -86,7 +86,7 @@ export function SwitchStaffSheet() {
 
   return (
     <div
-      className="fixed inset-0 z-panel flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-panel flex items-end justify-center bg-scrim/60 backdrop-blur-sm sm:items-center"
       onClick={closeSwitcher}
       role="dialog"
       aria-modal="true"

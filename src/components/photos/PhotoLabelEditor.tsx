@@ -108,7 +108,7 @@ export function PhotoLabelEditor({
 
   return (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/40 p-4"
       onClick={onClose}
     >
       <div
@@ -157,7 +157,7 @@ export function PhotoLabelEditor({
                       checked
                         ? 'ring-2 ring-offset-1 ring-blue-500'
                         : indeterminate
-                          ? 'opacity-60 ring-1 ring-dashed ring-gray-400'
+                          ? 'opacity-60 ring-1 ring-dashed ring-border-emphasis'
                           : 'opacity-50 hover:opacity-90',
                     )}
                   >

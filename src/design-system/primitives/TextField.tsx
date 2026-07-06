@@ -30,7 +30,7 @@ const toneClass: Record<
     focusLabel: 'peer-focus:text-emerald-600',
   },
   neutral: {
-    input: 'border-border-soft focus:border-border-strong focus:ring-gray-900/10',
+    input: 'border-border-soft focus:border-border-strong focus:ring-border-strong/10',
     floatLabel: 'text-text-soft',
     focusLabel: 'peer-focus:text-text-default',
   },

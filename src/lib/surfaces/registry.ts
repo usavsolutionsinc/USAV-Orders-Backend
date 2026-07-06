@@ -140,7 +140,14 @@ export function isFeedKey(v: unknown): v is FeedKey {
 
 // ─── feed_memberships.state / tone (mirror the DB CHECKs) ────────────────────
 
-export const FEED_MEMBERSHIP_STATES = ['active', 'needs_match', 'done'] as const;
+// 'active'/'needs_match'/'done' are the generic membership states. The
+// orders_unshipped feed additionally stores its fulfillment LANE
+// (pending/tested/blocked) in `state`, so the existing state index serves
+// per-lane counts + keyset pagination (Phase 5,
+// docs/unshipped-dashboard-performance-plan.md; Decision 8 — lane computed in
+// Node via deriveFulfillmentState, never in SQL). Mirrors
+// feed_memberships_state_chk (migration 2026-07-04a).
+export const FEED_MEMBERSHIP_STATES = ['active', 'needs_match', 'done', 'pending', 'tested', 'blocked'] as const;
 export type FeedMembershipState = (typeof FEED_MEMBERSHIP_STATES)[number];
 
 /** Mirrors TimelineTone (src/lib/timeline/types.ts) — the house tone registry. */

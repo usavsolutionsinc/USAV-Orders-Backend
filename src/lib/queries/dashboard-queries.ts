@@ -24,6 +24,7 @@ import { queryOptions } from '@tanstack/react-query';
 import {
   fetchPendingOrdersData,
   fetchUnshippedOrdersData,
+  fetchUnshippedQueueCounts,
   fetchDashboardPackedRecords,
 } from '@/lib/dashboard-table-data';
 import { fetchWarrantyClaims, fetchWarrantyCoverage, type FetchWarrantyClaimsParams } from '@/lib/warranty/client';
@@ -36,6 +37,12 @@ export interface OrderQueryParams {
   /** Universal staff filter (P1-WORK-02): one staff's assigned work, or all. */
   staffId?: number;
   strictSearchScope?: boolean;
+  /** Coarse stage facet (?stage), filtered SERVER-side in Phase 1; absent = all
+   *  stages. Fulfillment STATE / lane (?ustatus) stays a client filter (Decision 8). */
+  stage?: 'pending' | 'tested';
+  /** Row ceiling for the fulfillment page (Phase 2). Grows on "Load more"; the
+   *  server truncates + the counts endpoint's total drives whether more exist. */
+  limit?: number;
 }
 
 /**
@@ -87,10 +94,27 @@ export function unshippedOrdersQuery({
   testedBy,
   staffId,
   strictSearchScope = false,
+  stage,
+  limit,
 }: OrderQueryParams = {}) {
   return queryOptions({
-    queryKey: ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy, staffId, strictSearchScope }],
-    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy, staffId, strictSearchScope }),
+    queryKey: ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy, staffId, strictSearchScope, stage: stage ?? null, limit: limit ?? null }],
+    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy, staffId, strictSearchScope, stage, limit }),
+    staleTime: 60_000,
+    gcTime: 15 * 60 * 1000,
+  });
+}
+
+/**
+ * Lightweight Unshipped-queue counts (total + per-stage + lane combos) WITHOUT
+ * the row payload (Phase 2). The sidebar legend / stage dropdown / nav badge use
+ * this instead of counting off the full fulfillment rows. Its own key namespace
+ * so it never collides with the row list. `staffId` scopes it to `?staff=`.
+ */
+export function unshippedQueueCountsQuery({ staffId }: { staffId?: number } = {}) {
+  return queryOptions({
+    queryKey: ['dashboard-table', 'unshipped-counts', { staffId: staffId ?? null }],
+    queryFn: () => fetchUnshippedQueueCounts({ staffId }),
     staleTime: 60_000,
     gcTime: 15 * 60 * 1000,
   });

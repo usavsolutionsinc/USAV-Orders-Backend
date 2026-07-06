@@ -49,7 +49,6 @@ export function LineCartonContextSection({ row, staffId, c }: LineCartonContextS
       zendeskHref={c.zendeskHref}
       zendeskChipDisplay={c.zendeskChipDisplay}
       providerTicketId={c.providerTicketId}
-      ticketLookupPending={c.ticketLookupPending}
       onTicketUnlinked={() => {
         void c.invalidateSupportTicket();
       }}

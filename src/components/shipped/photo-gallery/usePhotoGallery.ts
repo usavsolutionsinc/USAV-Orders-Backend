@@ -121,22 +121,57 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
   useEffect(() => {
     if (!viewerOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Keep global chords (⌘K search, etc.) from stealing focus while the
+      // lightbox is up — the trap can't recover if focus lands in the header.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      // Modified shortcuts are for the browser / OS — viewer only owns bare keys.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       switch (e.key) {
-        case 'Escape': closeViewer(); break;
-        case 'ArrowLeft': handlePrevious(); break;
-        case 'ArrowRight': handleNext(); break;
+        case 'Escape':
+          e.preventDefault();
+          closeViewer();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          handlePrevious();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          handleNext();
+          break;
         case '+':
-        case '=': zoom.zoomIn(); break;
-        case '-': zoom.zoomOut(); break;
-        case '0': zoom.resetZoom(); break;
+        case '=':
+          e.preventDefault();
+          zoom.zoomIn();
+          break;
+        case '-':
+          e.preventDefault();
+          zoom.zoomOut();
+          break;
+        case '0':
+          e.preventDefault();
+          zoom.resetZoom();
+          break;
         case 'r':
-        case 'R': zoom.rotateCw(); break;
+        case 'R':
+          e.preventDefault();
+          zoom.rotateCw();
+          break;
         case 'i':
-        case 'I': setPanelOpen((prev) => !prev); break;
+        case 'I':
+          e.preventDefault();
+          setPanelOpen((prev) => !prev);
+          break;
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    // Capture so we win over page-level listeners (library grid, command bar).
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [viewerOpen, closeViewer, handlePrevious, handleNext, zoom]);
 
   const downloadFilename = (index: number, photoId: number | null) => {

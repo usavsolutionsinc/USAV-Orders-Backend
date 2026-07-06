@@ -47,7 +47,7 @@ export function DuplicateRoleDialog({ open, sourceRoleId, sourceLabel, onClose, 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) onClose(); }}>
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/60 p-4" onClick={() => { if (!busy) onClose(); }}>
       <div className="w-full max-w-md rounded-2xl bg-surface-card p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-semibold text-text-default">Duplicate role</h2>
         <p className="mt-0.5 text-xs text-text-soft">Copies permissions and color from <b>{sourceLabel}</b>.</p>

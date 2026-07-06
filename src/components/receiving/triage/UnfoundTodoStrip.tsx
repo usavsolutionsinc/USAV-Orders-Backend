@@ -9,6 +9,7 @@
  */
 
 import { useRouter } from 'next/navigation';
+import { TRIAGE_SURFACE_ROUTE } from '@/lib/receiving/surface-path';
 import { AlertTriangle, ChevronRight } from '@/components/Icons';
 
 export function UnfoundTodoStrip({ message }: { message: string }) {
@@ -21,7 +22,7 @@ export function UnfoundTodoStrip({ message }: { message: string }) {
       </div>
       <button
         type="button"
-        onClick={() => router.push('/receiving?mode=triage&triview=unfound')}
+        onClick={() => router.push(`${TRIAGE_SURFACE_ROUTE}?triview=unfound`)}
         className="ds-raw-button inline-flex shrink-0 items-center gap-1 text-eyebrow font-black uppercase tracking-widest text-amber-700 hover:text-amber-900"
       >
         Unfound tab

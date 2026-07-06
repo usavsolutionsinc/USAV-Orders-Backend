@@ -5,6 +5,7 @@ import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { FileText, Download, ClipboardList, Check, Loader2, Pencil, Tag, History, DollarSign } from '@/components/Icons';
 import { Button } from '@/design-system/primitives';
+import { WorkspaceCard } from '@/design-system/components';
 import { toast } from '@/lib/toast';
 import { LineChecklistTab } from './LineChecklistTab';
 
@@ -285,7 +286,9 @@ export function LineNotesTabbedCard({
   const hasTicket = Boolean(resolvedTicketId);
 
   return (
-    <section className="rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60 space-y-3">
+    // Glass workspace surface — matches the carton context / PO items cards so
+    // the whole unbox column reads as one frosted worksheet.
+    <WorkspaceCard variant="glass" overflow="visible" bodyClassName="space-y-3 p-4">
       {/* `overlay` skips the horizontal scroller so the active pill's blue glow
           isn't clipped at the bottom (overflow-x-auto forces overflow-y:auto). */}
       <HorizontalButtonSlider
@@ -519,6 +522,6 @@ export function LineNotesTabbedCard({
       ) : (
         <LineChecklistTab lineId={lineId} sku={sku} />
       )}
-    </section>
+    </WorkspaceCard>
   );
 }

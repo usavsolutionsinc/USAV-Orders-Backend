@@ -37,7 +37,7 @@ export function BulkMoveSheet({
       <button
         type="button"
         onClick={busy ? undefined : onCancel}
-        className="ds-raw-button absolute inset-0 bg-black/40"
+        className="ds-raw-button absolute inset-0 bg-scrim/40"
         aria-label="Close"
       />
       <div className="relative z-panelPopover w-full max-w-lg overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-2xl shadow-zinc-900/20">

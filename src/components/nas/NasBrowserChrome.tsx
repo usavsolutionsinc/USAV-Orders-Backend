@@ -65,7 +65,7 @@ export function NasBreadcrumb({
   const crumbBase =
     'shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider transition-colors';
   const inactive = dark
-    ? 'text-white/60 hover:bg-white/10 hover:text-white'
+    ? 'text-white/60 hover:bg-glass/10 hover:text-white'
     : 'text-text-soft hover:bg-surface-sunken hover:text-text-muted';
   const active = dark ? 'bg-surface-card text-black' : 'bg-surface-inverse text-white';
 
@@ -117,7 +117,7 @@ export function NasFolderCard({
       aria-label={`Open folder ${name}`}
       className={`ds-raw-button group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md active:translate-y-0 active:shadow-sm ${
         dark
-          ? 'border-white/10 bg-white/[0.04] hover:border-indigo-400/40 hover:bg-white/[0.07]'
+          ? 'border-glass/10 bg-glass/[0.04] hover:border-indigo-400/40 hover:bg-glass/[0.07]'
           : 'border-border-soft bg-surface-card hover:border-indigo-200 hover:bg-indigo-50/30'
       }`}
     >

@@ -26,7 +26,7 @@ export function RepairPaperworkCanvas({
         className={cn(
           'bg-surface-card',
           isBordered
-            ? 'border border-black'
+            ? 'border border-black' // ds-allow-raw-neutral: print ink — paper-form frame
             : 'shadow-lg ring-1 ring-border-default',
           isFull ? 'w-full' : 'mx-auto w-fit',
         )}

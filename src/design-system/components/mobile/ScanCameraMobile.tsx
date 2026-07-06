@@ -130,7 +130,7 @@ export function ScanCameraMobile({
 
   // ── Viewfinder ring color based on scan status ──
   const ringColor = {
-    idle: 'border-white/40',
+    idle: 'border-glass/40',
     scanning: 'border-blue-400',
     success: 'border-emerald-400',
     error: 'border-red-400',
@@ -145,7 +145,7 @@ export function ScanCameraMobile({
           animate={framerPresenceMobile.camera.animate}
           exit={framerPresenceMobile.camera.exit}
           transition={framerTransitionMobile.cameraEnter}
-          className="fixed inset-0 z-modal flex flex-col bg-black"
+          className="fixed inset-0 z-modal flex flex-col bg-stage"
         >
           {/* ── Top bar ── */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
@@ -160,7 +160,7 @@ export function ScanCameraMobile({
               type="button"
               onClick={onClose}
               aria-label="Close scanner"
-              className="h-11 w-11 flex items-center justify-center rounded-full bg-white/10 text-white active:bg-white/20"
+              className="h-11 w-11 flex items-center justify-center rounded-full bg-glass/10 text-white active:bg-glass/20"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -183,7 +183,7 @@ export function ScanCameraMobile({
                 {/* Viewfinder overlay */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   {/* Dimmed corners */}
-                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="absolute inset-0 bg-scrim/40" />
 
                   {/* Clear viewfinder window */}
                   <motion.div
@@ -253,16 +253,16 @@ export function ScanCameraMobile({
                     type="button"
                     onClick={handleCapture}
                     aria-label="Capture photo"
-                    className="h-16 w-16 rounded-full border-4 border-white/80 bg-white/20 active:bg-white/40 transition-colors"
+                    className="h-16 w-16 rounded-full border-4 border-glass/80 bg-glass/20 active:bg-glass/40 transition-colors"
                   >
-                    <span className="block h-full w-full rounded-full border-2 border-white/60" />
+                    <span className="block h-full w-full rounded-full border-2 border-glass/60" />
                   </button>
                 </div>
               </>
             ) : (
               /* Camera denied / unavailable fallback */
               <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-                <div className="h-16 w-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
+                <div className="h-16 w-16 rounded-full bg-stage-raised flex items-center justify-center mb-4">
                   <svg className="h-8 w-8 text-text-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
@@ -284,7 +284,7 @@ export function ScanCameraMobile({
 
           {/* ── Manual entry fallback ── */}
           {showManualEntry && (
-            <div className="flex-shrink-0 bg-black/80 backdrop-blur-sm px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="flex-shrink-0 bg-scrim/80 backdrop-blur-sm px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <form onSubmit={handleManualSubmit} className="flex gap-2">
                 <input
                   ref={manualInputRef}
@@ -295,7 +295,7 @@ export function ScanCameraMobile({
                   autoComplete="off"
                   autoCapitalize="characters"
                   className="
-                    flex-1 h-11 rounded-xl bg-white/10 border border-white/20
+                    flex-1 h-11 rounded-xl bg-glass/10 border border-glass/20
                     px-4 text-sm font-bold text-white placeholder:text-white/40
                     focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400/50
                   "

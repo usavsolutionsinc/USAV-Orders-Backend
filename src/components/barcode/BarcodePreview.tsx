@@ -153,7 +153,7 @@ export function BarcodePreview({
             >
                 {isPosting ? (
                     <span className="flex items-center justify-center gap-2">
-                        <span className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                        <span className="h-3 w-3 border-2 border-glass/30 border-t-white rounded-full animate-spin inline-block" />
                         {mode === 'print' ? 'Saving & Printing…' : mode === 'reprint' ? 'Reprinting…' : 'Logging…'}
                     </span>
                 ) : (
@@ -161,7 +161,7 @@ export function BarcodePreview({
                         <Check className={comfy ? 'h-5 w-5' : 'h-4 w-4'} />
                         {ctaLabel}
                         {comfy && (mode === 'print' || mode === 'reprint') && (
-                            <kbd className="rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-eyebrow font-mono font-bold tracking-tighter">⌘P</kbd>
+                            <kbd className="rounded border border-glass/30 bg-glass/10 px-1.5 py-0.5 text-eyebrow font-mono font-bold tracking-tighter">⌘P</kbd>
                         )}
                     </span>
                 )}

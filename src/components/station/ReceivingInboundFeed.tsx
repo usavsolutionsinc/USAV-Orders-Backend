@@ -155,7 +155,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
           Needs Testing
           {needsTesting.length > 0 && (
             <span className={`rounded-full px-1.5 py-0.5 text-mini font-black ${
-              section === 'testing' ? 'bg-white/30' : 'bg-orange-100 text-orange-700'
+              section === 'testing' ? 'bg-glass/30' : 'bg-orange-100 text-orange-700'
             }`}>
               {needsTesting.length}
             </span>
@@ -173,7 +173,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
           Recently Unboxed
           {recentlyUnboxed.length > 0 && (
             <span className={`rounded-full px-1.5 py-0.5 text-mini font-black ${
-              section === 'unboxed' ? 'bg-white/30' : 'bg-indigo-100 text-indigo-700'
+              section === 'unboxed' ? 'bg-glass/30' : 'bg-indigo-100 text-indigo-700'
             }`}>
               {recentlyUnboxed.length}
             </span>
@@ -189,7 +189,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
           </div>
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Package className="w-10 h-10 text-gray-200" />
+            <Package className="w-10 h-10 text-text-faint" />
             <p className="text-micro font-black uppercase tracking-widest text-text-faint">
               {section === 'testing' ? 'No items need testing' : 'Nothing unboxed in last 48h'}
             </p>

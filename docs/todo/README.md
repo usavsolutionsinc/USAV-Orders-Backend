@@ -11,6 +11,7 @@ Audited 2026-06-28. Verify against the live codebase before starting — a doc m
 
 ## Features
 - `tech-substitution-wiring-plan.md` — wire fulfillment substitution (`SubstituteUnitCard` / customer reason picker) into `/tech` `ActiveOrderWorkspace`; policy API, permissions, phases 0–7
+- `serial-label-pairing-split-combine-plan.md` — serial↔label audit ledger, prebox manifest combine/split, LPN desktop parity, multi-serial acknowledgement UI (receiving + testing); grounded in `serial_units` / `post-multi-sn` / `handling_units`
 - `testing-priority-needs-test-plan.md`
 - `packing-checklist-plan.md`
 - `incoming-tracking-todo-plan.md`

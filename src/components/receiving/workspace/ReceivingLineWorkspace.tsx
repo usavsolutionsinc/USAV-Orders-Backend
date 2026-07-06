@@ -139,9 +139,9 @@ export function ReceivingLineWorkspace({
           its chrome stays identical across those two flows. */}
       <div className="min-h-0 flex-1 overflow-hidden">
         {variant === 'triage' ? (
-          <TriagePanel row={row} staffId={staffId} onClose={onClose} />
+          <TriagePanel key="triage" row={row} staffId={staffId} onClose={onClose} />
         ) : (
-          <LineEditPanel row={row} staffId={staffId} itemTotal={nav?.total} />
+          <LineEditPanel key="unbox" row={row} staffId={staffId} itemTotal={nav?.total} />
         )}
       </div>
     </div>

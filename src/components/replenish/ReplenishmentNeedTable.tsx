@@ -30,7 +30,7 @@ function SkuChip({ sku }: { sku: string }) {
       value={sku}
       display={display}
       icon={<HashIcon />}
-      underlineClass="border-gray-500"
+      underlineClass="border-border-emphasis"
       iconClass="text-text-soft"
       truncateDisplay={false}
     />

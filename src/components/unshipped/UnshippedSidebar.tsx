@@ -3,7 +3,7 @@
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
+import { unshippedOrdersQuery, unshippedQueueCountsQuery } from '@/lib/queries/dashboard-queries';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
 import { Plus } from '@/components/Icons';
@@ -22,7 +22,7 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
 import { FilterDropdownSelect } from '@/design-system/components/FilterDropdownSelect';
 import { useStaffFilter } from '@/hooks/useStaffFilter';
-import { FULFILLMENT_STATE_META, countFulfillmentStates, type FulfillmentState } from '@/lib/unshipped-state';
+import { FULFILLMENT_STATE_META, countFulfillmentStates, deriveFulfillmentState, ZERO_FULFILLMENT_COUNTS, type FulfillmentState } from '@/lib/unshipped-state';
 
 /** Params that define an Unshipped saved view (filters only — not search text). */
 const UNSHIPPED_VIEW_PARAMS = ['stage', 'ustatus', 'staff'] as const;
@@ -200,23 +200,48 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
 
   // Per-stage counts for the filter dropdown. Reuses the SAME query key the
   // table mounts (React Query dedupes → one fetch, no extra request).
-  const { data: stageData, isFetching: stageFetching } = useQuery({
-    ...unshippedOrdersQuery({ searchQuery: searchValue, strictSearchScope: true }),
-    placeholderData: (previous) => previous,
+  // Legend + stage counts (Phase 2). DEFAULT (no active search): the lightweight
+  // counts endpoint — total + per-stage + raw lane combos, NO row download. During
+  // a search: results are bounded to the matches, so count off those rows directly.
+  const searching = searchValue.trim().length > 0;
+  const { data: counts, isFetching: countsFetching } = useQuery({
+    ...unshippedQueueCountsQuery({ staffId: staffFilter.staffId ?? undefined }),
+    enabled: !searching,
   });
-  // Pre-dock status-dot counts for the legend, derived from the SAME query rows
-  // the table mounts (no extra fetch). Distinct from `stageCounts`, which buckets
-  // by the coarser Awaiting/Pending/Tested filter facet.
-  const statusCounts = useMemo(() => countFulfillmentStates(stageData ?? []), [stageData]);
+  const { data: searchRows, isFetching: searchFetching } = useQuery({
+    ...unshippedOrdersQuery({
+      searchQuery: searchValue,
+      staffId: staffFilter.staffId ?? undefined,
+      strictSearchScope: true,
+    }),
+    enabled: searching,
+    placeholderData: (previous, previousQuery) => {
+      const prev = previousQuery?.queryKey?.[2] as { staffId?: number } | undefined;
+      if (prev?.staffId !== (staffFilter.staffId ?? undefined)) return undefined;
+      return previous;
+    },
+  });
+  const stageFetching = searching ? searchFetching : countsFetching;
+  // Pre-dock status-dot counts for the legend. Map the raw counts-endpoint combos
+  // to PENDING/TESTED/BLOCKED via the TS SoT (`deriveFulfillmentState`, Decision 8);
+  // the lane rule is NEVER re-encoded in SQL.
+  const statusCounts = useMemo<Record<FulfillmentState, number>>(() => {
+    if (searching) return countFulfillmentStates(searchRows ?? []);
+    const out: Record<FulfillmentState, number> = { ...ZERO_FULFILLMENT_COUNTS };
+    for (const c of counts?.combos ?? []) {
+      const state = deriveFulfillmentState({ shipmentId: 1, hasTechScan: c.hasTechScan, outOfStock: c.blocked ? 'x' : '' });
+      out[state] += c.count;
+    }
+    return out;
+  }, [searching, searchRows, counts]);
   const stageCounts = useMemo(() => {
-    const rows = stageData ?? [];
-    const tested = rows.filter((r) => Boolean((r as { has_tech_scan?: boolean }).has_tech_scan));
-    return {
-      all: rows.length,
-      pending: rows.length - tested.length,
-      tested: tested.length,
-    } as Record<FulfillmentStage, number>;
-  }, [stageData]);
+    if (searching) {
+      const rows = searchRows ?? [];
+      const tested = rows.filter((r) => Boolean((r as { has_tech_scan?: boolean }).has_tech_scan)).length;
+      return { all: rows.length, pending: rows.length - tested, tested } as Record<FulfillmentStage, number>;
+    }
+    return (counts?.byStage ?? { all: 0, pending: 0, tested: 0 }) as Record<FulfillmentStage, number>;
+  }, [searching, searchRows, counts]);
 
   const filterRefinements = useMemo((): FilterRefinement[] => {
     const out: FilterRefinement[] = [];

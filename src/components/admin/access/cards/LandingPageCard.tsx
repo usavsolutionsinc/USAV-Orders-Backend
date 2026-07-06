@@ -20,7 +20,7 @@ const MOBILE_LANDING_OPTIONS: ReadonlyArray<{ value: string; label: string }> = 
 
 const DESKTOP_ROLE_DEFAULTS: Record<string, string> = {
   admin: '/dashboard', receiver: '/receiving', receiving: '/receiving',
-  packer: '/packer', technician: '/tech', shipper: '/dashboard',
+  packer: '/pack', technician: '/test', shipper: '/dashboard',
   inventory_manager: '/inventory', sales: '/dashboard',
   viewer: '/dashboard', readonly: '/dashboard',
 };

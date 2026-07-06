@@ -7,11 +7,10 @@
  * sections are presentational components under `./details-panel/`.
  */
 
-import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { Clock, Pencil } from '../Icons';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import DeleteButton from '@/components/ui/DeleteButton';
 import { IconButton } from '@/design-system/primitives';
@@ -54,15 +53,8 @@ export function RepairDetailsPanel({
   const hasSavedNotes = String(repair.notes || '').trim().length > 0;
 
   return (
-    <>
-      <SlideOverBackdrop onClose={onClose} />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-      >
+    <DetailStackRailRegistrar id={`detail:claim:${repair.id}`} onClose={onClose}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <PaneHeader
           className="border-border-hairline bg-surface-card/90 backdrop-blur-xl"
           rowClassName="px-6"
@@ -213,7 +205,7 @@ export function RepairDetailsPanel({
               document.body,
             )
           : null}
-      </motion.div>
-    </>
+      </div>
+    </DetailStackRailRegistrar>
   );
 }

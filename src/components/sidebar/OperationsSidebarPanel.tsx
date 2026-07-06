@@ -3,7 +3,7 @@
 /**
  * Operations master-page sidebar — the single contextual panel for `/operations`.
  *
- * It owns the four-mode switcher (Live · Analytics · Insights · History) and,
+ * It owns the five-mode switcher (Live · Analytics · Insights · History · Signals) and,
  * per mode, the contextual search / filters / quick-nav. The right pane
  * (OperationsWorkspace) is purely visual and reacts to the same `?mode=` /
  * `?range=` / `?section=` / `?q=` URL params. Follows the house sidebar-mode
@@ -14,11 +14,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/utils/_cn';
-import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SidebarNavOverlaySlider } from '@/components/sidebar/SidebarNavOverlaySlider';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { OperationsModeToggle } from '@/components/sidebar/operations/OperationsModeToggle';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav/MasterNavContext';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -47,7 +47,20 @@ import {
 } from '@/components/sidebar/operations/operations-sidebar-shared';
 import { useOperationsMode } from '@/components/sidebar/operations/useOperationsMode';
 import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
+import { usePageHeaderSearch } from '@/hooks/usePageHeader';
+import { useSearchRecents } from '@/hooks/useSearchRecents';
+import { SearchRecentsDropdown } from '@/components/search/SearchRecentsDropdown';
+import { isUnifiedHeaderSearchEnabled } from '@/lib/search/unified-header-search';
+import { pushSearchRecent } from '@/lib/search/search-recents';
+import { looksLikeIdentifier } from '@/lib/search/search-hit';
 import type { JourneyDimension } from '@/lib/timeline/journey';
+import {
+  parseSignalsView,
+  replaceOperationsSignalsUrl,
+  SIGNALS_VIEW_ITEMS,
+  type SignalsView,
+} from '@/features/signals/signals-url';
+import { SIGNAL_KIND_LIST, SIGNAL_KINDS } from '@/lib/surfaces/registry';
 
 const ANALYTICS_RANGES: AnalyticsRange[] = ['24h', '7d', '30d'];
 
@@ -86,6 +99,7 @@ export function OperationsSidebarPanel() {
   if (mode === 'analytics') return <AnalyticsSidebar modeToggle={modeToggle} />;
   if (mode === 'insights') return <InsightsSidebar modeToggle={modeToggle} />;
   if (mode === 'history') return <HistorySidebar modeToggle={modeToggle} />;
+  if (mode === 'signals') return <SignalsSidebar modeToggle={modeToggle} />;
   return <LiveSidebar modeToggle={modeToggle} />;
 }
 
@@ -318,10 +332,119 @@ function InsightsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   );
 }
 
+// ── Signals ───────────────────────────────────────────────────────────────────
+
+const SIGNALS_WINDOWS: Array<{ id: string; label: string; days: number | null }> = [
+  { id: '7d', label: '7 days', days: 7 },
+  { id: '30d', label: '30 days', days: 30 },
+  { id: '90d', label: '90 days', days: 90 },
+  { id: 'all', label: 'All time', days: null },
+];
+
+const SIGNALS_FILTER_SELECT_CLASS =
+  'w-full rounded-md border border-border-soft bg-surface-card px-2 py-1.5 text-caption font-semibold text-text-muted focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400';
+
+function SignalsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const signalsView = parseSignalsView(searchParams.get('signalsView'));
+  const windowId = searchParams.get('window') ?? '30d';
+  const kind = searchParams.get('signalKind') ?? '';
+
+  const setSignalsView = (next: SignalsView) => {
+    replaceOperationsSignalsUrl(router, searchParams, (sp) => {
+      if (next === 'browse') sp.set('signalsView', 'browse');
+      else sp.delete('signalsView');
+      sp.delete('signalId');
+      sp.delete('window');
+      sp.delete('signalKind');
+      sp.delete('q');
+    });
+  };
+
+  const setParam = useCallback(
+    (key: string, value: string) => {
+      replaceOperationsSignalsUrl(router, searchParams, (sp) => {
+        if (value) sp.set(key, value);
+        else sp.delete(key);
+      });
+    },
+    [router, searchParams],
+  );
+
+  return (
+    <SidebarShell
+      headerAbove={modeToggle}
+      headerRows={[
+        <HorizontalButtonSlider
+          key="signals-view"
+          items={SIGNALS_VIEW_ITEMS}
+          value={signalsView}
+          onChange={(id) => setSignalsView(id as SignalsView)}
+          variant="nav"
+          dense
+          className="w-full"
+          aria-label="Signals view"
+        />,
+      ]}
+      bodyClassName="pt-0 pb-6"
+    >
+      <div className={cn('space-y-4 pt-3')}>
+        {signalsView === 'timeline' ? (
+          <>
+            <p className="text-caption leading-5 text-text-muted">
+              Org-scoped timeline — returns, test fails, receiving exceptions, denials, buyer notes.
+            </p>
+            <div className="space-y-2">
+              <label className="block space-y-1">
+                <span className={cn(sectionLabel)}>Time window</span>
+                <select
+                  className={SIGNALS_FILTER_SELECT_CLASS}
+                  value={windowId}
+                  onChange={(e) => setParam('window', e.target.value === '30d' ? '' : e.target.value)}
+                  aria-label="Time window"
+                >
+                  {SIGNALS_WINDOWS.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className={cn(sectionLabel)}>Signal kind</span>
+                <select
+                  className={SIGNALS_FILTER_SELECT_CLASS}
+                  value={kind}
+                  onChange={(e) => setParam('signalKind', e.target.value)}
+                  aria-label="Signal kind"
+                >
+                  <option value="">All kinds</option>
+                  {SIGNAL_KIND_LIST.map((k) => (
+                    <option key={k} value={k}>
+                      {SIGNAL_KINDS[k].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </>
+        ) : (
+          <p className="text-caption leading-5 text-text-muted">
+            Search from the header bar, then select a signal to inspect its detail.
+          </p>
+        )}
+      </div>
+    </SidebarShell>
+  );
+}
+
 // ── History ───────────────────────────────────────────────────────────────────
 
 function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const url = useOperationsTimelineUrlState();
+  const unifiedOn = isUnifiedHeaderSearchEnabled();
+  const { recents, remove, clear } = useSearchRecents({ scope: 'operations:history' });
 
   const placeholder =
     url.dim === 'order'
@@ -330,25 +453,80 @@ function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
         ? 'Search a serial number…'
         : 'Search a tracking number…';
 
-  // Pure record lookup: pick a dimension, paste a number. The right pane teaches
-  // the empty state; the body stays clean (no date/station/type/saved-view rails).
+  // Flag ON: the GLOBAL header drives an operations ?q= browse (results in the
+  // right pane); recents live here. Enter on an exact identifier fast-paths
+  // straight to that record's timeline (keeps today's paste-a-number reflex).
+  // Flag OFF: control is null → header stays global, sidebar owns entity search.
+  usePageHeaderSearch(
+    unifiedOn
+      ? {
+          value: url.q,
+          onChange: (v) => url.setQ(v),
+          onClear: () => url.setQ(''),
+          onSearch: (v) => {
+            const t = v.trim();
+            if (!t) return;
+            if (looksLikeIdentifier(t)) {
+              url.setEntity(t);
+              return;
+            }
+            pushSearchRecent({
+              query: t,
+              scope: 'operations:history',
+              scopeLabel: 'Operations · History',
+              scopeHref: `/operations?mode=history&q=${encodeURIComponent(t)}`,
+            });
+            url.setQ(t);
+          },
+          placeholder: 'Search shipped orders, serials, tracking…',
+          debounceMs: 300,
+        }
+      : null,
+    [unifiedOn, url.q, url.dim],
+  );
+
+  // Flag OFF: pure record lookup — pick a dimension, paste a number. The right
+  // pane teaches the empty state; the body stays clean.
+  if (!unifiedOn) {
+    return (
+      <SidebarShell
+        search={{
+          value: url.entityValue,
+          onChange: (v) => url.setEntity(v),
+          placeholder,
+          variant: 'blue',
+          debounceMs: 250,
+        }}
+        bodyClassName="pt-0"
+      >
+        {modeToggle}
+        <SidebarNavOverlaySlider
+          items={JOURNEY_DIMENSION_ITEMS}
+          value={url.dim}
+          onChange={(id) => url.setDim(id as JourneyDimension)}
+          aria-label="Journey dimension"
+        />
+      </SidebarShell>
+    );
+  }
+
+  // Flag ON: no sidebar search bar (the header owns it). Dimension toggle scopes
+  // the exact-id fast-path and the drill dimension; recent searches re-run ?q=.
   return (
-    <SidebarShell
-      search={{
-        value: url.entityValue,
-        onChange: (v) => url.setEntity(v),
-        placeholder,
-        variant: 'blue',
-        debounceMs: 250,
-      }}
-      bodyClassName="pt-0"
-    >
+    <SidebarShell bodyClassName="pt-0">
       {modeToggle}
       <SidebarNavOverlaySlider
         items={JOURNEY_DIMENSION_ITEMS}
         value={url.dim}
         onChange={(id) => url.setDim(id as JourneyDimension)}
         aria-label="Journey dimension"
+      />
+      <SearchRecentsDropdown
+        recents={recents}
+        onSelect={(entry) => url.setQ(entry.query)}
+        onRemove={remove}
+        onClearAll={() => clear('operations:history')}
+        className="mt-2"
       />
     </SidebarShell>
   );

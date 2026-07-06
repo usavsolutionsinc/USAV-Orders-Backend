@@ -106,7 +106,7 @@ const LOADER_SQL: Record<SearchEntityType, string> = {
            stn.tracking_number_raw                                AS tracking_number,
            COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)    AS carrier,
            r.zoho_purchaseorder_number                            AS po_number,
-           r.lpn, r.source_platform, r.intake_type, r.exception_code,
+           r.source_platform, r.intake_type, r.exception_code,
            r.support_notes, r.zoho_notes,
            r.condition_grade::text AS condition_grade,
            r.qa_status::text       AS qa_status,

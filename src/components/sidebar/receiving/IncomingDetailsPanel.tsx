@@ -1,9 +1,8 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { X, RefreshCw, Trash2 } from '@/components/Icons';
 import { PaneHeaderTabs } from '@/components/ui/pane-header';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 import DeleteButton from '@/components/ui/DeleteButton';
 import { PoChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
@@ -33,15 +32,11 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
   const { isShipmentOnly, tab, setTab, syncing, syncOne, handleDelete, data, isLoading, isError, headerPo, headerTracking } = c;
 
   return (
-    <>
-      <SlideOverBackdrop onClose={onClose} />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-      >
+    <DetailStackRailRegistrar
+      id={`detail:po:${props.zohoPurchaseOrderId ?? props.shipmentId ?? 'incoming'}`}
+      onClose={onClose}
+    >
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Header — PO chip (last-4 copy) + vendor + close. */}
       <div className="shrink-0 border-b border-border-soft bg-surface-card px-4 py-2.5">
         <div className="flex items-center justify-between gap-3">
@@ -87,7 +82,7 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
 
       </div>
 
-      {/* Tab nav — reuses PaneHeaderTabs (active tab = bg-gray-900 + white
+      {/* Tab nav — reuses PaneHeaderTabs (active tab = gray-900 fill + white
           text) so this panel matches the shipped + work-order detail panes. */}
       <div className="shrink-0 border-b border-border-soft">
         <PaneHeaderTabs<TabId>
@@ -136,7 +131,7 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
           className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
         />
       </div>
-      </motion.div>
-    </>
+      </div>
+    </DetailStackRailRegistrar>
   );
 }

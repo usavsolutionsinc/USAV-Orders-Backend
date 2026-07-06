@@ -104,7 +104,7 @@ export function StaffEditCard({
               type="text"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="h-11 w-full rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-gray-900/10"
+              className="h-11 w-full rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-border-strong/10"
               placeholder="Full name"
             />
           </FieldGroup>
@@ -113,7 +113,7 @@ export function StaffEditCard({
               type="text"
               value={editEmployeeId}
               onChange={(e) => setEditEmployeeId(e.target.value)}
-              className="h-11 w-full rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-gray-900/10"
+              className="h-11 w-full rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-border-strong/10"
               placeholder="Employee ID"
             />
           </FieldGroup>
@@ -126,7 +126,7 @@ export function StaffEditCard({
                 value={editRole}
                 onChange={(e) => setEditRole(e.target.value as StaffRole)}
                 disabled={member.role !== 'technician' && member.role !== 'packer'}
-                className="h-11 w-full rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-gray-900/10 disabled:cursor-not-allowed disabled:bg-surface-canvas disabled:text-text-soft"
+                className="h-11 w-full rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-border-strong/10 disabled:cursor-not-allowed disabled:bg-surface-canvas disabled:text-text-soft"
               >
                 <option value="technician">Technician</option>
                 <option value="packer">Packer</option>
@@ -158,7 +158,7 @@ export function StaffEditCard({
           <select
             value={editDefaultHomePath}
             onChange={(e) => setEditDefaultHomePath(e.target.value)}
-            className="h-11 min-w-[14rem] rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-gray-900/10"
+            className="h-11 min-w-[14rem] rounded-full border border-border-soft bg-surface-card px-4 text-sm font-semibold text-text-default outline-none transition focus:border-border-strong focus:ring-2 focus:ring-border-strong/10"
           >
             <option value="">Use role default</option>
             {STAFF_HOME_OPTIONS.map((opt) => (

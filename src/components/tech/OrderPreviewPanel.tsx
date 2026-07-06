@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { motion, type Variants } from 'framer-motion';
 import { AlertCircle, Calendar, Check, Clock, Copy, ExternalLink, Flag, Layers, Package, Star } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { WorkspaceCard } from '@/design-system/components';
 import { IconButton } from '@/design-system/primitives';
 import {
   getDaysLateNumber,
@@ -16,6 +18,21 @@ import type { Order } from '@/components/station/upnext/upnext-types';
 
 interface OrderPreviewPanelProps {
   order: Order;
+  /** When set, each card section participates in a parent stagger-reveal. */
+  revealItem?: Variants;
+}
+
+function RevealSection({
+  revealItem,
+  children,
+}: {
+  revealItem?: Variants;
+  children: ReactNode;
+}) {
+  if (revealItem) {
+    return <motion.div variants={revealItem}>{children}</motion.div>;
+  }
+  return <>{children}</>;
 }
 
 function getLast4(value: string | null | undefined) {
@@ -50,43 +67,44 @@ function getStatusTone(order: Order, daysLate: number | null): { tone: StatusTon
 type CopyKey = 'tracking';
 
 /**
- * Condition badge classes — mirrors the sidebar `OrderCard` so the right
- * panel reads with the same colorway: New → yellow, Parts → brown, else →
- * neutral slate.
+ * Condition badge classes — mirrors the sidebar `OrderCard` colorway (New →
+ * yellow, Parts → amber, else → neutral) but as the canonical 3-layer house
+ * chip (`bg-x-50 text-x-700 ring-x-200`) so every pill on the strip reads with
+ * the same weight instead of the old flat 2-layer fills.
  */
 function getConditionBadgeClasses(condition: string | null | undefined): string | null {
   const c = (condition || '').toLowerCase().trim();
   if (!c) return null;
-  if (c.includes('new')) return 'bg-yellow-100 text-yellow-800';
-  if (c.includes('part')) return 'bg-amber-200 text-amber-900';
-  return 'bg-surface-sunken text-text-muted';
+  if (c.includes('new')) return 'bg-yellow-50 text-yellow-700 ring-yellow-200';
+  if (c.includes('part')) return 'bg-amber-50 text-amber-700 ring-amber-200';
+  return 'bg-surface-sunken text-text-muted ring-border-soft';
 }
 
 /**
- * Quantity badge classes — mirrors the sidebar. ×1 reads as neutral (gray),
- * ×2+ grabs the eye (amber) since multi-unit orders need extra care.
+ * Quantity badge classes — ×1 reads as neutral (gray); ×2+ grabs the eye (amber)
+ * since multi-unit orders need extra care. 3-layer house chip.
  */
 function getQtyBadgeClasses(quantity: number): string {
-  if (quantity >= 2) return 'bg-amber-100 text-amber-700';
-  return 'bg-surface-sunken text-text-muted';
+  if (quantity >= 2) return 'bg-amber-50 text-amber-700 ring-amber-200';
+  return 'bg-surface-sunken text-text-muted ring-border-soft';
 }
 
 /**
- * Right-pane preview body — Linear-style structure.
+ * Right-pane preview body — workspace-card structure aligned with the
+ * receiving triage / unbox and testing panes.
  *
  * Layout:
- *   1. Title section (no #id/channel meta — the selected sidebar card
+ *   1. Order card — product title (no #id/channel meta; the sidebar card
  *      already shows that).
- *   2. Stat strip: 6 icon-on-left cells (Status / Ship by / Urgency /
- *      Tracking / Condition / Qty) in a single tinted band. Cells share
- *      the strip width via `flex-1` but never shrink below their content.
- *   3. Out-of-stock callout (if applicable).
+ *   2. Fulfillment card — stat strip with Status / Ship by / Urgency /
+ *      Tracking / Condition / Qty.
+ *   3. Out-of-stock card (if applicable).
  *
  * The Tracking cell always shows copy + external icons inline; no hover
  * gating, so the affordances are discoverable. SKU is intentionally not
  * surfaced — opening the listing externally already routes by item number.
  */
-export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
+export function OrderPreviewPanel({ order, revealItem }: OrderPreviewPanelProps) {
   const [copiedKey, setCopiedKey] = useState<CopyKey | null>(null);
 
   const quantity = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
@@ -117,95 +135,87 @@ export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
 
   return (
     <div className="space-y-4">
-      {/* ── Title — the visual anchor. The #id / channel meta row has been
-            removed since that information is already shown by the selected
-            sidebar card; repeating it here only added vertical noise. ── */}
-      <header className="border-b border-border-soft pb-3">
-        <h2 className="text-xl font-bold leading-tight tracking-tight text-text-default">
-          {title || 'Untitled order'}
-        </h2>
-      </header>
+      <RevealSection revealItem={revealItem}>
+        <WorkspaceCard label="Order" bodyClassName="px-5 pb-5 pt-3">
+          <h2 className="text-xl font-bold leading-tight tracking-tight text-text-default">
+            {title || 'Untitled order'}
+          </h2>
+        </WorkspaceCard>
+      </RevealSection>
 
-      {/* ── Summary stat row — icon-on-left, value-on-right, all in a single
-            horizontal band. Cells share the row width evenly via flex-1
-            (left-aligned) and never shrink below their content; horizontal
-            scroll kicks in as a graceful fallback if the panel goes narrow. ── */}
-      <div className="flex divide-x divide-border-soft overflow-x-auto overflow-y-hidden rounded-lg border border-border-soft bg-surface-canvas/60">
-        <StatCell icon={Flag} iconLabel="Status">
-          <StatusPill tone={status.tone}>{status.label}</StatusPill>
-        </StatCell>
-        <StatCell icon={Calendar} iconLabel="Ship by">
-          <span className="text-sm font-bold text-text-default">{displayDate}</span>
-        </StatCell>
-        <StatCell icon={Clock} iconLabel="Urgency">
-          <span className={`text-sm font-bold ${daysLateTone}`}>
-            {daysLatePhrase}
-          </span>
-        </StatCell>
-        {/* Tracking — copy + external icons are always visible (no hover
-            gating) so they're discoverable at a glance. */}
-        <StatCell icon={Package} iconLabel="Tracking">
-          {trackingNumber ? (
-            <span className="inline-flex items-center gap-0.5">
-              <HoverTooltip label={trackingNumber} asChild>
-                <span className="font-mono text-sm font-bold text-text-default">
-                  {getLast4(trackingNumber)}
+      <RevealSection revealItem={revealItem}>
+        <WorkspaceCard label="Fulfillment" bodyClassName="p-0">
+          <div className="flex divide-x divide-border-soft overflow-x-auto overflow-y-hidden">
+            <StatCell icon={Flag} iconLabel="Status">
+              <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            </StatCell>
+            <StatCell icon={Calendar} iconLabel="Ship by">
+              <span className="text-sm font-bold text-text-default">{displayDate}</span>
+            </StatCell>
+            <StatCell icon={Clock} iconLabel="Urgency">
+              <span className={`text-sm font-bold ${daysLateTone}`}>
+                {daysLatePhrase}
+              </span>
+            </StatCell>
+            <StatCell icon={Package} iconLabel="Tracking">
+              {trackingNumber ? (
+                <span className="inline-flex items-center gap-0.5">
+                  <HoverTooltip label={trackingNumber} asChild>
+                    <span className="font-mono text-sm font-bold text-text-default">
+                      {getLast4(trackingNumber)}
+                    </span>
+                  </HoverTooltip>
+                  <CopyButton
+                    copied={copiedKey === 'tracking'}
+                    onClick={() => handleCopy('tracking', trackingNumber)}
+                    ariaLabel={copiedKey === 'tracking' ? 'Tracking copied' : 'Copy tracking number'}
+                  />
+                  <ExternalButton
+                    onClick={() => {
+                      if (trackingUrl) window.open(trackingUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                    disabled={!trackingUrl}
+                    ariaLabel="Open tracking in external tab"
+                  />
                 </span>
-              </HoverTooltip>
-              <CopyButton
-                copied={copiedKey === 'tracking'}
-                onClick={() => handleCopy('tracking', trackingNumber)}
-                ariaLabel={copiedKey === 'tracking' ? 'Tracking copied' : 'Copy tracking number'}
-              />
-              <ExternalButton
-                onClick={() => {
-                  if (trackingUrl) window.open(trackingUrl, '_blank', 'noopener,noreferrer');
-                }}
-                disabled={!trackingUrl}
-                ariaLabel="Open tracking in external tab"
-              />
-            </span>
-          ) : (
-            <span className="text-sm font-bold text-text-faint">—</span>
-          )}
-        </StatCell>
-        {/* Condition + Qty mirror the sidebar's bottom-right pair: condition
-            first, then qty, with the same tonal badges so a tech's eye
-            translates the sidebar row directly into the right-pane stat row. */}
-        <StatCell icon={Star} iconLabel="Condition">
-          {order.condition && conditionBadgeClasses ? (
-            <span
-              className={`inline-flex items-center rounded px-1.5 py-0.5 text-caption font-black uppercase tracking-wide ${conditionBadgeClasses}`}
-            >
-              {order.condition}
-            </span>
-          ) : (
-            <span className="text-sm font-bold text-text-soft">—</span>
-          )}
-        </StatCell>
-        <StatCell icon={Layers} iconLabel="Qty">
-          <span
-            className={`inline-block rounded px-1.5 py-0.5 font-mono text-label font-bold ${qtyBadgeClasses}`}
-          >
-            ×{quantity}
-          </span>
-        </StatCell>
-      </div>
-
-      {/* ── Out-of-stock callout ── */}
-      {hasOutOfStock && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3">
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" />
-          <div className="min-w-0 flex-1">
-            <p className="text-micro font-black uppercase tracking-widest text-red-600">
-              Out of stock
-            </p>
-            <p className="mt-0.5 text-sm font-semibold leading-snug text-red-800">
-              {order.out_of_stock}
-            </p>
+              ) : (
+                <span className="text-sm font-bold text-text-faint">—</span>
+              )}
+            </StatCell>
+            <StatCell icon={Star} iconLabel="Condition">
+              {order.condition && conditionBadgeClasses ? (
+                <span
+                  className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-caption font-black uppercase tracking-wide ring-1 ring-inset ${conditionBadgeClasses}`}
+                >
+                  {order.condition}
+                </span>
+              ) : (
+                <span className="text-sm font-bold text-text-soft">—</span>
+              )}
+            </StatCell>
+            <StatCell icon={Layers} iconLabel="Qty">
+              <span
+                className={`inline-flex items-center rounded-md px-1.5 py-0.5 font-mono text-label font-bold ring-1 ring-inset ${qtyBadgeClasses}`}
+              >
+                ×{quantity}
+              </span>
+            </StatCell>
           </div>
-        </div>
-      )}
+        </WorkspaceCard>
+      </RevealSection>
+
+      {hasOutOfStock ? (
+        <RevealSection revealItem={revealItem}>
+          <WorkspaceCard label="Out of stock" tone="red" bodyClassName="px-5 py-4">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" />
+              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-red-800">
+                {order.out_of_stock}
+              </p>
+            </div>
+          </WorkspaceCard>
+        </RevealSection>
+      ) : null}
     </div>
   );
 }
@@ -230,7 +240,7 @@ interface StatCellProps {
  */
 function StatCell({ icon: Icon, iconLabel, children }: StatCellProps) {
   return (
-    <div className="flex flex-1 min-w-fit items-center justify-start gap-1.5 px-2.5 py-2">
+    <div className="flex flex-1 min-w-fit items-center justify-start gap-2 px-3 py-2.5">
       <Icon
         className="h-3.5 w-3.5 flex-shrink-0 text-text-faint"
         aria-label={iconLabel}
@@ -250,16 +260,18 @@ interface StatusPillProps {
 }
 
 function StatusPill({ tone, children }: StatusPillProps) {
+  // Canonical 3-layer house chip (bg-x-50 · text-x-700 · ring-x-200) so the
+  // status pill sits at the same visual weight as the condition + qty chips.
   const tones: Record<StatusTone, string> = {
-    emerald: 'bg-emerald-100 text-emerald-700',
-    orange: 'bg-orange-100 text-orange-700',
-    red: 'bg-red-100 text-red-700',
-    amber: 'bg-amber-100 text-amber-700',
-    gray: 'bg-surface-sunken text-text-muted',
+    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    orange: 'bg-orange-50 text-orange-700 ring-orange-200',
+    red: 'bg-red-50 text-red-700 ring-red-200',
+    amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+    gray: 'bg-surface-sunken text-text-muted ring-border-soft',
   };
   return (
     <span
-      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-caption font-bold ${tones[tone]}`}
+      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-caption font-bold ring-1 ring-inset ${tones[tone]}`}
     >
       {children}
     </span>

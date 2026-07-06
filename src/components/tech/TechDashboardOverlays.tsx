@@ -58,7 +58,7 @@ export function TechDashboardOverlays({
 
       {/* RepairDetailsPanel — triggered by repair card clicks anywhere on the page */}
       {loadingRepair && (
-        <div className="fixed inset-0 bg-black/20 z-panelBackdrop flex items-center justify-center pointer-events-none">
+        <div className="fixed inset-0 bg-scrim/20 z-panelBackdrop flex items-center justify-center pointer-events-none">
           <div className="w-8 h-8 border-4 border-orange-400 border-t-transparent rounded-full animate-spin pointer-events-auto" />
         </div>
       )}

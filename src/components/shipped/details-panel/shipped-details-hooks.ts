@@ -30,6 +30,9 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
   const [itemNumber, setItemNumber] = useState(initialShipped.item_number || '');
   const [shippingTrackingNumber, setShippingTrackingNumber] = useState(initialShipped.shipping_tracking_number || '');
   const [notes, setNotes] = useState(initialShipped.notes || '');
+  const [outOfStock, setOutOfStock] = useState(
+    String((initialShipped as { out_of_stock?: string }).out_of_stock || ''),
+  );
 
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
@@ -41,9 +44,11 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
   const {
     isSavingInlineFields,
     isSavingNotes,
+    isSavingOutOfStock,
     isSavingShipByDate,
     saveInlineFields: persistInlineFields,
     saveNotes,
+    saveOutOfStock,
     saveShipByDate,
     resetRefs,
   } = fieldSave;
@@ -56,6 +61,7 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
     setItemNumber(initialShipped.item_number || '');
     setShippingTrackingNumber(initialShipped.shipping_tracking_number || '');
     setNotes(initialShipped.notes || '');
+    setOutOfStock(String((initialShipped as { out_of_stock?: string }).out_of_stock || ''));
     resetRefs(
       initialShipped.order_id || '',
       initialShipped.item_number || '',
@@ -66,6 +72,59 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
   const saveInlineFields = useCallback(async () => {
     await persistInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
   }, [itemNumber, orderNumber, persistInlineFields, shippingTrackingNumber]);
+
+  const saveOutOfStockIfChanged = useCallback(async () => {
+    const initialValue = String((initialShipped as { out_of_stock?: string }).out_of_stock || '').trim();
+    const nextValue = outOfStock.trim();
+    if (nextValue === initialValue) return;
+    await saveOutOfStock(outOfStock);
+    setShipped((current) => ({ ...current, out_of_stock: nextValue } as ShippedOrder));
+  }, [initialShipped, outOfStock, saveOutOfStock, setShipped]);
+
+  const handleSaveOutOfStock = useCallback(async (onSaved?: () => void) => {
+    const trimmed = outOfStock.trim();
+    const currentSaved = String((shipped as { out_of_stock?: string }).out_of_stock || '').trim();
+    if (trimmed === currentSaved) {
+      onSaved?.();
+      return;
+    }
+    try {
+      await saveOutOfStock(outOfStock);
+      setShipped((current) => ({ ...current, out_of_stock: trimmed } as ShippedOrder));
+      onSaved?.();
+    } catch (error) {
+      console.error('Failed to save out of stock:', error);
+      setOutOfStock(String((shipped as { out_of_stock?: string }).out_of_stock || ''));
+    }
+  }, [outOfStock, saveOutOfStock, setOutOfStock, setShipped, shipped]);
+
+  const handleSaveNotes = useCallback(async (onSaved?: () => void) => {
+    const trimmed = notes.trim();
+    const currentSaved = String(shipped.notes || '').trim();
+    if (trimmed === currentSaved) {
+      onSaved?.();
+      return;
+    }
+    try {
+      await saveNotes(trimmed);
+      setShipped((current) => ({ ...current, notes: trimmed }));
+      onSaved?.();
+    } catch (error) {
+      console.error('Failed to save notes:', error);
+      setNotes(shipped.notes || '');
+    }
+  }, [notes, saveNotes, setNotes, setShipped, shipped.notes]);
+
+  useEffect(() => {
+    const handleClose = () => {
+      void (async () => {
+        await saveOutOfStockIfChanged();
+        await saveInlineFields();
+      })();
+    };
+    window.addEventListener('close-shipped-details' as keyof WindowEventMap, handleClose as EventListener);
+    return () => window.removeEventListener('close-shipped-details' as keyof WindowEventMap, handleClose as EventListener);
+  }, [saveInlineFields, saveOutOfStockIfChanged]);
 
   return {
     shipped,
@@ -78,20 +137,25 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
     setShippingTrackingNumber,
     notes,
     setNotes,
+    outOfStock,
+    setOutOfStock,
     shipByDate,
     setShipByDate,
     isSavingInlineFields,
     isSavingNotes,
+    isSavingOutOfStock,
     isSavingShipByDate,
     saveInlineFields,
     saveNotes,
     saveShipByDate,
+    saveOutOfStockIfChanged,
+    handleSaveNotes,
+    handleSaveOutOfStock,
   };
 }
 
 export interface UseShippedPanelViewStateOptions {
   initialShipped: ShippedOrder;
-  hasReturnContent: boolean;
 }
 
 /**
@@ -99,22 +163,18 @@ export interface UseShippedPanelViewStateOptions {
  * (out-of-stock / notes input, mark-as-shipped). Resets to sensible defaults
  * when the underlying order changes.
  */
-export function useShippedPanelViewState({ initialShipped, hasReturnContent }: UseShippedPanelViewStateOptions) {
-  const [activeSection, setActiveSection] = useState<ShippedActiveSection>(
-    hasReturnContent ? 'return' : 'shipping',
-  );
+export function useShippedPanelViewState({ initialShipped }: UseShippedPanelViewStateOptions) {
+  const [activeSection, setActiveSection] = useState<ShippedActiveSection>('shipping');
   const [activeInput, setActiveInput] = useState<ShippedActiveInput>('none');
-  const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
 
   // Reset to a sensible default when the underlying order changes (e.g. user
   // navigates to a different order via the panel's up/down arrows).
   useEffect(() => {
-    setActiveSection(hasReturnContent ? 'return' : 'shipping');
-  }, [initialShipped.id, hasReturnContent]);
+    setActiveSection('shipping');
+  }, [initialShipped.id]);
 
   useEffect(() => {
     setActiveInput('none');
-    setIsMarkAsShippedOpen(false);
   }, [initialShipped.id]);
 
   return {
@@ -122,8 +182,6 @@ export function useShippedPanelViewState({ initialShipped, hasReturnContent }: U
     setActiveSection,
     activeInput,
     setActiveInput,
-    isMarkAsShippedOpen,
-    setIsMarkAsShippedOpen,
   };
 }
 

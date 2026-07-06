@@ -27,7 +27,7 @@ test('DB↔UI vocabulary round-trips for every discriminator value', () => {
 test('searchHitHref: every entity type deep-links to its record surface', () => {
   assert.equal(searchHitHref('ORDER', 42), '/dashboard?openOrderId=42');
   assert.equal(searchHitHref('SERIAL_UNIT', 9), '/inventory/units?unit=9');
-  assert.equal(searchHitHref('RECEIVING', 3), '/receiving?mode=receive&openReceivingId=3');
+  assert.equal(searchHitHref('RECEIVING', 3), '/unbox?openReceivingId=3');
   assert.equal(searchHitHref('SKU', 11), '/products?view=qc&skuId=11');
   assert.equal(searchHitHref('REPAIR', 5), '/repair?tab=active&openRepair=5');
   assert.equal(searchHitHref('FBA_SHIPMENT', 2), '/fba?openShipmentId=2');

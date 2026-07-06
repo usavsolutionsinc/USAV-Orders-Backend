@@ -12,11 +12,7 @@ interface ShortcutRow {
 
 /** Grid/page shortcuts (useMediaLibraryShortcuts). */
 const GRID_SHORTCUTS: ShortcutRow[] = [
-  { keys: ['1'], label: 'Small grid' },
-  { keys: ['2'], label: 'Large grid' },
-  { keys: ['3'], label: 'Folders' },
-  { keys: ['4'], label: 'Group by ticket' },
-  { keys: ['5'], label: 'List' },
+  { keys: ['1'], label: 'List' },
   { keys: ['⌘', 'A'], label: 'Select all loaded (while selecting)' },
   { keys: ['Esc'], label: 'Exit selection' },
   { keys: ['?'], label: 'Show this help' },
@@ -78,7 +74,7 @@ export function MediaLibraryShortcutsModal({ open, onClose }: { open: boolean; o
 
   return createPortal(
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/40 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

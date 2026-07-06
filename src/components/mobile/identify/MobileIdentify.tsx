@@ -51,7 +51,7 @@ export function MobileIdentify() {
         </Button>
 
         {/* Live / Manual capture toggle */}
-        <div className="flex items-center rounded-full bg-white/10 p-0.5 text-xs font-medium">
+        <div className="flex items-center rounded-full bg-glass/10 p-0.5 text-xs font-medium">
           {/* ds-raw-button: dark-theme segmented camera-mode toggle with custom emerald/white active states */}
           <button
             onClick={() => switchMode('live')}
@@ -62,16 +62,16 @@ export function MobileIdentify() {
           {/* ds-raw-button: dark-theme segmented camera-mode toggle with custom emerald/white active states */}
           <button
             onClick={() => switchMode('manual')}
-            className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors ${!isLive ? 'bg-surface-card text-black' : 'text-white/70'}`}
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors ${!isLive ? 'bg-stage-contrast text-black' : 'text-white/70'}`}
           >
             <Camera className="h-3.5 w-3.5" /> Manual
           </button>
         </div>
 
         {poRef ? (
-          <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium tabular-nums">PO {poRef}</span>
+          <span className="rounded-full bg-glass/10 px-2.5 py-1 text-xs font-medium tabular-nums">PO {poRef}</span>
         ) : recvId ? (
-          <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs">Carton #{recvId}</span>
+          <span className="rounded-full bg-glass/10 px-2.5 py-1 text-xs">Carton #{recvId}</span>
         ) : (
           <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs text-amber-300">view-only</span>
         )}
@@ -100,7 +100,7 @@ export function MobileIdentify() {
             initial={{ opacity: 0.5 }}
             animate={{ opacity: [0.5, 0.9, 0.5] }}
             transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
-            className="h-44 w-72 rounded-2xl border-2 border-dashed border-white/70"
+            className="h-44 w-72 rounded-2xl border-2 border-dashed border-glass/70"
           />
           <p className="mt-4 text-sm text-white/80">Aim at the printed label on the bottom</p>
         </div>
@@ -122,7 +122,7 @@ export function MobileIdentify() {
 
       {/* Reading scan-line (manual identify or live read in flight) */}
       {reading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-scrim/30">
           <motion.div
             initial={{ y: -90 }}
             animate={{ y: 90 }}
@@ -137,7 +137,7 @@ export function MobileIdentify() {
 
       {/* Camera error */}
       {cameraError && (
-        <div className="absolute inset-x-6 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-white/10 p-4 text-center text-sm text-white/80">
+        <div className="absolute inset-x-6 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-glass/10 p-4 text-center text-sm text-white/80">
           Camera unavailable ({cameraError}). Check permissions, then reload.
         </div>
       )}
@@ -150,7 +150,7 @@ export function MobileIdentify() {
           <button
             onClick={() => void capture()}
             aria-label="Capture"
-            className="h-[72px] w-[72px] rounded-full border-4 border-white/80 bg-surface-card/95 shadow-lg active:scale-95"
+            className="h-[72px] w-[72px] rounded-full border-4 border-glass/80 bg-stage-contrast/95 shadow-lg active:scale-95"
           />
         </div>
       )}
@@ -159,7 +159,7 @@ export function MobileIdentify() {
       {isLive && !frozen && (liveScan.phase === 'scanning' || liveScan.phase === 'reading' || liveScan.phase === 'idle') && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           {added.length > 0 && <SessionList added={added} />}
-          <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs text-white/70">
+          <div className="flex items-center gap-2 rounded-full bg-glass/10 px-4 py-2 text-xs text-white/70">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
@@ -180,7 +180,7 @@ export function MobileIdentify() {
             transition={{ type: 'spring', stiffness: 400, damping: 34 }}
             className="absolute inset-x-0 bottom-0 z-40 rounded-t-3xl bg-[#15151B] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"
           >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-glass/20" />
             <div className="space-y-4 text-center">
               <motion.div
                 initial={{ scale: 0.5, opacity: 0 }}
@@ -201,7 +201,7 @@ export function MobileIdentify() {
                 variant="ghost"
                 size="lg"
                 onClick={retake}
-                className="h-auto w-full rounded-xl bg-surface-card py-3.5 text-sm font-semibold text-black active:scale-[0.99]"
+                className="h-auto w-full rounded-xl bg-stage-contrast py-3.5 text-sm font-semibold text-black active:scale-[0.99]"
               >
                 Next item
               </Button>
@@ -220,7 +220,7 @@ export function MobileIdentify() {
             transition={{ type: 'spring', stiffness: 400, damping: 34 }}
             className="absolute inset-x-0 bottom-0 z-30 rounded-t-3xl bg-[#15151B] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
           >
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-glass/20" />
 
             {status === 'error' && (
               <div className="space-y-4">
@@ -233,7 +233,7 @@ export function MobileIdentify() {
                     variant="ghost"
                     size="lg"
                     onClick={retake}
-                    className="h-auto flex-1 rounded-xl bg-surface-card py-3 text-sm font-semibold text-black"
+                    className="h-auto flex-1 rounded-xl bg-stage-contrast py-3 text-sm font-semibold text-black"
                   >
                     Retake
                   </Button>
@@ -242,7 +242,7 @@ export function MobileIdentify() {
                     size="lg"
                     onClick={() => recvId && (window.location.href = `/m/receive/${recvId}`)}
                     icon={<Search className="h-4 w-4" />}
-                    className="h-auto gap-1.5 rounded-xl bg-white/10 px-4 py-3 text-sm font-medium text-white/80"
+                    className="h-auto gap-1.5 rounded-xl bg-glass/10 px-4 py-3 text-sm font-medium text-white/80"
                   >
                     Search
                   </Button>

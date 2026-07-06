@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-04T18:21:20Z",
-  "totalRoutes": 754,
+  "generatedAt": "2026-07-06T04:32:22Z",
+  "totalRoutes": 760,
   "summary": {
-    "permissionGated": 645,
+    "permissionGated": 650,
     "authenticatedNoPermission": 36,
-    "anonymousIntentional": 71,
+    "anonymousIntentional": 72,
     "serviceToService": 2,
     "ungatedRead": 0,
     "ungatedWrite": 0
@@ -1311,6 +1311,15 @@
     },
     {
       "path": "/api/cron/cleanup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/documents/nas-mirror/route.ts",
       "methods": [
         "GET"
       ],
@@ -2785,6 +2794,16 @@
       "exemptReason": null
     },
     {
+      "path": "/api/nav/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/need-to-order/[id]/route.ts",
       "methods": [
         "DELETE",
@@ -2898,6 +2917,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/order-linkage/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/orders-exceptions/delete/route.ts",
       "methods": [
         "POST"
@@ -2950,6 +2978,15 @@
       ],
       "gate": "requireRoutePerm",
       "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/pack-checklist/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -3111,6 +3148,15 @@
     },
     {
       "path": "/api/orders/next/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/queue-counts/route.ts",
       "methods": [
         "GET"
       ],
@@ -6077,6 +6123,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/surfaces/[key]/resolve/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "dashboard.view",
       "exemptReason": null
     },
     {

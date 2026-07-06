@@ -163,7 +163,7 @@ function buildSerialUnitDoc(row: SearchSourceRow): BuiltSearchDoc {
 /**
  * Loader row contract:
  *   id, tracking_number (stn raw), carrier, po_number
- *   (zoho_purchaseorder_number), lpn, source_platform, intake_type,
+ *   (zoho_purchaseorder_number), source_platform, intake_type,
  *   exception_code, support_notes, zoho_notes, condition_grade,
  *   qa_status, received_at, created_at, line_item_names, line_skus
  *   (STRING_AGGs over receiving_lines).
@@ -177,7 +177,6 @@ function buildReceivingDoc(row: SearchSourceRow): BuiltSearchDoc {
       row.tracking_number,
       row.carrier,
       row.po_number,
-      row.lpn,
       row.source_platform,
       row.intake_type,
       row.exception_code,

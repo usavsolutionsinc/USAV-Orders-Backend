@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { openInUnboxHref } from '@/lib/receiving/surface-path';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PoLinesAccordion } from '../PoLinesAccordion';
 import { UnmatchedItemsSection } from '../UnmatchedItemsSection';
@@ -96,9 +97,7 @@ export function LinePoItemsSection({
 
   const openInUnboxHandler = openInUnbox
     ? () => {
-        const params = new URLSearchParams({ recvId: String(receivingId) });
-        if (row.id > 0) params.set('lineId', String(row.id));
-        router.push(`/receiving?${params.toString()}`);
+        router.push(openInUnboxHref(receivingId, row.id));
       }
     : undefined;
 

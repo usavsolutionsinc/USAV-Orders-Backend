@@ -72,9 +72,11 @@ const NAV_ITEMS: NavItem[] = [
     id: 'receiving',
     label: 'Receiving',
     icon: ClipboardList,
-    matchPrefixes: ['/m/receiving', '/m/receive', '/m/r/'],
+    matchPrefixes: ['/m/receiving', '/m/receive', '/m/triage', '/m/unbox', '/m/r/'],
     children: [
-      { kind: 'leaf', id: 'unboxing', label: 'Unboxing', icon: PackageOpen, href: '/m/receiving' },
+      { kind: 'leaf', id: 'triage', label: 'Triage', icon: ClipboardList, href: '/m/triage' },
+      { kind: 'leaf', id: 'unboxing', label: 'Unbox', icon: PackageOpen, href: '/m/unbox' },
+      { kind: 'leaf', id: 'photos', label: 'Photo feed', icon: PackageOpen, href: '/m/receiving' },
       { kind: 'leaf', id: 'local-pickup', label: 'Local Pickup', icon: MapPin, href: '/m/receiving?mode=local-pickup' },
       { kind: 'leaf', id: 'repair', label: 'Repair Service', icon: Wrench, href: '/m/receiving?mode=repair' },
     ],
@@ -127,7 +129,13 @@ export const MobileSidebarDrawer = ({
   const { user, signOut } = useAuth();
 
   // Auto-expand the Receiving group when the user is somewhere inside it.
-  const receivingActive = isGroupActive(pathname, ['/m/receiving', '/m/receive', '/m/r/']);
+  const receivingActive = isGroupActive(pathname, [
+    '/m/receiving',
+    '/m/receive',
+    '/m/triage',
+    '/m/unbox',
+    '/m/r/',
+  ]);
   const [expanded, setExpanded] = useState<string | null>(receivingActive ? 'receiving' : null);
 
   // Close on route change so a tap that navigates also dismisses the drawer.
@@ -180,7 +188,7 @@ export const MobileSidebarDrawer = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-panelBackdrop bg-slate-900/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-panelBackdrop bg-scrim/40 backdrop-blur-[2px]"
           />
 
           {/* Panel */}

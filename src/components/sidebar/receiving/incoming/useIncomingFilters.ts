@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import type { DateRange } from 'react-day-picker';
+import { receivingSurfaceBasePath } from '@/lib/receiving/surface-path';
 import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
 import { RECEIVING_HISTORY_URL_PARAMS } from '@/lib/receiving-history-search';
 import type { IncomingSort } from '@/components/sidebar/receiving/IncomingPaneHeader';
@@ -28,6 +29,9 @@ const parseISODate = (raw: string | null): Date | undefined => {
 export function useIncomingFilters() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  // Stay on the current surface (`/incoming` once graduated, else `/receiving`).
+  const base = receivingSurfaceBasePath(pathname);
 
   const search = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const stateRaw = (searchParams.get('state') || '').trim().toUpperCase();
@@ -50,9 +54,9 @@ export function useIncomingFilters() {
       if (trimmed) params.set(RECEIVING_HISTORY_URL_PARAMS.q, trimmed);
       else params.delete(RECEIVING_HISTORY_URL_PARAMS.q);
       params.delete('page');
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${base}?${params.toString()}`);
     },
-    [router, searchParams],
+    [router, searchParams, base],
   );
 
   const setState = useCallback(
@@ -61,9 +65,9 @@ export function useIncomingFilters() {
       if (next) params.set('state', next);
       else params.delete('state');
       params.delete('page');
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${base}?${params.toString()}`);
     },
-    [router, searchParams],
+    [router, searchParams, base],
   );
 
   // PO purchase-date range — `?po_from/po_to` map to zoho_po_mirror.po_date.
@@ -83,9 +87,9 @@ export function useIncomingFilters() {
       if (to) params.set('po_to', to);
       else params.delete('po_to');
       params.delete('page');
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${base}?${params.toString()}`);
     },
-    [router, searchParams],
+    [router, searchParams, base],
   );
 
   // Sort axis — same `?sort=` URL contract the API reads. Default omits the param.
@@ -104,9 +108,9 @@ export function useIncomingFilters() {
       if (next === 'zoho_newest') params.delete('sort');
       else params.set('sort', next);
       params.delete('page');
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${base}?${params.toString()}`);
     },
-    [router, searchParams],
+    [router, searchParams, base],
   );
 
   const clearFilters = useCallback(() => {
@@ -116,8 +120,8 @@ export function useIncomingFilters() {
     params.delete('po_to');
     params.delete('page');
     const s = params.toString();
-    router.replace(s ? `/receiving?${s}` : '/receiving');
-  }, [router, searchParams]);
+    router.replace(s ? `${base}?${s}` : base);
+  }, [router, searchParams, base]);
 
   const activeTile = state ? TILES.find((t) => t.state === state) ?? null : null;
 

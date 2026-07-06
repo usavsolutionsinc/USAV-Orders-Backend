@@ -59,7 +59,7 @@ export const LABEL_CHIP_CLASSES: Record<LabelColorToken, string> = {
 
 /** Solid dot classes per token (used in the color picker swatch). */
 export const LABEL_DOT_CLASSES: Record<LabelColorToken, string> = {
-  slate: 'bg-slate-500',
+  slate: 'bg-slate-500', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
   blue: 'bg-blue-500',
   violet: 'bg-violet-500',
   indigo: 'bg-indigo-500',

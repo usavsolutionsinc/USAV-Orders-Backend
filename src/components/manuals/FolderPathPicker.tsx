@@ -245,7 +245,7 @@ export function FolderPathPicker({ value, onChange }: FolderPathPickerProps) {
             const isPending = i >= ancestorDepth;
             return (
               <span key={`${i}-${seg}`} className="flex items-center gap-1">
-                <ChevronRight className="h-3 w-3 text-zinc-300" />
+                <ChevronRight className="h-3 w-3 text-text-faint" />
                 <CrumbPill
                   label={seg}
                   active={i === currentSegments.length - 1}
@@ -324,7 +324,7 @@ export function FolderPathPicker({ value, onChange }: FolderPathPickerProps) {
                   <span className="text-micro font-semibold text-text-faint">
                     {node.totalCount}
                   </span>
-                  <ChevronRight className="h-3 w-3 text-zinc-300" />
+                  <ChevronRight className="h-3 w-3 text-text-faint" />
                 </button>
               </li>
             ))}

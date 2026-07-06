@@ -34,7 +34,8 @@ import {
   matchesDoneQuery,
   type TriageDoneRow,
 } from './done-stub';
-import { RECEIVING_TABLE_LIMIT } from '@/lib/receiving/receiving-modes';
+/** Unbox sidebar "Unboxed" rail — most recent cartons opened on the Unbox surface. */
+export const UNBOX_SIDEBAR_LIMIT = 50;
 
 export type ReceivingLinesView = 'activity' | 'scanned' | 'viewed' | 'unbox_opened';
 export type ReceivingLinesSort = 'unboxed_newest' | 'priority';
@@ -264,7 +265,7 @@ export function buildTriageCombinedFetcher(rt: RailFetchRuntime): () => Promise<
 export function buildUnboxReceivedFetcher(rt: RailFetchRuntime): () => Promise<ApiResponse> {
   return async () => {
     const opened = await fetchReceivingLines(UNBOX_OPENED_SOURCE, rt, {
-      limit: RECEIVING_TABLE_LIMIT,
+      limit: UNBOX_SIDEBAR_LIMIT,
       includeSerials: false,
     }).then((d) => d.receiving_lines);
 
@@ -288,9 +289,9 @@ export function buildUnboxReceivedFetcher(rt: RailFetchRuntime): () => Promise<A
       }
     }
 
-    const merged = Array.from(bestByCarton.values()).sort(
-      (a, b) => scannedRecencyMs(b) - scannedRecencyMs(a),
-    );
+    const merged = Array.from(bestByCarton.values())
+      .sort((a, b) => scannedRecencyMs(b) - scannedRecencyMs(a))
+      .slice(0, UNBOX_SIDEBAR_LIMIT);
 
     return { success: true, receiving_lines: merged, total: merged.length };
   };
@@ -341,10 +342,10 @@ const FEEDS = {
     getActivityAt: (r) =>
       r.unboxed_at ?? r.unbox_opened_at ?? r.scanned_at ?? r.received_at ?? r.created_at ?? null,
     pinSelectedLead: false,
-    // Match History: all staff, deep window (not the triage ?staff= filter).
+    // All staff — not the triage ?staff= filter. Window capped at UNBOX_SIDEBAR_LIMIT.
     usesStaffFilter: false,
     autoSelectFirstWhenEmpty: true,
-    limit: RECEIVING_TABLE_LIMIT,
+    limit: UNBOX_SIDEBAR_LIMIT,
     refreshEvents: UNBOX_REFRESH,
   },
   /**
@@ -353,7 +354,7 @@ const FEEDS = {
    */
   unboxQueue: {
     segment: 'unbox-queue',
-    eyebrowTitle: 'Scanned',
+    eyebrowTitle: 'Door queue',
     qty: 'scanned',
     status: 'receiving',
     view: 'scanned',
@@ -367,7 +368,7 @@ const FEEDS = {
   /** Triage "Prioritize" — door-scanned matched cartons, not yet unboxed. */
   scanned: {
     segment: 'scanned',
-    eyebrowTitle: 'Scanned',
+    eyebrowTitle: 'At dock',
     qty: 'scanned',
     status: 'receiving',
     view: 'scanned',

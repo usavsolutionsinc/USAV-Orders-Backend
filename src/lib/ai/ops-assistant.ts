@@ -29,7 +29,7 @@ function buildDashboardHref(timeframe: AiTimeframe): string {
 
 function buildStaffHref(dimension: ShippingDimension, staffId: number | null): string | undefined {
   if (!staffId || !Number.isFinite(staffId)) return undefined;
-  return dimension === 'packer' ? `/packer?staffId=${staffId}` : `/tech?staffId=${staffId}`;
+  return dimension === 'packer' ? `/pack?staffId=${staffId}` : `/test?staffId=${staffId}`;
 }
 
 export function pickLocalOpsDimension(message: string): ShippingDimension {

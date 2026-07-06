@@ -210,7 +210,7 @@ async function postPhotoViaAdapter(
     file: blob,
     entityType,
     entityId,
-    photoType: entityType === 'RECEIVING_LINE' ? 'receiving_item' : 'receiving',
+    photoType: entityType === 'RECEIVING_LINE' ? 'receiving_item' : 'receiving_package',
     poRef: entry.scope.poRef ?? undefined,
   });
   return { id: result.id, url: result.url };

@@ -1,7 +1,7 @@
 'use client';
 
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
-import { DateTimeValue } from '@/design-system/components/DateTimeValue';
+import { formatClockTimePST, formatDatePST } from '@/utils/date';
 import type { ReceivingDetailsLog } from '@/components/station/receiving-details-log';
 import { ReceivingPhotosSection } from './ReceivingPhotosSection';
 
@@ -41,7 +41,16 @@ function StaffTimestampRow({
       ) : (
         <span className="text-sm font-bold text-text-faint">—</span>
       )}
-      <DateTimeValue value={hasAt ? at : null} fallback={emptyFallback} />
+      {hasAt ? (
+        <div className="flex shrink-0 items-baseline gap-2 tabular-nums">
+          <span className="text-sm font-bold text-text-muted">
+            {formatDatePST(at, { withLeadingZeros: true })}
+          </span>
+          <span className="text-sm font-bold text-text-default">{formatClockTimePST(at)}</span>
+        </div>
+      ) : (
+        <span className="shrink-0 text-sm font-bold tabular-nums text-text-faint">{emptyFallback}</span>
+      )}
     </div>
   );
 }

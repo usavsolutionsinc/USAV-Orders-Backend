@@ -1,17 +1,17 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import { Button } from '@/design-system/primitives';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import DeleteButton from '@/components/ui/DeleteButton';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 import { useSkuDetailView } from './sku-detail/useSkuDetailView';
 import type { SkuDetailViewProps } from './sku-detail/sku-detail-types';
 import { SkuDetailHeader } from './sku-detail/SkuDetailHeader';
 import { SkuStockCard } from './sku-detail/SkuStockCard';
 import { SkuLocationCard } from './sku-detail/SkuLocationCard';
 import { SkuDetailCards } from './sku-detail/SkuDetailCards';
-import { SkuPhotoLightbox } from './sku-detail/SkuPhotoLightbox';
+import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 
 /**
  * SKU detail view (panel slide-over or full page). Thin composition layer —
@@ -23,20 +23,11 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
   const { data, isPanel } = c;
 
   const wrapPanel = (content: React.ReactNode) => {
-    if (!isPanel) return content;
+    if (!isPanel || !onClose) return content;
     return (
-      <>
-        <SlideOverBackdrop onClose={c.handleClose} />
-        <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-          className="fixed right-0 top-0 z-panel flex h-screen w-[420px] max-w-full flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-        >
-          {content}
-        </motion.div>
-      </>
+      <DetailStackRailRegistrar id={`detail:sku:${sku}`} onClose={c.handleClose}>
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">{content}</div>
+      </DetailStackRailRegistrar>
     );
   };
 
@@ -94,7 +85,9 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
         </div>
       ) : null}
 
-      {c.lightboxUrl && <SkuPhotoLightbox url={c.lightboxUrl} onClose={() => c.setLightboxUrl(null)} />}
+      <AnimatePresence>
+        {c.gallery.viewerOpen ? <PhotoViewerModal g={c.gallery} /> : null}
+      </AnimatePresence>
     </div>,
   );
 }

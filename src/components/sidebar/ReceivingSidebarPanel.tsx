@@ -142,6 +142,7 @@ export function ReceivingSidebarPanel() {
   });
 
   useReceivingWorkspaceBridge({
+    mode,
     selectedLine,
     lineAccordionBootstrap,
     scanDriven,

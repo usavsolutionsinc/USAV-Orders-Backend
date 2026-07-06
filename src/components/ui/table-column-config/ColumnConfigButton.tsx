@@ -1,11 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/utils/_cn';
 import { SlidersHorizontal, Check } from '@/components/Icons';
 import { Button } from '@/design-system/primitives';
+import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { ToolbarButton } from '@/components/ui/ToolbarButton';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { useMotionPresence, useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import { useTableColumnConfig } from './TableColumnConfig';
 
 /**
@@ -15,66 +19,81 @@ import { useTableColumnConfig } from './TableColumnConfig';
  * toggleable columns (from the registry) as checkboxes — each toggle hides/shows
  * the column for the signed-in staffer and persists to their prefs.
  *
- * The panel renders in a BODY PORTAL (house rule: contextual popovers must portal
- * so a scrolling sidebar/header never clips them) and is clamped to the viewport,
- * anchored under the trigger.
+ * The panel renders through {@link AnchoredLayer} (body portal + rect tracking)
+ * so it never clips inside a scrolling header. Board-toolbar triggers use
+ * `bottom-end` so the menu's right edge flush-aligns with the trigger — matching
+ * the pencil + lane table corner below.
  */
 
-const PANEL_W = 224; // w-56
 const GAP = 4;
 
-export function ColumnConfigButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
+/** Board-toolbar popover — drops from the trigger's right edge with a slight slide-in. */
+const toolbarColumnPanelPresence = {
+  initial: { opacity: 0, y: -4, x: 8 },
+  animate: { opacity: 1, y: 0, x: 0 },
+  exit: { opacity: 0, y: -6, x: 4 },
+};
+
+export function ColumnConfigButton({
+  className,
+  iconOnly = false,
+  variant = 'ghost',
+}: {
+  className?: string;
+  iconOnly?: boolean;
+  /**
+   * `ghost` (default) — the borderless header control used inside dense-table
+   * headers. `toolbar` — the shared Linear view-toolbar control (rounded, soft
+   * border, solid-blue when its popover is open) used in the board headers so
+   * Columns matches the staff / select controls beside it. `toolbar` is always
+   * icon-only.
+   */
+  variant?: 'ghost' | 'toolbar';
+}) {
   const cfg = useTableColumnConfig();
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  const place = useCallback(() => {
-    const el = btnRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    // Open below the trigger; align the panel's LEFT edge to the trigger, then
-    // clamp so the right edge stays inside the viewport (8px gutter).
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - PANEL_W - 8));
-    const top = Math.min(r.bottom + GAP, window.innerHeight - 16);
-    setCoords({ top, left });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (open) place();
-  }, [open, place]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    const onReflow = () => place();
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('resize', onReflow);
-    // capture: catch scrolls in any ancestor scroll container, not just window.
-    window.addEventListener('scroll', onReflow, true);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', onReflow);
-      window.removeEventListener('scroll', onReflow, true);
-    };
-  }, [open, place]);
+  const panelPresence = useMotionPresence(
+    variant === 'toolbar' ? toolbarColumnPanelPresence : framerPresence.dropdownPanel,
+  );
+  const panelTransition = useMotionTransition(framerTransition.dropdownOpen);
 
   if (!cfg || cfg.columns.length === 0) return null;
 
   const hiddenCount = cfg.hidden.size;
+  const placement = variant === 'toolbar' ? 'bottom-end' : 'bottom-start';
 
-  return (
-    <div className={cn('shrink-0', className)}>
+  // Shared view-toolbar variant — the Linear method: rounded, soft-bordered,
+  // solid-blue while its popover is open, so it matches the staff / select
+  // controls beside it in the board headers. Always icon-only; the hidden-columns
+  // signal is a small corner dot.
+  const trigger =
+    variant === 'toolbar' ? (
+      <HoverTooltip label="Configure columns" focusable={false}>
+        <ToolbarButton
+          ref={btnRef}
+          iconOnly
+          active={open}
+          data-testid="column-config-trigger"
+          onClick={() => setOpen((v) => !v)}
+          className="relative"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Configure columns"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          {hiddenCount > 0 ? (
+            <span
+              className={cn(
+                'absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-white',
+                open ? 'bg-surface-card' : 'bg-blue-600',
+              )}
+              aria-hidden
+            />
+          ) : null}
+        </ToolbarButton>
+      </HoverTooltip>
+    ) : (
       <HoverTooltip label="Configure columns" focusable={false}>
         <Button
           ref={btnRef}
@@ -94,8 +113,6 @@ export function ColumnConfigButton({ className, iconOnly = false }: { className?
           aria-label={iconOnly ? 'Configure columns' : undefined}
         >
           {iconOnly ? (
-            // Hidden-columns signal collapses to a small dot so the control stays
-            // a single top-right icon.
             hiddenCount > 0 ? (
               <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-600 ring-2 ring-white" aria-hidden />
             ) : null
@@ -111,15 +128,30 @@ export function ColumnConfigButton({ className, iconOnly = false }: { className?
           )}
         </Button>
       </HoverTooltip>
+    );
 
-      {open && coords
-        ? createPortal(
-            <div
-              ref={panelRef}
+  return (
+    <div className={cn('shrink-0', className)}>
+      {trigger}
+
+      <AnchoredLayer
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={btnRef}
+        placement={placement}
+        gap={GAP}
+      >
+        <AnimatePresence>
+          {open ? (
+            <motion.div
+              initial={panelPresence.initial}
+              animate={panelPresence.animate}
+              exit={panelPresence.exit}
+              transition={panelTransition}
+              style={{ transformOrigin: variant === 'toolbar' ? 'top right' : 'top left' }}
               role="menu"
               data-testid="column-config-panel"
-              className="fixed z-tooltip w-56 rounded-lg border border-border-soft bg-surface-card p-1 shadow-xl"
-              style={{ top: coords.top, left: coords.left }}
+              className="w-56 rounded-lg border border-border-soft bg-surface-card p-1 shadow-xl"
             >
               <div className="flex items-center justify-between px-2 py-1.5">
                 <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
@@ -164,10 +196,10 @@ export function ColumnConfigButton({ className, iconOnly = false }: { className?
                   );
                 })}
               </div>
-            </div>,
-            document.body,
-          )
-        : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </AnchoredLayer>
     </div>
   );
 }

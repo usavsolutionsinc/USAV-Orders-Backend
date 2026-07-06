@@ -22,6 +22,7 @@ import { notInboundMirrorTerminalPredicate } from '@/lib/inbound/mirror';
 import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 import { UNBOX_OPENED_PREDICATE_SQL } from '@/lib/receiving/unbox-scan-opened';
+import { priorityRankSql, laneRankSql } from '@/lib/receiving/display/precedence';
 
 /**
  * A serial (aliased `alias`) whose CURRENT receiving line — its most recent
@@ -135,15 +136,15 @@ const CONDITIONS   = new Set(['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 
 // every list query below).
 // A manual priority_tier override (0..3) wins outright via COALESCE; falls back
 // to the legacy is_priority boolean (rank 0), then the platform-derived rank.
-const RECEIVING_PRIORITY_RANK_SQL = `
-  COALESCE(r.priority_tier, CASE
-    WHEN COALESCE(r.is_priority, false) THEN 0
-    WHEN r.source = 'unmatched' OR r.source_platform IS NULL THEN 1
-    WHEN lower(r.source_platform) = 'amazon'   THEN 2
-    WHEN lower(r.source_platform) = 'ebay'     THEN 3
-    WHEN lower(r.source_platform) = 'goodwill' THEN 4
-    ELSE 9
-  END)`;
+// Derived from the rules-as-data SoT (src/lib/receiving/display/precedence.ts)
+// so the server sort and the client badge (receivingPriorityRank) can never
+// drift — semantically identical to the former hand-written CASE (§7 Step E).
+const RECEIVING_PRIORITY_RANK_SQL = priorityRankSql({
+  tier: 'r.priority_tier',
+  isPriority: 'r.is_priority',
+  source: 'r.source',
+  sourcePlatform: 'r.source_platform',
+});
 
 // Triage priority-lane tier (docs/receiving-triage-redesign-plan.md §4.2) —
 // composes with RECEIVING_PRIORITY_RANK_SQL as a SECONDARY tie-breaker, never
@@ -152,14 +153,7 @@ const RECEIVING_PRIORITY_RANK_SQL = `
 // the primary rank would silently reshuffle the entire live Prioritize tab the
 // moment this shipped. Mirrors receivingTriageLanePolicy's lane values
 // (src/lib/receiving/triage-lane-policy.ts) — keep in sync if that list changes.
-const RECEIVING_LANE_RANK_SQL = `
-  CASE r.priority_lane
-    WHEN 'PO_STOCKOUT' THEN 0
-    WHEN 'RETURN'      THEN 1
-    WHEN 'PO_STANDARD' THEN 2
-    WHEN 'HOLD'        THEN 3
-    ELSE 4
-  END`;
+const RECEIVING_LANE_RANK_SQL = laneRankSql('r.priority_lane');
 
 function parsePositiveTechId(value: unknown): number | null {
   const parsed = Number(value);
@@ -286,6 +280,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 r.intake_type                AS receiving_intake_type,
                 COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
+                r.triage_complete,
+                r.triage_completed_at::text    AS triage_completed_at,
+                r.unbox_only_intake,
+                r.staging_location_id,
+                r.priority_lane,
+                r.pairing_state,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
                 r.zoho_notes                 AS receiving_zoho_notes,
@@ -414,6 +414,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   r.support_notes              AS receiving_support_notes,
                   r.zoho_notes                 AS receiving_zoho_notes,
                   r.listing_url                AS receiving_listing_url,
+                  r.triage_complete,
+                  r.triage_completed_at::text    AS triage_completed_at,
+                  r.unbox_only_intake,
                   r.received_at::text          AS receiving_received_at,
                   -- Carton unbox stamp — REQUIRED. normalizeRow maps row.unboxed_at
                   -- ONLY from receiving_unboxed_at, so omitting it here returned
@@ -1182,6 +1185,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 r.intake_type                AS receiving_intake_type,
                 COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
+                r.triage_complete,
+                r.triage_completed_at::text    AS triage_completed_at,
+                r.unbox_only_intake,
+                r.staging_location_id,
+                r.priority_lane,
+                r.pairing_state,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
                 r.zoho_notes                 AS receiving_zoho_notes,
@@ -2381,6 +2390,7 @@ function normalizeRow(row: Record<string, unknown>) {
     workflow_status:          (row.workflow_status as string | null) ?? null,
     disposition_code:         (row.disposition_code as string) ?? 'HOLD',
     condition_grade:          (row.condition_grade as string) ?? 'USED_A',
+    condition_set_at:         (row.condition_set_at as string | null) ?? null,
     disposition_audit:        (row.disposition_audit as unknown[]) ?? [],
     needs_test:               !!row.needs_test,
     is_priority:              !!row.is_priority,
@@ -2434,6 +2444,12 @@ function normalizeRow(row: Record<string, unknown>) {
     // The unbox rail reads THIS for its label + sort — same axis as the Overview —
     // instead of inferring it from the overloaded scanned_at. Null on non-unbox views.
     unbox_opened_at:          (row.unbox_opened_at as string | null) ?? null,
+    unbox_only_intake:        row.unbox_only_intake === true,
+    triage_complete:          row.triage_complete === true,
+    triage_completed_at:      (row.triage_completed_at as string | null) ?? null,
+    staging_location_id:      row.staging_location_id != null ? Number(row.staging_location_id) : null,
+    priority_lane:            (row.priority_lane as string | null) ?? null,
+    pairing_state:            (row.pairing_state as string | null) ?? null,
     created_at:               (row.created_at as string | null) ?? null,
     // Last write to the line itself (qty bump, condition, notes, …). Drives
     // the unbox_activity sort's tiebreak in the placeholder merge.

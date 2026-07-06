@@ -50,7 +50,7 @@ function DocumentPreviewPane({ title, doc }: DocumentPreviewPaneProps) {
           )
         ) : (
           <div className="flex flex-col items-center gap-2 px-6 text-center">
-            <FileText className="h-8 w-8 text-gray-300" />
+            <FileText className="h-8 w-8 text-text-faint" />
             <p className="text-caption font-semibold text-text-soft">No {title.toLowerCase()} attached</p>
             <p className="text-eyebrow text-text-faint">Attach one from the Documents tab</p>
           </div>

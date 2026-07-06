@@ -56,10 +56,11 @@ export const CONDITION_GRADE_TONE: Record<ConditionGrade, ConditionGradeTone> = 
     chipIconClass: 'inline-flex items-center justify-center text-blue-600',
   },
   USED_C: {
+    // ds-allow-raw-neutral: identity/tone hue — USED_C's slate among emerald/blue/amber grade hues, not chrome
     active: 'bg-slate-700 text-white shadow-sm shadow-slate-300 ring-slate-800',
     inactive: 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover',
     text: 'text-text-muted',
-    chipUnderline: 'border-slate-600',
+    chipUnderline: 'border-slate-600', // ds-allow-raw-neutral: identity/tone hue — USED_C slate underline
     chipIconClass: 'inline-flex items-center justify-center text-text-muted',
   },
   PARTS: {

@@ -96,7 +96,7 @@ export function InstallPrompt() {
                 onClick={dismiss}
                 ariaLabel="Dismiss"
                 icon={<X size={14} className="text-white/60" />}
-                className="flex items-center justify-center w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 transition-colors touch-manipulation"
+                className="flex items-center justify-center w-7 h-7 rounded-full bg-glass/10 hover:bg-glass/20 transition-colors touch-manipulation"
               />
             </div>
 
@@ -119,7 +119,7 @@ export function InstallPrompt() {
                   variant="ghost"
                   size="md"
                   onClick={dismiss}
-                  className="flex-1 rounded-station border border-white/20 text-caption font-bold tracking-wide uppercase text-white/70 hover:bg-white/10 hover:text-white/70 touch-manipulation font-sans"
+                  className="flex-1 rounded-station border border-glass/20 text-caption font-bold tracking-wide uppercase text-white/70 hover:bg-glass/10 hover:text-white/70 touch-manipulation font-sans"
                 >
                   Not now
                 </Button>

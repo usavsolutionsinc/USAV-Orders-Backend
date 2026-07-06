@@ -5,6 +5,7 @@ import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
 import { TestingRailFeedToggle, type TestingRailFeed } from './TestingRailFeedToggle';
+import { filterReceivingRailRows } from '@/components/sidebar/tech/filter-receiving-rail-rows';
 
 /**
  * Color logic for the left status dot in Testing view. Colors come straight
@@ -64,6 +65,8 @@ interface Props {
   limit?: number;
   /** Scopes both feeds to this staff member when set (queue → assignments, tested → verdicts). */
   testerId?: number | null;
+  /** Client-side filter over the loaded rail rows. */
+  filterText?: string;
 }
 
 /**
@@ -76,14 +79,16 @@ export function TestingRecentRail({
   selectedRow = null,
   limit = 25,
   testerId = null,
+  filterText = '',
 }: Props) {
   const [feed, setFeed] = useState<TestingRailFeed>('tested');
   const hasTester = Number.isFinite(testerId) && (testerId as number) > 0;
   const isQueue = feed === 'queue';
+  const trimmedFilter = filterText.trim();
 
   const queryKey = useMemo(
-    () => ['receiving-lines-table', 'rail', feed, String(testerId ?? 'all')] as const,
-    [feed, testerId],
+    () => ['receiving-lines-table', 'rail', feed, String(testerId ?? 'all'), trimmedFilter] as const,
+    [feed, testerId, trimmedFilter],
   );
 
   const fetchFn = async (): Promise<ApiResponse> => {
@@ -93,7 +98,10 @@ export function TestingRecentRail({
     if (hasTester) params.set('tester', String(testerId));
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
-    return res.json();
+    const data = await res.json();
+    if (!trimmedFilter) return data;
+    const receiving_lines = filterReceivingRailRows(data.receiving_lines ?? [], trimmedFilter);
+    return { ...data, receiving_lines, total: receiving_lines.length };
   };
 
   return (

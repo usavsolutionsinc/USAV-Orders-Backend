@@ -66,6 +66,7 @@ export default function SubstitutionDemoPage() {
           />
           <pre
             data-testid="last-payload"
+            // ds-allow-raw-neutral: terminal-style payload block — fixed dark console chrome (emerald-on-black), not themed UI
             className="overflow-x-auto rounded-lg bg-gray-900 p-3 text-caption leading-relaxed text-emerald-300"
           >
             {lastPayload ? JSON.stringify(lastPayload, null, 2) : '// submit to see the payload'}

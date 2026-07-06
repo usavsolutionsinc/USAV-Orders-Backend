@@ -23,6 +23,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { openInUnboxHref, TRIAGE_SURFACE_ROUTE } from '@/lib/receiving/surface-path';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import {
@@ -212,9 +213,12 @@ function TriageMatchingCard({
       onSuccess: () => {
         setForcePicker(false);
         if (showOpenInUnbox) {
+          // Carton went back to the Unfound queue — a triage sub-view; navigate
+          // to the Triage surface's unfound tab.
           const params = new URLSearchParams(searchParams.toString());
+          params.delete('mode');
           params.set('triview', 'unfound');
-          router.replace(`/receiving?${params.toString()}`);
+          router.replace(`${TRIAGE_SURFACE_ROUTE}?${params.toString()}`);
         }
       },
     });
@@ -333,9 +337,7 @@ function TriageMatchingCard({
   });
 
   const openInUnbox = () => {
-    const params = new URLSearchParams({ recvId: String(receivingId) });
-    if (row.id > 0) params.set('lineId', String(row.id));
-    router.push(`/receiving?${params.toString()}`);
+    router.push(openInUnboxHref(receivingId, row.id));
   };
 
   const tabs: HorizontalSliderItem[] = [

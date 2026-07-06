@@ -69,7 +69,6 @@ test('RECEIVING: tracking title, line items searchable, source platform facet', 
     tracking_number: '9400111899560000000000',
     carrier: 'USPS',
     po_number: 'PO-00123',
-    lpn: 'LPN-88',
     source_platform: 'ebay',
     intake_type: 'PO',
     exception_code: null,
@@ -87,7 +86,6 @@ test('RECEIVING: tracking title, line items searchable, source platform facet', 
   assert.equal(doc.subtitle, 'USPS · PO-00123 · ebay');
   assert.ok(doc.searchText.includes('Samsung Galaxy S22'));
   assert.ok(doc.searchText.includes('SAM-S22'));
-  assert.ok(doc.searchText.includes('LPN-88'));
   assert.equal(doc.facets.sourcePlatform, 'ebay');
   assert.equal(doc.facets.status, 'PENDING');
 });

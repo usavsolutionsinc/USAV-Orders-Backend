@@ -68,7 +68,7 @@ export function ClaimTicketReply({ reply, filedTicket, prefill }: Props) {
           'block w-full resize-y rounded-lg border bg-surface-canvas px-3 py-2 text-caption font-medium leading-snug text-text-default outline-none focus:ring-2',
           isPublic
             ? 'border-emerald-200 focus:border-emerald-400 focus:ring-emerald-500/20'
-            : 'border-border-soft focus:border-border-emphasis focus:ring-slate-500/20',
+            : 'border-border-soft focus:border-border-emphasis focus:ring-text-soft/20',
         )}
       />
 

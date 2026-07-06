@@ -10,6 +10,14 @@ import type { LabelFaceModel } from '@/lib/print/labelFace';
  * and the printed sticker can never drift. `embedded` strips the bordered card
  * chrome for use inside a menu/popover.
  *
+ * The preview is a THEMED surface (semantic tokens) so it sits naturally inside
+ * the app — a white sticker in light mode, a dark card in dark mode. The
+ * DataMatrix is drawn on a TRANSPARENT background and tagged `label-preview-matrix`;
+ * in a dark scheme globals.css inverts it to white modules so the code reads on
+ * the dark card instead of floating as a black-on-white square. The PRINT path
+ * is separate (buildFaceInfoHtml / printLabel) and always renders black-on-white
+ * paper — the inversion here is preview-only.
+ *
  * Row height is pinned to the 96px (6rem) DataMatrix so the text column spans
  * the same box: with no vertical padding the top row (topLeft · topRight) sits
  * flush with the matrix's top edge and the bottom row (bottomLeft · bottomRight)
@@ -31,12 +39,17 @@ export function LabelFacePreview({
   const matrixCol = (
     <div className="flex shrink-0 flex-col items-center justify-center gap-0.5 [&_svg]:block">
       {model.matrix.value ? (
-        <Gs1DataMatrix
-          value={model.matrix.value}
-          size={84}
-          symbology={model.matrix.symbology}
-          quietZone={0}
-        />
+        // Transparent bg + `label-preview-matrix` → globals.css inverts the code
+        // to white modules in a dark scheme so it reads on the dark card.
+        <div className="label-preview-matrix">
+          <Gs1DataMatrix
+            value={model.matrix.value}
+            size={84}
+            symbology={model.matrix.symbology}
+            quietZone={0}
+            bgColor="transparent"
+          />
+        </div>
       ) : null}
       {model.hri ? (
         <span className="font-mono text-[7px] font-extrabold leading-none tracking-wide text-text-default">
@@ -52,12 +65,12 @@ export function LabelFacePreview({
       <div className={shell}>
         <div className="flex min-h-[6rem] flex-nowrap items-stretch gap-4">
           <div className="min-w-0 flex flex-1 flex-col justify-between">
-            <span className="line-clamp-2 text-micro font-bold leading-snug tracking-tight text-black">
+            <span className="line-clamp-2 text-micro font-bold leading-snug tracking-tight text-text-default">
               {model.topLeft}
             </span>
             <div className="flex items-baseline justify-between gap-2 text-micro leading-none">
-              <span className="font-black text-black">{model.bottomLeft}</span>
-              <span className="shrink-0 tabular-nums font-black text-black">
+              <span className="font-black text-text-default">{model.bottomLeft}</span>
+              <span className="shrink-0 tabular-nums font-black text-text-default">
                 {model.bottomRight}
               </span>
             </div>

@@ -65,6 +65,7 @@ export function receivingPriorityTone(rank: number): PriorityTone {
       return {
         label: 'Other',
         title: 'Lowest priority — other platform',
+        // ds-allow-raw-neutral: identity tone — neutral member of the colored filled-pill family
         className: 'bg-slate-400 text-white',
       };
   }

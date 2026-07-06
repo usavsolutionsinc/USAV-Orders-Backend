@@ -22,9 +22,10 @@ import { ShippedTableEmptyState } from '@/components/shipped/dashboard-table/Shi
 import { VirtualShippedSections } from '@/components/shipped/dashboard-table/VirtualShippedSections';
 import { ShippedLaneTable } from '@/components/shipped/dashboard-table/ShippedLaneTable';
 import { SwimlaneBoard, type SwimlaneLaneDef } from '@/components/board/SwimlaneBoard';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { ToolbarButton } from '@/components/ui/ToolbarButton';
 import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
 import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
+import { BoardSelectToggle } from '@/components/board/BoardSelectToggle';
 import { DateRangePickerPill } from '@/components/ui/DateRangeHeader';
 
 /** Icon binding — maps the lib's outbound lane icon key to a concrete glyph. */
@@ -38,9 +39,9 @@ const OUTBOUND_LANE_ICON: Record<OutboundLaneIconKey, React.ComponentType<{ clas
   orphan: MapPin,
 };
 
-/** Pipeline ⇄ All view toggle — same DS segmented control (`nav`) as the board's
- *  column switcher, so the two header controls share one visual language. */
-const SHIPPED_VIEW_ITEMS: HorizontalSliderItem[] = [
+/** Pipeline ⇄ All view toggle — rendered as shared {@link ToolbarButton} pills so
+ *  it shares one visual language with the board's layout / columns / select. */
+const SHIPPED_VIEW_ITEMS: { id: ShippedLayout; label: string }[] = [
   { id: 'board', label: 'Pipeline' },
   { id: 'all', label: 'All' },
 ];
@@ -65,6 +66,8 @@ export interface DashboardShippedTableProps {
   embedded?: boolean;
   /** Pencil multi-select: rows render checkboxes; the page owns the action bar. */
   selectMode?: boolean;
+  /** Flip select-mode. When set, the board/list toolbar shows a Select toggle. */
+  onToggleSelectMode?: () => void;
   bannerTitle?: DashboardSearchSectionProps['bannerTitle'];
   bannerSubtitle?: DashboardSearchSectionProps['bannerSubtitle'];
   searchEmptyTitle?: DashboardSearchSectionProps['searchEmptyTitle'];
@@ -77,6 +80,7 @@ export function DashboardShippedTable({
   testedBy,
   embedded = false,
   selectMode = false,
+  onToggleSelectMode,
   bannerTitle,
   bannerSubtitle,
   searchEmptyTitle = 'No shipped orders found',
@@ -123,14 +127,21 @@ export function DashboardShippedTable({
   const shippedView = filters.layout;
 
   const viewToggle = (
-    <HorizontalButtonSlider
-      items={SHIPPED_VIEW_ITEMS}
-      value={shippedView}
-      onChange={(id) => filters.setLayout(id as ShippedLayout)}
-      variant="nav"
-      dense
-      aria-label="Shipped view"
-    />
+    <div role="group" aria-label="Shipped view" className="flex items-center gap-2">
+      {SHIPPED_VIEW_ITEMS.map((it) => {
+        const isActive = shippedView === it.id;
+        return (
+          <ToolbarButton
+            key={it.id}
+            active={isActive}
+            aria-pressed={isActive}
+            onClick={() => filters.setLayout(it.id)}
+          >
+            {it.label}
+          </ToolbarButton>
+        );
+      })}
+    </div>
   );
 
   // Explicit "Load more" — shown only when a fetched week/all-time window filled
@@ -231,7 +242,10 @@ export function DashboardShippedTable({
               onClear={period.onClear}
             />
             {viewToggle}
-            <ColumnConfigButton iconOnly />
+            <ColumnConfigButton variant="toolbar" />
+            {onToggleSelectMode ? (
+              <BoardSelectToggle active={selectMode} onToggle={onToggleSelectMode} />
+            ) : null}
           </div>
         }
         renderLaneBody={({ rows, laneLabel, maxBodyHeightClass, maxBodyHeightPx, growToContent }) => (
@@ -275,7 +289,10 @@ export function DashboardShippedTable({
           <div className="flex items-center gap-2">
             {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
             {viewToggle}
-            <ColumnConfigButton iconOnly />
+            <ColumnConfigButton variant="toolbar" />
+            {onToggleSelectMode ? (
+              <BoardSelectToggle active={selectMode} onToggle={onToggleSelectMode} />
+            ) : null}
           </div>
         </div>
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto no-scrollbar px-2 pb-8">

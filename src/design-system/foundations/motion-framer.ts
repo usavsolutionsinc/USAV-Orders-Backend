@@ -31,6 +31,10 @@ export const framerDuration = {
   tableRowMount: 0.22,
   /** Workbench right-pane / detail crossfade */
   workbenchPaneMount: 0.18,
+  /** Photo viewer details column — slides in from the right */
+  photoContextPanelMount: 0.22,
+  /** Global detail-stack overlay card (inset, rounded) — enter/exit */
+  detailStackOverlayMount: 0.22,
   /**
    * Heavy right-pane WORKSPACE overlay settle (receiving line workspace).
    * Slower + opacity-led than `workbenchPaneMount` — a carton→carton swap is a
@@ -62,6 +66,18 @@ export const framerTransition = {
   /** Workbench right-pane / detail crossfade — pair with `framerPresence.workbenchPane` */
   workbenchPaneMount: {
     duration: framerDuration.workbenchPaneMount,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /** Photo viewer details column — pair with `framerPresence.photoContextPanel` */
+  photoContextPanelMount: {
+    duration: framerDuration.photoContextPanelMount,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /** Detail-stack overlay card — pair with `framerPresence.detailStackOverlay` */
+  detailStackOverlayMount: {
+    duration: framerDuration.detailStackOverlayMount,
     ease: motionBezier.easeOut,
   } satisfies Transition,
 
@@ -257,6 +273,23 @@ export const framerTransition = {
   } satisfies Transition,
 
   /**
+   * Swimlane board column reflow — lanes slide into new grid slots when toggling
+   * 1-up / 2-up / 3-up. No bounce (ops dashboard); pair with `layout` on bubbles.
+   */
+  boardLaneLayout: {
+    type: 'spring' as const,
+    visualDuration: 0.38,
+    bounce: 0,
+  } satisfies Transition,
+
+  /** Table chip columns (platform / order id / tracking) reflow when toggling visibility */
+  chipColumnLayout: {
+    type: 'spring' as const,
+    visualDuration: 0.28,
+    bounce: 0,
+  } satisfies Transition,
+
+  /**
    * Title row swap + layout — `layout` for line-wrap; opacity/y for keyed row changes.
    * Footer stays outside `LayoutGroup` / `AnimatePresence` so it does not crossfade or layout-shift.
    */
@@ -356,6 +389,27 @@ export const framerPresence = {
     initial: { opacity: 0, y: 6 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -6 },
+  },
+  /**
+   * Photo viewer details column — slides in from the right while the image-lane
+   * toolbar stays scoped to the stage. Opacity + x only (GPU-composited); flex
+   * width is instant. Consume via `useMotionPresence` + `useMotionTransition`.
+   */
+  photoContextPanel: {
+    initial: { opacity: 0, x: 20 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: 12 },
+  },
+  /**
+   * Global detail-stack overlay — inset rounded card over the viewport.
+   * Scale + opacity only (GPU-composited); no edge slide. Exits ~75% of enter
+   * duration via `framerDuration.detailStackOverlayMount`. Pair with
+   * `framerTransition.detailStackOverlayMount` + `useMotionPresence`.
+   */
+  detailStackOverlay: {
+    initial: { opacity: 0, scale: 0.97 },
+    animate: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 0.98 },
   },
   /**
    * Heavy right-pane WORKSPACE overlay crossfade (the receiving line workspace

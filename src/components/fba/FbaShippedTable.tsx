@@ -334,7 +334,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                 [row.id]: { ...shipmentDraft, amazon: e.target.value.toUpperCase() },
                               }))
                             }
-                            className="h-9 w-full rounded-lg border border-border-default px-2 font-mono text-xs font-bold text-text-default outline-none focus:border-gray-500"
+                            className="h-9 w-full rounded-lg border border-border-default px-2 font-mono text-xs font-bold text-text-default outline-none focus:border-border-strong"
                             placeholder="FBA17XXXXXXXX"
                           />
                         </label>
@@ -350,7 +350,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                 [row.id]: { ...shipmentDraft, ups: e.target.value.toUpperCase() },
                               }))
                             }
-                            className="h-9 w-full rounded-lg border border-border-default px-2 font-mono text-xs font-bold text-text-default outline-none focus:border-gray-500"
+                            className="h-9 w-full rounded-lg border border-border-default px-2 font-mono text-xs font-bold text-text-default outline-none focus:border-border-strong"
                             placeholder="1Z..."
                           />
                         </label>
@@ -387,7 +387,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                     onChange={(e) =>
                                       setItemFnskuDrafts((prev) => ({ ...prev, [item.id]: e.target.value.toUpperCase() }))
                                     }
-                                    className="h-8 w-40 max-w-full rounded-md border border-border-default bg-surface-card px-2 font-mono text-caption font-bold text-text-default outline-none focus:border-gray-500"
+                                    className="h-8 w-40 max-w-full rounded-md border border-border-default bg-surface-card px-2 font-mono text-caption font-bold text-text-default outline-none focus:border-border-strong"
                                   />
                                   <Button
                                     type="button"

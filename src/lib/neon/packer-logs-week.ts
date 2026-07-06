@@ -8,6 +8,7 @@ import {
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { queryWithRetry } from '@/lib/db-retry';
 import { isPackerLogEnrichmentRead } from '@/lib/feature-flags';
+import { computePackerLogEnrichment } from '@/lib/neon/packer-log-enrichment';
 import type { OrgId } from '@/lib/tenancy/constants';
 
 export type PackerLogsTrackingFilter = 'all' | 'orders' | 'sku' | 'fba';
@@ -39,8 +40,8 @@ export interface FetchPackerLogRowsResult {
   cacheHit: boolean;
 }
 
-// v6: adds ship_confirmed_at / shipped_out_by / shipped_out_by_name (dock scan-out).
-const CACHE_NAMESPACE = 'api:packing-logs-v6';
+// v7: enriched read path falls back to live order_match when projection row is missing.
+const CACHE_NAMESPACE = 'api:packing-logs-v7';
 const CACHE_TAGS = ['packing-logs'];
 
 /**
@@ -581,8 +582,9 @@ export async function fetchPackerLogRows(
   // enr.order_row_id so every live o.* column (status_history, notes, condition,
   // quantity) and the volatile stn carrier status / staff / deadline / scan-out
   // laterals stay exactly as fresh as before. Column shape is identical to the
-  // legacy query (same aliases), so the route + client are unaffected. A
-  // not-yet-backfilled row has enr = NULL and degrades to the order's own title.
+  // legacy query (same aliases), so the route + client are unaffected. When the
+  // projection row is missing (e.g. packs after the backfill cutoff), fall back
+  // to the legacy order_match lateral so titles still resolve.
   const enrichedQuery = `
     ${pageCte}
     SELECT
@@ -663,6 +665,36 @@ export async function fetchPackerLogRows(
     LEFT JOIN packer_log_enrichment enr ON enr.sal_id = sal.id
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
     LEFT JOIN LATERAL (
+        SELECT ord.id
+        FROM orders ord
+        LEFT JOIN shipment_links osl ON osl.owner_id = ord.id AND osl.owner_type = 'ORDER'
+        LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
+        WHERE ord.organization_id = sal.organization_id
+          AND (
+            sal.shipment_id IS NOT NULL
+            AND (
+              osl.shipment_id = sal.shipment_id
+              OR ord.shipment_id = sal.shipment_id
+            )
+        ) OR (
+            COALESCE(stn.tracking_number_raw, sal.scan_ref, '') <> ''
+            AND ord_stn.tracking_number_raw IS NOT NULL
+            AND ord_stn.tracking_number_raw != ''
+            AND RIGHT(regexp_replace(UPPER(ord_stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
+                RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, sal.scan_ref, '')), '[^A-Z0-9]', '', 'g'), 18)
+        )
+        ORDER BY
+            CASE
+              WHEN sal.shipment_id IS NOT NULL AND osl.shipment_id = sal.shipment_id THEN 0
+              WHEN sal.shipment_id IS NOT NULL AND ord.shipment_id = sal.shipment_id THEN 1
+              ELSE 2
+            END,
+            CASE WHEN COALESCE(osl.is_primary, false) THEN 0 ELSE 1 END,
+            ord.created_at DESC NULLS LAST,
+            ord.id DESC
+        LIMIT 1
+    ) order_match_fallback ON enr.sal_id IS NULL
+    LEFT JOIN LATERAL (
         SELECT
             MAX(so.created_at) AS ship_confirmed_at,
             (ARRAY_AGG(so.staff_id ORDER BY so.created_at DESC))[1] AS shipped_out_by
@@ -674,7 +706,8 @@ export async function fetchPackerLogRows(
     LEFT JOIN staff shipped_out_staff ON shipped_out_staff.id = ship_out.shipped_out_by
     LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
     LEFT JOIN staff packed_staff ON packed_staff.id = sal.staff_id
-    LEFT JOIN orders o ON o.id = enr.order_row_id AND o.organization_id = sal.organization_id
+    LEFT JOIN orders o ON o.id = COALESCE(enr.order_row_id, order_match_fallback.id)
+      AND o.organization_id = sal.organization_id
     LEFT JOIN orders_exceptions oe ON oe.id = sal.orders_exception_id
     LEFT JOIN LATERAL (
         SELECT wa.deadline_at
@@ -769,6 +802,30 @@ export async function fetchPackerLogRows(
   // Defer the cache write so it never blocks TTFB. Safe in both Route Handlers
   // and Server Components on Next 16.
   after(() => setCachedJson(CACHE_NAMESPACE, cacheLookup, rows, cacheTTL, CACHE_TAGS));
+
+  // Heal missing projection rows in the background so subsequent reads stay on
+  // the fast path (order_match_fallback above is the correctness safety net).
+  if (isPackerLogEnrichmentRead() && rows.length > 0) {
+    const salIds = rows.map((r: { id?: unknown }) => Number(r.id)).filter((id) => Number.isFinite(id));
+    after(() => {
+      pool.query<{ id: number }>(
+        `SELECT sal.id
+           FROM station_activity_logs sal
+           LEFT JOIN packer_log_enrichment enr ON enr.sal_id = sal.id
+          WHERE sal.id = ANY($1::int[])
+            AND enr.sal_id IS NULL`,
+        [salIds],
+      )
+        .then((missing) => {
+          const ids = missing.rows.map((r) => r.id);
+          if (ids.length === 0) return;
+          return computePackerLogEnrichment(pool, ids);
+        })
+        .catch((error) => {
+          console.warn('[packer-logs-week] deferred enrichment backfill failed', error);
+        });
+    });
+  }
 
   return { rows, cacheTTL, cacheHit: false };
 }

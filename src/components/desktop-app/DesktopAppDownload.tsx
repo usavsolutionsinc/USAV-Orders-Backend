@@ -233,7 +233,7 @@ function PlatformCard({
   const base =
     'group relative flex flex-col rounded-2xl border p-6 text-left transition-all';
   const ring = highlighted
-    ? 'border-transparent bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 ring-1 ring-white/20'
+    ? 'border-transparent bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 ring-1 ring-glass/20'
     : 'border-border-soft bg-surface-card text-text-default hover:border-border-default hover:shadow-md';
   const hover = disabled
     ? 'cursor-not-allowed opacity-60'
@@ -246,13 +246,13 @@ function PlatformCard({
       <div className="flex items-center justify-between">
         <div
           className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-            highlighted ? 'bg-white/20 ring-1 ring-white/30' : 'bg-surface-sunken'
+            highlighted ? 'bg-glass/20 ring-1 ring-glass/30' : 'bg-surface-sunken'
           }`}
         >
           {icon}
         </div>
         {highlighted && (
-          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-micro font-bold uppercase tracking-widest text-white ring-1 ring-white/30">
+          <span className="rounded-full bg-glass/20 px-2.5 py-0.5 text-micro font-bold uppercase tracking-widest text-white ring-1 ring-glass/30">
             Your device
           </span>
         )}

@@ -18,8 +18,30 @@ test('maps known surfaces to their entity scope', () => {
 
 test('subpaths and query strings resolve by first segment', () => {
   assert.deepEqual(pageContextToEntityTypes('/receiving?mode=receive&openReceivingId=3'), ['RECEIVING']);
+  // Unbox + Triage graduated to first-class receiving surfaces; page-context
+  // must recognize them as RECEIVING for AI-search boosting.
+  assert.deepEqual(pageContextToEntityTypes('/unbox?openReceivingId=3'), ['RECEIVING']);
+  assert.deepEqual(pageContextToEntityTypes('/triage?triview=unfound'), ['RECEIVING']);
   assert.deepEqual(pageContextToEntityTypes('/products?view=qc&skuId=11'), ['SKU']);
   assert.deepEqual(pageContextToEntityTypes('/inventory/bins'), ['SERIAL_UNIT', 'SKU']);
+});
+
+// Every graduated operator surface (operator-surfaces refactor Phases 7–9) must
+// map to a boost scope so AI search reorders toward the surface the operator is
+// standing on. Canonical routes + their legacy aliases both resolve.
+test('graduated surface routes map to the right AI-search boost', () => {
+  // Pack (Phase 7) — order fulfillment.
+  assert.deepEqual(pageContextToEntityTypes('/pack'), ['ORDER']);
+  assert.deepEqual(pageContextToEntityTypes('/packer'), ['ORDER']); // legacy alias
+  // Test (Phase 8) — serial-unit verification.
+  assert.deepEqual(pageContextToEntityTypes('/test?view=testing'), ['SERIAL_UNIT']);
+  assert.deepEqual(pageContextToEntityTypes('/tech?view=testing'), ['SERIAL_UNIT']); // legacy alias
+  // Pickup + History (Phase 9) — receiving family.
+  assert.deepEqual(pageContextToEntityTypes('/pickup'), ['RECEIVING']);
+  assert.deepEqual(pageContextToEntityTypes('/receiving/history?recvId=5'), ['RECEIVING']);
+  assert.deepEqual(pageContextToEntityTypes('/incoming'), ['RECEIVING']);
+  // Outbound stays a global/order surface — no dedicated boost (still resolves clean).
+  assert.equal(pageContextToEntityTypes('/outbound'), undefined);
 });
 
 test('full URLs are tolerated (pathname extracted)', () => {

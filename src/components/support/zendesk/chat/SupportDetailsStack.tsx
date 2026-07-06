@@ -59,7 +59,7 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
         >
           <Layers className="h-3.5 w-3.5" />
           {tagCount > 0 ? (
-            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-gray-700 px-1 text-mini font-black text-white">
+            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-surface-inverse-raised px-1 text-mini font-black text-white">
               {tagCount}
             </span>
           ) : null}

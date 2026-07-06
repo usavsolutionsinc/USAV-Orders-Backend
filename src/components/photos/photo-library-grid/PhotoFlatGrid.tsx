@@ -27,7 +27,7 @@ export function PhotoFlatGrid({
   onPhotoContextMenu,
   openAt,
 }: PhotoGridViewProps & { view: PhotoLibraryViewMode; gridDensity: PhotoGridDensity }) {
-  const showLabel = view === 'grid-lg';
+  const showLabel = gridDensity === 'lg';
   const containerClass = photoGridLeafClass(gridDensity);
 
   return (

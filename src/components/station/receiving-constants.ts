@@ -60,6 +60,7 @@ export const CONDITION_OPTS = CONDITION_GRADES.map((v) => ({
 // ─── Pill-button option arrays (active/inactive Tailwind classes) ─────────────
 
 export const QA_BTN_OPTS = [
+  // ds-allow-raw-neutral: identity/tone hue — PENDING's gray among colored verdict pills, not chrome
   { value: 'PENDING',           label: 'Pending',    active: 'bg-gray-600 text-white',      inactive: 'bg-surface-sunken text-text-soft' },
   { value: 'PASSED',            label: 'Passed',     active: 'bg-emerald-500 text-white',   inactive: 'bg-surface-sunken text-text-soft' },
   { value: 'FAILED_DAMAGED',    label: 'Damaged',    active: 'bg-red-500 text-white',       inactive: 'bg-surface-sunken text-text-soft' },
@@ -72,6 +73,7 @@ export const DISP_BTN_OPTS = [
   { value: 'ACCEPT', label: 'Accept', active: 'bg-emerald-500 text-white',      inactive: 'bg-surface-sunken text-text-soft' },
   { value: 'HOLD',   label: 'Hold',   active: 'bg-yellow-400 text-text-default',    inactive: 'bg-surface-sunken text-text-soft' },
   { value: 'RTV',    label: 'RTV',    active: 'bg-purple-500 text-white',       inactive: 'bg-surface-sunken text-text-soft' },
+  // ds-allow-raw-neutral: identity/tone hue — SCRAP's gray among colored disposition pills, not chrome
   { value: 'SCRAP',  label: 'Scrap',  active: 'bg-gray-700 text-white',         inactive: 'bg-surface-sunken text-text-soft' },
   { value: 'REWORK', label: 'Rework', active: 'bg-blue-500 text-white',         inactive: 'bg-surface-sunken text-text-soft' },
 ];

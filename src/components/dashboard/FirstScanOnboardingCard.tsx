@@ -33,6 +33,7 @@
  */
 
 import { useRouter } from 'next/navigation';
+import { UNBOX_SURFACE_ROUTE } from '@/lib/receiving/surface-path';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/design-system/primitives';
 import { Sparkles, Barcode, ChevronRight, Share2 } from '@/components/Icons';
@@ -104,13 +105,13 @@ function FirstScanOnboardingCardInner({ variant }: { variant: 'band' | 'sidebar'
           ))}
         </div>
 
-        {/* CTAs — primary to the first station (Receiving); secondary to the graph. */}
+        {/* CTAs — primary to the first station (Unbox); secondary to the graph. */}
         <div className="mt-4 flex flex-wrap items-center gap-2.5">
           <Button
             variant="primary"
             icon={<Barcode />}
             iconRight={<ChevronRight />}
-            onClick={() => router.push('/receiving')}
+            onClick={() => router.push(UNBOX_SURFACE_ROUTE)}
           >
             Scan your first unit
           </Button>

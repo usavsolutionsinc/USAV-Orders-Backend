@@ -28,8 +28,8 @@ const ROLE_HOME: Record<string, string> = {
   admin: '/dashboard',
   receiver: '/receiving',
   receiving: '/receiving',
-  packer: '/packer',
-  technician: '/tech',
+  packer: '/pack',
+  technician: '/test',
   shipper: '/dashboard',
   inventory_manager: '/inventory',
   sales: '/dashboard',
@@ -376,7 +376,7 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-scrim/40 backdrop-blur-sm transition-opacity"
       />
       <div className="relative w-full max-w-sm rounded-3xl border border-border-soft bg-surface-card p-7 shadow-2xl shadow-gray-900/20">
         <IconButton
@@ -392,7 +392,7 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
         />
 
         <div className="text-center">
-          <div className="mx-auto inline-flex items-center justify-center rounded-full bg-slate-900/95 px-3 py-1 text-micro font-semibold uppercase tracking-[0.18em] text-white">
+          <div className="mx-auto inline-flex items-center justify-center rounded-full bg-scrim/95 px-3 py-1 text-micro font-semibold uppercase tracking-[0.18em] text-white">
             Phone sign-in
           </div>
           <h2 className="mt-3 text-lg font-semibold tracking-tight text-text-default">

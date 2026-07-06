@@ -144,7 +144,7 @@ export type PhotoLibraryViewMode = 'grid-sm' | 'grid-lg' | 'grid-ticket' | 'fold
 
 /**
  * Canonical left→right view order. Single source for both the header toggle
- * order (VIEW_OPTIONS in PhotoLibraryHeader) and the `1`–`5` keyboard shortcuts
+ * order (PhotoLibraryViewToggle) and the `1` keyboard shortcut for List.
  * (useMediaLibraryShortcuts) so the digit always matches the on-screen position.
  */
 export const PHOTO_LIBRARY_VIEW_ORDER: readonly PhotoLibraryViewMode[] = [
@@ -154,6 +154,19 @@ export const PHOTO_LIBRARY_VIEW_ORDER: readonly PhotoLibraryViewMode[] = [
   'grid-ticket',
   'list',
 ];
+
+/** Display modes in the second-header toggle (grid size lives on row 3). */
+export const PHOTO_LIBRARY_HEADER_DISPLAY_MODES: readonly PhotoLibraryViewMode[] = ['list'];
+
+/**
+ * Keyboard shortcut target for display modes — currently List only (`1`).
+ */
+export function photoLibraryViewToggleModes(
+  _view: PhotoLibraryViewMode,
+  _folderIsLeaf: boolean,
+): readonly PhotoLibraryViewMode[] {
+  return PHOTO_LIBRARY_HEADER_DISPLAY_MODES;
+}
 
 /** Server page size for the library query (usePhotoLibrary requests this many per page). */
 export const PHOTO_LIBRARY_PAGE_SIZE = 48;

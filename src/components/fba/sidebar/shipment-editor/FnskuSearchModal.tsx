@@ -53,7 +53,7 @@ export function FnskuSearchModal({
           {/* ds-raw-button */}
           <button
             type="button"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-scrim/50"
             aria-label="Close FNSKU search"
             onClick={onClose}
           />
@@ -96,7 +96,7 @@ export function FnskuSearchModal({
             <div className="flex-1 overflow-y-auto px-3 py-3">
               {query.trim().length < 2 ? (
                 <div className="py-16 text-center">
-                  <Search className="mx-auto h-6 w-6 text-zinc-300" />
+                  <Search className="mx-auto h-6 w-6 text-text-faint" />
                   <p className="mt-2 text-xs font-semibold text-text-faint">
                     Type at least 2 characters to search
                   </p>

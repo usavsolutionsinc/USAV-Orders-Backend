@@ -12,20 +12,16 @@ import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
-import { InlineNotice } from '@/design-system/components';
-import { PackChecklist, type PackKitPart } from './PackChecklist';
+import { OrderPackChecklist } from '@/components/packing/OrderPackChecklist';
 import { usePackingPolicy } from '@/hooks/usePackingPolicy';
+import { useOrderPackChecklist } from '@/hooks/useOrderPackChecklist';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useAssistantContext } from '@/hooks/useAssistantContext';
 import { STATION_SKILL } from '@/lib/assistant/page-skills';
-
-interface SkuQcFlag {
-  id: number;
-  label: string;
-  category: string | null;
-}
+import { dispatchPackActiveOrder } from '@/components/packer/usePackerOrderPane';
 
 interface ActivePackingOrder {
+  orderRowId: number | null;
   orderId: string;
   productTitle: string;
   qty: number;
@@ -81,34 +77,33 @@ export default function StationPacking({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeOrder, setActiveOrder] = useState<ActivePackingOrder | null>(null);
   const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
-  const [skuPackNotes, setSkuPackNotes] = useState<string | null>(null);
-  const [skuQcFlags, setSkuQcFlags] = useState<SkuQcFlag[]>([]);
-  const [skuKitParts, setSkuKitParts] = useState<PackKitPart[]>([]);
   const { data: packingPolicy } = usePackingPolicy();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch per-SKU pack notes + QA flags + kit-parts BOM whenever the active
-  // order's SKU changes. All three are surfaced to the packer BEFORE the pack is
-  // confirmed (P1-PCK-02 notes/flags; P1-PCK-03 the kit-parts checklist). The
-  // BOM is condition-gated by the order's condition.
+  const { data: packChecklist, isLoading: checklistLoading } = useOrderPackChecklist({
+    orderRowId: activeOrder?.orderRowId ?? null,
+    sku: activeOrder?.sku,
+    condition: activeOrder?.condition,
+    productTitle: activeOrder?.productTitle,
+    enabled: Boolean(activeOrder),
+  });
+
   useEffect(() => {
-    const sku = activeOrder?.sku?.trim();
-    if (!sku) { setSkuPackNotes(null); setSkuQcFlags([]); setSkuKitParts([]); return; }
-    const condition = activeOrder?.condition?.trim();
-    let cancelled = false;
-    const qs = new URLSearchParams({ sku });
-    if (condition && condition !== 'N/A') qs.set('condition', condition);
-    fetch(`/api/get-title-by-sku?${qs.toString()}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        setSkuPackNotes(data?.packNotes || null);
-        setSkuQcFlags(Array.isArray(data?.qcFlags) ? data.qcFlags : []);
-        setSkuKitParts(Array.isArray(data?.kitParts) ? data.kitParts : []);
-      })
-      .catch(() => { if (!cancelled) { setSkuPackNotes(null); setSkuQcFlags([]); setSkuKitParts([]); } });
-    return () => { cancelled = true; };
-  }, [activeOrder?.sku, activeOrder?.condition]);
+    if (!activeOrder || activeFba) {
+      dispatchPackActiveOrder(null);
+      return;
+    }
+    dispatchPackActiveOrder({
+      orderRowId: activeOrder.orderRowId,
+      orderId: activeOrder.orderId,
+      productTitle: activeOrder.productTitle,
+      qty: activeOrder.qty,
+      condition: activeOrder.condition,
+      tracking: activeOrder.tracking,
+      sku: activeOrder.sku,
+      scanType: activeOrder.scanType,
+    });
+  }, [activeOrder, activeFba]);
 
   const { theme: themeColor, colors: themeColors, inputBorder, inputTheme: activeColor } = useStationTheme({ staffId });
   const { normalizeTrackingQuery, normalizeTracking } = useLast8TrackingSearch();
@@ -221,7 +216,9 @@ export default function StationPacking({
           // card the order path uses — but show the SKU in place of TRK#.
           const isSku = resolvedScanType === 'SKU';
           const skuValue = String(data?.sku || '').trim();
+          const orderRowIdRaw = Number(data?.orderRowId);
           setActiveOrder({
+            orderRowId: Number.isFinite(orderRowIdRaw) && orderRowIdRaw > 0 ? orderRowIdRaw : null,
             orderId: String(data?.orderId || '').trim(),
             productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
             qty: Math.max(1, Number(data?.qty ?? data?.quantity ?? data?.orderQty ?? 1) || 1),
@@ -377,7 +374,8 @@ export default function StationPacking({
             )}
           </AnimatePresence>
 
-          {/* Regular order scan result */}
+          {/* Regular order scan result — embedded sidebar stays compact; full
+              checklist crossfades in the right pane (see ActivePackerWorkspace). */}
           <AnimatePresence mode="wait">
             {activeOrder && !activeFba && (
               <motion.div
@@ -419,38 +417,33 @@ export default function StationPacking({
                   </div>
                 </div>
 
-                {/* Per-SKU pack instructions from sku_catalog.notes (P1-PCK-02 §A) */}
-                {skuPackNotes ? (
-                  <InlineNotice
-                    tone="info"
-                    size="sm"
-                    title="How to pack this product"
-                    className="mt-3 whitespace-pre-wrap"
-                  >
-                    {skuPackNotes}
-                  </InlineNotice>
-                ) : null}
-
-                {/* Per-SKU pack checklist: kit-parts BOM ("in the box") + QA
-                    verify steps, ticked off as the packer confirms each
-                    (P1-PCK-03). Advisory in Phase 1 — never blocks completion. */}
-                <PackChecklist
-                  kitParts={skuKitParts}
-                  checks={skuQcFlags}
-                  resetKey={activeOrder.sku}
-                  enforcement={packingPolicy?.enforcement ?? 'advisory'}
-                />
-
-                {/* Closed-loop linkage: order ↔ tracking ↔ serial + linked
-                    Zendesk tickets, so the packer sees any open ticket on this
-                    order without leaving the station. */}
-                <div className="mt-3 border-t border-border-hairline pt-3">
-                  <LinkedTicketsPanel
-                    order={activeOrder.orderId || undefined}
-                    tracking={activeOrder.tracking || undefined}
-                    dense
-                  />
-                </div>
+                {embedded ? (
+                  <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-caption font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                    Checklist open in the history pane — verify each line item before sealing.
+                  </p>
+                ) : (
+                  <>
+                    <OrderPackChecklist
+                      lines={packChecklist?.lines ?? []}
+                      enforcement={packingPolicy?.enforcement ?? packChecklist?.enforcement ?? 'advisory'}
+                      resetKey={
+                        activeOrder.orderRowId
+                          ? `row-${activeOrder.orderRowId}`
+                          : activeOrder.sku || activeOrder.tracking
+                      }
+                      isLoading={checklistLoading}
+                      variant="station"
+                      className="mt-3"
+                    />
+                    <div className="mt-3 border-t border-border-hairline pt-3">
+                      <LinkedTicketsPanel
+                        order={activeOrder.orderId || undefined}
+                        tracking={activeOrder.tracking || undefined}
+                        dense
+                      />
+                    </div>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

@@ -221,12 +221,16 @@ export async function fetchUnshippedOrdersData({
   testedBy,
   staffId,
   strictSearchScope = false,
+  stage,
+  limit,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
   staffId?: number;
   strictSearchScope?: boolean;
+  stage?: 'pending' | 'tested';
+  limit?: number;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
@@ -235,6 +239,15 @@ export async function fetchUnshippedOrdersData({
   if (staffId !== undefined) params.set('staff', String(staffId));
   const scoped = !searchQuery.trim() || strictSearchScope;
   if (scoped) params.set('fulfillmentScope', 'true');
+  // Phase 1: on the scoped, non-search fulfillment load, request the thin queue
+  // projection and push the coarse stage facet to SQL. A search stays full-shape
+  // (the route ignores listShape when `q` is present) for match highlighting.
+  if (scoped && !searchQuery.trim()) {
+    params.set('listShape', 'queue');
+    if (stage) params.set('stage', stage);
+    // Phase 2: bounded page. "Load more" grows this; search stays unbounded.
+    if (limit != null && limit > 0) params.set('limit', String(limit));
+  }
 
   const res = await fetch(`/api/orders?${params.toString()}`, FRESH_FETCH_OPTIONS);
   if (!res.ok) {
@@ -245,6 +258,48 @@ export async function fetchUnshippedOrdersData({
   return dedupeByOrderProduct(
     ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord)
   );
+}
+
+/** Raw signal combo from the queue-counts endpoint — mapped to a fulfillment
+ *  lane CLIENT-side via `deriveFulfillmentState` (Decision 8), never in SQL. */
+export interface QueueCountsCombo {
+  hasTechScan: boolean;
+  blocked: boolean;
+  count: number;
+}
+
+export interface UnshippedQueueCounts {
+  total: number;
+  byStage: { all: number; pending: number; tested: number };
+  combos: QueueCountsCombo[];
+}
+
+const ZERO_QUEUE_COUNTS: UnshippedQueueCounts = {
+  total: 0,
+  byStage: { all: 0, pending: 0, tested: 0 },
+  combos: [],
+};
+
+/**
+ * Lightweight Unshipped-queue tallies — total + per-stage + raw lane combos —
+ * WITHOUT downloading the rows (Phase 2). Powers the sidebar legend / stage
+ * dropdown / nav badge so they stop paying for the full fulfillment row payload.
+ */
+export async function fetchUnshippedQueueCounts({
+  staffId,
+}: { staffId?: number } = {}): Promise<UnshippedQueueCounts> {
+  const params = new URLSearchParams();
+  if (staffId !== undefined) params.set('staff', String(staffId));
+  const qs = params.toString();
+  const res = await fetch(`/api/orders/queue-counts${qs ? `?${qs}` : ''}`, FRESH_FETCH_OPTIONS);
+  if (!res.ok) return ZERO_QUEUE_COUNTS;
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data.total !== 'number') return ZERO_QUEUE_COUNTS;
+  return {
+    total: data.total,
+    byStage: data.byStage ?? ZERO_QUEUE_COUNTS.byStage,
+    combos: Array.isArray(data.combos) ? data.combos : [],
+  };
 }
 
 export interface DashboardShippedSearchMeta {

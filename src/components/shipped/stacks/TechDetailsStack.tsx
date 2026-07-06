@@ -8,7 +8,6 @@ import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
 import { toPSTDateKey } from '@/utils/date';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
-import { ShippedNotesComposer } from '@/components/shipped/details-panel/ShippedNotesComposer';
 
 export function TechDetailsStack({
   shipped,
@@ -18,16 +17,9 @@ export function TechDetailsStack({
   onUpdate,
   actionBar: _actionBar,
   activeSection,
-  activeInput = 'none',
-  setActiveInput,
-  notes = '',
-  setNotes,
-  isSavingNotes = false,
-  onSaveNotes,
 }: DetailsStackProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
-  const hasSavedNotes = String(shipped.notes || '').trim().length > 0;
   const [shipByDate, setShipByDate] = useState('');
   const [orderNumber, setOrderNumber] = useState(shipped.order_id || '');
   const [itemNumber, setItemNumber] = useState(shipped.item_number || '');
@@ -195,32 +187,9 @@ export function TechDetailsStack({
           onShipByDateBlur: () => { void fieldSave.saveShipByDate(shipByDate); },
         }}
         showPackingPhotos={false}
-        showPackingInformation={false}
-        showTestingInformation={false}
         activeSection={activeSection}
       />
       </div>
-
-      {(activeInput === 'notes' || hasSavedNotes) && (
-        activeInput === 'notes' && setNotes && onSaveNotes ? (
-          <ShippedNotesComposer
-            value={notes}
-            onChange={setNotes}
-            onCancel={() => {
-              setNotes(shipped.notes || '');
-              setActiveInput?.('none');
-            }}
-            onSubmit={onSaveNotes}
-            isSaving={isSavingNotes}
-          />
-        ) : (
-          <ShippedNotesComposer
-            value={String(shipped.notes || '')}
-            readOnly
-            onClick={() => setActiveInput?.('notes')}
-          />
-        )
-      )}
 
       <section className="mx-8 pt-2">
         <Button

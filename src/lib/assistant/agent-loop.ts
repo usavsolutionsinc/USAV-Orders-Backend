@@ -40,7 +40,7 @@ export const UI_TOOLS: Anthropic.Tool[] = [
   {
     name: 'navigate',
     description:
-      'Navigate the user\'s browser to an app route. Every surface is URL-addressable — e.g. /operations?mode=analytics, /receiving?mode=history&openReceivingId=123, /studio?focus=<nodeId>. Use after you have gathered what you need and the user asked to go somewhere or you want to show them the data in place.',
+      'Navigate the user\'s browser to an app route. Every surface is URL-addressable — e.g. /operations?mode=analytics, /unbox?openReceivingId=123 (the Unbox surface), /triage (receiving scan/identify), /pack (packing station), /test?view=testing (testing/QC station), /pickup (local pickup), /studio?focus=<nodeId>. Use after you have gathered what you need and the user asked to go somewhere or you want to show them the data in place.',
     input_schema: {
       type: 'object',
       properties: {

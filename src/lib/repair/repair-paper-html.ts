@@ -19,7 +19,7 @@ export function repairSignatureRowHtml(options: {
     label,
     dateText,
     lineHeightPx,
-    borderClass = 'border-b border-black',
+    borderClass = 'border-b border-black', // ds-allow-raw-neutral: print ink
     innerHtml = '',
   } = options;
 

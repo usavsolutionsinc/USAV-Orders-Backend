@@ -69,7 +69,7 @@ export function GaugeDonut({
     <div className={cn('flex flex-col items-center', className)}>
       <svg width={size} height={height} role="img" aria-label={`${centerLabel} gauge`}>
         {/* track */}
-        <g className="text-gray-200">
+        <g className="text-surface-strong">
           <path
             d={arcPath(cx, cy, r, 180, 360)}
             fill="none"

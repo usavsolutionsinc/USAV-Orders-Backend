@@ -17,8 +17,8 @@ const TONE_CHIP: Record<TimelineTone, { base: string; selected: string }> = {
   warning: { base: 'bg-amber-50 text-amber-700 ring-amber-200', selected: 'bg-amber-100 ring-amber-400' },
   danger: { base: 'bg-rose-50 text-rose-700 ring-rose-200', selected: 'bg-rose-100 ring-rose-400' },
   success: { base: 'bg-emerald-50 text-emerald-700 ring-emerald-200', selected: 'bg-emerald-100 ring-emerald-400' },
-  muted: { base: 'bg-surface-canvas text-text-muted ring-border-soft', selected: 'bg-surface-sunken ring-gray-400' },
-  default: { base: 'bg-surface-canvas text-text-muted ring-border-soft', selected: 'bg-surface-sunken ring-gray-400' },
+  muted: { base: 'bg-surface-canvas text-text-muted ring-border-soft', selected: 'bg-surface-sunken ring-border-emphasis' },
+  default: { base: 'bg-surface-canvas text-text-muted ring-border-soft', selected: 'bg-surface-sunken ring-border-emphasis' },
 };
 
 export interface SubstituteReasonPickerProps {

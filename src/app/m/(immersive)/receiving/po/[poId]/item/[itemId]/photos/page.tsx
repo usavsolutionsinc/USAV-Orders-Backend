@@ -78,7 +78,7 @@ export default function MobileItemPhotoCapturePage(
   props: { params: Promise<{ poId: string; itemId: string }> },
 ) {
   return (
-    <Suspense fallback={<div className="min-h-[100dvh] bg-black" />}>
+    <Suspense fallback={<div className="min-h-[100dvh] bg-stage" />}>
       <ItemPhotoPageInner params={props.params} />
     </Suspense>
   );

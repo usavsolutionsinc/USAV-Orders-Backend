@@ -329,7 +329,7 @@ export function FavoritesManagementTab() {
       {isFormOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
-          <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close favorite form" />
+          <button type="button" className="absolute inset-0 bg-scrim/30" onClick={closeForm} aria-label="Close favorite form" />
           <div className="relative flex w-full max-w-2xl flex-col overflow-hidden border border-border-soft bg-surface-card shadow-xl">
             <div className="flex items-center justify-between border-b border-border-soft px-5 py-4">
               <div>

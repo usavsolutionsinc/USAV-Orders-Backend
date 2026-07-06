@@ -114,7 +114,7 @@ export function RailRow<TRow>({
         // Shift-click range select: stop the browser's native shift-click text
         // selection from highlighting row labels across the range.
         onMouseDown={(e) => { if (editActive && e.shiftKey) e.preventDefault(); }}
-        className={`ds-raw-button relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${
+        className={`ds-raw-button group relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${
           isDisabled ? 'cursor-wait opacity-80' : ''
         } ${
           (editActive ? isChecked : isSelected)

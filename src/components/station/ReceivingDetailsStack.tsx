@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { UNBOX_SURFACE_ROUTE } from '@/lib/receiving/surface-path';
 import { Copy, Edit, Package, RefreshCw, Trash2, X } from '@/components/Icons';
 import { Button } from '@/design-system/primitives/Button';
 import { IconButton } from '@/design-system/primitives/IconButton';
@@ -27,7 +27,7 @@ import {
   PaneHeaderActionBar,
   type PaneHeaderActionBarAction,
 } from '@/components/ui/pane-header';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 
 type ReceivingTab = 'overview' | 'lines' | 'timeline' | 'details';
 
@@ -103,12 +103,13 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         toast.error('No lines on this receiving yet');
         return;
       }
-      // Flip URL to `?mode=receive` so the receiving page renders the
-      // workspace surface (the dashboard hides the workspace when mode
-      // is `history`).
+      // Navigate to the Unbox surface (`/unbox`) so the page renders the
+      // workspace. Drop any stale `mode` param — being on `/unbox` IS the
+      // receive/unbox mode.
       const params = new URLSearchParams(searchParams.toString());
-      params.set('mode', 'receive');
-      router.replace(`/receiving?${params.toString()}`);
+      params.delete('mode');
+      const qs = params.toString();
+      router.replace(qs ? `${UNBOX_SURFACE_ROUTE}?${qs}` : UNBOX_SURFACE_ROUTE);
       onClose();
       // Dispatch workspace-open DIRECTLY (bypassing the sidebar's
       // receiving-select-line intercept that would otherwise re-route
@@ -132,15 +133,8 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   };
 
   return (
-    <>
-      <SlideOverBackdrop onClose={backdropClose} />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-      >
+    <DetailStackRailRegistrar id={`detail:receiving:${log.id}`} onClose={backdropClose}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Header — receiving ID identity, primary "Edit PO" action in the
           right slot, and segmented tabs in the dual-sticky belowSlot. Matches
           the 2026 ops convention (Vercel/Front/Stripe pattern). */}
@@ -352,7 +346,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               : 'Delete'}
         </Button>
       </div>
-    </motion.div>
-    </>
+      </div>
+    </DetailStackRailRegistrar>
   );
 }

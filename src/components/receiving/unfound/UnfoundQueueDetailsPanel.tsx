@@ -24,11 +24,10 @@
  * presentational components under `./details-panel/`.
  */
 
-import { motion } from 'framer-motion';
 import { ExternalLink, Trash2, X } from '@/components/Icons';
 import { Button, IconButton } from '@/design-system/primitives';
 import { formatDateTimePST } from '@/utils/date';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 import {
   PaneHeader,
   PaneHeaderIconBadge,
@@ -52,15 +51,8 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
   const { meta, Icon, detailQuery, detail, isEmailPo } = c;
 
   return (
-    <>
-      <SlideOverBackdrop onClose={onClose} />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-      >
+    <DetailStackRailRegistrar id={`detail:claim:${row.source_id}`} onClose={onClose}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <PaneHeader
           className="border-border-hairline bg-surface-card/90 backdrop-blur-xl"
           rowClassName="px-6"
@@ -194,7 +186,7 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
             </p>
           )}
         </div>
-      </motion.div>
-    </>
+      </div>
+    </DetailStackRailRegistrar>
   );
 }

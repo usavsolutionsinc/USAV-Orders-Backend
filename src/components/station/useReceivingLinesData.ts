@@ -10,7 +10,8 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { receivingSurfaceBasePath } from '@/lib/receiving/surface-path';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseReceivingPrependedDetail } from '@/lib/queries/receiving-queries';
 import { INCOMING_PAGE_SIZE, type ReceivingModeContext, type ReceivingModeDescriptor } from '@/lib/receiving/receiving-modes';
@@ -54,6 +55,7 @@ export function useReceivingLinesData({
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
 
   // Query key + params both come from the active descriptor. The key varies with
@@ -114,9 +116,9 @@ export function useReceivingLinesData({
     if (incomingPage > maxPage) {
       const params = new URLSearchParams(searchParams.toString());
       params.delete('page');
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${receivingSurfaceBasePath(pathname)}?${params.toString()}`);
     }
-  }, [isIncomingMode, data?.total, incomingPage, router, searchParams]);
+  }, [isIncomingMode, data?.total, incomingPage, router, searchParams, pathname]);
 
   // Refresh signals → invalidate the list query.
   useEffect(() => {

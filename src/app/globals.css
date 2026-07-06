@@ -146,11 +146,17 @@ body {
   margin-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Hardware-accelerated scan input focus — prevents iOS zoom */
-input[type='text'],
-input[type='search'],
-textarea {
-  font-size: max(16px, 1rem);
+/* Prevent iOS Safari from auto-zooming on input focus (it zooms when the focused
+   field is < 16px). This floor is ONLY needed on touch devices — on desktop the
+   attribute selector (specificity 0,1,1) silently overrode every design-system
+   input size (e.g. the text-xs station scan bar rendered at 16px), so scope it
+   to coarse pointers and let the token sizes win everywhere else. */
+@media (pointer: coarse) {
+  input[type='text'],
+  input[type='search'],
+  textarea {
+    font-size: max(16px, 1rem);
+  }
 }
 
 /* Glassmorphism utilities */

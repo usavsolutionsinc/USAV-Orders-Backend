@@ -234,7 +234,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
         {line.image_url ? (
           <img src={line.image_url} alt="" className="h-full w-full object-contain" />
         ) : (
-          <Package className="h-14 w-14 text-gray-200" />
+          <Package className="h-14 w-14 text-text-faint" />
         )}
         <HoverTooltip label="Remove item" asChild>
           <IconButton

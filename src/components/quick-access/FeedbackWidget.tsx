@@ -1,16 +1,14 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { MessageSquare, Check, X } from '@/components/Icons';
-import { Button, IconButton } from '@/design-system/primitives';
-import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { usePathname } from 'next/navigation';
+import { Check } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import { QuickAccessPanelShell } from './QuickAccessPanelShell';
 
 type IssueType = 'bug' | 'suggestion' | 'question';
-type Phase = 'idle' | 'open' | 'submitting' | 'success' | 'error';
+type Phase = 'open' | 'submitting' | 'success' | 'error';
 
 const TYPE_OPTS: { value: IssueType; label: string }[] = [
   { value: 'bug', label: 'Bug' },
@@ -18,13 +16,35 @@ const TYPE_OPTS: { value: IssueType; label: string }[] = [
   { value: 'question', label: 'Question' },
 ];
 
-// ─── Form ────────────────────────────────────────────────────────────────────
+const FIELD_CLS =
+  'w-full rounded-lg border border-border-soft bg-surface-card px-3 text-sm text-text-default ' +
+  'placeholder:text-text-faint outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20';
 
-interface FormProps {
+interface FeedbackFormProps {
   onSuccess: () => void;
+  pagePath: string;
 }
 
-export function FeedbackForm({ onSuccess }: FormProps) {
+/** Standalone form export for embedding outside the popover shell. */
+export function FeedbackForm({ onSuccess, pagePath }: FeedbackFormProps) {
+  return <FeedbackPopoverBody onSuccess={onSuccess} pagePath={pagePath} embedded />;
+}
+
+interface FeedbackPopoverProps {
+  onClose: () => void;
+}
+
+export function FeedbackPopover({ onClose }: FeedbackPopoverProps) {
+  const pathname = usePathname() ?? '';
+  return <FeedbackPopoverBody onSuccess={onClose} onClose={onClose} pagePath={pathname} />;
+}
+
+function FeedbackPopoverBody({
+  onSuccess,
+  onClose,
+  pagePath,
+  embedded = false,
+}: FeedbackFormProps & { onClose?: () => void; embedded?: boolean }) {
   const [type, setType] = useState<IssueType>('bug');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -38,151 +58,114 @@ export function FeedbackForm({ onSuccess }: FormProps) {
       const res = await fetch('/api/user-issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          description,
-          type,
-          page: typeof window !== 'undefined' ? window.location.pathname : '',
-        }),
+        body: JSON.stringify({ title, description, type, page: pagePath }),
       });
-      const data = await res.json() as { ok: boolean; error?: string };
+      const data = (await res.json()) as { ok: boolean; error?: string };
       if (!data.ok) throw new Error(data.error ?? 'Unknown error');
       setPhase('success');
-      setTimeout(() => onSuccess(), 1800);
+      setTimeout(() => onSuccess(), 1600);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong');
       setPhase('error');
     }
-  }, [title, description, type, onSuccess]);
+  }, [title, description, type, pagePath, onSuccess]);
 
-  if (phase === 'success') {
-    return (
-      <motion.div
-        {...framerPresence.tableRow}
-        transition={framerTransition.tableRowMount}
-        className="flex flex-col items-center gap-3 py-8 text-center"
-      >
-        <Check className="h-10 w-10 text-emerald-500" />
-        <p className="text-sm font-semibold text-text-default">Got it — issue logged</p>
-        <p className="text-xs text-text-soft">Claude Code will pick it up and open a PR</p>
-      </motion.div>
+  const canSubmit = !!title.trim() && !!description.trim();
+
+  const body =
+    phase === 'success' ? (
+      <div className="flex flex-col items-center gap-2 px-2 py-10 text-center">
+        <Check className="h-8 w-8 text-emerald-600" />
+        <p className="text-sm font-semibold text-text-default">Issue logged</p>
+        <p className="text-caption text-text-soft">The team will pick it up from here.</p>
+      </div>
+    ) : (
+      <div className="space-y-4 px-2 pb-2">
+        <div className="flex gap-1 rounded-lg border border-border-hairline bg-surface-canvas p-0.5">
+          {TYPE_OPTS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setType(opt.value)}
+              className={cn(
+                'ds-raw-button flex-1 rounded-md px-2 py-1.5 text-caption font-semibold transition-colors',
+                type === opt.value
+                  ? 'bg-surface-card text-text-default shadow-sm ring-1 ring-border-soft'
+                  : 'text-text-soft hover:text-text-muted',
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="issue-title" className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
+            Title
+          </label>
+          <input
+            id="issue-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Short description"
+            maxLength={120}
+            className={cn(FIELD_CLS, 'h-9')}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="issue-details" className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
+            Details
+          </label>
+          <textarea
+            id="issue-details"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What happened? What did you expect?"
+            rows={4}
+            className={cn(FIELD_CLS, 'resize-none py-2')}
+          />
+        </div>
+
+        {pagePath ? (
+          <p className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
+            From {pagePath}
+          </p>
+        ) : null}
+
+        {phase === 'error' ? (
+          <p className="text-caption text-rose-600">{errorMsg}</p>
+        ) : null}
+      </div>
     );
-  }
 
-  return (
-    <div className="flex flex-col gap-4 pb-2">
-      <div className="flex gap-1.5">
-        {TYPE_OPTS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setType(opt.value)}
-            className={cn(
-              'ds-raw-button flex-1 rounded-lg border py-1.5 text-xs font-bold uppercase tracking-wider transition-colors duration-100',
-              type === opt.value
-                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                : 'border-border-soft bg-surface-card text-text-soft hover:border-border-default hover:text-text-muted',
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-micro font-black uppercase tracking-widest text-text-faint">
-          Title <span className="text-rose-500">*</span>
-        </label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Short description of the issue"
-          maxLength={120}
-          className={cn(
-            'h-9 w-full rounded-lg border border-border-soft bg-surface-card px-3',
-            'text-sm text-text-default placeholder:text-text-faint',
-            'outline-none transition-colors duration-100',
-            'focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100',
-          )}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-micro font-black uppercase tracking-widest text-text-faint">
-          Details <span className="text-rose-500">*</span>
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="What happened? What did you expect?"
-          rows={4}
-          className={cn(
-            'w-full resize-none rounded-lg border border-border-soft bg-surface-card px-3 py-2',
-            'text-sm text-text-default placeholder:text-text-faint',
-            'outline-none transition-colors duration-100',
-            'focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100',
-          )}
-        />
-      </div>
-
-      {typeof window !== 'undefined' && (
-        <p className="text-micro text-text-faint">
-          Page: <span className="font-mono">{window.location.pathname}</span>
-        </p>
-      )}
-
-      {phase === 'error' && (
-        <p className="text-xs text-rose-600">{errorMsg}</p>
-      )}
-
+  const footer =
+    phase === 'success' ? undefined : (
       <Button
         variant="primary"
         size="md"
         onClick={submit}
-        disabled={!title.trim() || !description.trim() || phase === 'submitting'}
+        disabled={!canSubmit || phase === 'submitting'}
         loading={phase === 'submitting'}
         className="w-full justify-center"
       >
         Submit issue
       </Button>
-    </div>
-  );
-}
+    );
 
-// ─── Popover ─────────────────────────────────────────────────────────────────
-
-interface FeedbackPopoverProps {
-  onClose: () => void;
-}
-
-/**
- * Secondary popover surfaced from the Quick Access "Report an issue" action
- * row. Mirrors ActivityInboxPopover / PhoneHistoryPopover styling.
- */
-export function FeedbackPopover({ onClose }: FeedbackPopoverProps) {
-  return (
-    <div
-      role="dialog"
-      aria-label="Report an issue"
-      className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-xl"
-    >
-      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-border-hairline px-4 py-2">
-        <div>
-          <p className="text-sm font-black text-text-default">Report an issue</p>
-          <p className="text-caption text-text-soft">Bug, suggestion, or question</p>
-        </div>
-        <IconButton
-          type="button"
-          onClick={onClose}
-          ariaLabel="Close"
-          icon={<X className="h-3.5 w-3.5" />}
-          className="text-text-faint hover:text-text-muted"
-        />
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
-        <FeedbackForm onSuccess={onClose} />
+  if (embedded) {
+    return (
+      <div className="flex flex-col">
+        {body}
+        {footer ? <div className="border-t border-border-hairline px-4 py-3">{footer}</div> : null}
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <QuickAccessPanelShell title="Report an issue" onClose={onClose ?? onSuccess} footer={footer}>
+      {body}
+    </QuickAccessPanelShell>
   );
 }

@@ -115,7 +115,7 @@ export function POUnboxingSection({
   ) : undefined;
 
   return (
-    <WorkspaceCard overflow="visible">
+    <WorkspaceCard variant="glass" overflow="visible">
       <div>
         {/* 1 — PO Items (top/header section). Pencil shares the eyebrow row. */}
         {showPoItems ? (

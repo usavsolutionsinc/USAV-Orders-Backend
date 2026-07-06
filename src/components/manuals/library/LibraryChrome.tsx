@@ -25,7 +25,7 @@ export function LibraryBreadcrumb({
       {currentPath.map((seg, i) => (
         <span key={i} className="flex shrink-0 items-center gap-1">
           <ChevronRightTiny className="h-2.5 w-2.5 text-text-faint" />
-          {/* ds-raw-button: breadcrumb segment with custom active fill (bg-gray-900) — segmented-toggle case */}
+          {/* ds-raw-button: breadcrumb segment with custom active fill (gray-900) — segmented-toggle case */}
           <button
             type="button"
             onClick={() => onCrumb(i + 1)}
@@ -74,7 +74,7 @@ export function BulkActionsBar({
         icon={<Pencil className="h-3 w-3" />}
         onClick={onMove}
         disabled={busy}
-        className="rounded-lg bg-zinc-800 px-2 py-1 text-micro font-black uppercase tracking-wider text-white hover:bg-zinc-700 hover:text-white"
+        className="rounded-lg bg-surface-inverse-raised px-2 py-1 text-micro font-black uppercase tracking-wider text-white hover:bg-surface-inverse-soft hover:text-white"
       >
         Move
       </Button>

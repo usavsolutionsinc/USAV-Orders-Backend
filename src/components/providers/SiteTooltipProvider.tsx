@@ -293,7 +293,7 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
               <motion.span
                 layout="position"
                 transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-                className="absolute border-x-4 border-b-0 border-t-4 border-x-transparent border-t-gray-900"
+                className="absolute border-x-4 border-b-0 border-t-4 border-x-transparent border-t-surface-inverse"
                 style={{ left: caretOffsetX, transform: 'translateX(-50%)' }}
               />
             </div>

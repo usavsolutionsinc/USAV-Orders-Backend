@@ -8,7 +8,8 @@
 export const OPERATIONS_SKILL = [
   'This page is the Operations Monitor (read-only): live activity, analytics (KPI strip, throughput, station distribution, "You vs typical" benchmarks), and history over the org-scoped event spine.',
   'Useful tools here: get_kpis (event counts by type), get_top_reasons, get_signals_by_node, get_benchmarks (seeded vertical benchmarks — compare against the actuals from get_kpis).',
-  'URL modes: /operations?mode=live|analytics|insights|history; analytics accepts ?range=24h|7d|30d and ?section= anchors (e.g. section=benchmarks).',
+  'History mode = forensic "what happened": a Browse region (org-wide filterable event feed over station scans, inventory events, audit, carrier and warranty spines) and a Trace region (one order/serial/tracking journey). Signals mode is the SEPARATE "why did this outcome happen" layer over entity_signals — cross-linked to History, never merged into it.',
+  'URL modes: /operations?mode=live|analytics|insights|history|signals; analytics accepts ?range=24h|7d|30d and ?section= anchors; history accepts ?dim=order|serial|tracking with ?order=/?serial=/?tracking= for Trace, or ?stations=,?types=,?from=,?until=,?staffId=,?sources= filters + ?view= saved views for Browse.',
 ].join('\n');
 
 export const STUDIO_SKILL = [

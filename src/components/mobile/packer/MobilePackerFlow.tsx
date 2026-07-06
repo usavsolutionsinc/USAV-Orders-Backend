@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
   ClipboardList,
-  ShieldCheck,
   Loader2,
   ChevronLeft,
   MapPin,
@@ -18,18 +17,16 @@ import { IconButton } from '@/design-system/primitives';
 import {
   OrderIdChip,
   TrackingChip,
-  SerialChip,
-  SkuScanRefChip,
   getLast4,
 } from '@/components/ui/CopyChip';
-import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
-import { resolveTestingScan } from '@/lib/testing/resolve-testing-scan';
-import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
   packScanReducer,
   classifyPackScan,
   INITIAL_PACK_SCAN_STATE,
 } from '@/lib/packer/pack-scan-machine';
+import { OrderPackChecklist } from '@/components/packing/OrderPackChecklist';
+import { useOrderPackChecklist } from '@/hooks/useOrderPackChecklist';
+import { usePackingPolicy } from '@/hooks/usePackingPolicy';
 
 /**
  * /m/pack — Mobile packer flow with scan-driven auto-progression (P1-MOB-01).
@@ -83,10 +80,15 @@ export function MobilePackerFlow() {
   const [order, setOrder] = useState<OrderVM | null>(null);
   const [orderState, setOrderState] = useState<AsyncState>('idle');
 
-  // Scan 2 → what-to-pack receiving line(s) (pre-pack resolve, read-only).
-  const [packLines, setPackLines] = useState<ReceivingLineRow[]>([]);
-  const [packState, setPackState] = useState<AsyncState>('idle');
-  const [lastNotFound, setLastNotFound] = useState<string | null>(null);
+  // Scan 2 → highlight matching checklist line by SKU.
+  const [highlightRowId, setHighlightRowId] = useState<number | null>(null);
+  const [lastScannedSku, setLastScannedSku] = useState<string | null>(null);
+
+  const { data: packingPolicy } = usePackingPolicy();
+  const { data: packChecklist, isLoading: checklistLoading } = useOrderPackChecklist({
+    orderRowId: order?.id ?? null,
+    enabled: orderState === 'ready' && order != null,
+  });
 
   // The already-completed packer_log for the scanned order (created by the
   // tracking-scan pack completion). In-flow photos attach to it — read-only
@@ -149,30 +151,19 @@ export function MobilePackerFlow() {
   // ── scan 2: resolve a product SKU/label → its pre-packed receiving line(s) ──
   // REUSE of the P1-PCK-01 read-only pre-pack resolve. `forcedType: 'sku'` makes
   // it search ONLY the product-SKU path and never mint/mutate a serial.
-  const loadPack = useCallback(async (ref: string) => {
-    setPackState('loading');
-    setLastNotFound(null);
-    try {
-      const result = await resolveTestingScan(ref, { forcedType: 'sku' });
-      if (result.kind === 'line') {
-        setPackLines([result.row]);
-        setPackState('ready');
-      } else if (result.kind === 'multi') {
-        setPackLines(result.rows);
-        setPackState('ready');
-      } else if (result.kind === 'not_found') {
-        setPackLines([]);
-        setLastNotFound(result.query);
-        setPackState('empty');
-      } else {
-        setPackLines([]);
-        setPackState('error');
-      }
-    } catch {
-      setPackLines([]);
-      setPackState('error');
-    }
+  const loadPack = useCallback((ref: string) => {
+    setLastScannedSku(ref.trim());
   }, []);
+
+  useEffect(() => {
+    if (!lastScannedSku || !packChecklist?.lines?.length) return;
+    const norm = lastScannedSku.toUpperCase();
+    const match = packChecklist.lines.find((l) => {
+      const sku = l.sku?.trim().toUpperCase() ?? '';
+      return sku === norm || (sku.length > 0 && norm.includes(sku));
+    });
+    setHighlightRowId(match?.orderRowId ?? null);
+  }, [lastScannedSku, packChecklist?.lines]);
 
   // ── dispatch a scan → classify → advance the machine → fire the loader ─────
   const onScan = useCallback(
@@ -187,13 +178,11 @@ export function MobilePackerFlow() {
       inFlight.current = true;
       try {
         if (kind === 'order') {
-          // A fresh order resets the pack step.
-          setPackLines([]);
-          setPackState('idle');
+          setHighlightRowId(null);
+          setLastScannedSku(null);
           void loadOrder(value);
         } else if (kind === 'product') {
-          // Only meaningful once an order is anchored (machine guards this too).
-          if (machine.context.orderRef != null) void loadPack(value);
+          if (machine.context.orderRef != null) loadPack(value);
         }
       } finally {
         inFlight.current = false;
@@ -204,8 +193,8 @@ export function MobilePackerFlow() {
 
   const goBack = useCallback(() => {
     dispatchMachine({ type: 'BACK' });
-    setPackLines([]);
-    setPackState('idle');
+    setHighlightRowId(null);
+    setLastScannedSku(null);
   }, []);
 
   const placeholder =
@@ -254,10 +243,25 @@ export function MobilePackerFlow() {
               <OrderDetailsCard state={orderState} order={order} orderRef={machine.context.orderRef} />
 
               {orderState === 'ready' && order && (
-                <PackPhotosCta packerLogId={packerLogId} orderId={order.orderId} />
+                <>
+                  <OrderPackChecklist
+                    lines={packChecklist?.lines ?? []}
+                    enforcement={packingPolicy?.enforcement ?? packChecklist?.enforcement ?? 'advisory'}
+                    resetKey={`order-${order.id}`}
+                    isLoading={checklistLoading}
+                    variant="mobile"
+                    highlightOrderRowId={highlightRowId}
+                  />
+                  {lastScannedSku && highlightRowId == null && machine.name === 'what_to_pack' ? (
+                    <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-caption font-semibold text-amber-700">
+                      SKU not on this order — double-check the label.
+                    </p>
+                  ) : null}
+                  <PackPhotosCta packerLogId={packerLogId} orderId={order.orderId} />
+                </>
               )}
 
-              {machine.name === 'what_to_pack' && (
+              {machine.name === 'what_to_pack' && orderState !== 'ready' ? (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 px-1">
                     <IconButton
@@ -267,11 +271,10 @@ export function MobilePackerFlow() {
                       icon={<ChevronLeft className="h-4 w-4 text-blue-500" />}
                       className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-card shadow-sm ring-1 ring-blue-100 active:scale-90"
                     />
-                    <SectionHeader title="What to pack" />
+                    <SectionHeader title="Verify items" />
                   </div>
-                  <WhatToPackCard state={packState} lines={packLines} notFound={lastNotFound} />
                 </div>
-              )}
+              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
@@ -411,83 +414,6 @@ function PackPhotosCta({
     >
       <Camera className="h-6 w-6" />
     </Link>
-  );
-}
-
-/** Scan-2 result — the pre-packed receiving line(s) for the scanned SKU. */
-function WhatToPackCard({
-  state,
-  lines,
-  notFound,
-}: {
-  state: AsyncState;
-  lines: ReceivingLineRow[];
-  notFound: string | null;
-}) {
-  if (state === 'idle') {
-    return (
-      <div className="rounded-2xl bg-surface-card px-4 py-8 text-center opacity-60 shadow-sm ring-1 ring-blue-100/60">
-        <Package className="mx-auto mb-2 h-9 w-9 text-blue-200" />
-        <p className="text-xs font-black uppercase tracking-widest text-blue-300">
-          Scan the product label to pack
-        </p>
-      </div>
-    );
-  }
-  if (state === 'loading') {
-    return (
-      <div className="flex items-center justify-center rounded-2xl bg-surface-card py-10 shadow-sm ring-1 ring-blue-100/60">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-300" />
-      </div>
-    );
-  }
-  if (state === 'empty' || state === 'error') {
-    return (
-      <div className="rounded-2xl bg-surface-card px-4 py-8 text-center shadow-sm ring-1 ring-amber-100">
-        <p className="text-xs font-black uppercase tracking-widest text-amber-500">
-          {state === 'empty' ? 'No pre-packed stock for that SKU' : 'Pack lookup failed'}
-        </p>
-        {notFound && <p className="mt-1 font-mono text-caption text-amber-300">{notFound}</p>}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      {lines.map((line) => {
-        const title =
-          line.catalog_product_title || line.item_name || line.sku || `Line #${line.id}`;
-        const sku = (line.sku || '').trim();
-        const qty = `${line.quantity_received}/${line.quantity_expected ?? '?'}`;
-        const cond = conditionGradeTableLabel(line.condition_grade);
-        const serials = (line.serials ?? [])
-          .map((s) => s.serial_number)
-          .filter(Boolean)
-          .join(', ');
-        return (
-          <div
-            key={line.id}
-            className="rounded-2xl border border-blue-100 bg-surface-card p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
-          >
-            <div className="flex items-start gap-2">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-              <p className="min-w-0 flex-1 text-base font-black leading-snug tracking-tight text-blue-950">
-                {title}
-              </p>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
-              <span className="text-caption font-black uppercase tracking-widest text-text-soft">
-                <span className="text-text-default">{qty}</span>
-                <span className="px-1 text-text-faint">·</span>
-                <span>{cond}</span>
-              </span>
-              {sku && <SkuScanRefChip value={sku} display={getLast4(sku)} />}
-              {serials && <SerialChip value={serials} width="w-auto" />}
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

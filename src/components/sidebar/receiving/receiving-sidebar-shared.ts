@@ -300,9 +300,9 @@ export function listingUrlForOpen(raw: string): string | null {
   }
 }
 
-/** Desktop receiving page deep link (`/receiving?recvId=…&lineId=…`). */
+/** Desktop Unbox surface deep link (`/unbox?recvId=…&lineId=…`). */
 export function receivingShareUrl(receivingId: number, lineId?: number): string {
-  const path = '/receiving';
+  const path = '/unbox';
   if (typeof window !== 'undefined') {
     const u = new URL(path, window.location.origin);
     u.searchParams.set('recvId', String(receivingId));
@@ -522,9 +522,10 @@ export const RECEIVING_VARIANT_THEME: Record<ReceivingVariant, ReceivingVariantS
     tone: 'gray',
     label: 'Other',
     chip: 'bg-surface-sunken text-text-muted ring-1 ring-inset ring-border-soft',
+    // ds-allow-raw-neutral: identity/tone hue — OTHER's gray among blue/rose/amber/emerald variants, not chrome
     cta: 'bg-gray-700 hover:bg-gray-800',
-    focusRing: 'focus:ring-gray-400/30 focus:border-border-emphasis',
-    iconBg: 'bg-gray-700',
+    focusRing: 'focus:ring-gray-400/30 focus:border-border-emphasis', // ds-allow-raw-neutral: identity/tone hue
+    iconBg: 'bg-gray-700', // ds-allow-raw-neutral: identity/tone hue
   },
 };
 

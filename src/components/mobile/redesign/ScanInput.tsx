@@ -129,7 +129,7 @@ export function ScanInput({
               muted
             />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className={`relative ${boxSize} rounded-[32px] border-2 border-white/40 bg-white/5 backdrop-blur-[1px]`}>
+              <div className={`relative ${boxSize} rounded-[32px] border-2 border-glass/40 bg-glass/5 backdrop-blur-[1px]`}>
                 <motion.div
                   animate={{ top: ['5%', '95%', '5%'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}

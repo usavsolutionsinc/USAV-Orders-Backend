@@ -24,6 +24,7 @@ function RepairSignatureLine({
   return (
     <div className="mb-2 grid grid-cols-[5.75rem_minmax(0,1fr)_11rem] items-end gap-x-4">
       <span className="whitespace-nowrap font-bold">{label}</span>
+      {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
       <div className="border-b border-black" style={{ height: '24px' }} />
       <span className="whitespace-nowrap text-right font-bold tabular-nums">{dateText}</span>
     </div>
@@ -83,16 +84,23 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
       <RepairPaperTicketHeading displayTicket={displayTicket} compact={isCompact} />
 
       {/* Information Table */}
+      {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
       <div className={`border-l border-t border-black ${sectionGap} ${isCompact ? 'text-xs' : ''}`}>
+        {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
         <div className="flex border-b border-r border-black">
+          {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
           <div className={`shrink-0 border-r border-black bg-surface-canvas p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>Product Title:</div>
           <div className="min-w-0 flex-1 break-words p-2">{productTitle}</div>
         </div>
+        {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
         <div className="flex border-b border-r border-black">
+          {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
           <div className={`shrink-0 border-r border-black bg-surface-canvas p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>SN & Issues:</div>
           <div className="min-w-0 flex-1 break-words p-2">{serialNumber}, {issue}</div>
         </div>
+        {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
         <div className="flex border-b border-r border-black">
+          {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
           <div className={`shrink-0 border-r border-black bg-surface-canvas p-2 font-bold ${isCompact ? 'w-28' : 'w-40'}`}>Contact Info:</div>
           <div className="min-w-0 flex-1 break-words p-2">{contactDisplay}</div>
         </div>
@@ -114,6 +122,7 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
           Your Bose product has been received into our repair center. Under normal circumstances it will
           be repaired within the next 3-10 working days and returned to you at the address above.
         </p>
+        {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
         <p className="inline-block border-b border-black font-bold">
           There is a 30 day Warranty on all our repair services.
         </p>
@@ -130,10 +139,15 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
       {!isCompact && (
         <>
           {/* Internal Use Table */}
+          {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
           <div className={`flex border-l border-t border-black ${isScreen ? 'mb-2' : 'mb-4 print:mb-3'}`}>
+            {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
             <div className="flex-1 border-b border-r border-black p-2 font-bold">Part Repaired:</div>
+            {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
             <div className="flex-1 border-b border-r border-black p-2" />
+            {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
             <div className="flex-1 border-b border-r border-black p-2 font-bold">Who:</div>
+            {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
             <div className="flex-1 border-b border-r border-black p-2 font-bold">Date:</div>
           </div>
 

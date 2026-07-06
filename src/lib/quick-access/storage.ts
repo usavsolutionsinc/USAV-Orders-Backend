@@ -26,7 +26,6 @@ export const DEFAULT_SETTINGS: QuickAccessSettings = {
   showRecent: true,
   actions: {
     phoneHistory: true,
-    installDesktopApp: true,
   },
   pinned: [],
 };

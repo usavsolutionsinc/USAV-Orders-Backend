@@ -37,7 +37,7 @@ const TYPE_CONFIG: Record<string, {
     Icon: MapPin,
     badge: 'bg-blue-100 text-blue-700 border-blue-200',
     confirmBtn: 'bg-blue-600 active:bg-blue-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-blue-500/30 text-white border-blue-400/50',
   },
   SERIAL: {
@@ -45,7 +45,7 @@ const TYPE_CONFIG: Record<string, {
     Icon: Barcode,
     badge: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     confirmBtn: 'bg-emerald-600 active:bg-emerald-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-emerald-500/30 text-white border-emerald-400/50',
   },
   FNSKU: {
@@ -53,7 +53,7 @@ const TYPE_CONFIG: Record<string, {
     Icon: Package,
     badge: 'bg-violet-100 text-violet-700 border-violet-200',
     confirmBtn: 'bg-violet-600 active:bg-violet-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-violet-500/30 text-white border-violet-400/50',
   },
   REPAIR: {
@@ -61,23 +61,27 @@ const TYPE_CONFIG: Record<string, {
     Icon: Settings,
     badge: 'bg-amber-100 text-amber-700 border-amber-200',
     confirmBtn: 'bg-amber-600 active:bg-amber-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-amber-500/30 text-white border-amber-400/50',
   },
   SKU: {
     label: 'SKU',
     Icon: Barcode,
     badge: 'bg-surface-sunken text-text-muted border-border-soft',
+    // ds-allow-raw-neutral: neutral member of the per-type colored confirm-button family (blue/emerald/violet/amber-600) — a themed token would drift from its colored siblings
     confirmBtn: 'bg-gray-700 active:bg-gray-800',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
+    // ds-allow-raw-neutral: neutral member of the colored active-pill family (blue/emerald/violet/amber-500/30); glass(#fff)/scrim(#020617) can't reproduce a mid-gray wash
     pillActive: 'bg-gray-500/30 text-white border-border-emphasis/50',
   },
   COMMAND: {
     label: 'Command',
     Icon: Settings,
     badge: 'bg-surface-sunken text-text-muted border-border-soft',
+    // ds-allow-raw-neutral: neutral member of the per-type colored confirm-button family (blue/emerald/violet/amber-600) — a themed token would drift from its colored siblings
     confirmBtn: 'bg-gray-700 active:bg-gray-800',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
+    // ds-allow-raw-neutral: neutral member of the colored active-pill family (blue/emerald/violet/amber-500/30); glass(#fff)/scrim(#020617) can't reproduce a mid-gray wash
     pillActive: 'bg-gray-500/30 text-white border-border-emphasis/50',
   },
 };

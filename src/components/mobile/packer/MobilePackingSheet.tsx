@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { Camera } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
+import { OrderPackChecklist } from '@/components/packing/OrderPackChecklist';
+import { useOrderPackChecklist } from '@/hooks/useOrderPackChecklist';
+import { usePackingPolicy } from '@/hooks/usePackingPolicy';
 import {
   OrderIdChip,
   SkuScanRefChip,
@@ -44,6 +47,16 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
   const trackingValue = (row.shipping_tracking_number || row.scan_ref || '').trim();
   const serialValue = (row.serial_number || '').trim();
   const photos = Array.isArray(row.packer_photos_url) ? row.packer_photos_url : [];
+  const orderRowId = row.order_row_id ?? null;
+
+  const { data: packingPolicy } = usePackingPolicy();
+  const { data: packChecklist, isLoading: checklistLoading } = useOrderPackChecklist({
+    orderRowId,
+    sku: skuValue || null,
+    condition: row.condition,
+    productTitle: productTitle,
+    enabled: open && (orderRowId != null || Boolean(skuValue)),
+  });
 
   // Carry the real order number so packer photos file under it in the library.
   const photosHref = packerLogId
@@ -76,6 +89,14 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
             </div>
           </div>
         </div>
+
+        <OrderPackChecklist
+          lines={packChecklist?.lines ?? []}
+          enforcement={packingPolicy?.enforcement ?? packChecklist?.enforcement ?? 'advisory'}
+          resetKey={orderRowId ? `row-${orderRowId}` : skuValue}
+          isLoading={checklistLoading}
+          variant="mobile"
+        />
 
         {photos.length > 0 ? (
           <div className="rounded-2xl border border-border-hairline bg-surface-canvas/60 p-3">

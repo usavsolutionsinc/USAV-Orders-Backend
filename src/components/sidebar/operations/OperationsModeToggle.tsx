@@ -8,7 +8,7 @@ interface OperationsModeToggleProps {
   onChange: (next: OperationsMode) => void;
 }
 
-/** Top-level Live / Analytics / Insights / History switcher for /operations. */
+/** Top-level Live / Analytics / Insights / History / Signals switcher for /operations. */
 export function OperationsModeToggle({ value, onChange }: OperationsModeToggleProps) {
   return (
     <SidebarNavOverlaySlider

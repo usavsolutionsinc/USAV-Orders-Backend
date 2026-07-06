@@ -14,6 +14,7 @@ import { Button, IconButton } from '@/design-system/primitives';
 import { isMobileAllowedPath } from '@/lib/sidebar-navigation';
 import { GlobalHeader } from '@/components/layout/GlobalHeader';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
+import { QuickAccessVisitRecorder } from '@/lib/quick-access/QuickAccessVisitRecorder';
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
 import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
@@ -209,7 +210,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             animate="visible"
             exit="hidden"
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-panelBackdrop bg-black/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-panelBackdrop bg-scrim/40 backdrop-blur-[2px]"
             onClick={closeDrawer}
             aria-hidden
           />
@@ -310,6 +311,9 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         <CommandBar />
         <Suspense fallback={null}>
           <GlobalDesktopSkuScanner />
+        </Suspense>
+        <Suspense fallback={null}>
+          <QuickAccessVisitRecorder />
         </Suspense>
         {drawerOverlay}
       </div>

@@ -145,7 +145,8 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
     return () => window.removeEventListener('receiving-workspace-nav-state', handler);
   }, []);
 
-  // Deep-link: cmd+k emits /receiving?mode=receive&openReceivingId=<receiving.id>.
+  // Deep-link: cmd+k emits /unbox?openReceivingId=<receiving.id> (param read
+  // path-agnostically, so the legacy /receiving?…&openReceivingId= still works).
   // Resolve that carton's first line (receiving.id → /api/receiving-lines
   // ?receiving_id=) and select it once via dispatchSelectLine, so the right pane
   // opens AND the sidebar/rail highlight stay in sync. Best-effort: a missing or
@@ -193,6 +194,21 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
   // Guards the "never blank" effect while a delete-recovery is choosing the next
   // line, so the two don't race and momentarily reopen the just-deleted line.
   const recoveringRef = useRef(false);
+  // Any mode switch must drop the focused workspace from state — even though
+  // ReceivingRightPane hides the overlay via isTableOnlyMode / presence keys,
+  // stale state lets a late receiving-workspace-open or a zero-duration race
+  // repaint the prior mode's panel (Triage ↔ Unbox ↔ History bleed).
+  const prevModeForWorkspaceRef = useRef<string | null>(null);
+  useEffect(() => {
+    const liveMode = searchParams.get('mode') ?? 'receive';
+    const prev = prevModeForWorkspaceRef.current;
+    prevModeForWorkspaceRef.current = liveMode;
+    if (prev === null || prev === liveMode) return;
+    setWorkspace(null);
+    setNav(null);
+    setScanInFlight(null);
+  }, [searchParams]);
+
   useEffect(() => {
     const liveMode = searchParams.get('mode') ?? 'receive';
     if (liveMode !== 'receive') return;

@@ -87,7 +87,9 @@ export function searchHitHref(dbType: SearchEntityType, entityId: number): strin
     case 'SERIAL_UNIT':
       return `/inventory/units?unit=${entityId}`;
     case 'RECEIVING':
-      return `/receiving?mode=receive&openReceivingId=${entityId}`;
+      // Unbox is the first-class receiving surface (`/unbox`); it opens the
+      // carton via `?openReceivingId=`.
+      return `/unbox?openReceivingId=${entityId}`;
     case 'SKU':
       return `/products?view=qc&skuId=${entityId}`;
     case 'REPAIR':

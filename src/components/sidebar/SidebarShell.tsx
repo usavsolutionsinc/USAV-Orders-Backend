@@ -86,7 +86,7 @@ export function MobileSidebarOverlay({ onClose, children }: MobileSidebarOverlay
     <div className="md:hidden fixed inset-0 z-panel">
       <button
         type="button"
-        className="ds-raw-button absolute inset-0 bg-gray-900/35"
+        className="ds-raw-button absolute inset-0 bg-scrim/35"
         onClick={onClose}
         aria-label="Close sidebar overlay"
       />

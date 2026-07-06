@@ -255,7 +255,7 @@ export function ShippedActionsButton({ defaultDateKey }: ShippedActionsButtonPro
                 >
                   Preview &amp; Sync to Zoho
                   {pendingCount > 0 ? (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-mini font-black">
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-glass/25 px-1.5 text-mini font-black">
                       {pendingCount}
                     </span>
                   ) : null}

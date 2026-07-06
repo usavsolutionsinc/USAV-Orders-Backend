@@ -17,7 +17,7 @@ const TEST_TRACKING = process.env.PW_TEST_TRACKING || '1ZA8337B0325514010';
 
 test.describe('Receive PO → Zoho Inventory update', () => {
   test('marking a line received fires the Zoho receive endpoint', async ({ page, request }) => {
-    await page.goto('/receiving');
+    await page.goto('/unbox');
     await page.getByPlaceholder(/Scan tracking/i).fill(TEST_TRACKING);
     await page.keyboard.press('Enter');
     await page.locator('aside button').first().click();

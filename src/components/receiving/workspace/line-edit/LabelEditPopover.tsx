@@ -212,6 +212,8 @@ export function LabelEditPopover({
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {/* Live preview — identical to the printed face. */}
+        {/* Themed frame; the label face inside adapts to the theme (dark card +
+            inverted barcode in dark mode). Print output stays black-on-white. */}
         <div className="mb-4 rounded-xl border border-border-soft/80 bg-surface-card px-3 py-3 shadow-sm">
           <ReceivingPoLabelPreview {...preview} embedded />
         </div>

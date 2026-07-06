@@ -42,6 +42,10 @@ export interface OutboundDocumentData {
   objectKey?: string | null;
   sha256Hex?: string | null;
   fileSizeBytes?: number | null;
+  /** Cold NAS copy after GCS→NAS mirror cron (primary serve stays GCS). */
+  nasUrl?: string | null;
+  nasObjectKey?: string | null;
+  nasMirroredAt?: string | null;
 }
 
 export interface DocumentEntityLinkRow {

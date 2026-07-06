@@ -58,7 +58,7 @@ const DOMAINS: Domain[] = [
     icon: Truck,
     tone: TONE_AMBER,
     links: [
-      { name: 'Order Packing', href: '/packer', badge: '14 Pending' },
+      { name: 'Order Packing', href: '/pack', badge: '14 Pending' },
       { name: 'FBA Intake', href: '/fba' },
       { name: 'Shipping & Tracking', href: '/shipping' },
       { name: 'Pick Lists', href: '/pick' },
@@ -80,7 +80,7 @@ const DOMAINS: Domain[] = [
     icon: Cpu,
     tone: TONE_TERRACOTTA,
     links: [
-      { name: 'Serial Number Intake', href: '/tech', badge: 'Critical' },
+      { name: 'Serial Number Intake', href: '/test', badge: 'Critical' },
       { name: 'Device Repairs', href: '/repair' },
     ],
   },

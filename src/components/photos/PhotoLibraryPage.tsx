@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Download, ExternalLink, Link2, Loader2, MessageSquare, Tag, Trash2 } from '@/components/Icons';
-import { usePageSelection } from '@/hooks/usePageHeader';
 import { usePhotoLibrary, photoLibraryFilterParams } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
 import { usePhotoSelection } from '@/hooks/usePhotoSelection';
@@ -12,13 +11,13 @@ import { describePhotoLibraryContext } from '@/lib/photos/library-context-label'
 import { claimsTicketLabel, photoShareTitle } from '@/lib/photos/display-names';
 import { buildPhotoDateTree } from '@/lib/photos/date-tree';
 import {
-  PHOTO_LIBRARY_VIEW_ORDER,
+  photoLibraryViewToggleModes,
   sourceScopeFromFilters,
   todayFoldersDateFilter,
 } from '@/lib/photos/library-filter-state';
 import { useMediaLibraryShortcuts } from '@/hooks/useMediaLibraryShortcuts';
 import { usePhotoGridDensity } from '@/hooks/usePhotoGridDensity';
-import { photoLibraryShowsGridControls } from '@/lib/photos/photo-grid-density';
+import { photoLibraryShowsGridControls, photoLibraryShowsSecondHeaderControls } from '@/lib/photos/photo-grid-density';
 import { describeFolderBrowseHeader } from '@/components/photos/photo-library-grid/date-folder-tree';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
@@ -133,7 +132,7 @@ export function PhotoLibraryPage() {
   const [selectMode, setSelectMode] = useState(false);
   // Selection persists across the client pages (see usePhotoSelection): a bulk
   // action carries the whole set, not just the visible page.
-  const { selected, selectedPhotos, isActive, selectTile, selectAll, selectIds, clear } =
+  const { selected, selectedPhotos, isActive, selectTile, selectAll, selectIds, toggleGroupSelection, clear } =
     usePhotoSelection(photos);
   const selectionActive = selectMode || isActive;
 
@@ -156,7 +155,8 @@ export function PhotoLibraryPage() {
 
   const folderIsLeaf = Boolean(folderBrowse?.isLeaf);
   const showGridControls = photoLibraryShowsGridControls(view, folderIsLeaf);
-  const gridControlsInBreadcrumb = view === 'folders' && folderIsLeaf;
+  const showSecondHeaderControls = photoLibraryShowsSecondHeaderControls(view, folderIsLeaf);
+  const viewToggleModes = useMemo(() => photoLibraryViewToggleModes(view, folderIsLeaf), [view, folderIsLeaf]);
 
   // Date breadcrumb quick-jump defaults: today + the most recent
   // capture day across the loaded photos — both keyed off `created_at` (PST),
@@ -216,23 +216,15 @@ export function PhotoLibraryPage() {
     }
   }, [filters, selectIds]);
 
-  usePageSelection(
-    {
-      active: selectionActive,
-      onToggle: () => (selectionActive ? exitSelectMode() : setSelectMode(true)),
-    },
-    [selectionActive, exitSelectMode],
-  );
-
   // Grid keyboard shortcuts (the viewer owns its own keys). `?` help, `⌘A`
   // select-all while selecting, `Esc` exit, `1`–`5` view switch.
   const toggleShortcuts = useCallback(() => setShowShortcuts((v) => !v), []);
   const selectViewByIndex = useCallback(
     (index: number) => {
-      const next = PHOTO_LIBRARY_VIEW_ORDER[index];
+      const next = viewToggleModes[index];
       if (next) handleViewChange(next);
     },
-    [handleViewChange],
+    [handleViewChange, viewToggleModes],
   );
   useMediaLibraryShortcuts({
     selectionActive,
@@ -557,16 +549,13 @@ export function PhotoLibraryPage() {
         title={title}
         metaLine={metaLine}
         folderBrowse={folderBrowse}
-        view={view}
-        onViewChange={handleViewChange}
         sort={filters.sort ?? 'recent'}
         onSortChange={(sort) => patch({ sort })}
-        gridDensity={gridDensity}
-        onGridDensityChange={setGridDensity}
-        onRefreshPhotos={() => void query.refetch()}
-        isRefreshingPhotos={query.isFetching && !query.isLoading}
-        showGridControls={showGridControls}
-        gridControlsInBreadcrumb={gridControlsInBreadcrumb}
+        view={view}
+        onViewChange={handleViewChange}
+        folderIsLeaf={folderIsLeaf}
+        onToggleSelection={() => setSelectMode(true)}
+        showDisplayControls={showSecondHeaderControls}
       />
 
       {/* Top context bar — folder path by default, swapped for the bulk-action bar
@@ -585,25 +574,29 @@ export function PhotoLibraryPage() {
           onClear={exitSelectMode}
         />
       ) : (
-        <div className="flex h-[40px] shrink-0 items-center justify-between gap-2 border-b border-border-soft bg-surface-card px-4">
-          <PhotoDateBreadcrumb
-            filters={displayFilters}
-            today={today}
-            mostRecentDay={mostRecentDay}
-            folderLeafLabel={folderIsLeaf ? folderBrowse?.title : undefined}
-            onNavigate={({ dateFrom, dateTo }) =>
-              patch({ dateFrom, dateTo, poRef: undefined, ticketId: undefined })
-            }
-          />
-          {gridControlsInBreadcrumb ? (
-            <PhotoGridDisplayControls
-              density={gridDensity}
-              onDensityChange={setGridDensity}
-              onRefresh={() => void query.refetch()}
-              isRefreshing={query.isFetching && !query.isLoading}
+        <>
+          <div className="flex h-[40px] shrink-0 items-center border-b border-border-soft bg-surface-card px-4">
+            <PhotoDateBreadcrumb
+              filters={displayFilters}
+              today={today}
+              mostRecentDay={mostRecentDay}
+              folderLeafLabel={folderIsLeaf ? folderBrowse?.title : undefined}
+              onNavigate={({ dateFrom, dateTo }) =>
+                patch({ dateFrom, dateTo, poRef: undefined, ticketId: undefined })
+              }
             />
+          </div>
+          {showGridControls ? (
+            <div className="flex h-[40px] shrink-0 items-center justify-end gap-1 border-b border-border-soft bg-surface-card px-4">
+              <PhotoGridDisplayControls
+                density={gridDensity}
+                onDensityChange={setGridDensity}
+                onRefresh={() => void query.refetch()}
+                isRefreshing={query.isFetching && !query.isLoading}
+              />
+            </div>
           ) : null}
-        </div>
+        </>
       )}
 
       <div className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-6 lg:p-6">
@@ -623,6 +616,7 @@ export function PhotoLibraryPage() {
           selectionActive={selectionActive}
           selected={selected}
           onSelectTile={selectTile}
+          onToggleGroupSelection={toggleGroupSelection}
           onPhotoContextMenu={(photo, e) => {
             e.preventDefault();
             setCtxMenu({ photo, x: e.clientX, y: e.clientY });

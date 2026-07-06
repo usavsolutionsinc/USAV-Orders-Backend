@@ -52,6 +52,7 @@ export function RepairAgreement({ formData, signatureData, onSignatureChange }: 
       </div>
 
       {/* Details — table style */}
+      {/* ds-allow-raw-neutral: print ink — literal black-on-white output */}
       <div className="border-2 border-gray-900">
         <DetailRow label="Product" value={formData.product.model || formData.product.type} />
         <DetailRow label="Serial #" value={formData.serialNumber} />

@@ -84,6 +84,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     const lineIdRaw = params.get('receivingLineId');
     const scope = params.get('scope');
+    const photoIntentRaw = params.get('photoIntent');
+    const photoIntent =
+      photoIntentRaw === 'package' || photoIntentRaw === 'item' ? photoIntentRaw : 'all';
 
     const lineId =
       lineIdRaw != null
@@ -101,6 +104,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       receivingId,
       lineId,
       scope: scope === 'po' ? 'po' : 'all',
+      photoIntent,
     });
 
     // Surface when this carton was physically scanned/received so the NAS picker
@@ -216,7 +220,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const entityType = receivingLineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
     const entityId = receivingLineId ?? receivingId;
     const poRef = await resolvePoRef(entityType, entityId);
-    const photoType = caption || (receivingLineId != null ? 'receiving_item' : 'receiving');
+    const photoType =
+      caption ||
+      (receivingLineId != null ? 'receiving_item' : 'receiving_package');
 
     let attached;
     try {

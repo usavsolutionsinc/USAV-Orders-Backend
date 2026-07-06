@@ -93,7 +93,7 @@ export function FbaCreatePlanModal({ stationTheme = 'blue' }: { stationTheme?: S
     <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <button
         type="button"
-        className="ds-raw-button absolute inset-0 bg-black/35"
+        className="ds-raw-button absolute inset-0 bg-scrim/35"
         aria-label="Close create plan"
         onClick={() => { if (!submitting) setOpen(false); }}
       />

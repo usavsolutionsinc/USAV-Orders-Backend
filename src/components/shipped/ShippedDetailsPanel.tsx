@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
 import { usePanelActions } from '@/hooks/usePanelActions';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
 import { type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
 import type { DetailsStackDurationData, ShippedActiveInput } from './stacks/types';
@@ -46,15 +46,6 @@ export function ShippedDetailsPanel({
   // labels, read-only on dashboard/fulfillment/staged.
   const showDocumentsTab = showDashboardExtras || isStagedPanel;
 
-  // Return tab leads with operator info ("who packed / tested / with what
-  // serials") and is the default once the order is packed.
-  const hasReturnContent =
-    !!initialShipped.packed_at &&
-    initialShipped.packed_at !== '1' &&
-    !isFulfillmentPanel &&
-    !isLabelsPanel &&
-    !isStagedPanel;
-
   const [durationData] = useState<DetailsStackDurationData>({});
 
   const {
@@ -68,14 +59,18 @@ export function ShippedDetailsPanel({
     setShippingTrackingNumber,
     notes,
     setNotes,
+    outOfStock,
+    setOutOfStock,
     shipByDate,
     setShipByDate,
     isSavingInlineFields,
     isSavingNotes,
+    isSavingOutOfStock,
     isSavingShipByDate,
-    saveNotes,
     saveInlineFields,
     saveShipByDate,
+    handleSaveNotes,
+    handleSaveOutOfStock,
   } = useShippedDetailState(initialShipped, onUpdate);
 
   const meta = deriveShippedHeaderMeta(shipped);
@@ -85,9 +80,7 @@ export function ShippedDetailsPanel({
     setActiveSection,
     activeInput,
     setActiveInput,
-    isMarkAsShippedOpen,
-    setIsMarkAsShippedOpen,
-  } = useShippedPanelViewState({ initialShipped, hasReturnContent });
+  } = useShippedPanelViewState({ initialShipped });
 
   const { copiedAll, copiedOrderId, handleCopyAll, handleCopyOrderId } = useShippedCopyActions(
     shipped,
@@ -108,7 +101,7 @@ export function ShippedDetailsPanel({
   const panelActions = usePanelActions(
     { entityType: 'order', entityId: shipped.id, orderId: shipped.order_id },
     {
-      status: () => setIsMarkAsShippedOpen((prev) => !prev),
+      status: () => setActiveInput((prev) => (prev === 'mark_shipped' ? 'none' : 'mark_shipped')),
       out_of_stock: () => setActiveInput((prev) => (prev === 'out_of_stock' ? 'none' : 'out_of_stock')),
       notes: () => setActiveInput((prev) => (prev === 'notes' ? 'none' : 'notes')),
     },
@@ -124,7 +117,7 @@ export function ShippedDetailsPanel({
     // Highlight the button while its panel is open, so the selected action is clear.
     active:
       action.key === 'status'
-        ? isMarkAsShippedOpen
+        ? activeInput === 'mark_shipped'
         : action.key === 'out_of_stock'
           ? activeInput === 'out_of_stock'
           : action.key === 'notes'
@@ -150,29 +143,17 @@ export function ShippedDetailsPanel({
   };
 
   return (
-    <>
-      <SlideOverBackdrop onClose={onClose} />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-      >
+    <DetailStackRailRegistrar id={`detail:order:${shipped.id}`} onClose={onClose}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <ShippedDetailsHeader
           orderIdDisplay={meta.orderIdDisplay}
           showExceptionsFallback={meta.showExceptionsFallback}
           copiedOrderId={copiedOrderId}
           onCopyOrderId={handleCopyOrderId}
           onClose={onClose}
-          quantity={(shipped as any).quantity}
-          showStatusPill={Boolean((meta.hasTechScan && meta.testedById) || meta.hasOutOfStock)}
-          statusTone={meta.statusTone}
-          statusLabel={meta.statusLabel}
           actions={headerBarActions}
           onMoveUp={stackActionBar.onMoveUp}
           onMoveDown={stackActionBar.onMoveDown}
-          hasReturnContent={hasReturnContent}
           showCustomerTab={showDashboardExtras}
           showDocumentsTab={showDocumentsTab}
           activeSection={activeSection}
@@ -183,6 +164,7 @@ export function ShippedDetailsPanel({
           context={context}
           isFulfillmentPanel={isFulfillmentPanel}
           isLabelsPanel={isLabelsPanel}
+          showDashboardExtras={showDashboardExtras}
           activeSection={activeSection}
           shipped={shipped}
           durationData={durationData}
@@ -191,8 +173,6 @@ export function ShippedDetailsPanel({
           onUpdate={onUpdate}
           activeInput={activeInput}
           setActiveInput={setActiveInput}
-          isMarkAsShippedOpen={isMarkAsShippedOpen}
-          setIsMarkAsShippedOpen={setIsMarkAsShippedOpen}
           stackActionBar={stackActionBar}
           editableFields={{
             orderNumber,
@@ -211,7 +191,15 @@ export function ShippedDetailsPanel({
           notes={notes}
           setNotes={setNotes}
           isSavingNotes={isSavingNotes}
-          onSaveNotes={() => { void saveNotes(notes); }}
+          onSaveNotes={() => { void handleSaveNotes(() => setActiveInput('none')); }}
+          outOfStock={outOfStock}
+          setOutOfStock={setOutOfStock}
+          isSavingOutOfStock={isSavingOutOfStock}
+          onSaveOutOfStock={() => { void handleSaveOutOfStock(() => setActiveInput('none')); }}
+          onMarkShippedSuccess={() => {
+            setActiveInput('none');
+            onUpdate();
+          }}
           isDeleteArmed={isDeleteArmed}
           isDeletingOrder={isDeleting}
           onDeleteOrder={handleDelete}
@@ -229,7 +217,7 @@ export function ShippedDetailsPanel({
             />
           ) : null}
         </AnimatePresence>
-      </motion.div>
-    </>
+      </div>
+    </DetailStackRailRegistrar>
   );
 }

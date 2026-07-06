@@ -15,14 +15,19 @@ import type { SearchEntityType } from '@/lib/search/build-search-text';
 /** First-path-segment → likely entity types. Order is meaningless. */
 const SEGMENT_SCOPE: Record<string, SearchEntityType[]> = {
   dashboard: ['ORDER'],
-  packer: ['ORDER'],
+  pack: ['ORDER'], // first-class Packing surface (operator-surfaces Phase 7)
+  packer: ['ORDER'], // legacy alias
   shipped: ['ORDER'],
-  receiving: ['RECEIVING'],
+  receiving: ['RECEIVING'], // also covers the nested `/receiving/history` surface
+  unbox: ['RECEIVING'],
+  triage: ['RECEIVING'],
   incoming: ['RECEIVING'],
+  pickup: ['RECEIVING'], // first-class Local Pickup surface (operator-surfaces Phase 9)
   products: ['SKU'],
   'sku-stock': ['SKU'],
   inventory: ['SERIAL_UNIT', 'SKU'],
-  tech: ['SERIAL_UNIT'],
+  test: ['SERIAL_UNIT'], // first-class Testing surface (operator-surfaces Phase 8)
+  tech: ['SERIAL_UNIT'], // legacy alias
   testing: ['SERIAL_UNIT'],
   repair: ['REPAIR'],
   fba: ['FBA_SHIPMENT'],

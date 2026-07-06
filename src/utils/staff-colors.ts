@@ -32,7 +32,7 @@ export const stationScanInputBorderClass: Record<StationTheme, string> = {
   blue: 'border-2 border-blue-500',
   purple: 'border-2 border-purple-500',
   yellow: 'border-2 border-amber-500',
-  black: 'border-2 border-slate-700',
+  black: 'border-2 border-slate-700', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
   red: 'border-2 border-red-500',
   lightblue: 'border-2 border-sky-500',
   pink: 'border-2 border-pink-500',
@@ -88,8 +88,8 @@ export const stationThemeColors: Record<StationTheme, StationThemeColors> = {
     shadow: 'shadow-amber-100',
   },
   black: {
-    bg: 'bg-slate-900',
-    hover: 'hover:bg-slate-800',
+    bg: 'bg-slate-900', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
+    hover: 'hover:bg-slate-800', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
     light: 'bg-surface-canvas',
     border: 'border-border-soft',
     text: 'text-text-default',
@@ -156,7 +156,7 @@ export const stationThemeClasses: Record<
     inactive: 'bg-surface-card text-amber-700 border-amber-200 hover:bg-amber-50',
   },
   black: {
-    active: 'bg-slate-900 text-white border-slate-900',
+    active: 'bg-slate-900 text-white border-slate-900', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
     inactive: 'bg-surface-sunken text-text-default border-border-default hover:bg-surface-strong',
   },
   red: {
@@ -176,9 +176,9 @@ export const stationThemeClasses: Record<
 export const packerInputThemeClasses: Record<PackerStationTheme, StationInputThemeClasses> = {
   black: {
     text: 'text-text-default',
-    bg: 'bg-slate-900',
-    ring: 'focus:ring-slate-500/10',
-    border: 'focus:border-slate-500',
+    bg: 'bg-slate-900', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
+    ring: 'focus:ring-slate-500/10', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
+    border: 'focus:border-slate-500', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
   },
   red: {
     text: 'text-red-600',
@@ -464,19 +464,20 @@ export const printQueueTableUi: Record<
     statusFocusRing: 'focus-visible:ring-2 focus-visible:ring-amber-500/50',
   },
   black: {
-    checkboxChecked: 'border-slate-900 bg-slate-900',
-    checkboxIdleHover: 'hover:border-slate-600 hover:bg-surface-hover',
+    checkboxChecked: 'border-slate-900 bg-slate-900', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
+    checkboxIdleHover: 'hover:border-slate-600 hover:bg-surface-hover', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
     checkboxFocusRing:
+      // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
       'focus-visible:ring-2 focus-visible:ring-slate-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
     rowSelected: 'bg-surface-sunken/80 hover:bg-surface-sunken',
-    rowFocusRing: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40',
+    rowFocusRing: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
     readyStatusPill:
       'rounded-md bg-surface-strong px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wide text-text-default',
     toolbarAccent: 'text-text-default',
     toolbarIconMuted: 'text-text-default',
     metaIconAccent: 'text-text-default',
     refreshHover: 'hover:border-border-emphasis hover:text-text-default',
-    statusFocusRing: 'focus-visible:ring-2 focus-visible:ring-slate-500/50',
+    statusFocusRing: 'focus-visible:ring-2 focus-visible:ring-slate-500/50', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
   },
   red: {
     checkboxChecked: 'border-red-600 bg-red-600',
@@ -609,15 +610,17 @@ export const fbaWorkspaceScanChrome: Record<
   },
   black: {
     trackingCard:
+      // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
       'space-y-3 rounded-xl border-2 border-slate-500/90 bg-gradient-to-b from-slate-50/90 to-white px-3 py-3 shadow-sm shadow-slate-200/40',
     trackingSectionBorder: 'border-t border-border-emphasis',
     selectedItemsLabel: 'text-eyebrow font-black uppercase tracking-[0.14em] text-text-default',
     fnskuSubtext:
       'font-mono text-micro font-semibold uppercase tracking-[0.12em] text-text-muted',
-    fieldFocusRing: 'focus:ring-slate-500',
+    fieldFocusRing: 'focus:ring-slate-500', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
     savingSpinner: 'text-text-soft',
     fnskuScanIconClass: 'text-text-muted',
     fnskuScanInputClass:
+      // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
       '!text-text-default placeholder:text-text-faint focus:border-border-emphasis focus:ring-2 focus:ring-slate-500/25',
   },
   red: {
@@ -691,6 +694,7 @@ export const fbaFnskuChecklistChrome: Record<
   },
   black: {
     shell:
+      // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
       'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-slate-700/95 bg-gradient-to-b from-slate-50/90 via-white to-stone-50 shadow-md shadow-slate-300/30',
     headerBarDivider: 'border-b-2 border-border-emphasis',
   },
@@ -901,10 +905,10 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     loading: 'text-text-faint',
     emptyShell: 'rounded-2xl border border-border-soft bg-surface-canvas/80 px-4 py-3',
     emptyLabel: 'text-text-soft',
-    emptyIcon: 'text-slate-300',
-    cardActive: 'bg-surface-card border-slate-500',
-    cardIdle: 'bg-surface-card border-border-default hover:border-slate-500',
-    cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-slate-400/50',
+    emptyIcon: 'text-slate-300', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
+    cardActive: 'bg-surface-card border-slate-500', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
+    cardIdle: 'bg-surface-card border-border-default hover:border-slate-500', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
+    cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-slate-400/50', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
     cardDateText: 'text-sm font-black text-text-default',
     cardOpenPill:
       'rounded-full bg-surface-strong px-2 py-0.5 text-mini font-black uppercase tracking-wide text-text-default',
@@ -913,7 +917,7 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     cardExpandedDivider: 'border-t border-border-soft',
     cardQtyInput:
       'w-14 rounded-md border border-border-soft bg-surface-card px-1.5 py-1 text-center text-micro font-black tabular-nums text-text-default outline-none focus:border-border-emphasis',
-    cardProgress: 'h-full rounded-full bg-slate-500',
+    cardProgress: 'h-full rounded-full bg-slate-500', // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
     selectedRow: 'border-l-4 border-l-border-emphasis bg-surface-sunken/80 hover:bg-surface-sunken',
     selectedCountText: 'text-eyebrow font-black uppercase tracking-[0.16em] text-text-muted',
     scanResultsShell: 'rounded-xl border border-border-soft bg-surface-canvas/80 px-2.5 py-2',
@@ -925,8 +929,10 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
     secondaryButton:
       'inline-flex items-center gap-1 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-micro font-black uppercase tracking-wide text-text-muted transition-all hover:bg-surface-strong',
     input:
+      // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
       'w-full rounded-xl border-2 border-border-soft bg-surface-card px-4 py-3 text-sm font-semibold text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-slate-500',
     monoInput:
+      // ds-allow-raw-neutral: identity hue — staff/label color vocabulary, not chrome
       'w-full rounded-xl border-2 border-border-soft bg-surface-card px-4 py-3 text-sm font-semibold font-mono text-text-default outline-none transition-all placeholder:text-text-faint focus:border-transparent focus:ring-2 focus:ring-slate-500',
     primaryButton:
       'w-full rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 px-4 py-3 text-xs font-black uppercase tracking-wide text-white transition-all shadow-lg shadow-slate-500/20 hover:from-slate-800 hover:to-black disabled:cursor-not-allowed disabled:bg-surface-strong',

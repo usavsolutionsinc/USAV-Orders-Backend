@@ -273,7 +273,7 @@ export function RightPaneOverlay({
           exit={{ opacity: 0, pointerEvents: 'none' }}
           transition={FADE}
           onClick={onClose}
-          className="fixed inset-0 z-panelPopover bg-gray-950/35 backdrop-blur-[1px]"
+          className="fixed inset-0 z-panelPopover bg-scrim/35 backdrop-blur-[1px]"
         />
       ) : null}
       {open ? (

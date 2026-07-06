@@ -113,6 +113,27 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       : '';
     const shippedByCarrierOrLatestStatusSql = SHIPPED_BY_CARRIER_SQL;
 
+    // --- Unshipped queue (Phases 1-2): opt-in thin projection, coarse stage
+    // filter, and keyset pagination. Every param below is ABSENT for all other
+    // /api/orders callers, so their query + payload are byte-for-byte unchanged. ---
+    const queueShape = searchParams.get('listShape') === 'queue' && !hasSearchQuery && !singleOrderMode;
+    const stageRaw = String(searchParams.get('stage') || '').toLowerCase();
+    const stageFilter = stageRaw === 'pending' || stageRaw === 'tested' ? stageRaw : '';
+    const limitRaw = Number(searchParams.get('limit'));
+    const pageLimit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 500) : null;
+    // Keyset cursor over the ORDER BY (deadline_at ASC NULLS LAST, id ASC),
+    // base64(JSON{ d: iso|null, id }).
+    const cursorRaw = searchParams.get('cursor');
+    let cursor: { d: string | null; id: number } | null = null;
+    if (cursorRaw) {
+      try {
+        const parsed = JSON.parse(Buffer.from(cursorRaw, 'base64').toString('utf8')) as { d?: unknown; id?: unknown };
+        if (parsed && Number.isFinite(Number(parsed.id))) {
+          cursor = { d: parsed.d == null ? null : String(parsed.d), id: Number(parsed.id) };
+        }
+      } catch { cursor = null; }
+    }
+
     const cacheLookup = createCacheLookupKey({
       organizationId:     ctx.organizationId,
       status:             status || '',
@@ -136,6 +157,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       stallHours,
       carrierFilter,
       statusCategoryFilter,
+      listShape:          queueShape ? 'queue' : '',
+      stage:              stageFilter,
+      pageLimit:          pageLimit ?? '',
+      cursor:             cursorRaw || '',
       shipmentStatusRuleVersion: 'latest_status_relaxed_v2',
     });
 
@@ -164,6 +189,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         NULL::numeric AS replenishment_quantity_to_order,
         NULL::text AS replenishment_po_number,
         NULL::text AS replenishment_notes,`;
+    // listShape=queue omits the heavy per-order multi-tracking arrays (a
+    // details-panel concern) — the row chip uses the single stn.tracking_number.
+    // With those columns unreferenced, Postgres prunes the order_trackings LATERAL,
+    // so this trims both the JSON payload and the per-row lateral scan.
+    const trackingArraysSelect = queueShape
+      ? `'[]'::json AS tracking_numbers,
+        '[]'::json AS tracking_number_rows,`
+      : `COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
+        COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,`;
     // Precompute latest assignment and shipment activity in set-based CTEs so the
     // orders query does not fan out into multiple per-row lateral scans.
     let sql = `
@@ -381,8 +415,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         o.quantity,
         o.shipment_id,
         stn.tracking_number_raw AS tracking_number,
-        COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
-        COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
+        ${trackingArraysSelect}
         COALESCE(sc.sku, o.sku) AS sku,
         o.condition,
         o.out_of_stock,
@@ -570,6 +603,22 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       params.push(statusCategoryFilter);
     }
 
+    // Coarse stage facet, server-side (Phase 1). Mirrors the `has_tech_scan`
+    // SELECT alias (any station_activity_logs row for the shipment): within the
+    // fulfillment scope PACK events are already excluded, so an existing row is a
+    // tech scan. Fulfillment STATE / lane (ustatus) stays client-side (Decision 8).
+    if (stageFilter === 'tested') {
+      sql += ` AND EXISTS (
+        SELECT 1 FROM station_activity_logs sal
+        WHERE sal.shipment_id IS NOT NULL AND sal.shipment_id = o.shipment_id
+      )`;
+    } else if (stageFilter === 'pending') {
+      sql += ` AND NOT EXISTS (
+        SELECT 1 FROM station_activity_logs sal
+        WHERE sal.shipment_id IS NOT NULL AND sal.shipment_id = o.shipment_id
+      )`;
+    }
+
     if (exceptionsOnly) {
       sql += ` AND (
         stn.has_exception = true
@@ -608,9 +657,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     }
 
     if (staffFilterId != null) {
-      // OR across the packer + tech assignee so one selected staff sees every
-      // order assigned to them in this queue, regardless of station.
-      sql += ` AND (wa_p.assigned_packer_id = $${paramCount} OR wa_t.assigned_tech_id = $${paramCount})`;
+      // Match queue-counts: ANY non-canceled pack/test assignment to this staff,
+      // not just the latest ranked wa_p/wa_t row (reassignments must not hide work).
+      sql += ` AND EXISTS (
+        SELECT 1 FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id
+          AND wa.status <> 'CANCELED'
+          AND (wa.assigned_packer_id = $${paramCount} OR wa.assigned_tech_id = $${paramCount})
+      )`;
       params.push(staffFilterId);
       paramCount++;
     }
@@ -699,15 +753,56 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       params.push(orderIdFilter);
     }
 
+    // Keyset cursor: rows AFTER (d, id) in `deadline_at ASC NULLS LAST, id ASC`.
+    // A non-null cursor also sweeps in the NULL-deadline tail (it sorts last).
+    if (cursor) {
+      if (cursor.d != null) {
+        sql += ` AND (
+          wa_deadline.deadline_at > $${paramCount}::timestamptz
+          OR (wa_deadline.deadline_at = $${paramCount}::timestamptz AND o.id > $${paramCount + 1})
+          OR wa_deadline.deadline_at IS NULL
+        )`;
+        params.push(cursor.d, cursor.id);
+        paramCount += 2;
+      } else {
+        sql += ` AND wa_deadline.deadline_at IS NULL AND o.id > $${paramCount++}`;
+        params.push(cursor.id);
+      }
+    }
+
     sql += ` ORDER BY wa_deadline.deadline_at ASC NULLS LAST, o.id ASC`;
+
+    // Fetch one extra row to detect truncation + mint the next keyset cursor.
+    // Only when an explicit limit is set — unlimited callers are unchanged.
+    if (pageLimit != null) {
+      sql += ` LIMIT $${paramCount++}`;
+      params.push(pageLimit + 1);
+    }
 
     const result = await tenantQuery(ctx.organizationId, sql, params);
 
+    let rows = result.rows;
+    let nextCursor: string | null = null;
+    let truncated = false;
+    if (pageLimit != null && rows.length > pageLimit) {
+      truncated = true;
+      rows = rows.slice(0, pageLimit);
+      const last = rows[rows.length - 1] as { deadline_at?: unknown; id?: unknown };
+      const d = last?.deadline_at == null
+        ? null
+        : last.deadline_at instanceof Date
+          ? last.deadline_at.toISOString()
+          : String(last.deadline_at);
+      nextCursor = Buffer.from(JSON.stringify({ d, id: Number(last?.id) }), 'utf8').toString('base64');
+    }
+
     const payload = {
-      orders:    result.rows,
-      count:     result.rows.length,
-      weekStart: weekStart || null,
-      weekEnd:   weekEnd   || null,
+      orders:     rows,
+      count:      rows.length,
+      nextCursor,
+      truncated,
+      weekStart:  weekStart || null,
+      weekEnd:    weekEnd   || null,
     };
     if (!singleOrderMode && !hasSearchQuery) {
       await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);

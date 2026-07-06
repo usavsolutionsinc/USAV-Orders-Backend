@@ -167,3 +167,21 @@ export const Upload = ({ className = "w-6 h-6" }: { className?: string }) => (
         <path d="M12 3v12" />
     </svg>
 );
+
+/** Horizontal ellipsis — overflow / more-actions trigger. */
+export const MoreHorizontal = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+        <circle cx="5" cy="12" r="1.75" />
+        <circle cx="12" cy="12" r="1.75" />
+        <circle cx="19" cy="12" r="1.75" />
+    </svg>
+);
+
+/** Vertical ellipsis — overflow / more-actions trigger. */
+export const MoreVertical = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+        <circle cx="12" cy="5" r="1.75" />
+        <circle cx="12" cy="12" r="1.75" />
+        <circle cx="12" cy="19" r="1.75" />
+    </svg>
+);

@@ -67,7 +67,7 @@ const peekCardVariants: Variants = {
 };
 
 const CTRL_BTN =
-  'grid place-items-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/65 disabled:opacity-30';
+  'grid place-items-center rounded-full bg-scrim/40 text-white backdrop-blur-md transition-colors hover:bg-scrim/65 disabled:opacity-30';
 
 // ── Peek + fan ────────────────────────────────────────────────────────────────
 
@@ -237,7 +237,7 @@ export function PhotoPeekFan({
                 <img src={card.imgUrl} alt={card.alt} loading="lazy" className="h-full w-full object-cover" />
                 {/* Count badge rides the FRONT card's visible corner. */}
                 {i === 0 && count > 1 ? (
-                  <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-micro font-black leading-none text-white tabular-nums backdrop-blur-sm">
+                  <span className="absolute left-1.5 top-1.5 rounded-full bg-scrim/60 px-1.5 py-0.5 text-micro font-black leading-none text-white tabular-nums backdrop-blur-sm">
                     {count}
                   </span>
                 ) : null}
@@ -258,13 +258,13 @@ export function PhotoPeekFan({
                 <motion.div
                   key="photo-fan-expanded"
                   data-testid="photo-peek-expanded"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  initial={{ opacity: 0, pointerEvents: 'auto' }}
+                  animate={{ opacity: 1, pointerEvents: 'auto' }}
+                  exit={{ opacity: 0, pointerEvents: 'none' }}
                   transition={{ duration: 0.2, ease: motionBezier.easeOut }}
-                  onClick={close}
+                  onClick={viewerOpen ? undefined : close}
                   style={{ backgroundColor: FAN_BG, zIndex: zLayer.modalBackdrop }}
-                  className="fixed inset-0 flex items-center justify-center overflow-hidden backdrop-blur-sm"
+                  className={`fixed inset-0 flex items-center justify-center overflow-hidden backdrop-blur-sm ${viewerOpen ? 'pointer-events-none' : ''}`}
                 >
                   {/* Fan's own close — hidden while the fullscreen viewer is open so
                       its button doesn't stack a second X above the viewer. */}

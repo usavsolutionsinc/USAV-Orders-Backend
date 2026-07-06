@@ -140,7 +140,7 @@ function SalesListRow({ line, active, onSelect }: SalesListRowProps) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={line.image_url} alt="" className="h-full w-full object-contain" />
           ) : (
-            <Package className="h-5 w-5 text-gray-200" />
+            <Package className="h-5 w-5 text-text-faint" />
           )}
         </div>
         <p className="min-w-0 flex-1 truncate text-caption font-bold leading-snug text-text-default">

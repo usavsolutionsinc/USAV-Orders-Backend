@@ -217,6 +217,127 @@ const sourcingOpenDemand: DataSourceDefinition = {
   permission: 'sourcing.view',
 };
 
+/**
+ * Cartons arrived but not yet unboxed — the Unbox surface's work queue.
+ * Wraps GET /api/receiving/pending-unboxing (one row per receiving carton).
+ * A `rail_feed` or `checklist` block bound to this IS the unbox queue; a
+ * `scan_band` in the trigger slot classifies a scan against it.
+ */
+const receivingUnboxQueue: DataSourceDefinition = {
+  id: 'receiving.unbox_queue',
+  label: 'Cartons awaiting unbox',
+  integration: 'receiving',
+  endpoint: '/api/receiving/pending-unboxing',
+  buildUrl: (filters) => {
+    const limit = typeof filters.limit === 'string' && /^\d+$/.test(filters.limit) ? filters.limit : '100';
+    const status = typeof filters.status === 'string' ? filters.status : '';
+    const q = new URLSearchParams({ limit });
+    if (status && status !== 'ARRIVED_MATCHED') q.set('status', status);
+    return `/api/receiving/pending-unboxing?${q.toString()}`;
+  },
+  parse: (json) => {
+    const pending = (json as { pending?: Array<Record<string, unknown>> })?.pending ?? [];
+    return pending.map((p) => {
+      const firstLine = Array.isArray(p.lines) && p.lines.length > 0
+        ? (p.lines[0] as Record<string, unknown>)
+        : null;
+      const title =
+        (firstLine?.item_name as string | null) ??
+        (p.tracking_number as string | null) ??
+        `Carton #${p.receiving_id}`;
+      return {
+        id: String(p.receiving_id),
+        title,
+        tracking_number: (p.tracking_number as string | null) ?? null,
+        carrier: (p.carrier as string | null) ?? null,
+        po_number: (firstLine?.zoho_purchaseorder_id as string | null) ?? null,
+        sku: (firstLine?.sku as string | null) ?? null,
+        line_count: Number(p.line_count ?? 0),
+        received_at: (p.received_at as string | null) ?? null,
+      };
+    });
+  },
+  shape: [
+    { key: 'title', label: 'Item / tracking', kind: 'text' },
+    { key: 'tracking_number', label: 'Tracking', kind: 'tracking_ref' },
+    { key: 'carrier', label: 'Carrier', kind: 'text' },
+    { key: 'po_number', label: 'PO #', kind: 'po_ref' },
+    { key: 'sku', label: 'SKU', kind: 'sku_ref' },
+    { key: 'received_at', label: 'Received', kind: 'timestamp' },
+  ],
+  filters: [
+    {
+      key: 'status',
+      label: 'Queue',
+      kind: 'select',
+      options: [
+        { value: 'ARRIVED_MATCHED', label: 'Arrived + matched' },
+        { value: 'ALL', label: 'All pending' },
+        { value: 'UNBOXED', label: 'Unboxed (recent)' },
+      ],
+      default: 'ARRIVED_MATCHED',
+    },
+    {
+      key: 'limit',
+      label: 'Max rows',
+      kind: 'select',
+      options: [
+        { value: '50', label: '50' },
+        { value: '100', label: '100' },
+        { value: '200', label: '200' },
+      ],
+      default: '100',
+    },
+  ],
+  permission: 'receiving.view',
+  realtime: { ablyChannel: 'receiving' },
+};
+
+/**
+ * Units awaiting test / ready-to-ship — the Test surface's work queue
+ * (operator-surfaces refactor Phase 13). Wraps GET /api/inbox/tech-queue (one
+ * row per carton: returns pending a test verdict + unboxed priority orders ready
+ * to ship). A `rail_feed` block bound to this IS the testing queue; a `scan_band`
+ * with `surface: 'test'` in the trigger slot drives the scan loop against it.
+ */
+const testingTechQueue: DataSourceDefinition = {
+  id: 'testing.tech_queue',
+  label: 'Units awaiting test / ship',
+  integration: 'tech',
+  endpoint: '/api/inbox/tech-queue',
+  // The route takes no query params — it derives the queue from the session org.
+  buildUrl: () => '/api/inbox/tech-queue',
+  parse: (json) => {
+    const items = (json as { items?: Array<Record<string, unknown>> })?.items ?? [];
+    return items.map((it) => {
+      const receivingId = it.receivingId;
+      const lineId = it.lineId ?? 0;
+      return {
+        id: `${receivingId}-${lineId}`,
+        title:
+          (it.productTitle as string | null) ??
+          (it.orderNumber as string | null) ??
+          (it.trackingNumber as string | null) ??
+          `Carton #${receivingId}`,
+        tracking_number: (it.trackingNumber as string | null) ?? null,
+        order_number: (it.orderNumber as string | null) ?? null,
+        queue_kind:
+          it.kind === 'return_pending_test' ? 'Return · needs test' : 'Order · ready to ship',
+        unboxed_at: (it.unboxedAt as string | null) ?? null,
+      };
+    });
+  },
+  shape: [
+    { key: 'title', label: 'Item', kind: 'text' },
+    { key: 'tracking_number', label: 'Tracking', kind: 'tracking_ref' },
+    { key: 'order_number', label: 'Order', kind: 'order_ref' },
+    { key: 'queue_kind', label: 'Queue', kind: 'text' },
+    { key: 'unboxed_at', label: 'Unboxed', kind: 'timestamp' },
+  ],
+  permission: 'tech.view',
+  realtime: { ablyChannel: 'tech' },
+};
+
 let builtinsRegistered = false;
 export function registerBuiltinDataSources(): void {
   if (builtinsRegistered) return;
@@ -224,4 +345,6 @@ export function registerBuiltinDataSources(): void {
   registerDataSource(poGmailUnmatchedEmails);
   registerDataSource(receivingAwaitingTrackingPos);
   registerDataSource(sourcingOpenDemand);
+  registerDataSource(receivingUnboxQueue);
+  registerDataSource(testingTechQueue);
 }

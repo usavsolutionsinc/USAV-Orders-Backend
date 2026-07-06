@@ -36,6 +36,7 @@ interface PhotoLibraryGridProps {
   selected: Set<number>;
   /** Select/toggle a tile (the page owns range/anchor logic). */
   onSelectTile: (id: number, mods: TileSelectMods) => void;
+  onToggleGroupSelection?: (ids: number[]) => void;
   /** Right-click a photo tile — the page opens the contextual action menu. */
   onPhotoContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
   /** Called after a photo is deleted from the folder viewer so the list refreshes. */
@@ -57,6 +58,7 @@ export function PhotoLibraryGrid({
   selectionActive,
   selected,
   onSelectTile,
+  onToggleGroupSelection,
   onPhotoContextMenu,
   onPhotoDeleted,
   isLoading,
@@ -92,6 +94,7 @@ export function PhotoLibraryGrid({
           selectionActive={selectionActive}
           selected={selected}
           onSelectTile={onSelectTile}
+          onToggleGroupSelection={onToggleGroupSelection}
           onPhotoContextMenu={onPhotoContextMenu}
           openAt={openAt}
         />

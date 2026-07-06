@@ -38,7 +38,7 @@ export const UNBOX_SCAN_MODES: readonly UnboxScanModeMeta[] = [
     mode: 'order',
     label: 'PO #',
     Icon: Hash,
-    armedClass: 'text-text-muted bg-slate-500/10',
+    armedClass: 'text-text-muted bg-slate-500/10', // ds-allow-raw-neutral: identity/tone hue — PO-mode slate tint among emerald/blue mode tints
     iconClass: 'text-text-soft',
   },
 ] as const;

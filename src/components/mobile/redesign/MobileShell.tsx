@@ -39,7 +39,16 @@ function MobilePageError(error: Error, reset: () => void) {
  * Fullscreen photo flows live under `app/m/(immersive)` and do not mount this shell.
  */
 
-const HEADER_ROUTES = new Set(['/m/home', '/m/receiving', '/m/scan', '/m/receive', '/m/pick', '/m/pack']);
+const HEADER_ROUTES = new Set([
+  '/m/home',
+  '/m/receiving',
+  '/m/scan',
+  '/m/receive',
+  '/m/triage',
+  '/m/unbox',
+  '/m/pick',
+  '/m/pack',
+]);
 
 export const RedesignedMobileShell = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();

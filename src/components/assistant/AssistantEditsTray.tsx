@@ -80,22 +80,15 @@ export function AssistantEditsTray() {
     [load],
   );
 
+  if (loading || rows.length === 0) return null;
+
   return (
-    <div className="border-t border-border-hairline px-4 py-3">
+    <div className="shrink-0 border-t border-border-hairline px-4 py-3">
       <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
         AI edits{definitionId ? ' · this draft' : ''}
       </p>
-      {loading ? (
-        <p className="mt-2 flex items-center gap-1.5 text-micro text-text-faint">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
-        </p>
-      ) : rows.length === 0 ? (
-        <p className="mt-1 text-micro leading-5 text-text-faint">
-          Changes the assistant applies will appear here for review and revert.
-        </p>
-      ) : (
-        <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
-          {rows.map((m) => (
+      <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+        {rows.map((m) => (
             <li key={m.id} className="flex items-center gap-2 py-0.5">
               <span className="min-w-0 flex-1 truncate text-caption font-semibold text-text-default">
                 {m.mutation_kind.replaceAll('_', ' ')}
@@ -128,8 +121,7 @@ export function AssistantEditsTray() {
               ) : null}
             </li>
           ))}
-        </ul>
-      )}
+      </ul>
     </div>
   );
 }

@@ -24,8 +24,8 @@ const toneClassName: Record<SearchFieldTone, string> = {
   emerald: 'border-emerald-200 hover:border-emerald-300 focus-within:border-emerald-500 focus-within:hover:border-emerald-500',
   purple:  'border-purple-200 hover:border-purple-300 focus-within:border-purple-500 focus-within:hover:border-purple-500',
   yellow:  'border-amber-200 hover:border-amber-300 focus-within:border-amber-500 focus-within:hover:border-amber-500',
-  neutral: 'border-border-default hover:border-border-emphasis focus-within:border-gray-500 focus-within:hover:border-gray-500',
-  gray:    'border-border-default hover:border-border-emphasis focus-within:border-gray-700 focus-within:hover:border-gray-700',
+  neutral: 'border-border-default hover:border-border-emphasis focus-within:border-border-strong focus-within:hover:border-border-strong',
+  gray:    'border-border-default hover:border-border-emphasis focus-within:border-border-strong focus-within:hover:border-border-strong',
 };
 
 const loaderToneClass: Record<SearchFieldTone, string> = {
@@ -73,6 +73,11 @@ export interface SearchFieldProps {
    * Use for compact actions that should sit left of paste (e.g. “product not in catalog”).
    */
   trailingPrefix?: ReactNode;
+  /**
+   * Renders after the default trailing control in the same row (e.g. divider + assistant
+   * action on the header search pill).
+   */
+  trailingSuffix?: ReactNode;
   /** When true, trailing slot shows only paste (clipboard); never the clear (X) button when the field has text. */
   pasteOnlyTrailing?: boolean;
 }
@@ -108,6 +113,7 @@ export function SearchField({
   hideClear = false,
   customTrailingSlot,
   trailingPrefix,
+  trailingSuffix,
   pasteOnlyTrailing = false,
 }: SearchFieldProps) {
   // Internal draft — avoid churn from async parent updates during typing.
@@ -172,12 +178,12 @@ export function SearchField({
 
   const sizeClasses = size === 'compact'
     ? {
-        field: hideUnderline ? 'pb-1' : 'border-b pb-1',
-        input: 'h-7 text-sm',
-        rightSlot: 'h-7',
+        field: hideUnderline ? '' : 'border-b pb-1',
+        input: 'h-8 text-sm',
+        rightSlot: 'h-8',
       }
     : {
-        field: hideUnderline ? 'pb-1' : 'border-b-2',
+        field: hideUnderline ? '' : 'border-b-2',
         input: 'h-8 text-sm',
         rightSlot: 'h-8',
       };
@@ -213,7 +219,54 @@ export function SearchField({
     }
   };
 
-  const icon = leadingIcon || <Search className="h-[14px] w-[14px]" />;
+  const icon = leadingIcon || <Search className="h-4 w-4" />;
+
+  const trailingControl =
+    customTrailingSlot !== undefined ? (
+      customTrailingSlot
+    ) : isSearching ? (
+      <Loader2 className={`h-4 w-4 animate-spin ${loaderToneClass[tone]}`} />
+    ) : isPending ? (
+      <span className="flex h-4 w-4 items-center justify-center">
+        <span
+          className={`block h-[5px] w-[5px] rounded-full animate-pulse ${loaderToneClass[tone]} bg-current opacity-60`}
+        />
+      </span>
+    ) : pasteOnlyTrailing ? (
+      <button
+        type="button"
+        onClick={handlePaste}
+        className="inline-flex h-4 w-4 items-center justify-center text-text-faint transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95"
+        aria-label="Paste from clipboard"
+        title="Paste"
+      >
+        <Clipboard className="h-4 w-4" />
+      </button>
+    ) : hasValue ? (
+      hideClear ? (
+        <span className="h-4 w-4 shrink-0" aria-hidden />
+      ) : (
+        <button
+          type="button"
+          onClick={handleClear}
+          className="inline-flex h-4 w-4 items-center justify-center text-text-faint transition-colors duration-100 ease-out hover:text-text-default active:scale-95"
+          aria-label="Clear search"
+          title="Clear"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )
+    ) : (
+      <button
+        type="button"
+        onClick={handlePaste}
+        className="inline-flex h-4 w-4 items-center justify-center text-text-faint transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95"
+        aria-label="Paste from clipboard"
+        title="Paste"
+      >
+        <Clipboard className="h-4 w-4" />
+      </button>
+    );
 
   return (
     <div className={`flex w-full min-w-0 items-center ${fieldGapClass} ${className}`.trim()}>
@@ -223,7 +276,7 @@ export function SearchField({
           hideUnderline ? 'border-transparent' : toneClassName[tone]
         }`.trim()}
       >
-        <span className="shrink-0 text-text-faint transition-colors duration-100 ease-out group-focus-within:text-text-default">
+        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-text-faint transition-colors duration-100 ease-out group-focus-within:text-text-default">
           {icon}
         </span>
 
@@ -237,57 +290,13 @@ export function SearchField({
           className={`w-full border-0 bg-transparent px-0 font-bold text-text-default outline-none placeholder:font-medium placeholder:text-text-faint ${sizeClasses.input}`.trim()}
         />
 
-        {/* Right-slot: optional prefix, then spinner > pending > clear > paste — or fully custom slot. */}
+        {/* Trailing row: prefix → spinner/pending/clear/paste → suffix */}
         <span
-          className={`flex shrink-0 items-center justify-end ${
-            trailingPrefix != null
-              ? 'min-h-[14px] gap-2'
-              : 'h-[14px] w-[14px] justify-center'
-          }`}
+          className={`flex shrink-0 items-center gap-1.5 ${sizeClasses.rightSlot}`.trim()}
         >
           {trailingPrefix}
-          {customTrailingSlot !== undefined ? (
-            customTrailingSlot
-          ) : isSearching ? (
-            <Loader2 className={`h-[14px] w-[14px] animate-spin ${loaderToneClass[tone]}`} />
-          ) : isPending ? (
-            // Subtle pulsing dot while debounce is in-flight — no spinner jitter.
-            <span className={`block h-[5px] w-[5px] rounded-full animate-pulse ${loaderToneClass[tone]} bg-current opacity-60`} />
-          ) : pasteOnlyTrailing ? (
-            <button
-              type="button"
-              onClick={handlePaste}
-              className="text-text-faint transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95"
-              aria-label="Paste from clipboard"
-              title="Paste"
-            >
-              <Clipboard className="h-[14px] w-[14px]" />
-            </button>
-          ) : hasValue ? (
-            hideClear ? (
-              <span className="h-[14px] w-[14px] shrink-0" aria-hidden />
-            ) : (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="text-text-faint transition-colors duration-100 ease-out hover:text-text-default active:scale-95"
-                aria-label="Clear search"
-                title="Clear"
-              >
-                <X className="h-[14px] w-[14px]" />
-              </button>
-            )
-          ) : (
-            <button
-              type="button"
-              onClick={handlePaste}
-              className="text-text-faint transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95"
-              aria-label="Paste from clipboard"
-              title="Paste"
-            >
-              <Clipboard className="h-[14px] w-[14px]" />
-            </button>
-          )}
+          {trailingControl}
+          {trailingSuffix}
         </span>
       </form>
 

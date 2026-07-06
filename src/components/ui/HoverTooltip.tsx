@@ -4,6 +4,7 @@ import {
   cloneElement,
   isValidElement,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -83,6 +84,19 @@ export function HoverTooltip({
 
     setPos({ top, left });
   }, [anchor]);
+
+  // Dismiss when the trigger unmounts, the pane scrolls, or the host panel
+  // tears down — otherwise the body portal stays at a fixed viewport rect and
+  // "leaks" over unrelated regions (e.g. condition pills over the notes tabs
+  // after a mode switch or scroll in ReceivingLineWorkspace).
+  useEffect(() => () => hide(), [hide]);
+
+  useEffect(() => {
+    if (!anchor) return;
+    const onScroll = () => hide();
+    window.addEventListener('scroll', onScroll, true);
+    return () => window.removeEventListener('scroll', onScroll, true);
+  }, [anchor, hide]);
 
   const bubble =
     anchor && typeof document !== 'undefined'

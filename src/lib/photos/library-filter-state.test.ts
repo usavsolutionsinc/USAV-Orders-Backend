@@ -13,6 +13,7 @@ import {
   DEFAULT_PHOTO_LIBRARY_MEDIA_SCOPE,
   PHOTO_LIBRARY_VIEW_ORDER,
   PHOTO_LIBRARY_PAGE_SIZE,
+  photoLibraryViewToggleModes,
   type PhotoLibraryViewMode,
 } from '@/lib/photos/library-filter-state';
 
@@ -169,6 +170,11 @@ test('label round-trips through parse + serialize and counts/clears as structure
   // The image-type navigator survives a structured clear.
   assert.equal(cleared.imageType, 'listing');
   assert.equal(countActivePhotoLibraryFilters(cleared), 0);
+});
+
+test('photoLibraryViewToggleModes lists list only — grid size is on row 3', () => {
+  assert.deepEqual(photoLibraryViewToggleModes('folders', true), ['list']);
+  assert.deepEqual(photoLibraryViewToggleModes('grid-sm', false), ['list']);
 });
 
 test('PHOTO_LIBRARY_VIEW_ORDER lists the 5 view modes, unique, for the 1–5 shortcuts', () => {

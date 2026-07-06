@@ -48,6 +48,7 @@ export function LineLabelPreviewCard({
   return (
     <>
       <WorkspaceCard
+        variant="glass"
         label="Label"
         actions={
           scanValue ? (
@@ -61,8 +62,9 @@ export function LineLabelPreviewCard({
           ) : undefined
         }
       >
-        {/* Bordered box matches the testing/products LabelPreviewCard so all
-            label previews read identically. */}
+        {/* Themed frame matching the testing/products LabelPreviewCard so all label
+            previews read identically. The label face inside is theme-aware (dark
+            card + inverted barcode in dark mode); print stays black-on-white. */}
         <div className="rounded border border-border-soft bg-surface-card px-2 py-2 shadow-sm">
           {scanValue ? (
             <ReceivingPoLabelPreview {...labelPayload} embedded />

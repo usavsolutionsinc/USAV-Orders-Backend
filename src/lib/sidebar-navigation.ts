@@ -49,7 +49,6 @@ import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 export type SidebarRouteKey =
   | 'dashboard'
   | 'operations'
-  | 'signals'
   | 'ops-photos'
   | 'studio'
   | 'fba'
@@ -103,8 +102,14 @@ const MOBILE_ALLOWED_PREFIXES: ReadonlyArray<string> = [
   '/m',
   '/signin',
   '/receiving',
+  '/unbox',
+  '/triage',
+  '/incoming',
+  '/pickup',
+  '/pack',
   '/packer',
   '/outbound',
+  '/test',
   '/tech',
   '/01',
   '/414',
@@ -119,21 +124,30 @@ export function isMobileAllowedPath(pathname: string | null | undefined): boolea
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'operations',        label: 'Operations',  href: '/operations',         icon: Monitor,         kind: 'main',    requires: 'operations.view' },
-  { id: 'signals',           label: 'Signals',     href: '/signals',            icon: Activity,        kind: 'main',    requires: 'operations.view' },
   { id: 'dashboard',         label: 'Orders / Shipping', href: '/dashboard',    icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
   { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
   { id: 'sourcing',          label: 'Sourcing',    href: '/sourcing',           icon: Search,          kind: 'main',    requires: 'sourcing.view' },
   { id: 'products',          label: 'Products',    href: '/products',           icon: Tags,            kind: 'main',    requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: ShelvingUnit,    kind: 'main',    requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: Warehouse,       kind: 'main',    requires: 'sku_stock.view' },
-  { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
+  // Points at the Unbox surface (`/unbox`) — the receiving station's default
+  // surface — so the primary nav lands on the canonical URL without a redirect
+  // hop. Route key still resolves to 'receiving', so the item stays active
+  // across every receiving mode (/unbox, /triage, /receiving?mode=…).
+  { id: 'receiving',         label: 'Receiving',   href: '/unbox',              icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'outbound',          label: 'Outbound',    href: '/outbound',           icon: Truck,           kind: 'station', requires: 'shipping.view' },
-  { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
+  // Points at the first-class Test surface (`/test`) so the primary nav lands on
+  // the canonical URL without a redirect hop. Route key still resolves to 'tech'
+  // (reuses the tech panel), so the item stays active on /test + /tech.
+  { id: 'tech',              label: 'Testing',     href: '/test',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   // Data Wipe is temporarily absent from master nav — revisit when the station
   // UX is ready for general rollout. /wipe route + API remain live.
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'main',    requires: 'fba.view' },
   { id: 'ops-photos',        label: 'Media library', href: '/ops/photos',       icon: Images,          kind: 'main',    requires: 'photos.view' },
-  { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Box,             kind: 'station', requires: 'packing.view' },
+  // Points at the first-class Pack surface (`/pack`) so the primary nav lands on
+  // the canonical URL without a redirect hop. Route key still resolves to
+  // 'packer' (reuses the packer panel), so the item stays active on /pack + /packer.
+  { id: 'packer',            label: 'Packing',     href: '/pack',               icon: Box,             kind: 'station', requires: 'packing.view' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom', requires: 'integrations.zendesk' },
   { id: 'studio',            label: 'Studio',      href: '/studio',             icon: Layers,          kind: 'bottom',  requires: 'studio.view' },
   { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
@@ -179,10 +193,17 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'dashboard';
   if (pathname === '/operations' || pathname.startsWith('/operations/')) return 'operations';
-  if (pathname === '/signals' || pathname.startsWith('/signals/')) return 'signals';
+  if (pathname === '/signals' || pathname.startsWith('/signals/')) return 'operations';
   if (pathname === '/ops/photos' || pathname.startsWith('/ops/photos/')) return 'ops-photos';
   if (pathname === '/studio' || pathname.startsWith('/studio/')) return 'studio';
   if (pathname === '/fba' || pathname.startsWith('/fba/')) return 'fba';
+  // `/unbox` + `/triage` are the first-class receiving surfaces — they reuse the
+  // receiving sidebar panel + right pane, so they resolve to the `receiving` key.
+  if (pathname === '/unbox' || pathname.startsWith('/unbox/')) return 'receiving';
+  if (pathname === '/triage' || pathname.startsWith('/triage/')) return 'receiving';
+  if (pathname === '/incoming' || pathname.startsWith('/incoming/')) return 'receiving';
+  if (pathname === '/pickup' || pathname.startsWith('/pickup/')) return 'receiving';
+  // `/receiving/history` (+ every other receiving sub-route) resolves here too.
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/walk-in' || pathname.startsWith('/walk-in/')) return 'walk-in';
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'walk-in';
@@ -196,7 +217,13 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
   if (pathname === '/audit-log' || pathname.startsWith('/audit-log/')) return 'audit-log';
   if (pathname === '/settings/audit' || pathname.startsWith('/settings/audit/')) return 'audit-log';
+  // `/test` is the first-class Testing surface; it reuses the `tech` sidebar
+  // panel + station, so it resolves to the `tech` key (legacy `/tech` too).
+  if (pathname === '/test' || pathname.startsWith('/test/')) return 'tech';
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
+  // `/pack` is the first-class Packing surface; it reuses the `packer` sidebar
+  // panel + station, so it resolves to the `packer` key (legacy `/packer` too).
+  if (pathname === '/pack' || pathname.startsWith('/pack/')) return 'packer';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
   if (pathname === '/outbound' || pathname.startsWith('/outbound/')) return 'outbound';
   if (pathname === '/manuals/library' || pathname.startsWith('/manuals/library/')) return 'manuals-library';
@@ -208,7 +235,13 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
 
 function getFirstPathSegment(path: string): string {
   const [segment = ''] = path.split('/').filter(Boolean);
-  return segment === 'packers' ? 'packer' : segment;
+  // Normalize the Packing surface aliases (`/pack`, `/packer`, `/packers`) to a
+  // single `pack` segment so the nav item stays active across the migration.
+  if (segment === 'packers' || segment === 'packer') return 'pack';
+  // Normalize the legacy Testing route (`/tech`) to the canonical `test` segment
+  // so the nav item stays active across the migration.
+  if (segment === 'tech') return 'test';
+  return segment;
 }
 
 export function isSidebarNavActive(pathname: string | null, href: string): boolean {
@@ -217,7 +250,7 @@ export function isSidebarNavActive(pathname: string | null, href: string): boole
   const hrefSegment = getFirstPathSegment(href);
   const pathnameSegment = getFirstPathSegment(pathname);
 
-  if (hrefSegment === 'tech' || hrefSegment === 'packer') {
+  if (hrefSegment === 'test' || hrefSegment === 'pack') {
     return pathnameSegment === hrefSegment;
   }
 
@@ -243,8 +276,17 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/walk-in',            permission: 'walk_in.view' },
   { prefix: '/repair',             permission: 'repair.view' },
   { prefix: '/receiving',          permission: 'receiving.view' },
+  // `/unbox` + `/triage` + `/incoming` are first-class receiving surfaces (same gate).
+  { prefix: '/unbox',              permission: 'receiving.view' },
+  { prefix: '/triage',             permission: 'receiving.view' },
+  { prefix: '/incoming',           permission: 'receiving.view' },
+  { prefix: '/pickup',             permission: 'receiving.view' },
+  // `/test` is the first-class Testing surface (legacy `/tech`).
+  { prefix: '/test',               permission: 'tech.view' },
   { prefix: '/tech',               permission: 'tech.view' },
   { prefix: '/wipe',               permission: 'tech.data_wipe' },
+  // `/pack` is the first-class Packing surface (legacy `/packer` / `/packers`).
+  { prefix: '/pack',               permission: 'packing.view' },
   { prefix: '/packer',             permission: 'packing.view' },
   { prefix: '/packers',            permission: 'packing.view' },
   { prefix: '/outbound',           permission: 'shipping.view' },
@@ -332,18 +374,34 @@ export interface SidebarPageNav extends SidebarNavItem {
 // self-contained literal (no closure over the array).
 const DASHBOARD = '/dashboard';
 const OPERATIONS = '/operations';
-const RECEIVING = '/receiving';
+// Unbox + Triage graduated to their own first-class surface routes
+// (operator-surfaces refactor Phases 1–2); those modes navigate to them. Pickup +
+// History graduated in Phase 9 (`/pickup`, nested `/receiving/history`). The whole
+// receiving family now navigates via first-class routes, so no bare `/receiving`
+// const remains.
+const UNBOX = '/unbox';
+const TRIAGE = '/triage';
+const PICKUP = '/pickup';
+const RECEIVING_HISTORY = '/receiving/history';
+const INCOMING = '/incoming';
 const FBA = '/fba';
 const INVENTORY = '/inventory';
 const WAREHOUSE = '/warehouse';
 const SOURCING = '/sourcing';
 const PRODUCTS = '/products';
-const TECH = '/tech';
+// Testing graduated to its own first-class surface route (`/test`,
+// operator-surfaces refactor Phase 8); its modes navigate there (the `?view=`
+// sub-mode rides along). Legacy `/tech` still resolves (proxy redirect + shared
+// page). Renamed const so the page href + every mode `to()` land on `/test`.
+const TECH = '/test';
 const WALK_IN = '/walk-in';
 const ADMIN = '/admin';
 const OUTBOUND = '/outbound';
 const SUPPORT = '/support';
-const PACKER = '/packer';
+// Packing graduated to its own first-class surface route (`/pack`,
+// operator-surfaces refactor Phase 7); its modes navigate there. Legacy
+// `/packer` still resolves (proxy redirect + shared page).
+const PACK = '/pack';
 
 export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Orders / Shipping ─────────────────────────────────────────────────────
@@ -367,23 +425,25 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     },
   },
   // ── Operations ────────────────────────────────────────────────────────────
-  // `?mode=analytics|insights|history`; bare /operations = the Live floor
-  // dashboard (default). The L2 rail mirrors the four right-pane modes
+  // `?mode=analytics|insights|history|signals`; bare /operations = the Live
+  // floor dashboard (default). The L2 rail mirrors the five right-pane modes
   // (OperationsWorkspace). Every switch clears the mode-scoped params (search,
   // selection, range, section…) so each mode opens clean — matches Inventory.
   {
     id: 'operations', label: 'Operations', href: OPERATIONS, icon: Monitor, kind: 'main', requires: 'operations.view',
     modes: [
-      { id: 'live',      label: 'Live',      icon: Activity,  to: () => ({ pathname: OPERATIONS, params: { mode: null,         q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
-      { id: 'analytics', label: 'Analytics', icon: BarChart3, to: () => ({ pathname: OPERATIONS, params: { mode: 'analytics', q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
-      { id: 'insights',  label: 'Insights',  icon: Sparkles,  to: () => ({ pathname: OPERATIONS, params: { mode: 'insights',  q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
-      { id: 'history',   label: 'History',   icon: History,   to: () => ({ pathname: OPERATIONS, params: { mode: 'history',   q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'live',      label: 'Live',      icon: Activity,  to: () => ({ pathname: OPERATIONS, params: { mode: null, signalsView: null, signalId: null, window: null, signalKind: null, q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'analytics', label: 'Analytics', icon: BarChart3, to: () => ({ pathname: OPERATIONS, params: { mode: 'analytics', signalsView: null, signalId: null, window: null, signalKind: null, q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'insights',  label: 'Insights',  icon: Sparkles,  to: () => ({ pathname: OPERATIONS, params: { mode: 'insights',  signalsView: null, signalId: null, window: null, signalKind: null, q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'history',   label: 'History',   icon: History,   to: () => ({ pathname: OPERATIONS, params: { mode: 'history',   signalsView: null, signalId: null, window: null, signalKind: null, q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'signals',   label: 'Signals',   icon: Zap,       to: () => ({ pathname: OPERATIONS, params: { mode: 'signals',   signalsView: null, signalId: null, window: null, signalKind: null, q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
     ],
     resolveMode: ({ params }) => {
       const m = params.get('mode');
       if (m === 'analytics') return 'analytics';
       if (m === 'insights') return 'insights';
       if (m === 'history') return 'history';
+      if (m === 'signals') return 'signals';
       return 'live';
     },
   },
@@ -394,15 +454,32 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // runs before unboxing; it's the 2nd pill and reachable at ?mode=triage. The
   // former `unfound` mode was relocated to Admin › PO Mailbox.
   {
-    id: 'receiving', label: 'Receiving', href: RECEIVING, icon: ClipboardList, kind: 'station', requires: 'receiving.view',
+    // href is the Unbox surface (the receiving station's default); keep it in
+    // sync with APP_SIDEBAR_NAV so `getSidebarHref('receiving')` resolves there.
+    id: 'receiving', label: 'Receiving', href: UNBOX, icon: ClipboardList, kind: 'station', requires: 'receiving.view',
     modes: [
-      { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
-      { id: 'triage',   label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: 'triage' } }) },
-      { id: 'receive',  label: 'Unbox',        icon: PackageOpen,    to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
-      { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
-      { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
+      // Incoming now lives at its own route (`/incoming`).
+      { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: INCOMING, params: { mode: null } }) },
+      // Triage now lives at its own route (`/triage`); dropping `mode` avoids a
+      // stale `?mode=` riding onto the surface path.
+      { id: 'triage',   label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: TRIAGE, params: { mode: null } }) },
+      // Unbox now lives at its own route (`/unbox`); dropping `mode` avoids a
+      // stale `?mode=` riding onto the surface path.
+      { id: 'receive',  label: 'Unbox',        icon: PackageOpen,    to: () => ({ pathname: UNBOX, params: { mode: null } }) },
+      // Pickup + History graduated to their own routes (`/pickup`,
+      // `/receiving/history`); dropping `mode` avoids a stale `?mode=` riding on.
+      { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: PICKUP, params: { mode: null } }) },
+      { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING_HISTORY, params: { mode: null } }) },
     ],
-    resolveMode: ({ params }) => {
+    resolveMode: ({ pathname, params }) => {
+      // The graduated surface routes resolve path-based (consistent with
+      // Inventory's graph/triage/pulse), regardless of params. `/receiving/history`
+      // is checked before the bare-route params fall-through.
+      if (pathname === RECEIVING_HISTORY || pathname.startsWith(`${RECEIVING_HISTORY}/`)) return 'history';
+      if (pathname === UNBOX || pathname.startsWith(`${UNBOX}/`)) return 'receive';
+      if (pathname === TRIAGE || pathname.startsWith(`${TRIAGE}/`)) return 'triage';
+      if (pathname === INCOMING || pathname.startsWith(`${INCOMING}/`)) return 'incoming';
+      if (pathname === PICKUP || pathname.startsWith(`${PICKUP}/`)) return 'pickup';
       const m = params.get('mode');
       if (m === 'pickup') return 'pickup';
       if (m === 'history') return 'history';
@@ -460,11 +537,11 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // `?packMode=fragile|multi`; default `standard` (param cleared). Mirrors the
   // panel's own `?packMode=` derivation so deep-links resolve identically.
   {
-    id: 'packer', label: 'Packing', href: PACKER, icon: Box, kind: 'station', requires: 'packing.view',
+    id: 'packer', label: 'Packing', href: PACK, icon: Box, kind: 'station', requires: 'packing.view',
     modes: [
-      { id: 'standard', label: 'Standard',   icon: Box,           to: () => ({ pathname: PACKER, params: { packMode: null } }) },
-      { id: 'fragile',  label: 'Fragile',    icon: AlertTriangle, to: () => ({ pathname: PACKER, params: { packMode: 'fragile' } }) },
-      { id: 'multi',    label: 'Multi-Item', icon: Boxes,         to: () => ({ pathname: PACKER, params: { packMode: 'multi' } }) },
+      { id: 'standard', label: 'Standard',   icon: Box,           to: () => ({ pathname: PACK, params: { packMode: null } }) },
+      { id: 'fragile',  label: 'Fragile',    icon: AlertTriangle, to: () => ({ pathname: PACK, params: { packMode: 'fragile' } }) },
+      { id: 'multi',    label: 'Multi-Item', icon: Boxes,         to: () => ({ pathname: PACK, params: { packMode: 'multi' } }) },
     ],
     resolveMode: ({ params }) => {
       const m = params.get('packMode');

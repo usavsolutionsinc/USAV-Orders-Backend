@@ -186,4 +186,8 @@ export interface ReceivingLineRow {
   triage_complete?: boolean | null;
   /** `receiving.triage_completed_at` — when the carton was staged/saved for unbox. */
   triage_completed_at?: string | null;
+  /** Carton first opened on Unbox with no prior triage door scan. */
+  unbox_only_intake?: boolean;
+  /** Server stamp when operator explicitly picked condition_grade. */
+  condition_set_at?: string | null;
 }

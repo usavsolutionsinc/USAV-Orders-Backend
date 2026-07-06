@@ -303,7 +303,7 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
       {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-scrim/40 backdrop-blur-sm" />
       <div className="relative w-full max-w-md rounded-2xl border border-border-soft bg-surface-card p-5 shadow-2xl">
         <h2 className="text-[16px] font-semibold text-text-default">Invite a teammate</h2>
         <p className="mt-1 text-label text-text-soft">

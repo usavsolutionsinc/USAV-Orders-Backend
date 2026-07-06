@@ -301,7 +301,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
           {/* ds-raw-button: full-screen invisible click-catcher scrim, not a UI button */}
           <button
             type="button"
-            className="absolute inset-0 bg-black/30"
+            className="absolute inset-0 bg-scrim/30"
             onClick={() => setIsDeleteOpen(false)}
             aria-label="Close delete confirmation"
           />
@@ -347,7 +347,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
           {/* ds-raw-button: full-screen invisible click-catcher scrim, not a UI button */}
           <button
             type="button"
-            className="absolute inset-0 bg-black/30"
+            className="absolute inset-0 bg-scrim/30"
             onClick={() => setIsUploadInfoOpen(false)}
             aria-label="Close FNSKU upload instructions"
           />
@@ -393,7 +393,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
           {/* ds-raw-button: full-screen invisible click-catcher scrim, not a UI button */}
           <button
             type="button"
-            className="absolute inset-0 bg-black/30"
+            className="absolute inset-0 bg-scrim/30"
             onClick={() => setIsAddOpen(false)}
             aria-label="Close add FNSKU mapping dialog"
           />

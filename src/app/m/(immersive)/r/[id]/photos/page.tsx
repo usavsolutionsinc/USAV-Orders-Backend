@@ -78,7 +78,7 @@ function PhotoPageInner() {
 
 export default function ReceivingPhotosPage() {
   return (
-    <Suspense fallback={<div className="min-h-[100dvh] bg-black" />}>
+    <Suspense fallback={<div className="min-h-[100dvh] bg-stage" />}>
       <PhotoPageInner />
     </Suspense>
   );

@@ -4,7 +4,7 @@ export interface TransferOrderDetail {
   sku: string;
   itemNumber: string;
   tracking: string;
-  titleSource: 'sheet' | 'sku_catalog' | 'platform_lookup' | 'none';
+  titleSource: 'sheet' | 'sku_catalog' | 'platform_lookup' | 'title_catalog_match' | 'none';
   /**
    * For `updated` / `deleted` rows: the original order's account_source and
    * created_at. Lets the dialog show provenance like "originally inserted by

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getOrdersChannelName, safeChannelName } from '@/lib/realtime/channels';
@@ -8,20 +8,27 @@ import type { DashboardSearchSectionProps } from '@/components/dashboard/Dashboa
 import { UnshippedShelfBoard } from '@/components/unshipped/UnshippedShelfBoard';
 import { OrdersFirstRunEmptyState } from '@/components/dashboard/OrdersFirstRunEmptyState';
 import { dispatchOpenShippedDetails } from '@/utils/events';
-import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
+import { unshippedOrdersQuery, unshippedQueueCountsQuery } from '@/lib/queries/dashboard-queries';
+import { Button } from '@/design-system/primitives';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
 import { deriveFulfillmentState, type FulfillmentState } from '@/lib/unshipped-state';
+import { patchUnshippedOrderCache, invalidateUnshippedCounts } from '@/lib/queries/dashboard-cache-patch';
 
 export interface UnshippedTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
   testedBy?: number;
   /** Pencil multi-select: rows render checkboxes; the page owns the action bar. */
   selectMode?: boolean;
+  /** Flip select-mode — drives the board's in-toolbar Select toggle. */
+  onToggleSelectMode?: () => void;
 }
 
-function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
-  const patched = { ...row };
+/** Map an assignment/order-changed event payload to the flat row patch it implies
+ *  (only the fields the event carries). Applied to the cache via
+ *  {@link patchUnshippedOrderCache}. */
+function assignmentPatchFromEvent(detail: any): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
   const {
     testerId,
     packerId,
@@ -35,23 +42,23 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
   } = detail || {};
 
   if (testerId !== undefined) {
-    patched.tester_id = testerId;
-    patched.tester_name = testerName ?? null;
-    patched.tested_by_name = testerName ?? null;
+    patch.tester_id = testerId;
+    patch.tester_name = testerName ?? null;
+    patch.tested_by_name = testerName ?? null;
   }
   if (packerId !== undefined) {
-    patched.packer_id = packerId;
-    patched.packer_name = packerName ?? null;
-    patched.packed_by_name = packerName ?? null;
+    patch.packer_id = packerId;
+    patch.packer_name = packerName ?? null;
+    patch.packed_by_name = packerName ?? null;
   }
-  if (deadlineAt !== undefined) patched.deadline_at = deadlineAt;
-  if (outOfStock !== undefined) patched.out_of_stock = outOfStock;
-  if (notes !== undefined) patched.notes = notes;
-  if (itemNumber !== undefined) patched.item_number = itemNumber;
-  if (condition !== undefined) patched.condition = condition;
-  if (detail.shippingTrackingNumber !== undefined) patched.shipping_tracking_number = detail.shippingTrackingNumber;
+  if (deadlineAt !== undefined) patch.deadline_at = deadlineAt;
+  if (outOfStock !== undefined) patch.out_of_stock = outOfStock;
+  if (notes !== undefined) patch.notes = notes;
+  if (itemNumber !== undefined) patch.item_number = itemNumber;
+  if (condition !== undefined) patch.condition = condition;
+  if (detail?.shippingTrackingNumber !== undefined) patch.shipping_tracking_number = detail.shippingTrackingNumber;
 
-  return patched;
+  return patch;
 }
 
 export function UnshippedTable({
@@ -62,6 +69,7 @@ export function UnshippedTable({
   searchResultLabel = 'unshipped orders',
   clearSearchLabel = 'Show All Unshipped Orders',
   selectMode = false,
+  onToggleSelectMode,
 }: UnshippedTableProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
@@ -96,9 +104,38 @@ export function UnshippedTable({
   // assigned work. Absent = ALL staff (current behavior preserved).
   const staffParam = Number(searchParams.get('staff'));
   const staffId = Number.isFinite(staffParam) && staffParam > 0 ? staffParam : undefined;
+
+  // Phase 2 pagination — a growing row ceiling. "Load more" bumps it; any filter
+  // change resets it. A search stays unbounded (results are already the matches).
+  const [rowLimit, setRowLimit] = useState(200);
+  useEffect(() => { setRowLimit(200); }, [stageFilter, staffId, searchQuery, statusFilter]);
+
   const query = useQuery({
-    ...unshippedOrdersQuery({ searchQuery, packedBy, testedBy, staffId, strictSearchScope }),
-    placeholderData: (previousData) => previousData,
+    ...unshippedOrdersQuery({
+      searchQuery,
+      packedBy,
+      testedBy,
+      staffId,
+      strictSearchScope,
+      // Coarse stage facet now filtered SERVER-side (Phase 1). Absent = all.
+      stage: stageFilter === 'all' ? undefined : stageFilter,
+      // Bounded page (Phase 2); search stays unbounded.
+      limit: searchQuery ? undefined : rowLimit,
+    }),
+    // Keep rows visible while search/stage refetch, but never bleed the previous
+    // staff scope into a new one — that made ?staff= look like it wasn't filtering.
+    placeholderData: (previousData, previousQuery) => {
+      const prev = previousQuery?.queryKey?.[2] as { staffId?: number } | undefined;
+      if (prev?.staffId !== staffId) return undefined;
+      return previousData;
+    },
+  });
+
+  // Stage-aware total from the counts endpoint (dedup-independent) drives the
+  // "Load more" affordance without downloading extra rows. Dedupes with the sidebar.
+  const { data: queueCounts } = useQuery({
+    ...unshippedQueueCountsQuery({ staffId }),
+    enabled: !searchQuery,
   });
 
   const ordersChannelName = safeChannelName(() => getOrdersChannelName(orgId!));
@@ -128,19 +165,9 @@ export function UnshippedTable({
         detail.shippingTrackingNumber !== undefined;
       if (!hasAnyChange) return;
 
-      queryClient.setQueriesData(
-        { queryKey: ['dashboard-table', 'unshipped'] },
-        (current: unknown) => {
-          if (!Array.isArray(current)) return current;
-          let changed = false;
-          const next = current.map((row: any) => {
-            if (Number(row?.id) !== orderId) return row;
-            changed = true;
-            return patchOrderRecordFromAssignmentEvent(row, detail);
-          });
-          return changed ? next : current;
-        }
-      );
+      patchUnshippedOrderCache(queryClient, orderId, assignmentPatchFromEvent(detail));
+      // out_of_stock/deadline can change the derived lane → keep the legend fresh.
+      invalidateUnshippedCounts(queryClient);
     },
     !!ordersChannelName,
   );
@@ -157,23 +184,12 @@ export function UnshippedTable({
       const normalizedTestedById = testedById != null && Number.isFinite(testedById) ? testedById : null;
       if (!Number.isFinite(orderId)) return;
 
-      queryClient.setQueriesData(
-        { queryKey: ['dashboard-table', 'unshipped'] },
-        (current: unknown) => {
-          if (!Array.isArray(current)) return current;
-          let changed = false;
-          const next = current.map((row: any) => {
-            if (Number(row?.id) !== orderId) return row;
-            changed = true;
-            return {
-              ...row,
-              has_tech_scan: true,
-              tested_by: normalizedTestedById ?? row?.tested_by ?? null,
-            };
-          });
-          return changed ? next : current;
-        }
-      );
+      // A tech verdict flips has_tech_scan (pending → tested lane). Patch in place
+      // (never clobber an existing tested_by with a null) + refresh the counts.
+      const patch: Record<string, unknown> = { has_tech_scan: true };
+      if (normalizedTestedById != null) patch.tested_by = normalizedTestedById;
+      patchUnshippedOrderCache(queryClient, orderId, patch);
+      invalidateUnshippedCounts(queryClient);
     },
     !!ordersChannelName,
   );
@@ -181,6 +197,7 @@ export function UnshippedTable({
   useEffect(() => {
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      invalidateUnshippedCounts(queryClient);
     };
     const handleAssignmentUpdated = (e: any) => {
       const detail = e?.detail || {};
@@ -199,19 +216,9 @@ export function UnshippedTable({
       if (!hasAnyChange) return;
 
       const idSet = new Set<number>(orderIds.map(Number));
-      queryClient.setQueriesData(
-        { queryKey: ['dashboard-table', 'unshipped'] },
-        (current: unknown) => {
-          if (!Array.isArray(current)) return current;
-          let changed = false;
-          const next = current.map((row: any) => {
-            if (!idSet.has(Number(row?.id))) return row;
-            changed = true;
-            return patchOrderRecordFromAssignmentEvent(row, detail);
-          });
-          return changed ? next : current;
-        }
-      );
+      const patch = assignmentPatchFromEvent(detail);
+      for (const oid of idSet) patchUnshippedOrderCache(queryClient, oid, patch);
+      invalidateUnshippedCounts(queryClient);
     };
 
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
@@ -234,25 +241,18 @@ export function UnshippedTable({
   };
 
   const allRecords = query.data || [];
-  const stageRecords = (() => {
-    switch (stageFilter) {
-      case 'pending':
-        return allRecords.filter((r) => !Boolean((r as { has_tech_scan?: boolean }).has_tech_scan));
-      case 'tested':
-        return allRecords.filter((r) => Boolean((r as { has_tech_scan?: boolean }).has_tech_scan));
-      default:
-        return allRecords;
-    }
-  })();
+  // `?stage` (pending/tested) is filtered SERVER-side now (Phase 1), so the query
+  // data already reflects it. `?ustatus` stays a client filter — exact derived
+  // FulfillmentState (PENDING/TESTED/BLOCKED), Decision 8.
   const records = statusFilter
-    ? stageRecords.filter((r) => {
+    ? allRecords.filter((r) => {
         const row = r as { has_tech_scan?: boolean; out_of_stock?: string | null };
         return deriveFulfillmentState({
           hasTechScan: Boolean(row.has_tech_scan),
           outOfStock: row.out_of_stock,
         }) === statusFilter;
       })
-    : stageRecords;
+    : allRecords;
 
   // First-run teaching state: a brand-new org with zero unshipped orders and no
   // active search/filter sees the "connect a sales channel" CTA instead of three
@@ -263,6 +263,7 @@ export function UnshippedTable({
     allRecords.length === 0 &&
     !searchQuery &&
     !statusFilter &&
+    stageFilter === 'all' &&
     staffId === undefined;
 
   if (isFirstRunEmpty) {
@@ -273,12 +274,32 @@ export function UnshippedTable({
     );
   }
 
+  // Phase 2 "Load more": the stage-aware total (server, dedup-independent) exceeds
+  // the loaded ceiling ⇒ more rows exist. Bumping the ceiling refetches the wider
+  // page. Hidden during search (results are already the full match set).
+  const stageTotal =
+    stageFilter === 'pending' ? (queueCounts?.byStage.pending ?? 0)
+      : stageFilter === 'tested' ? (queueCounts?.byStage.tested ?? 0)
+        : (queueCounts?.total ?? 0);
+  const showLoadMore = !searchQuery && stageTotal > rowLimit;
+  const footer = showLoadMore ? (
+    <div className="flex flex-col items-center gap-1 py-4">
+      <Button type="button" variant="secondary" onClick={() => setRowLimit((n) => n + 200)}>
+        Load more
+      </Button>
+      <p className="text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
+        Showing {Math.min(rowLimit, stageTotal)} of {stageTotal}
+      </p>
+    </div>
+  ) : null;
+
   return (
     <UnshippedShelfBoard
       records={records}
       loading={query.isLoading}
       searchValue={searchQuery}
       selectMode={selectMode}
+      onToggleSelectMode={onToggleSelectMode}
       onOpenRecord={(record) => {
         dispatchOpenShippedDetails(record, 'queue');
       }}
@@ -286,6 +307,7 @@ export function UnshippedTable({
       searchEmptyTitle={searchEmptyTitle}
       searchResultLabel={searchResultLabel}
       clearSearchLabel={clearSearchLabel}
+      footer={footer}
     />
   );
 }

@@ -44,7 +44,7 @@ export function FolderPickerModal({
   const folders = entries.filter((e) => e.type === 'directory');
 
   return (
-    <Layer level="panelPopover" role="dialog" aria-modal="true" className="fixed inset-0 grid place-items-center bg-black/40 p-4" onClick={onCancel}>
+    <Layer level="panelPopover" role="dialog" aria-modal="true" className="fixed inset-0 grid place-items-center bg-scrim/40 p-4" onClick={onCancel}>
       <div onClick={(e) => e.stopPropagation()} className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface-card shadow-2xl ring-1 ring-border-soft">
         <div className="flex items-center justify-between border-b border-border-hairline px-4 py-3">
           <div className="min-w-0">

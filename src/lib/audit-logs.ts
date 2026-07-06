@@ -124,6 +124,8 @@ export const AUDIT_ENTITY = {
   PART_ACQUISITION: 'part_acquisition',
   // Station builder (Operations Studio layer 2)
   STATION_DEFINITION: 'station_definition',
+  // Navigation as data (operator-surfaces refactor Phase 4)
+  NAV_DEFINITION: 'nav_definition',
   // Workflow graphs (Operations Studio layer 1)
   WORKFLOW_DEFINITION: 'workflow_definition',
   // AI write path (universal-feed plan §2.6) — agent-proposed mutations
@@ -360,6 +362,8 @@ export const AUDIT_ACTION = {
   // Station builder (Operations Studio layer 2) — draft/publish lifecycle
   STATION_DRAFT_SAVE: 'station.draft.save',
   STATION_PUBLISH:    'station.publish',
+  // Navigation as data (operator-surfaces refactor Phase 4)
+  NAV_PUBLISH:        'nav.publish',
   // Workflow graphs (Operations Studio layer 1) — draft/publish lifecycle
   WORKFLOW_DRAFT_CREATE: 'workflow.draft.create',
   WORKFLOW_DRAFT_SAVE:   'workflow.draft.save',

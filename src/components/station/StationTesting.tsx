@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
-import UpNextOrder from '../UpNextOrder';
+import { ShippingRecentRail } from '@/components/sidebar/shipping/ShippingRecentRail';
 import { Barcode, Loader2, Package, MapPin, Settings } from '../Icons';
 import { StationScanBar } from './StationScanBar';
 import { STATION_SCAN_BAR_MODE_BTN_ARMED } from '@/components/station/scan-bar';
@@ -40,7 +40,6 @@ export default function StationTesting({
 }: StationTestingProps) {
   const { theme: themeColor, inputBorder } = useStationTheme({ staffId });
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
-  const filterBarPortalRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
   const {
@@ -171,7 +170,7 @@ export default function StationTesting({
   })();
   const ActiveModeIcon = modeBadge.Icon;
   const modeButtonBaseClass =
-    'relative h-6 w-6 rounded-md flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60';
+    'relative h-6 w-6 rounded-md flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-emphasis/60';
   const inactiveModeButtonClass = 'relative z-base text-text-soft hover:bg-surface-sunken hover:text-text-default';
 
   const toggleMode = useCallback(
@@ -353,28 +352,21 @@ export default function StationTesting({
           </div>
         )}
 
-        {/* ── Scrollable content — Up Next queue. Active-order details now live
-              in the right pane (see ActiveOrderWorkspace via TechDashboard);
-              this sidebar stays focused on the scan input + queue. ── */}
-        <div className={`flex-1 space-y-3 overflow-y-auto ${SIDEBAR_GUTTER} pb-4 no-scrollbar ${isMobile ? 'pb-2' : ''}`}>
-          <div className="space-y-2 mt-0.5">
-            <UpNextOrder
-              techId={userId}
-              onStart={(tracking) => {
-                setActiveOrder(null);
-                clearFeedback();
-                setTimeout(() => handleFormSubmit(undefined, tracking), 50);
-              }}
-              onMissingParts={() => {
-                triggerGlobalRefresh();
-              }}
-              filterBarPortalRef={filterBarPortalRef}
-            />
-          </div>
+        {/* ── Scrollable recent rail — same shell as TestingSidebarPanel. ── */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <ShippingRecentRail
+            techId={userId}
+            onStart={(tracking) => {
+              setActiveOrder(null);
+              clearFeedback();
+              setTimeout(() => handleFormSubmit(undefined, tracking), 50);
+            }}
+            onMissingParts={() => {
+              triggerGlobalRefresh();
+            }}
+            onAllCompleted={onComplete}
+          />
         </div>
-
-        {/* Portal target for UpNextOrder filter bar */}
-        <div ref={filterBarPortalRef} className="flex-shrink-0" />
 
         {/* Mobile: scan bar docked at bottom, above safe area. Feedback
             strip sits just above the scan bar so it remains in the tech's

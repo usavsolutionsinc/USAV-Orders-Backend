@@ -67,7 +67,7 @@ export function MultiSeriesLineChart({
     <div ref={ref} className={cn('w-full', className)}>
       <svg width={width} height={height} role="img" aria-label="Throughput over time" className="overflow-visible">
         {/* horizontal grid — inherits dark-mode via currentColor */}
-        <g className="text-gray-200">
+        <g className="text-surface-strong">
           {model.ticks.map((t, i) => {
             const y = model.yFor(t);
             return (

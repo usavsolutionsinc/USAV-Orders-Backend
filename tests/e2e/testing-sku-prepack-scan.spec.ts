@@ -29,7 +29,7 @@ test.describe('Testing mode — SKU pre-pack scan', () => {
   test('testing scan bar exposes a SKU route and arms it like the receiving modes', async ({
     page,
   }) => {
-    await page.goto('/tech?view=testing');
+    await page.goto('/test?view=testing');
 
     // Stable chrome: the testing scan input band carries data-testing-scan.
     const scanBand = page.locator('[data-testing-scan]');
@@ -54,7 +54,7 @@ test.describe('Testing mode — SKU pre-pack scan', () => {
   test('a SKU scan resolves to its pre-packed line (best-effort prefill)', async ({
     page,
   }) => {
-    await page.goto('/tech?view=testing');
+    await page.goto('/test?view=testing');
 
     const scanBand = page.locator('[data-testing-scan]');
     await expect(scanBand).toBeVisible({ timeout: BOOT_TIMEOUT });

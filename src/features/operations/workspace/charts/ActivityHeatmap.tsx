@@ -105,7 +105,7 @@ export function ActivityHeatmap({
             const cy = TOP_PAD + r * ROW_H + ROW_H / 2;
             if (intensity === 0) {
               return (
-                <g key={`${r}:${c}`} className="text-gray-200">
+                <g key={`${r}:${c}`} className="text-surface-strong">
                   <circle cx={cx} cy={cy} r={2.5} fill="currentColor" />
                 </g>
               );

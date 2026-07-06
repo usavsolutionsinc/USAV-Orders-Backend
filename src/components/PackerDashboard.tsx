@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PackerTable } from './PackerTable';
+import { PackerRightPane } from '@/components/packer/PackerRightPane';
+import { usePackerOrderPane } from '@/components/packer/usePackerOrderPane';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 
@@ -13,26 +14,32 @@ interface PackerDashboardProps {
 export default function PackerDashboard({ packerId, showStaffSelector = true }: PackerDashboardProps) {
     useRealtimeToasts('packer');
     const [refreshNonce, setRefreshNonce] = useState(0);
+    const { activeOrderPane, setActiveOrderPane } = usePackerOrderPane();
+
     useEffect(() => {
         void showStaffSelector;
     }, [showStaffSelector]);
 
     useEffect(() => {
         const handleRefresh = () => setRefreshNonce((value) => value + 1);
-        window.addEventListener('usav-refresh-data', handleRefresh as any);
+        window.addEventListener('usav-refresh-data', handleRefresh as EventListener);
         return () => {
-            window.removeEventListener('usav-refresh-data', handleRefresh as any);
+            window.removeEventListener('usav-refresh-data', handleRefresh as EventListener);
         };
     }, []);
 
     return (
         <>
-        <div className="flex h-full w-full relative">
-            <div className="flex-1 overflow-hidden">
-                <PackerTable key={`${packerId}-${refreshNonce}`} packedBy={parseInt(packerId)} />
+            <div className="relative flex h-full w-full">
+                <div key={refreshNonce} className="relative min-h-0 flex-1 overflow-hidden">
+                    <PackerRightPane
+                        packerId={packerId}
+                        activeOrderPane={activeOrderPane}
+                        onCloseActiveOrder={() => setActiveOrderPane(null)}
+                    />
+                </div>
             </div>
-        </div>
-        <StationDetailsHandler stationRole="packer" />
+            <StationDetailsHandler stationRole="packer" />
         </>
     );
 }

@@ -437,12 +437,12 @@ export function useUnboxLineController(
       ? 'Print only, mark as scanned, or receive (no print)'
       : 'Print only, mark as scanned, or receive all (no print)';
   const splitMenuHoverTitle = isUnfound
-    ? 'Hover for print-only or receive all locally — Zoho is not touched'
+    ? 'Hover for print-only or receive all locally — external inventory is not touched'
     : isSinglePoItem
       ? 'Hover for print-only, mark as scanned, or receive without print'
       : 'Hover for print-only, mark as scanned, or receive all without print';
   const receiveMenuTitle = isUnfound
-    ? 'Unfound carton — no Zoho PO to receive against; use Receive locally'
+    ? 'Unfound carton — no external PO to receive against; use Receive locally'
     : row.receiving_id == null
       ? 'Line must be linked to a shipment'
       : undefined;
@@ -450,9 +450,9 @@ export function useUnboxLineController(
     row.receiving_id == null && !scanValue.trim() && !(row.sku || '').trim()
       ? 'Need a shipment link or SKU to continue'
       : isUnfound
-        ? 'Print label (if available), then receive locally — unfound carton, Zoho is not touched'
+        ? 'Print label (if available), then receive locally — unfound carton, external inventory is not touched'
         : isSinglePoItem
-          ? 'Print label (if available), then receive this line'
+          ? 'Print label (if available), then receive this line into inventory'
           : 'Print label (if available), then receive every open line on this PO';
 
   // Pair the carton with the shipped order a scanned serial matched. Fires for

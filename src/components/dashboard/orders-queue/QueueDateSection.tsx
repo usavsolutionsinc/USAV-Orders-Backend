@@ -1,11 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { CollapsibleGroupRow } from '@/components/ui/CollapsibleGroupRow';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import type { RowGroup } from '@/lib/group-rows';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
-import { OrderGroupSummary } from './OrderGroupSummary';
+import { QueueGroupRow } from './QueueGroupRow';
 
 export interface QueueDateSectionProps {
   date: string;
@@ -24,7 +23,8 @@ export interface QueueDateSectionProps {
  */
 export function QueueDateSection({ date, groups, isMobile, renderRow }: QueueDateSectionProps) {
   // groups preserve the per-day sort order (groupRowsBy), matching
-  // displayedRecords so shift-range select lines up with the view.
+  // displayedRecords so shift-range select lines up with the view. `stripeIndex`
+  // runs across the whole day (group children included) via each group's base.
   let stripeIndex = 0;
   const dayTotal = groups.reduce((sum, g) => sum + g.rows.length, 0);
 
@@ -32,29 +32,16 @@ export function QueueDateSection({ date, groups, isMobile, renderRow }: QueueDat
     <div className="flex flex-col">
       <DateGroupHeader date={date} total={dayTotal} />
       {groups.map((group) => {
-        // Singleton order → a plain row (the common case).
-        if (group.rows.length === 1) {
-          const node = renderRow(group.rows[0], stripeIndex);
-          stripeIndex += 1;
-          return node;
-        }
-        // Multi-product order → one collapsed header, expand to reveal each
-        // product line. Different products, same order#.
-        const headerIndex = stripeIndex;
-        const children = group.rows.map((row) => {
-          const node = renderRow(row, stripeIndex);
-          stripeIndex += 1;
-          return node;
-        });
+        const baseStripeIndex = stripeIndex;
+        stripeIndex += group.rows.length;
         return (
-          <CollapsibleGroupRow
+          <QueueGroupRow
             key={`order-${group.key}`}
-            index={headerIndex}
-            showChevron={false}
-            summary={<OrderGroupSummary rows={group.rows} isMobile={isMobile} />}
-          >
-            {children}
-          </CollapsibleGroupRow>
+            group={group}
+            baseStripeIndex={baseStripeIndex}
+            isMobile={isMobile}
+            renderRow={renderRow}
+          />
         );
       })}
     </div>

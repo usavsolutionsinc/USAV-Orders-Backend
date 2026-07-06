@@ -154,7 +154,7 @@ export async function searchReceiving(orgId: OrgId, query: string, limit: number
     entityType: 'receiving' as const,
     title: String(row.tracking_number || `Receiving #${row.id}`),
     subtitle: String(row.carrier || 'Unknown carrier'),
-    href: `/receiving?mode=receive&openReceivingId=${row.id}`,
+    href: `/unbox?openReceivingId=${row.id}`,
     matchField: 'receiving',
   }));
 }

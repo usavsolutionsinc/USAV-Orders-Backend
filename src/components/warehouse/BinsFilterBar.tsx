@@ -31,7 +31,7 @@ const CHIPS: { id: BinFilterStatus; label: string; tone: string }[] = [
 
 const ACTIVE_TONE: Record<BinFilterStatus, string> = {
   all:   'bg-surface-inverse text-white ring-surface-inverse',
-  empty: 'bg-slate-700 text-white ring-slate-700',
+  empty: 'bg-slate-700 text-white ring-slate-700', // ds-allow-raw-neutral: identity/tone hue — Empty's slate must stay distinct from All (= surface-inverse)
   low:   'bg-amber-600 text-white ring-amber-600',
   over:  'bg-red-600 text-white ring-red-600',
   stale: 'bg-purple-600 text-white ring-purple-600',

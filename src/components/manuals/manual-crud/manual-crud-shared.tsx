@@ -56,7 +56,7 @@ export function ModalShell({
       {/* ds-raw-button: full-bleed dismiss scrim, not a Button shape */}
       <button
         type="button"
-        className="ds-raw-button absolute inset-0 bg-black/40"
+        className="ds-raw-button absolute inset-0 bg-scrim/40"
         aria-label="Close"
         onClick={() => { if (!busy) onClose(); }}
       />

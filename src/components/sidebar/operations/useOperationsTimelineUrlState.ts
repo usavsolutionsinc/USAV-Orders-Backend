@@ -60,6 +60,8 @@ export interface OperationsTimelineUrlState {
   /** The focused entity value for the active dimension (empty = browse mode). */
   entityValue: string;
   focused: boolean;
+  /** Browse query (?q=) — fuzzy cross-entity search, distinct from focus. */
+  q: string;
   from: string;
   until: string;
   stations: string[];
@@ -69,7 +71,14 @@ export interface OperationsTimelineUrlState {
   /** Count of active *narrowing* filters (excludes dim + focused entity). */
   activeFilterCount: number;
   setDim: (next: JourneyDimension) => void;
-  setEntity: (value: string) => void;
+  /**
+   * Focus an entity (empty = clear focus). `dimOverride` switches the active
+   * dimension in the same URL write (e.g. drilling an order row from a mixed
+   * browse list). The browse query (?q=) is preserved so "Clear" returns to it.
+   */
+  setEntity: (value: string, dimOverride?: JourneyDimension) => void;
+  /** Set the browse query (?q=); clears any focused entity (mutually exclusive). */
+  setQ: (next: string) => void;
   setRange: (from: string | null, until: string | null) => void;
   toggleStation: (id: string) => void;
   toggleType: (id: string) => void;
@@ -118,13 +127,28 @@ export function useOperationsTimelineUrlState(): OperationsTimelineUrlState {
   );
 
   const setEntity = useCallback(
-    (value: string) =>
+    (value: string, dimOverride?: JourneyDimension) =>
       replaceParams((p) => {
+        const targetDim = dimOverride ?? dim;
+        if (dimOverride) p.set('dim', dimOverride);
         for (const k of ENTITY_KEYS) p.delete(k);
         const v = value.trim();
-        if (v) p.set(JOURNEY_DIMENSION_PARAM[dim], v);
+        if (v) p.set(JOURNEY_DIMENSION_PARAM[targetDim], v);
+        // NB: ?q= is intentionally preserved so "Clear" returns to the list.
       }),
     [replaceParams, dim],
+  );
+
+  const setQ = useCallback(
+    (next: string) =>
+      replaceParams((p) => {
+        const v = next.trim();
+        if (v) p.set('q', v);
+        else p.delete('q');
+        // Browsing is mutually exclusive with a focused entity.
+        for (const k of ENTITY_KEYS) p.delete(k);
+      }),
+    [replaceParams],
   );
 
   const setRange = useCallback(
@@ -209,6 +233,7 @@ export function useOperationsTimelineUrlState(): OperationsTimelineUrlState {
     dim,
     entityValue,
     focused: !!entityValue.trim(),
+    q,
     from,
     until,
     stations,
@@ -218,6 +243,7 @@ export function useOperationsTimelineUrlState(): OperationsTimelineUrlState {
     activeFilterCount,
     setDim,
     setEntity,
+    setQ,
     setRange,
     toggleStation: (id: string) => toggleCsv('stations', id),
     toggleType: (id: string) => toggleCsv('types', id),

@@ -36,8 +36,8 @@ import { useIsColumnHidden } from '@/components/ui/table-column-config/TableColu
  *     (`qtyColWide`) so it doesn't clip — pair it with `indentWide`/`dotTrackWide`.
  *   Keep META_COL the single source for these paired widths.
  *
- * (Meta fields are low visual weight; chips + title width are the main source
- * of perceived flicker on config changes, addressed in ChipColumns.)
+ * (Meta fields are low visual weight; chip reflow when toggling Configure columns
+ * is animated in ChipColumns.)
  */
 export const META_COL = {
   /** Default dot-track width AND meta indent — single-token counts (orders/shipped/tech/packer). */
@@ -129,8 +129,7 @@ export function RowMetaColumns({
   className?: string;
 }) {
   // Per-staff hidden slots (no-op outside a TableColumnConfigProvider). A hidden
-  // slot drops its grid track + cell. (Chip side reserves to keep title/chip
-  // positions stable; meta slide is minor.)
+  // slot drops its grid track + cell; chip side uses the same drop + layout animation.
   const isHidden = useIsColumnHidden();
   const showQty = !isHidden('qty');
   const showCondition = !isHidden('condition');

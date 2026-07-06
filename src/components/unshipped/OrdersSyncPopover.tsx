@@ -92,18 +92,20 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
                     {sync.isTransferring ? (
                       <Button
                         variant="danger"
+                        size="lg"
                         onClick={sync.handleCancelTransfer}
                         icon={<X className="h-3.5 w-3.5" />}
-                        className={`w-full rounded-xl py-2.5 ${sectionLabel}`}
+                        className="w-full text-micro font-black uppercase tracking-[0.2em]"
                       >
                         Cancel Import
                       </Button>
                     ) : (
                       <Button
                         variant="primary"
+                        size="lg"
                         onClick={sync.handleTransfer}
                         icon={<Database className="h-3.5 w-3.5" />}
-                        className={`w-full rounded-xl py-2.5 ${sectionLabel}`}
+                        className="w-full text-micro font-black uppercase tracking-[0.2em]"
                       >
                         Import Latest Orders
                       </Button>

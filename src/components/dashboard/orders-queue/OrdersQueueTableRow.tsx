@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
-import { Check } from '@/components/Icons';
+import { Check, AlertTriangle, FileText } from '@/components/Icons';
 import { OrderIdentityChips } from '@/components/ui/OrderIdentityChips';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { StaffInitials } from '@/design-system/components/StaffBadge';
@@ -35,7 +35,12 @@ export interface OrdersQueueTableRowProps {
   trackingAction?: React.ReactNode;
   hasOutOfStock: boolean;
   outOfStockValue: string;
+  notesValue: string;
   daysLate: number | null;
+  /** Under virtualization the row remounts on every scroll-into-view; skip the
+   *  opacity enter so scrolling stays flicker-free (hover/tap remain). Height is
+   *  unaffected either way, so `measureElement` still measures cleanly. */
+  disableEnterAnimation?: boolean;
   /** `event` carries `shiftKey` for range-select; structural so both mouse +
    *  keyboard events satisfy it. */
   onRowClick: (record: ShippedOrder, event?: { shiftKey: boolean }) => void;
@@ -52,12 +57,14 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   trackingAction,
   hasOutOfStock,
   outOfStockValue,
+  notesValue,
   daysLate,
   testerDisplay,
   packerDisplay,
   testerId,
   packerId,
   isMobile,
+  disableEnterAnimation = false,
   onRowClick,
 }: OrdersQueueTableRowProps) {
   const orderChannelLabel = useOrderChannelLabel();
@@ -89,14 +96,14 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   // so the column stays rigid across rows.
   const hasTester = testerDisplay && testerDisplay !== '---';
   const hasPacker = packerDisplay && packerDisplay !== '---';
-  // Phase-5 governing-event projection (orders.label_printed_at): glanceable
+  const hasNotes = notesValue.trim().length > 0;
   // "done" dot, shown only once the timestamp is stamped.
   const labelPrintedAt = record.label_printed_at;
 
   return (
     <motion.div
-      {...framerPresence.tableRow}
-      transition={framerTransition.tableRowMount}
+      {...(disableEnterAnimation ? {} : framerPresence.tableRow)}
+      transition={disableEnterAnimation ? undefined : framerTransition.tableRowMount}
       whileHover={{ x: 2 }}
       whileTap={{ scale: 0.998 }}
       onClick={(event) => onRowClick(record, event)}
@@ -169,10 +176,21 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
                 ) : (
                   <StaffInitials staffId={packerId} name={packerDisplay} />
                 )}
+                {hasNotes ? (
+                  <HoverTooltip label={notesValue.trim()} focusable={false}>
+                    <span className="inline-flex items-center text-text-muted" aria-label="Order notes">
+                      <FileText className="h-3.5 w-3.5" />
+                    </span>
+                  </HoverTooltip>
+                ) : null}
+                {hasOutOfStock ? (
+                  <HoverTooltip label={outOfStockValue.trim()} focusable={false}>
+                    <span className="inline-flex items-center text-red-600" aria-label="Out of stock">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    </span>
+                  </HoverTooltip>
+                ) : null}
               </span>
-              {hasOutOfStock ? (
-                <span className="text-red-600">{outOfStockValue}</span>
-              ) : null}
               {labelPrintedAt ? (
                 <HoverTooltip label="Label printed" focusable={false}>
                   <span className="flex items-center gap-1 text-emerald-600">
@@ -215,6 +233,7 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.rowStatus.label !== next.rowStatus.label) return false;
   if (prev.hasOutOfStock !== next.hasOutOfStock) return false;
   if (prev.outOfStockValue !== next.outOfStockValue) return false;
+  if (prev.notesValue !== next.notesValue) return false;
   if (prev.daysLate !== next.daysLate) return false;
   if (prev.record.product_title !== next.record.product_title) return false;
   if (prev.record.condition !== next.record.condition) return false;

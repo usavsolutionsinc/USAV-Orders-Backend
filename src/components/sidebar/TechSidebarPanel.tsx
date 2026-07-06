@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import StationTesting from '@/components/station/StationTesting';
 import { TestingSidebarPanel } from '@/components/sidebar/TestingSidebarPanel';
+import { ShippingSidebarPanel } from '@/components/sidebar/ShippingSidebarPanel';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { useTechLogs } from '@/hooks/useTechLogs';
-import { ChevronDown, ChevronLeft, History, Wrench } from '@/components/Icons';
+import { History } from '@/components/Icons';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useActiveStaffDirectory } from './hooks';
@@ -43,8 +43,13 @@ interface TechSidebarPanelProps {
 
 export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Testing' }: TechSidebarPanelProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  // Stay on whichever surface route we're on (`/test` canonical, `/tech` legacy)
+  // when mutating the `?view=` sub-mode, so mode switches don't bounce through a
+  // redirect. The operator-surfaces refactor (Phase 8) graduated /tech → /test.
+  const basePath = pathname || '/test';
   const staffDirectory = useActiveStaffDirectory();
   // When the master nav owns mode switching, its L2 rail replaces this panel's
   // own Shipping/Testing pills (avoids a double switcher).
@@ -73,8 +78,8 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
     nextParams.delete('view');
     nextParams.set('staffId', techId);
     const nextSearch = nextParams.toString();
-    router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
-  }, [searchParams, router, techId]);
+    router.replace(nextSearch ? `${basePath}?${nextSearch}` : basePath);
+  }, [searchParams, router, techId, basePath]);
 
   // Use the same hook + week range as TechTable so the sidebar shares its
   // loading state (the skeleton below keys off `records`/`isLoading`).
@@ -99,7 +104,7 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
       if (v === 'testing' || v === 'testing-history') nextParams.delete('view');
     }
     const nextSearch = nextParams.toString();
-    router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
+    router.replace(nextSearch ? `${basePath}?${nextSearch}` : basePath);
   };
 
   const refreshHistory = useCallback(() => {
@@ -149,17 +154,10 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
         </div>
       )}
 
-      {/* Body — Testing top mode owns a lean scan-bar + recent rail shell;
-          Shipping mode renders the StationTesting scan bar + UpNext queue. The
-          right pane is fixed to the History feed (the active/preview order
-          crossfades over it in TechDashboard); there is no sub-mode switcher.
-          The parent owns chrome (bands 1 + 2); child renders only the body. */}
+      {/* Body — Shipping and Testing use dedicated sidebar panels that share
+          the same shell (scan band, rail, bottom filter) but different rails. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {topMode === 'testing' ? (
-          <TestingSidebarPanel staffId={techId} />
-        ) : topMode === 'history' ? (
-          // History is browse-only — the tested-lines feed lives in the right
-          // pane (TestingHistoryList); the sidebar just orients the tech.
+        {topMode === 'history' ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
             <History className="h-6 w-6 text-text-faint" />
             <p className="text-sm font-semibold text-text-soft">Browsing your tested lines</p>
@@ -167,14 +165,15 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
               Use <span className="font-bold text-text-muted">Select</span> in the top bar to pick lines and act on them.
             </p>
           </div>
-        ) : (
-          <StationTesting
-            embedded
-            userId={techId}
-            userName={techName}
+        ) : topMode === 'shipping' ? (
+          <ShippingSidebarPanel
+            techId={techId}
+            techName={techName}
             staffId={techId}
             onComplete={refreshHistory}
           />
+        ) : (
+          <TestingSidebarPanel staffId={techId} />
         )}
       </div>
     </div>

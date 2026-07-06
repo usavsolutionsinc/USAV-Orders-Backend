@@ -48,6 +48,7 @@ import { isSearchEntityType } from '@/lib/search/build-search-text';
 // (src/lib/search/ai-search-client.ts) so CommandBar and the workbench
 // quick-jumps stay on one implementation.
 import { fetchAiSearchEnabled, postAiRetrieve } from '@/lib/search/ai-search-client';
+import { dispatchGlobalSearchFocus } from '@/lib/global-search-focus';
 import { useAuth } from '@/contexts/AuthContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -216,7 +217,7 @@ export function CommandBar() {
     setRecents(getRecent());
   }, []);
 
-  // ── Keyboard shortcut: ⌘K / Ctrl+K ──
+  // ── Keyboard shortcut: ⌘K / Ctrl+K → focus header search ──
   useEffect(() => {
     function handleKeyDown(e: globalThis.KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -228,7 +229,7 @@ export function CommandBar() {
           target?.isContentEditable;
         if (editable && !open) return;
         e.preventDefault();
-        setOpen((prev) => !prev);
+        dispatchGlobalSearchFocus();
       }
       if (e.key === 'Escape' && open) {
         setOpen(false);
@@ -238,10 +239,10 @@ export function CommandBar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
-  // External trigger — the QuickAccess FAB popover dispatches this when the
-  // user taps the Search button in its header.
+  // Legacy external trigger — quick-access surfaces that still dispatch the old
+  // event name; redirect to the inline header search field.
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = () => dispatchGlobalSearchFocus();
     window.addEventListener('usav-command-bar-open', onOpen);
     return () => window.removeEventListener('usav-command-bar-open', onOpen);
   }, []);
@@ -446,7 +447,7 @@ export function CommandBar() {
             animate={framerPresence.workOrderScrim.animate}
             exit={framerPresence.workOrderScrim.exit}
             transition={shouldReduceMotion ? { duration: 0 } : framerTransition.overlayScrim}
-            className="fixed inset-0 z-command bg-gray-900/40 backdrop-blur-md"
+            className="fixed inset-0 z-command bg-scrim/40 backdrop-blur-md"
             onClick={() => setOpen(false)}
             aria-hidden
           />

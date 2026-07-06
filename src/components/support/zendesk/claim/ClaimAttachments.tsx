@@ -46,6 +46,7 @@ export function ClaimAttachments({ c }: { c: ZendeskClaimController }) {
                   <span
                     className={cn(
                       'absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-white shadow-sm',
+                      // ds-allow-raw-neutral: badge overlays a photo thumbnail — photos don't theme
                       on ? 'bg-blue-500' : 'bg-gray-400',
                     )}
                   >
@@ -79,7 +80,8 @@ export function ClaimAttachments({ c }: { c: ZendeskClaimController }) {
                   onClick={() => c.removeAdded(a.id)}
                   ariaLabel="Remove"
                   icon={<X className="h-2.5 w-2.5 text-white" />}
-                  className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/70 transition hover:bg-gray-900"
+                  // ds-allow-raw-neutral: glass overlay pinned on an image thumbnail — photo doesn't theme, stays dark
+                  className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-scrim/70 transition hover:bg-gray-900"
                 />
               </div>
             ))}

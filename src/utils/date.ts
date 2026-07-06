@@ -324,6 +324,35 @@ export function formatTime12hPST(
   return `${h12}:${min} ${period}`;
 }
 
+/** Wall-clock HH:mm (24-hour, zero-padded) in America/Los_Angeles — no date, no seconds. */
+export function formatClockTimePST(input: string | Date | null | undefined): string {
+  const placeholder = '--:--';
+  if (!input) return placeholder;
+
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) return placeholder;
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: PST_TIME_ZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(input);
+  }
+
+  const raw = String(input).trim();
+  if (!raw || raw === '1') return placeholder;
+
+  const normalized = normalizePSTTimestamp(raw, { fallbackToNow: false });
+  if (!normalized) return placeholder;
+
+  const timePart = normalized.split(' ')[1];
+  if (!timePart) return placeholder;
+
+  const [hh, mm] = timePart.split(':');
+  if (!hh || !mm) return placeholder;
+  return `${hh}:${mm}`;
+}
+
 export function isSamePSTDate(
   a: string | Date | null | undefined,
   b: string | Date | null | undefined

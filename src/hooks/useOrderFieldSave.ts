@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useOrderAssignment } from './useOrderAssignment';
 import { getCurrentPSTDateKey } from '@/utils/date';
 
@@ -12,6 +13,39 @@ interface UseOrderFieldSaveOptions {
   onUpdate?: () => void;
 }
 
+function patchOrderFieldInCaches(current: unknown, orderId: number, patch: Record<string, unknown>) {
+  if (!current) return current;
+
+  const normalizedPatch = { ...patch };
+  if ('outOfStock' in patch) {
+    normalizedPatch.out_of_stock = patch.outOfStock;
+  }
+
+  const patchRow = (row: Record<string, unknown> | null | undefined) => {
+    if (!row || Number(row.id) !== orderId) return row;
+    return { ...row, ...normalizedPatch };
+  };
+
+  if (Array.isArray(current)) {
+    return current.map((row) => patchRow(row as Record<string, unknown>));
+  }
+
+  if (current && typeof current === 'object') {
+    const record = current as Record<string, unknown>;
+    if (Array.isArray(record.orders)) {
+      return { ...record, orders: record.orders.map((row) => patchRow(row as Record<string, unknown>)) };
+    }
+    if (Array.isArray(record.results)) {
+      return { ...record, results: record.results.map((row) => patchRow(row as Record<string, unknown>)) };
+    }
+    if (Array.isArray(record.shipped)) {
+      return { ...record, shipped: record.shipped.map((row) => patchRow(row as Record<string, unknown>)) };
+    }
+  }
+
+  return current;
+}
+
 export function useOrderFieldSave({
   orderId,
   initialOrderNumber = '',
@@ -19,6 +53,7 @@ export function useOrderFieldSave({
   initialTrackingNumber = '',
   onUpdate,
 }: UseOrderFieldSaveOptions) {
+  const queryClient = useQueryClient();
   const orderAssignmentMutation = useOrderAssignment();
   const [isSavingOutOfStock, setIsSavingOutOfStock]   = useState(false);
   const [isSavingNotes, setIsSavingNotes]             = useState(false);
@@ -36,28 +71,78 @@ export function useOrderFieldSave({
     lastSavedTrackingNumberRef.current = String(trackingNumber).trim();
   }, []);
 
-  const saveOutOfStock = async (value: string) => {
-    setIsSavingOutOfStock(true);
+  const persistOrderRecordField = async (
+    body: Record<string, unknown>,
+    cachePatch: Record<string, unknown>,
+    eventDetail: Record<string, unknown>,
+    setSaving: (value: boolean) => void,
+    errorLabel: string,
+  ) => {
+    setSaving(true);
+    const cacheKeys = [['orders'], ['shipped'], ['dashboard-table']] as const;
+    const snapshots: Array<{ key: readonly unknown[]; data: unknown }> = [];
+
+    cacheKeys.forEach((key) => {
+      queryClient.getQueriesData({ queryKey: key }).forEach(([queryKey, data]) => {
+        snapshots.push({ key: queryKey, data });
+        queryClient.setQueryData(queryKey, (current: unknown) =>
+          patchOrderFieldInCaches(current, orderId, cachePatch),
+        );
+      });
+    });
+
     try {
-      await orderAssignmentMutation.mutateAsync({ orderId, outOfStock: value.trim() });
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || errorLabel);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('order-assignment-updated', {
+            detail: { orderIds: [orderId], ...eventDetail },
+          }),
+        );
+      }
       onUpdate?.();
     } catch (error) {
+      snapshots.forEach((snapshot) => {
+        queryClient.setQueryData(snapshot.key, snapshot.data);
+      });
       console.error(error);
+      throw error;
     } finally {
-      setIsSavingOutOfStock(false);
+      setSaving(false);
     }
   };
 
+  const saveOutOfStock = async (value: string) => {
+    const trimmed = value.trim();
+    const outOfStockValue = trimmed || null;
+    await persistOrderRecordField(
+      { outOfStock: outOfStockValue },
+      { outOfStock: outOfStockValue, out_of_stock: outOfStockValue },
+      { outOfStock: outOfStockValue },
+      setIsSavingOutOfStock,
+      'Failed to save out of stock',
+    );
+  };
+
   const saveNotes = async (value: string) => {
-    setIsSavingNotes(true);
-    try {
-      await orderAssignmentMutation.mutateAsync({ orderId, notes: value.trim() });
-      onUpdate?.();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsSavingNotes(false);
-    }
+    const trimmed = value.trim();
+    const notesValue = trimmed || null;
+    await persistOrderRecordField(
+      { notes: notesValue },
+      { notes: notesValue },
+      { notes: trimmed },
+      setIsSavingNotes,
+      'Failed to save notes',
+    );
   };
 
   const saveShipByDate = async (shipByDate: string) => {

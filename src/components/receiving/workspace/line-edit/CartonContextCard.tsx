@@ -28,12 +28,19 @@ import { usePlatformCatalog, useReceivingTypeCatalog, usePlatformMeta } from '@/
  * Zendesk / PO# / tracking chip row, the matching below-row inline editors,
  * and the source-platform + receiving-type pickers.
  *
+ * DENSITY CONTRACT: this is an operations-heavy surface — everything stays on
+ * ONE condensed row (pills + chips + actions), with editors sliding in below
+ * on demand. Do not regroup it into stacked form sections; the one-row
+ * anatomy is the display method. The card renders on the frosted glass
+ * workspace surface (`WorkspaceCard variant="glass"`) shared by the whole
+ * unbox column.
+ *
  * Layout decisions preserved from the original inline implementation:
- *  - The listing chip is hidden when the URL is empty AND its editor is closed
- *    (unmatched cartons have no listing until a PO# binds them).
- *  - When the PO# editor is open and the listing slot is free, the PO# input
- *    promotes from a compact chip+pencil to a full-width inline SearchBar; the
- *    below-row PO# editor is skipped in that case to avoid a duplicate input.
+ *  - The listing chip reads "----" (gray, no platform tone) until a URL or a
+ *    derived storefront href exists (unmatched cartons have no listing until a
+ *    PO# binds them).
+ *  - All three identity editors (PO# / tracking / listing URL) live in the
+ *    below-row drawer; the condensed top row stays chips + hover menus only.
  *
  * Purely presentational/controlled — all state lives in the parent.
  */
@@ -61,7 +68,6 @@ export function CartonContextCard({
   zendeskHref,
   zendeskChipDisplay,
   providerTicketId = null,
-  ticketLookupPending = false,
   onTicketUnlinked,
   primaryTrackingTrimmed,
   filledExtraTrackingsCount,
@@ -110,8 +116,6 @@ export function CartonContextCard({
   zendeskHref: string | null | undefined;
   zendeskChipDisplay: string;
   providerTicketId?: number | null;
-  /** True while the support-ticket lookup is in flight — suppresses the Claim CTA. */
-  ticketLookupPending?: boolean;
   /** Called after the ticket chip's popover unlinks the ticket — clears it. */
   onTicketUnlinked?: () => void;
   primaryTrackingTrimmed: string;
@@ -203,7 +207,8 @@ export function CartonContextCard({
       label: 'Auto',
       title: `Auto — follows platform (${derivedTone.label})`,
       activeClass: 'border-border-default bg-surface-card text-text-muted',
-      inactiveClass: 'border-border-soft bg-surface-card text-text-soft hover:border-border-default hover:bg-surface-hover',
+      inactiveClass:
+        'border-border-soft bg-surface-card/70 text-text-soft hover:border-border-default hover:bg-surface-hover',
     },
     ...PRIORITY_OVERRIDE_TIERS.map((t) => ({
       value: String(t.value),
@@ -251,7 +256,7 @@ export function CartonContextCard({
     .map((o) => ({ value: o.value, label: o.label }));
 
   return (
-    <WorkspaceCard bodyClassName="px-0 py-0" overflow="visible">
+    <WorkspaceCard variant="glass" bodyClassName="px-0 py-0" overflow="visible">
       <div className="space-y-2 px-4 pt-2 pb-3">
         <div className="flex min-w-0 flex-col gap-y-1">
           {/* Condensed identity row — Priority · Platform · Type · listing ·
@@ -353,7 +358,7 @@ export function CartonContextCard({
               value={poDisplay}
               display={poDisplay ? getLast4(poDisplay) : '----'}
               tone="id"
-              underlineClass="border-gray-500"
+              underlineClass="border-border-emphasis"
               disableCopy={!poDisplay}
               onEdit={
                 isReturn
@@ -388,13 +393,19 @@ export function CartonContextCard({
                 actionsInMenu
               />
               {filledExtraTrackingsCount > 0 ? (
-                <span className="shrink-0 rounded bg-surface-strong/90 px-1 py-px text-eyebrow font-black tabular-nums text-text-muted">
-                  +{filledExtraTrackingsCount}
-                </span>
+                <HoverTooltip
+                  label={`${filledExtraTrackingsCount} extra box${filledExtraTrackingsCount === 1 ? '' : 'es'} on this PO`}
+                  asChild
+                >
+                  <span className="shrink-0 rounded bg-surface-strong/90 px-1 py-px text-eyebrow font-black tabular-nums text-text-muted">
+                    +{filledExtraTrackingsCount}
+                  </span>
+                </HoverTooltip>
               ) : null}
             </div>
 
-            {/* Claim → flips to the filed ticket# chip once a claim exists.
+            {/* Claim renders with the rest of the identity row; when a filed
+                ticket resolves from support_tickets it swaps to the ticket chip.
                 Same IdentityLinkChip primitive as PO#/tracking (flush spacing,
                 tone-driven `#` icon): chip copies, hover menu opens Zendesk or
                 shows ticket history (with Unlink) via Edit. */}
@@ -416,7 +427,7 @@ export function CartonContextCard({
                     linkedTicketId={providerTicketId}
                   />
                 </div>
-              ) : ticketLookupPending ? null : onMakeClaim ? (
+              ) : onMakeClaim ? (
                 <HoverTooltip label="File a damage / wrong-item / missing claim for this package" asChild>
                   <Button
                     type="button"

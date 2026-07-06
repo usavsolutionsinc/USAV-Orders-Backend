@@ -84,9 +84,9 @@ export function ScanSurface({
   const isPulse = scanner.lastScannedValue != null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border-soft bg-slate-900">
+    <div className="overflow-hidden rounded-2xl border border-border-soft bg-stage-raised">
       {/* Camera frame */}
-      <div className="relative w-full bg-black" style={{ aspectRatio }}>
+      <div className="relative w-full bg-stage" style={{ aspectRatio }}>
         <video
           ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
           autoPlay
@@ -131,7 +131,7 @@ export function ScanSurface({
             aria-label="Toggle flashlight"
             aria-pressed={scanner.torchOn}
             className={`absolute top-3 left-3 grid h-10 w-10 place-items-center rounded-full text-lg backdrop-blur transition-colors ${
-              scanner.torchOn ? 'bg-yellow-400/90 text-black' : 'bg-white/15 text-white/85'
+              scanner.torchOn ? 'bg-yellow-400/90 text-black' : 'bg-glass/15 text-white/85'
             }`}
           >
             ⚡
@@ -145,7 +145,7 @@ export function ScanSurface({
               ? 'bg-red-500/85 text-white'
               : scanner.isScanning
                 ? 'bg-emerald-500/85 text-white'
-                : 'bg-white/15 text-white/85'
+                : 'bg-glass/15 text-white/85'
           }`}
         >
           {isScanError ? 'Camera error' : scanner.isScanning ? 'Scanning' : 'Paused'}
@@ -153,14 +153,14 @@ export function ScanSurface({
 
         {/* Error overlay */}
         {isScanError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-scrim/80 p-6 text-center">
             <p className="max-w-[280px] text-sm text-red-200">
               {scanner.error || 'Camera unavailable. Check browser permissions and reload.'}
             </p>
             <Button
               variant="ghost"
               onClick={() => void scanner.startScanning()}
-              className="bg-white/10 text-white hover:bg-white/20 hover:text-white"
+              className="bg-glass/10 text-white hover:bg-glass/20 hover:text-white"
             >
               Try again
             </Button>
@@ -169,7 +169,7 @@ export function ScanSurface({
       </div>
 
       {/* Manual entry dock — collapsed by default */}
-      <div className="bg-slate-900 px-3 py-2.5">
+      <div className="bg-stage-raised px-3 py-2.5">
         {manualOpen ? (
           <form onSubmit={handleManualSubmit} className="flex items-center gap-2">
             <input
@@ -179,7 +179,7 @@ export function ScanSurface({
               placeholder={manualPlaceholder}
               autoComplete="off"
               inputMode="text"
-              className="h-11 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/40 outline-none focus:border-white/40"
+              className="h-11 flex-1 rounded-xl border border-glass/10 bg-glass/5 px-3 text-sm text-white placeholder:text-white/40 outline-none focus:border-glass/40"
             />
             <Button
               type="submit"
@@ -197,7 +197,7 @@ export function ScanSurface({
                 setManualValue('');
                 setManualOpen(false);
               }}
-              className="h-11 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white"
+              className="h-11 bg-glass/5 text-white/80 hover:bg-glass/10 hover:text-white"
               ariaLabel="Cancel manual entry"
             >
               Cancel

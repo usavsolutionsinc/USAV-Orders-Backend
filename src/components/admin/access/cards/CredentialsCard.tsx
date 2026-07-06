@@ -107,7 +107,7 @@ export function CredentialsCard({
                 value={staff.session_policy}
                 onChange={(e) => onChangeSessionPolicy(e.target.value)}
                 disabled={busyBasic}
-                className="rounded-md border border-border-default bg-surface-card px-2 py-1 text-xs font-medium text-text-default focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="rounded-md border border-border-default bg-surface-card px-2 py-1 text-xs font-medium text-text-default focus:outline-none focus:ring-1 focus:ring-border-emphasis"
               >
                 <option value="default">Default</option>
                 <option value="extended">Extended</option>

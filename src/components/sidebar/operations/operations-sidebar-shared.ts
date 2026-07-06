@@ -2,7 +2,7 @@
  * Shared types + constants for the Operations master-page sidebar.
  *
  * The Operations page is a single contextual sidebar + a mostly-visual right
- * pane (the house sidebar-mode contract). The four modes below are the
+ * pane (the house sidebar-mode contract). The five modes below are the
  * top-level switcher; each owns its own search placeholder, result list, and
  * right-pane view. `?mode=` in the URL is the single source of truth — never a
  * local `useState`. Mirrors `receiving-sidebar-shared.ts`.
@@ -10,35 +10,48 @@
  * Pure data only — no JSX.
  */
 
-import { Activity, BarChart3, Sparkles, History, Barcode, MapPin, PackageCheck } from '@/components/Icons';
+import { Activity, BarChart3, Sparkles, History, Barcode, MapPin, PackageCheck, Zap } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import type { JourneyDimension } from '@/lib/timeline/journey';
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
 
-export type OperationsMode = 'live' | 'analytics' | 'insights' | 'history';
+export type OperationsMode = 'live' | 'analytics' | 'insights' | 'history' | 'signals';
 
 /**
  * `live` is the default and stays on the bare `/operations` path (no `?mode=`)
  * for deep-link + realtime back-compat — it renders the existing floor
- * dashboard. The other three flip `?mode=`.
+ * dashboard. The other modes flip `?mode=`.
  *
  * - live      → real-time operations (the existing OperationsDashboard)
  * - analytics → deep analytics dashboard (trends, breakdowns, inventory health)
  * - insights  → AI assistant, pre-scoped to live ops/inventory context
- * - history   → audit + inventory-event timeline of past operations
+ * - history   → forensic "what happened" (Monitor). Two URL-driven regions:
+ *               Browse (org-wide filterable event feed over SAL / inventory_events
+ *               / audit_logs / carrier / warranty — gated by
+ *               NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE, default off) and Trace
+ *               (a focused ?order= / ?serial= / ?tracking= journey). Absorbs the
+ *               legacy /audit-log display over time. See
+ *               docs/operations-history-consolidation-plan.md.
+ * - signals   → entity_signals timeline + browse — the "why did this outcome
+ *               happen" layer. Deliberately a SEPARATE mode (plan Decision D2):
+ *               Studio-anchored, registry-extensible, cross-linked to History,
+ *               never merged into the History event firehose.
  */
 export const OPERATIONS_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'live',      label: 'Live',      icon: Activity },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'insights',  label: 'Insights',  icon: Sparkles },
   { id: 'history',   label: 'History',   icon: History },
+  { id: 'signals',   label: 'Signals',   icon: Zap },
 ];
 
 export const DEFAULT_OPERATIONS_MODE: OperationsMode = 'live';
 
 export function parseOperationsMode(raw: string | null | undefined): OperationsMode {
-  return raw === 'analytics' || raw === 'insights' || raw === 'history' ? raw : 'live';
+  return raw === 'analytics' || raw === 'insights' || raw === 'history' || raw === 'signals'
+    ? raw
+    : 'live';
 }
 
 /**
@@ -66,6 +79,11 @@ export const OPERATIONS_MODE_SCOPED_PARAMS = [
   'sources',  // spine filter (CSV)
   'view',     // applied saved-view id
   'cursor',   // browse keyset cursor (transient; cleared on filter change)
+  // ── Signals mode ──
+  'signalsView', // timeline (default) | browse
+  'signalId',    // selected signal in browse
+  'window',      // timeline time window
+  'signalKind',  // timeline kind filter
 ] as const;
 
 // ── Master Operations Journey (History mode) ────────────────────────────────

@@ -215,7 +215,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             disabled={isSubmitting}
             ariaLabel="Open new repair order form"
             icon={<Plus className="h-5 w-5 text-white" />}
-            className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-400"
+            className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-border-emphasis"
           />
           </HoverTooltip>
         ),

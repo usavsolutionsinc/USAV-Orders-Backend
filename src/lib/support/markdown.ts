@@ -63,7 +63,7 @@ export function renderInlineMarkdown(text: string): React.ReactNode {
         case 'code':
           return React.createElement(
             'code',
-            { key, className: 'rounded bg-black/10 px-1 py-0.5 text-[0.9em]' },
+            { key, className: 'rounded bg-scrim/10 px-1 py-0.5 text-[0.9em]' },
             t.value,
           );
         case 'link':

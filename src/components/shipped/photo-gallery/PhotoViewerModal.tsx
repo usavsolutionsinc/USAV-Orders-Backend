@@ -1,11 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
+import { useFocusTrap } from '@/design-system/hooks';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
-  AlertCircle, Trash2, Info, RotateCcw, RefreshCw, ExternalLink, Package,
+  AlertCircle, Trash2, Info, RotateCcw, RefreshCw, ExternalLink, Package, MoreVertical,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
 import { MovePhotoToPoPanel } from './MovePhotoToPoPanel';
@@ -13,6 +14,9 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { photoHeroLayoutId } from './photo-gallery-utils';
 import type { PhotoGalleryController } from './usePhotoGallery';
+
+const TOOLBAR_ICON_BTN =
+  'rounded-full border border-glass/20 bg-glass/10 p-3 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-glass/30 hover:bg-glass/20 disabled:opacity-50 disabled:hover:scale-100';
 
 /** Fullscreen lightbox: zoomable image, nav arrows, thumbnail strip, toolbar. */
 export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
@@ -23,6 +27,52 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
   const panelVisible = g.panelOpen;
   const reduceMotion = useReducedMotion();
   const heroTransition = useMotionTransition(framerTransition.photoHeroMorph);
+  // Keep Tab inside the lightbox — without this the page behind the scrim
+  // keeps receiving keyboard focus.
+  const trapRef = useFocusTrap<HTMLDivElement>(true);
+
+  const moreRef = useRef<HTMLDivElement>(null);
+  const downloadRef = useRef<HTMLDivElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+
+  const multiPhoto = photoItems.length > 1;
+  const currentPhotoError = photoItems[currentIndex]?.status === 'error';
+  const allPhotosError = photoItems.every((p) => p.status === 'error');
+  const canDownloadCurrent = !g.downloading && !currentPhotoError;
+  const canDownloadAll = !g.downloading && !allPhotosError && photoItems.length > 0;
+
+  // Close overflow menus when the photo changes; keep the viewer open.
+  useEffect(() => {
+    setMoreOpen(false);
+    setDownloadOpen(false);
+  }, [currentIndex]);
+
+  useEffect(() => {
+    if (!moreOpen && !downloadOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (moreRef.current?.contains(target) || downloadRef.current?.contains(target)) return;
+      setMoreOpen(false);
+      setDownloadOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [moreOpen, downloadOpen]);
+
+  // Escape closes toolbar menus first; only the second Esc reaches usePhotoGallery.
+  useEffect(() => {
+    if (!moreOpen && !downloadOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setMoreOpen(false);
+      setDownloadOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [moreOpen, downloadOpen]);
 
   // The grid-tile → lightbox hero morph (shared `layoutId`) only ever plays for
   // the photo the viewer opened on. Once the user navigates away it is "spent"
@@ -39,31 +89,42 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
 
   return (
     <motion.div
+      ref={trapRef}
       data-testid="photo-lightbox"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 flex bg-scrim/95 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+      tabIndex={-1}
+      initial={{ opacity: 0, pointerEvents: 'auto' }}
+      animate={{ opacity: 1, pointerEvents: 'auto' }}
+      exit={{ opacity: 0, pointerEvents: 'none' }}
+      className="fixed inset-0 flex bg-scrim/95 outline-none backdrop-blur-md"
       style={{ zIndex: zLayer.modal }}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
     >
-      {/* Stage — image + all floating controls. flex-1 so it yields width to the
-          panel; its absolute children stay centered within the visible area. */}
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-      {/* Top Bar — image controls (counter + zoom) on the left, global actions on
-          the right. The close X is NOT here: it's pinned to the WINDOW corner
-          below so it never moves when the panel opens. When the panel is closed
-          the right group reserves room (pr-20) so it clears that pinned X. */}
-      <div className={`absolute top-0 left-0 right-0 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent py-6 pl-6 z-10 ${panelVisible ? 'pr-6' : 'pr-20'}`}>
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-glass/10 backdrop-blur-md rounded-full border border-glass/20">
-            <span className="text-white text-sm font-black">
+      {/* Stage — image lane. flex-1 yields width to the details panel; toolbar
+          is scoped here so it never bleeds over the panel border. */}
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Top bar — counter (left) + zoom/rotate pill + action buttons (right).
+          Pinned to the image lane, not the full viewport, so controls stay left
+          of the details column when it opens. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center justify-between py-6 pl-6 pr-6"
+      >
+        <div className="pointer-events-auto flex shrink-0 items-center gap-3">
+          <div className="rounded-full border border-glass/20 bg-glass/10 px-4 py-2 backdrop-blur-md">
+            <span className="text-sm font-black text-white">
               {currentIndex + 1} / {photoItems.length}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full border border-glass/20 bg-glass/10 p-1 backdrop-blur-md">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+          {/* Zoom / rotate / reset — inline with the action buttons so the whole
+              cluster reads as one toolbar; hidden on phones (the mobile viewer
+              owns touch surfaces). p-1.5 matches the p-3 icon buttons' height. */}
+          <div className="hidden items-center gap-1 rounded-full border border-glass/20 bg-glass/10 p-1.5 backdrop-blur-md sm:flex">
             <HoverTooltip label="Zoom out (-)" asChild>
               <IconButton
                 onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
@@ -107,61 +168,182 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             </HoverTooltip>
           </div>
 
-          <div className="mx-1 h-6 w-px bg-glass/20" aria-hidden="true" />
-
-          <HoverTooltip
-            label={g.downloading ? 'Downloading…' : `Download photo ${currentIndex + 1}`}
-            asChild
-          >
-            <IconButton
-              onClick={(e) => { e.stopPropagation(); void g.handleDownloadCurrent(); }}
-              disabled={g.downloading || photoItems[currentIndex]?.status === 'error'}
-              className="p-3 bg-glass/10 hover:bg-glass/20 rounded-full transition-all text-white backdrop-blur-md border border-glass/20 hover:border-glass/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
-              ariaLabel={`Download photo ${currentIndex + 1}`}
-              icon={<Download className="h-5 w-5 text-white" />}
-            />
-          </HoverTooltip>
-
-          {g.libraryHref ? (
-            <HoverTooltip label="Open in media library" asChild>
-              <a
-                href={g.libraryHref}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-glass/20 border-glass/20 hover:border-glass/30 hover:scale-110"
-                aria-label="Open in media library"
-              >
-                <ExternalLink className="h-5 w-5 text-white" />
-              </a>
+          {!panelVisible ? (
+            <HoverTooltip label="Show details (i)" asChild>
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  g.togglePanel();
+                }}
+                aria-pressed={false}
+                className={TOOLBAR_ICON_BTN}
+                ariaLabel="Show photo details"
+                icon={<Info className="h-5 w-5 text-white" />}
+              />
             </HoverTooltip>
           ) : null}
 
-          <HoverTooltip label="Toggle details (i)" asChild>
-            <IconButton
-              onClick={(e) => { e.stopPropagation(); g.togglePanel(); }}
-              aria-pressed={g.panelOpen}
-              className={
-                g.panelOpen
-                  ? 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-blue-500/30 border-blue-300/40 hover:bg-blue-500/40 hover:scale-110'
-                  : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-glass/20 border-glass/20 hover:border-glass/30 hover:scale-110'
-              }
-              ariaLabel={g.panelOpen ? 'Hide photo details' : 'Show photo details'}
-              icon={<Info className="h-5 w-5 text-white" />}
-            />
-          </HoverTooltip>
-
-          {g.canReassignCurrent && (
-            <HoverTooltip label="Move to another PO" asChild>
+          {/* More actions → Download → Delete → Close (fixed order). */}
+          <div ref={moreRef} className="relative">
+            <HoverTooltip label="More actions" asChild>
               <IconButton
-                onClick={(e) => { e.stopPropagation(); g.setReassignOpen(true); }}
-                disabled={g.reassigning}
-                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-glass/20 border-glass/20 hover:border-glass/30 hover:scale-110 disabled:opacity-50"
-                ariaLabel="Move photo to another PO"
-                icon={<Package className="h-5 w-5 text-white" />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDownloadOpen(false);
+                  setMoreOpen((open) => !open);
+                }}
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                className={`${TOOLBAR_ICON_BTN} ${moreOpen ? 'border-glass/40 bg-glass/25' : ''}`}
+                ariaLabel="More photo actions"
+                icon={<MoreVertical className="h-5 w-5 text-white" />}
               />
             </HoverTooltip>
-          )}
+
+            <AnimatePresence initial={false}>
+              {moreOpen ? (
+                <motion.div
+                  role="menu"
+                  aria-label="Photo actions"
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 top-full z-50 mt-2 min-w-[12rem] overflow-hidden rounded-xl border border-glass/20 bg-scrim/90 py-1 shadow-xl backdrop-blur-xl"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  {g.libraryHref ? (
+                    <a
+                      href={g.libraryHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      role="menuitem"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMoreOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-glass/15"
+                    >
+                      <ExternalLink className="h-4 w-4 shrink-0" />
+                      Open in library
+                    </a>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-pressed={g.panelOpen}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMoreOpen(false);
+                      g.togglePanel();
+                    }}
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-glass/15 ${
+                      g.panelOpen ? 'text-blue-200' : 'text-white'
+                    }`}
+                  >
+                    <Info className="h-4 w-4 shrink-0" />
+                    {g.panelOpen ? 'Hide details' : 'Show details'}
+                  </button>
+
+                  {g.canReassignCurrent ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={g.reassigning}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMoreOpen(false);
+                        g.setReassignOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-glass/15 disabled:opacity-50"
+                    >
+                      <Package className="h-4 w-4 shrink-0" />
+                      Move to another PO
+                    </button>
+                  ) : null}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+
+          {/* Download — one photo downloads immediately; multi-photo opens a picker. */}
+          <div ref={downloadRef} className="relative">
+            <HoverTooltip
+              label={
+                g.downloading
+                  ? 'Downloading…'
+                  : multiPhoto
+                    ? 'Download photos'
+                    : `Download photo ${currentIndex + 1}`
+              }
+              asChild
+            >
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (multiPhoto) {
+                    setMoreOpen(false);
+                    setDownloadOpen((open) => !open);
+                    return;
+                  }
+                  if (canDownloadCurrent) void g.handleDownloadCurrent();
+                }}
+                disabled={!canDownloadCurrent && !multiPhoto}
+                aria-haspopup={multiPhoto ? 'menu' : undefined}
+                aria-expanded={multiPhoto ? downloadOpen : undefined}
+                className={`${TOOLBAR_ICON_BTN} ${downloadOpen ? 'border-glass/40 bg-glass/25' : ''}`}
+                ariaLabel={multiPhoto ? 'Download photos' : `Download photo ${currentIndex + 1}`}
+                icon={<Download className="h-5 w-5 text-white" />}
+              />
+            </HoverTooltip>
+
+            <AnimatePresence initial={false}>
+              {downloadOpen && multiPhoto ? (
+                <motion.div
+                  role="menu"
+                  aria-label="Download photos"
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 top-full z-50 mt-2 min-w-[12rem] overflow-hidden rounded-xl border border-glass/20 bg-scrim/90 py-1 shadow-xl backdrop-blur-xl"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!canDownloadCurrent}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDownloadOpen(false);
+                      void g.handleDownloadCurrent();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-glass/15 disabled:opacity-50"
+                  >
+                    <Download className="h-4 w-4 shrink-0" />
+                    This photo ({currentIndex + 1}/{photoItems.length})
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!canDownloadAll}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDownloadOpen(false);
+                      void g.handleDownloadAll();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-glass/15 disabled:opacity-50"
+                  >
+                    <Download className="h-4 w-4 shrink-0" />
+                    All photos ({photoItems.length})
+                  </button>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
 
           {g.canDeleteCurrent && (
             <HoverTooltip label={g.deleteArmed ? 'Click again to confirm' : 'Delete photo'} asChild>
@@ -171,8 +353,8 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                 disabled={g.deletingPhoto}
                 className={
                   g.deleteArmed
-                    ? 'flex items-center gap-2 px-4 py-3 rounded-full transition-all text-white backdrop-blur-md border bg-red-500/80 border-red-300 hover:bg-red-500 disabled:opacity-60'
-                    : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-glass/10 hover:bg-red-500/30 border-glass/20 hover:border-red-300 hover:scale-110 disabled:opacity-60'
+                    ? 'flex items-center gap-2 rounded-full border border-red-300 bg-red-500/80 px-4 py-3 text-white backdrop-blur-md transition-all hover:bg-red-500 disabled:opacity-60'
+                    : `${TOOLBAR_ICON_BTN} hover:border-red-300 hover:bg-red-500/30 disabled:opacity-60`
                 }
                 aria-label={g.deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
               >
@@ -185,12 +367,22 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               </button>
             </HoverTooltip>
           )}
+
+          <HoverTooltip label="Close (Esc)" asChild>
+            <IconButton
+              onClick={(e) => { e.stopPropagation(); g.closeViewer(); }}
+              className={TOOLBAR_ICON_BTN}
+              ariaLabel="Close photo viewer"
+              icon={<X className="h-5 w-5 text-white" />}
+            />
+          </HoverTooltip>
         </div>
       </div>
 
+      <div className="relative flex flex-1 items-center justify-center overflow-hidden">
       {g.deleteError && (
         <div
-          className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-red-600/90 border border-red-300 text-white text-xs font-bold backdrop-blur-md shadow-lg"
+          className="absolute top-24 left-1/2 z-20 -translate-x-1/2 rounded-full border border-red-300 bg-red-600/90 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-md"
           role="alert"
         >
           {g.deleteError}
@@ -199,7 +391,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
 
       {g.reassignError && !g.reassignOpen && (
         <div
-          className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-amber-600/90 border border-amber-300 text-white text-xs font-bold backdrop-blur-md shadow-lg"
+          className="absolute top-24 left-1/2 z-20 -translate-x-1/2 rounded-full border border-amber-300 bg-amber-600/90 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-md"
           role="alert"
         >
           {g.reassignError}
@@ -222,8 +414,9 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={framerTransition.dropdownOpen}
-        className="relative w-full h-full flex items-center justify-center p-4 sm:pl-16 sm:pr-16 sm:py-16"
+        className="relative flex h-full w-full items-center justify-center p-4 sm:py-16 sm:pl-16 sm:pr-16"
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         onMouseDown={g.onMouseDown}
         onMouseMove={g.onMouseMove}
         onMouseUp={g.onMouseUp}
@@ -236,14 +429,14 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             alt={`Photo ${currentIndex + 1}`}
             layoutId={heroLayoutId}
             transition={heroLayoutId ? heroTransition : undefined}
-            className="max-h-[78vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl select-none sm:max-h-[65vh] sm:max-w-[48vw]"
+            className="max-h-[78vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl select-none sm:max-h-[65vh] sm:max-w-[48vw]"
             style={{ scale: zoomLevel, rotate: g.rotation, x: g.imagePosition.x, y: g.imagePosition.y }}
             draggable={false}
           />
         ) : photoItems[currentIndex]?.status === 'error' ? (
-          <div className="w-full max-w-2xl h-96 flex flex-col items-center justify-center bg-red-900/20 rounded-2xl border-2 border-red-500/30">
-            <AlertCircle className="h-16 w-16 text-red-400 mb-4" />
-            <p className="text-red-300 text-lg font-bold">Failed to load image</p>
+          <div className="flex h-96 w-full max-w-2xl flex-col items-center justify-center rounded-2xl border-2 border-red-500/30 bg-red-900/20">
+            <AlertCircle className="mb-4 h-16 w-16 text-red-400" />
+            <p className="text-lg font-bold text-red-300">Failed to load image</p>
           </div>
         ) : photoItems[currentIndex]?.thumbUrl ? (
           // Instant low-res placeholder while the full image preloads — never a
@@ -255,12 +448,12 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             alt={`Photo ${currentIndex + 1}`}
             layoutId={heroLayoutId}
             transition={heroLayoutId ? heroTransition : undefined}
-            className="max-h-[78vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl select-none blur-[1px] sm:max-h-[65vh] sm:max-w-[48vw]"
+            className="max-h-[78vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl select-none blur-[1px] sm:max-h-[65vh] sm:max-w-[48vw]"
             draggable={false}
           />
         ) : (
-          <div className="w-full max-w-2xl h-96 flex items-center justify-center bg-stage-raised/50 rounded-2xl">
-            <div className="h-12 w-12 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+          <div className="flex h-96 w-full max-w-2xl items-center justify-center rounded-2xl bg-stage-raised/50">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-400/30 border-t-blue-400" />
           </div>
         )}
       </motion.div>
@@ -271,7 +464,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           <HoverTooltip label="Previous (←)" asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); g.handlePrevious(); }}
-              className="absolute left-8 top-1/2 -translate-y-1/2 p-4 bg-glass/10 hover:bg-glass/20 rounded-full transition-all text-white backdrop-blur-md border border-glass/20 hover:border-glass/30 hover:scale-110 z-10"
+              className="absolute left-8 top-1/2 z-10 -translate-y-1/2 rounded-full border border-glass/20 bg-glass/10 p-4 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-glass/30 hover:bg-glass/20"
               ariaLabel="Previous photo"
               icon={<ChevronLeft className="h-6 w-6 text-white" />}
             />
@@ -279,7 +472,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           <HoverTooltip label="Next (→)" asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); g.handleNext(); }}
-              className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-glass/10 hover:bg-glass/20 rounded-full transition-all text-white backdrop-blur-md border border-glass/20 hover:border-glass/30 hover:scale-110 z-10"
+              className="absolute right-8 top-1/2 z-10 -translate-y-1/2 rounded-full border border-glass/20 bg-glass/10 p-4 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-glass/30 hover:bg-glass/20"
               ariaLabel="Next photo"
               icon={<ChevronRight className="h-6 w-6 text-white" />}
             />
@@ -291,24 +484,24 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           mx-auto`, so it shrinks to its thumbs and stays centered when they fit,
           and scrolls internally once they exceed the available width. */}
       {photoItems.length > 1 && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 max-w-4xl w-full px-8 z-10">
-          <div className="mx-auto w-fit max-w-full overflow-x-auto no-scrollbar rounded-2xl border border-glass/20 bg-scrim/50 p-3 backdrop-blur-md">
+        <div className="absolute bottom-8 left-1/2 z-10 w-full max-w-4xl -translate-x-1/2 px-8">
+          <div className="no-scrollbar mx-auto w-fit max-w-full overflow-x-auto rounded-2xl border border-glass/20 bg-scrim/50 p-3 backdrop-blur-md">
             <div className="flex items-center gap-2">
               {photoItems.map((photo, index) => (
                 // ds-raw-button: image thumbnail tile (selectable), not an icon/label button
                 <button
                   key={index}
                   onClick={(e) => { e.stopPropagation(); g.setCurrentIndex(index); g.resetZoom(); }}
-                  className={`relative flex-shrink-0 h-20 w-14 overflow-hidden rounded-lg transition-all ${
-                    index === currentIndex ? 'ring-3 ring-white shadow-xl scale-105' : 'opacity-60 hover:opacity-100 hover:scale-105'
+                  className={`relative h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg transition-all ${
+                    index === currentIndex ? 'scale-105 shadow-xl ring-3 ring-white' : 'opacity-60 hover:scale-105 hover:opacity-100'
                   }`}
                 >
                   {photo.status === 'error' ? (
-                    <div className="w-full h-full bg-red-900/50 flex items-center justify-center">
+                    <div className="flex h-full w-full items-center justify-center bg-red-900/50">
                       <AlertCircle className="h-6 w-6 text-red-400" />
                     </div>
                   ) : (
-                    <img src={photo.thumbUrl ?? photo.url} alt={`Thumbnail ${index + 1}`} loading="lazy" className="w-full h-full bg-stage-raised object-cover" />
+                    <img src={photo.thumbUrl ?? photo.url} alt={`Thumbnail ${index + 1}`} loading="lazy" className="h-full w-full bg-stage-raised object-cover" />
                   )}
                 </button>
               ))}
@@ -317,22 +510,16 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
         </div>
       )}
       </div>
+      </div>
       {/* Info panel — flex sibling of the stage; mount/unmount animated. */}
       <AnimatePresence initial={false}>
-        {panelVisible ? <PhotoContextPanel photo={photoItems[currentIndex]} /> : null}
+        {panelVisible ? (
+          <PhotoContextPanel
+            photo={photoItems[currentIndex]}
+            onCollapse={g.togglePanel}
+          />
+        ) : null}
       </AnimatePresence>
-
-      {/* Close — pinned to the WINDOW's top-right corner (outside the shrinking
-          stage, above the panel via z-50) so it stays in the exact same place
-          whether the info panel is open or closed. */}
-      <HoverTooltip label="Close (Esc)" asChild>
-        <IconButton
-          onClick={(e) => { e.stopPropagation(); g.closeViewer(); }}
-          className="absolute right-6 top-6 z-50 rounded-full border border-glass/20 bg-glass/10 p-3 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-glass/30 hover:bg-glass/20"
-          ariaLabel="Close photo viewer"
-          icon={<X className="h-5 w-5 text-white" />}
-        />
-      </HoverTooltip>
     </motion.div>
   );
 }

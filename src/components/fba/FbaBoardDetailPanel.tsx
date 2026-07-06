@@ -7,13 +7,12 @@
  * under `./board-detail/`.
  */
 
-import { motion } from 'framer-motion';
 import { Check, ClipboardList, Loader2 } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { FnskuCatalogInfoPanel } from './FnskuCatalogInfoPanel';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 import { scanActionLabel, formatCreatedAt, type FbaBoardDetailPanelProps } from './board-detail/board-detail-shared';
 import { useFbaBoardDetail } from './board-detail/useFbaBoardDetail';
 import { PlanEntryCard } from './board-detail/PlanEntryCard';
@@ -34,15 +33,8 @@ export function FbaBoardDetailPanel({
   } = useFbaBoardDetail({ item, onSaved });
 
   return (
-    <>
-      <SlideOverBackdrop onClose={onClose} />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 26, stiffness: 360, mass: 0.45 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-border-soft bg-surface-card shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
-      >
+    <DetailStackRailRegistrar id={`detail:plan:${item.fnsku}`} onClose={onClose}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* ── Fixed header (4 rows) — never scrolls ──────────────────── */}
       <div className="shrink-0 overflow-hidden bg-surface-card">
         {/* Row 1: label */}
@@ -54,7 +46,7 @@ export function FbaBoardDetailPanel({
 
         {/* Row 2: title */}
         <div className="px-6 pt-1.5 pb-2 border-b border-border-soft h-[100px]">
-          <h2 className="line-clamp-4 text-lg font-black leading-snug tracking-tight text-gray-950">
+          <h2 className="line-clamp-4 text-lg font-black leading-snug tracking-tight text-text-default">
             {headerTitle}
           </h2>
         </div>
@@ -210,7 +202,7 @@ export function FbaBoardDetailPanel({
           </section>
         </div>
       </div>
-    </motion.div>
-    </>
+      </div>
+    </DetailStackRailRegistrar>
   );
 }

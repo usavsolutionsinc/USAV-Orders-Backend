@@ -62,6 +62,8 @@ export async function listReceivingPhotos(input: {
   receivingId: number;
   lineId?: number | null;
   scope?: 'po' | 'all';
+  /** Filter by capture intent — triage box shots vs unbox item shots. */
+  photoIntent?: 'package' | 'item' | 'all';
   contentUrl?: (id: number) => string;
 }): Promise<ReceivingPhotoListRow[]> {
   const toUrl = input.contentUrl ?? ((id: number) => `/api/photos/${id}/content`);
@@ -93,11 +95,19 @@ export async function listReceivingPhotos(input: {
       )`;
   }
 
+  const intent = input.photoIntent ?? 'all';
+  const intentSql =
+    intent === 'package'
+      ? ` AND (l.entity_type = 'RECEIVING' OR COALESCE(p.photo_type, '') IN ('receiving_package', 'receiving'))`
+      : intent === 'item'
+        ? ` AND (l.entity_type = 'RECEIVING_LINE' OR COALESCE(p.photo_type, '') = 'receiving_item')`
+        : '';
+
   const res = await pool.query<DbRow>(
     `SELECT ${SELECT}
        FROM photos p
        ${LINK_JOINS}
-      WHERE ${where}
+      WHERE ${where}${intentSql}
       ORDER BY p.id ASC, p.created_at ASC`,
     params,
   );

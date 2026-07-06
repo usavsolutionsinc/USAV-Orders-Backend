@@ -357,6 +357,113 @@ export async function resolveSkuCatalogByPlatformId(
   return result.rows[0]?.sku_catalog_id ?? null;
 }
 
+export interface SkuCatalogTitleMatch {
+  id: number;
+  sku: string;
+  productTitle: string;
+}
+
+/**
+ * Minimum trigram similarity for a title-only catalog match when the import
+ * row has no SKU or platform item number to anchor on (Google Sheet minimal
+ * imports). Higher than {@link SKU_TITLE_GUARD_MIN} because there is no SKU
+ * cross-check — we need a stronger title signal to avoid false positives.
+ */
+export const SKU_TITLE_ONLY_MIN = 0.45;
+
+/**
+ * Batch-resolve sku_catalog rows from product titles alone.
+ *
+ * Used by the Google Sheets transfer job for small-business imports that only
+ * carry an order number + product title. Returns a map keyed by the exact
+ * input title string (trimmed) so callers can look up per row.
+ */
+export async function batchResolveSkuCatalogByTitles(
+  titles: string[],
+  orgId?: OrgId,
+): Promise<Map<string, SkuCatalogTitleMatch>> {
+  const unique = Array.from(new Set(titles.map((t) => t.trim()).filter(Boolean)));
+  const out = new Map<string, SkuCatalogTitleMatch>();
+  if (unique.length === 0) return out;
+
+  const sql = `WITH inputs AS (
+       SELECT title, LOWER(TRIM(title)) AS norm
+         FROM unnest($1::text[]) AS title
+     )
+     SELECT DISTINCT ON (inputs.title)
+       inputs.title AS input_title,
+       sc.id,
+       sc.sku,
+       sc.product_title,
+       CASE
+         WHEN LOWER(TRIM(sc.product_title)) = inputs.norm THEN 1.0
+         ELSE similarity(LOWER(sc.product_title), inputs.norm)
+       END AS sim
+     FROM inputs
+     JOIN sku_catalog sc ON (
+       LOWER(TRIM(sc.product_title)) = inputs.norm
+       OR similarity(LOWER(sc.product_title), inputs.norm) >= ${SKU_TITLE_ONLY_MIN}
+     )
+     WHERE sc.product_title IS NOT NULL
+       AND BTRIM(sc.product_title) <> ''
+       ${orgId ? 'AND sc.organization_id = $2' : ''}
+     ORDER BY inputs.title,
+       (LOWER(TRIM(sc.product_title)) = inputs.norm) DESC,
+       sim DESC,
+       sc.id`;
+
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [unique, orgId])
+    : await pool.query(sql, [unique]);
+
+  for (const row of result.rows) {
+    const inputTitle = String(row.input_title || '').trim();
+    const id = Number(row.id);
+    const sku = String(row.sku || '').trim();
+    const productTitle = String(row.product_title || '').trim();
+    if (!inputTitle || !Number.isFinite(id) || id <= 0 || !sku) continue;
+    out.set(inputTitle, { id, sku, productTitle });
+  }
+  return out;
+}
+
+/**
+ * Best-effort platform_item_id per sku_catalog row (for backfilling orders.item_number
+ * when a sheet import matched by title but carries no listing id).
+ */
+export async function batchPlatformItemIdsByCatalogIds(
+  catalogIds: number[],
+  orgId?: OrgId,
+): Promise<Map<number, string>> {
+  const unique = Array.from(new Set(catalogIds.filter((id) => Number.isFinite(id) && id > 0)));
+  const out = new Map<number, string>();
+  if (unique.length === 0) return out;
+
+  const sql = `SELECT DISTINCT ON (sku_catalog_id)
+       sku_catalog_id,
+       platform_item_id
+     FROM sku_platform_ids
+     WHERE sku_catalog_id = ANY($1::int[])
+       AND platform_item_id IS NOT NULL
+       AND BTRIM(platform_item_id) <> ''
+       AND is_active = true
+       ${orgId ? 'AND organization_id = $2' : ''}
+     ORDER BY sku_catalog_id, id DESC`;
+
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [unique, orgId])
+    : await pool.query(sql, [unique]);
+
+  for (const row of result.rows) {
+    const catalogId = Number(row.sku_catalog_id);
+    const itemId = String(row.platform_item_id || '').trim();
+    if (Number.isFinite(catalogId) && catalogId > 0 && itemId) {
+      out.set(catalogId, itemId);
+    }
+  }
+  return out;
+}
+
 /**
  * Minimum trigram similarity between a sku_catalog row's product_title and a
  * caller-supplied expected title for a same-SKU match to be trusted.

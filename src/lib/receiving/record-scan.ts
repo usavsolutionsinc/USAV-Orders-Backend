@@ -4,6 +4,14 @@ import { recordOpsEvent } from '@/lib/ops-events';
 
 export type ReceivingScanSource = 'zoho_po' | 'unmatched';
 
+/** Operator surface that issued the scan — drives independent triage vs unbox stamps. */
+export type ReceivingIntakeSurface = 'triage' | 'unbox';
+
+export interface RecordReceivingScanOptions {
+  /** Default `triage` — only triage (door) scans stamp received_at/received_by. */
+  intakeSurface?: ReceivingIntakeSurface;
+}
+
 /**
  * Register the scanned tracking into the STN master and link it to the scan +
  * carton. Returns true when STN owns the tracking (so the carton needs no legacy
@@ -20,8 +28,6 @@ async function linkScanToStn(
   source: ReceivingScanSource,
 ): Promise<boolean> {
   try {
-    // Derive the org from the receiving row so the STN write is correctly
-    // org-stamped (a scan's tracking belongs to that receiving's tenant).
     const orgRow = await pool.query<{ organization_id: string }>(
       'SELECT organization_id FROM receiving WHERE id = $1 LIMIT 1',
       [receivingId],
@@ -48,29 +54,31 @@ async function linkScanToStn(
   }
 }
 
-/** Idempotent dock-scan audit row — upserts scanned_at + scanned_by per operator. */
+/** Idempotent scan audit row — upserts scanned_at + scanned_by per operator. */
 export async function recordReceivingScan(
   receivingId: number,
   trackingNumber: string,
   carrier: string,
   staffId: number | null,
   source: ReceivingScanSource,
+  options: RecordReceivingScanOptions = {},
 ): Promise<number> {
+  const intakeSurface: ReceivingIntakeSurface = options.intakeSurface ?? 'triage';
+
   const result = await pool.query<{ id: number }>(
     `INSERT INTO receiving_scans
-       (receiving_id, tracking_number, carrier, scanned_at, scanned_by, source, organization_id)
-     VALUES ($1, $2, $3, NOW(), $4, $5, (SELECT organization_id FROM receiving WHERE id = $1))
+       (receiving_id, tracking_number, carrier, scanned_at, scanned_by, source, organization_id, intake_surface)
+     VALUES ($1, $2, $3, NOW(), $4, $5, (SELECT organization_id FROM receiving WHERE id = $1), $6)
      ON CONFLICT (tracking_number, receiving_id) DO UPDATE
        SET scanned_at = EXCLUDED.scanned_at,
            scanned_by = EXCLUDED.scanned_by,
-           carrier = COALESCE(EXCLUDED.carrier, receiving_scans.carrier)
+           carrier = COALESCE(EXCLUDED.carrier, receiving_scans.carrier),
+           intake_surface = COALESCE(receiving_scans.intake_surface, EXCLUDED.intake_surface)
      RETURNING id`,
-    [receivingId, trackingNumber, carrier || null, staffId, source],
+    [receivingId, trackingNumber, carrier || null, staffId, source, intakeSurface],
   );
   const scanId = Number(result.rows[0].id);
 
-  // Emit a stable, append-only scan event. Uses a scanId-derived client_event_id
-  // so retries/upserts remain idempotent across the ops event spine.
   try {
     const orgRow = await pool.query<{ organization_id: string }>(
       'SELECT organization_id FROM receiving WHERE id = $1 LIMIT 1',
@@ -91,31 +99,28 @@ export async function recordReceivingScan(
           source,
           receivingId,
           scanId,
+          intakeSurface,
         },
       });
     }
   } catch (err) {
-    // Fail-open: a missing ops_events table or transient DB error must not block scans.
     console.warn('[recordReceivingScan] ops_events write skipped:', err);
   }
 
-  // Register the scan's tracking into the STN master — the canonical (and now
-  // sole) home for the tracking string. Linked via receiving.shipment_id; the
-  // legacy receiving_tracking_number text column has been dropped.
   await linkScanToStn(scanId, receivingId, trackingNumber, source);
 
-  // A recorded scan IS the physical door-arrival event, so stamp received_at on
-  // the carton here — the one chokepoint every scan path funnels through
-  // (lookup-po, touch-scan, the local-first re-scan, test cartons). COALESCE so
-  // only the FIRST scan sets it (idempotent; re-scans never reset the arrival
-  // time).
-  await pool.query(
-    `UPDATE receiving
-        SET received_at = COALESCE(received_at, NOW()),
-            received_by = COALESCE(received_by, $2),
-            updated_at  = NOW()
-      WHERE id = $1`,
-    [receivingId, staffId],
-  );
+  // Door-arrival stamp — TRIAGE surface only. Unbox scans must not touch
+  // received_at/received_by so the two modes stay independent on one carton.
+  if (intakeSurface === 'triage') {
+    await pool.query(
+      `UPDATE receiving
+          SET received_at = COALESCE(received_at, NOW()),
+              received_by = COALESCE(received_by, $2),
+              updated_at  = NOW()
+        WHERE id = $1`,
+      [receivingId, staffId],
+    );
+  }
+
   return scanId;
 }

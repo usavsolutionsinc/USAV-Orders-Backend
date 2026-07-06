@@ -82,7 +82,17 @@ export function LineEditPanel({
 
   return (
     <>
-      <div className="relative flex h-full min-h-0 flex-col bg-surface-canvas">
+      <div className="relative isolate flex h-full min-h-0 flex-col bg-surface-canvas">
+        {/* Ambient wash — ultra-soft tonal blobs behind the glass cards so their
+            backdrop-blur has something to frost. Sits at -z-10 inside the
+            panel's isolated stacking context (`isolate` above), so it can never
+            paint over content. Pure decoration: token-family hues at ≤8% alpha,
+            calm enough to read as light, not color. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute -top-24 left-1/2 h-72 w-[44rem] -translate-x-1/2 rounded-full bg-blue-400/[0.08] blur-3xl" />
+          <div className="absolute right-[-7rem] top-1/3 h-80 w-80 rounded-full bg-violet-400/[0.06] blur-3xl" />
+          <div className="absolute bottom-[-5rem] left-[-5rem] h-80 w-80 rounded-full bg-emerald-400/[0.06] blur-3xl" />
+        </div>
         <LineEditToolbar
           mode="unbox"
           receivingId={row.receiving_id ?? null}
@@ -216,6 +226,7 @@ export function LineEditPanel({
             receivingId={row.receiving_id}
             staffId={Number(staffId) || 0}
             poRef={c.poNumber || null}
+            photoIntent="item"
           />
         ) : null}
       </div>

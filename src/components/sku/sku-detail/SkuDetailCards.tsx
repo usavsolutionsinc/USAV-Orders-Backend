@@ -73,15 +73,15 @@ export function SkuDetailCards({ c, data }: { c: SkuDetailController; data: SkuD
         </div>
         {data.photos.length > 0 ? (
           <div className="grid grid-cols-3 gap-2">
-            {data.photos.map((photo) => (
+            {data.photos.map((photo, index) => (
               <button
                 key={photo.id}
-                onClick={() => c.setLightboxUrl(photo.url)}
+                onClick={() => c.openPhoto(index)}
                 className="ds-raw-button relative aspect-square rounded-lg overflow-hidden bg-surface-sunken hover:ring-2 hover:ring-blue-400 transition-all"
               >
                 <img src={photo.url} alt={`SKU photo ${photo.id}`} className="h-full w-full object-cover" loading="lazy" />
                 {photo.photoType && (
-                  <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-mini font-bold uppercase text-white">{photo.photoType}</span>
+                  <span className="absolute bottom-1 left-1 rounded bg-scrim/60 px-1.5 py-0.5 text-mini font-bold uppercase text-white">{photo.photoType}</span>
                 )}
               </button>
             ))}

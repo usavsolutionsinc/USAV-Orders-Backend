@@ -147,7 +147,7 @@ export function AssignmentOverlayCard({
         type="button"
         aria-label="Close overlay"
         onClick={onClose}
-        className="fixed inset-0 z-takeover bg-gray-950/55 backdrop-blur-[4px]"
+        className="fixed inset-0 z-takeover bg-scrim/55 backdrop-blur-[4px]"
       />
       {isBottom ? (
         <div className="pointer-events-none fixed inset-0 z-takeover flex items-end justify-center p-3 pb-[max(1rem,5vh)] sm:p-4 sm:pb-[max(1rem,5vh)]">

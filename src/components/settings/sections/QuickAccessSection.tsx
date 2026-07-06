@@ -89,8 +89,7 @@ export function QuickAccessSection() {
       <header>
         <h2 className="sr-only">Quick access</h2>
         <p className="mt-1 text-sm text-text-soft">
-          The bottom-right floating button. Pin pages for one-click navigation and toggle which built-in
-          actions appear.
+          The account menu from the header avatar. Pin pages for one-click navigation and toggle optional actions.
         </p>
       </header>
 
@@ -116,20 +115,14 @@ export function QuickAccessSection() {
       </div>
 
       <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
-        <h3 className="mb-2 text-sm font-semibold text-text-default">Built-in actions</h3>
-        <p className="mb-2 text-caption text-text-soft">Choose which actions appear at the top of the popover.</p>
+        <h3 className="mb-2 text-sm font-semibold text-text-default">Optional actions</h3>
+        <p className="mb-2 text-caption text-text-soft">Shown at the bottom of the account menu when enabled.</p>
         <div className="divide-y divide-border-hairline">
           <ToggleRow
             label="Phone history"
-            description="Resume your recent packed orders from the FAB."
+            description="Resume recent packed orders from the account menu."
             checked={settings.actions.phoneHistory}
             onChange={(v) => patchActions({ phoneHistory: v })}
-          />
-          <ToggleRow
-            label="Install desktop app"
-            description="Hidden when running inside Electron or when no download URL is configured."
-            checked={settings.actions.installDesktopApp !== false}
-            onChange={(v) => patchActions({ installDesktopApp: v })}
           />
           <ToggleRow
             label="Switch staff"

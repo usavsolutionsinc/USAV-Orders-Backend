@@ -301,7 +301,7 @@ export function IncomingAttachTrackingPopover({
     open && typeof document !== 'undefined'
       ? createPortal(
           <div
-            className="fixed inset-0 flex items-center justify-center bg-black/60 p-4"
+            className="fixed inset-0 flex items-center justify-center bg-scrim/60 p-4"
             style={{ zIndex: zIndex.modal }}
             onClick={() => setOpen(false)}
           >

@@ -8,16 +8,8 @@
 export interface ActionToggles {
   /** Open the phone-history popover (recent packed orders, tap to resume). */
   phoneHistory: boolean;
-  /**
-   * Show "Install desktop app" in the actions list. Auto-hidden when the
-   * app is already running inside Electron, or when no download URL is
-   * configured. Default true.
-   */
-  installDesktopApp?: boolean;
   /** Show "Switch staff" in the popover action list. Default true. */
   switchStaff?: boolean;
-  /** Show "Log warranty claim" quick-action row (shown only for warranty.manage holders). */
-  warrantyCheckin?: boolean;
 }
 
 export interface PinnedPage {

@@ -73,6 +73,15 @@ function pickArchetype(region) {
 // On ambiguity, the JOB (observe vs edit vs act-and-clear vs reshape) decides — not the feature area or route.
 ```
 
+> **Code home (operator surfaces refactor).** This algorithm is implemented in
+> `src/lib/stations/archetype.ts` (`pickArchetype()` — explicit hint wins, else runs Q1→Q4). Each
+> first-class operator surface declares its archetype in the closed `SURFACE_REGISTRY`
+> (`src/lib/stations/surface-keys.ts`): a stable `SurfaceKey` (`unbox`, `triage`, `incoming`, …) → route
+> + archetype + permission + `station_definitions` `page_key`/`mode_key`. A surface renders its legacy
+> tree by default and, once an org publishes a composition + enables `surface_composed_render`, through
+> the `SurfaceRenderer`/`StationSlot` host (`resolveSurface` / `SurfaceGate`). See
+> `docs/todo/studio-driven-operator-surfaces-refactor-plan.md`.
+
 ---
 
 ## At a glance

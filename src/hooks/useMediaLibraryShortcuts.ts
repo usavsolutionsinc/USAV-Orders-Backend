@@ -22,7 +22,7 @@ export interface MediaLibraryShortcutHandlers {
   onSelectAll: () => void;
   /** `Esc` — exit selection / dismiss transient chrome. */
   onEscape: () => void;
-  /** `1`–`5` — switch view by index into PHOTO_LIBRARY_VIEW_ORDER. */
+  /** `1` — switch to list view. */
   onSelectViewIndex: (index: number) => void;
 }
 
@@ -83,10 +83,10 @@ export function useMediaLibraryShortcuts(handlers: MediaLibraryShortcutHandlers)
         return;
       }
 
-      // `1`–`5` (no modifiers) switch view by on-screen position.
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key >= '1' && e.key <= '5') {
+      // `1` (no modifiers) switches to list view.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key === '1') {
         e.preventDefault();
-        onSelectViewIndex(Number(e.key) - 1);
+        onSelectViewIndex(0);
       }
     };
 

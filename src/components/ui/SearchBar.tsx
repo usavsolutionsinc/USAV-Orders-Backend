@@ -27,6 +27,8 @@ export interface SearchBarProps {
   customTrailingSlot?: React.ReactNode;
   /** Icons / actions rendered just left of paste inside the field (passed to SearchField). */
   trailingPrefix?: React.ReactNode;
+  /** Icons / actions after paste/clear in the same trailing row (passed to SearchField). */
+  trailingSuffix?: React.ReactNode;
   /** Trailing slot shows clipboard paste only (no clear X when filled). */
   pasteOnlyTrailing?: boolean;
 }
@@ -72,6 +74,7 @@ export function SearchBar({
   hideClear = false,
   customTrailingSlot,
   trailingPrefix,
+  trailingSuffix,
   pasteOnlyTrailing,
 }: SearchBarProps) {
   const isMobile = useIsMobile();
@@ -111,6 +114,7 @@ export function SearchBar({
         hideClear={hideClear}
         customTrailingSlot={customTrailingSlot}
         trailingPrefix={trailingPrefix}
+        trailingSuffix={trailingSuffix}
         pasteOnlyTrailing={pasteOnlyTrailing}
       />
     </div>

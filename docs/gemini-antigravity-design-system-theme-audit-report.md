@@ -232,3 +232,60 @@ precedent).
   are convertible now that tokens take alpha — left for a follow-up since surface-inverse/95 in
   dark = mid-slate at 95%, a deliberate look change to review visually.
 - Light theme's pre-existing AA findings (§5) remain open for a product decision.
+
+---
+
+## 7. ZERO ADDENDUM + 8-THEME ROLLOUT — 2026-07-04 (third pass)
+
+### Raw neutrals: 454 → 0
+
+The ratchet guard (`color-neutrals.guard.test.ts`) is now pinned at **baseline 0**. Every raw
+neutral utility in `src/` is either a theme token or carries an explicit, justified
+`ds-allow-raw-neutral` marker. What closed the gap:
+
+- **Fixed stage/scrim/glass vocabulary** (tailwind.config.ts; deliberately identical in every
+  theme, plain hex so native alpha works): `bg-stage` (camera/lightbox backdrops),
+  `bg-stage-raised` (control pills on the stage), `text-stage-soft`, `bg-stage-contrast`
+  (shutter buttons), `bg-scrim/NN` (all modal/photo backdrop washes), `bg-glass/NN` (light
+  glass highlights on colored/dark fills). ~308 conversions across the media/viewer/scanner
+  cluster and every modal backdrop in the app.
+- **Inverse ladder completed**: `surface-inverse-raised` (chip resting ON an inverse bar) and
+  `surface-inverse-soft` (muted standalone dark fill ≈ gray-600) — 49 more conversions
+  (mid-dark buttons, hover pairs preserved by direction, `ring-gray-900/10 → ring-border-strong/10`,
+  focus ramps → `border-border-strong`, chip underlines → `border-border-emphasis`).
+- **Chart hairlines**: gridlines/tracks → `text-surface-strong` (the ≈gray-200 track token) so
+  charts theme with the palette.
+- **Explicit escapes (~100 lines)**: print output (repair agreement + print route — literal ink
+  on paper), identity-hue registries (staff colors, label swatches, platform brand black,
+  neutral members of colored tone families), photo-overlay badges. Each marker states its
+  reason inline; the guard enforces that any NEW raw neutral must be tokenized or justified.
+- Spinner arcs → `border-t-text-muted`; the tooltip caret → `border-t-surface-inverse`
+  (matches its now-tokenized body).
+
+### 8 themes live (the audit's "8+ themes" target)
+
+Four new palettes joined light/dark/mono/slate — each a single file + registry entry, proving
+the architecture's promise:
+
+| Theme | Scheme | Character |
+|---|---|---|
+| **paper** | light | Warm cream, stone neutrals, ink text — print-like calm |
+| **ember** | dark | Coal-brown canvas, amber glow, ember-orange fallback accent |
+| **cyberpunk** | dark | Violet-black canvas, neon functional tones, magenta accent |
+| **forest** | dark | Pine canvas, green-cast neutrals, moss accent |
+
+All three dark newcomers inherit the neutral compatibility remap + dark staff-accent overrides
+automatically via `scheme: 'dark'` → `data-color-scheme` — zero remap CSS was added. Contrast:
+**145/152 checks pass across all 8 themes**; the 7 failures are light's pre-existing
+parity-locked values (§5), unchanged by policy. Paper's success/warning pill text was deepened
+one step during authoring to clear AA.
+
+### Switcher: scheme-grouped theme gallery
+
+Settings → Appearance now renders the themes as a two-group gallery (Light themes / Dark
+themes, eyebrow-headed) of preview cards. Each card's miniature is drawn from the palette's
+**actual variables** — canvas, bordered card, text bars, accent chip, and the
+success/warning/danger dot triad — so the preview is the theme, not an icon. Fully
+registry-driven: a ninth theme appears in the gallery, validates on the server
+(`STAFF_THEMES` derives from `THEME_NAMES`), boots without flash, and persists cross-device
+with zero switcher changes.

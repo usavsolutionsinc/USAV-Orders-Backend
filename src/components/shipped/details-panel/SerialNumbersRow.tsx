@@ -5,7 +5,7 @@ import { CopyActionIcon } from '@/design-system/components/CopyActionIcon';
 
 /**
  * Canonical serial-numbers ledger row — the single reusable display for serials
- * across the shipped details panel (Return Info + Shipping tab). Serials render
+ * across the shipped details panel Order Details section. Serials render
  * as one truncated CSV line, with a copy-all icon in the row actions.
  */
 export function SerialNumbersRow({

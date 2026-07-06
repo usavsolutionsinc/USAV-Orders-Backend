@@ -6,7 +6,7 @@ import { Button } from '@/design-system/primitives';
 
 function ImmersivePageError(error: Error, reset: () => void) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 bg-black px-6 text-center text-white">
+    <div className="flex h-full flex-col items-center justify-center gap-4 bg-stage px-6 text-center text-white">
       <div>
         <p className="text-micro font-black uppercase tracking-[0.22em] text-rose-400">
           Camera error
@@ -19,7 +19,7 @@ function ImmersivePageError(error: Error, reset: () => void) {
         type="button"
         variant="ghost"
         onClick={reset}
-        className="h-12 bg-white/10 px-6 text-white hover:bg-white/20 active:bg-white/20"
+        className="h-12 bg-glass/10 px-6 text-white hover:bg-glass/20 active:bg-glass/20"
       >
         Try again
       </Button>
@@ -33,7 +33,7 @@ function ImmersivePageError(error: Error, reset: () => void) {
  */
 export function MobileImmersiveLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-black font-sans text-white antialiased">
+    <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-stage font-sans text-white antialiased">
       <ErrorBoundary label="mobile-immersive" fallback={ImmersivePageError}>
         <main className="relative min-h-0 flex-1 overflow-hidden">{children}</main>
       </ErrorBoundary>

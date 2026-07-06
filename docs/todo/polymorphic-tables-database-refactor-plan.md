@@ -1,6 +1,26 @@
 # Receiving → Polymorphic Streets — Deep Refactor Plan (receiving / receiving_line)
 
-> **Status:** PLAN (2026-06-29). Receiving-only deep-dive. No implementation started.
+> **Status:** PLAN (2026-06-29 origin); **Phase 1 additive foundation SHIPPED** (2026-06-29);
+> **carton street side-tables SHIPPED** (2026-07-05, `2026-07-05c`) — `receiving_triage` + `receiving_unbox`
+> created, backfilled at 0-drift parity, kept live by the `trg_sync_receiving_street` dual-write trigger;
+> `condition_set_at` promoted to `receiving_line_testing`.
+> **SPINE RENAMED — SHIPPED** (2026-07-05, `2026-07-05d`): `receiving` → **`receiving_carton`**,
+> `receiving_lines` → **`receiving_line`** (§7 Step F / §8 step 14, done EARLY). Because ~900 raw-SQL refs
+> can't be safely mass-renamed on a live app, the old names remain as **`security_invoker=true` auto-updatable
+> compat views** — the physical tables ARE renamed and stay renamed; the views keep legacy SQL + tenant RLS
+> working verbatim. `ON CONFLICT` sites (lookup-po ×2, attach-box, zoho-receiving-sync) + the Drizzle models
+> now target the base tables. Verified: RLS org-scoped through the views, triggers/FKs followed, writes-through-view
+> fire the dual-write trigger, tsc clean, tests green.
+> **Step E (vocab unification) SHIPPED** (2026-07-05): the server `RECEIVING_PRIORITY_RANK_SQL` /
+> `RECEIVING_LANE_RANK_SQL` now derive from `display/precedence.ts` (`priorityRankSql`/`laneRankSql`),
+> proven byte-identical — the last hardcoded copies are gone.
+> **STILL GATED — Phase 2 reader/writer cutover (§8 steps 6–13) + Step D write-collapse:** these rewrite the live
+> 2,075-line `?view=` multiplexer + the 5 write paths and, per §7/§9, MUST be verified per-PR against
+> `tests/e2e/receive-to-zoho.spec.ts`. That e2e is currently RED (uncommitted receiving-UI WIP), and Step D would
+> change state-machine-enforced transitions (e.g. `FAILED→PASSED` re-test, self-transitions currently allowed by the
+> `lines/[id]/status` raw UPDATE but rejected by `INBOUND_TRANSITIONS`). Doing them blind would break the live tech/
+> receive flow — deferred until the WIP is committed and the e2e is green. Column drops (§8 step 13) are gated behind
+> the reader cutover AND require recreating the compat views (they are `SELECT *`).
 >
 > **Scope:** the `receiving` (carton) + `receiving_lines` (operational unit) spine **only**, plus every "street" that
 > reads/writes it. The whole-schema view (serial_units, orders, FBA, warranty, listings, workflow config, Zoho mirrors)
@@ -9,6 +29,9 @@
 > contract, the existing-polymorphic-surface matrix (Appendix A), and the jsonb/discriminator inventories (Appendices
 > C/D) in the companion apply here unchanged — read them for the cross-table rationale.
 >
+> **Companion ops doc (operator semantics):** [`context/WORKFLOW-RECEIVING.md`](../../context/WORKFLOW-RECEIVING.md) —
+> triage vs unbox surfaces, independent timestamps, photo intent, soft recommendations.
+>
 > **Two stance differences from the companion (deliberate):**
 > 1. **The codebase is NOT live.** There are no external tenants and no production data to protect, so this plan is a
 >    **clean destructive cutover** (create the target shape, one-time backfill, drop the old wide columns, cut readers
@@ -16,7 +39,9 @@
 >    cleanest wins because nothing is in flight.
 > 2. **The thesis is application-architecture, not just schema.** The goal is that **each station / mode / page is its
 >    own street with its own logic**, sharing only (a) the design-system display archetypes and (b) the backend
->    chokepoints — never the decision logic. The DB split is half the work; the query/write-lane split is the other half.
+>    chokepoints — never the decision logic. **Station operations must not live on the spine tables** (`receiving`,
+>    `receiving_lines`); they live on street side-tables + the polymorphic ops spine. The DB split is half the work;
+>    the query/write-lane split is the other half.
 
 ---
 
@@ -25,15 +50,14 @@
 The monolith tangles **three independent axes** into two wide tables and one mega-query: **intake-kind** (PO / RETURN /
 TRADE_IN / PICKUP / sourcing-import / local-pickup → different *data*), **stage/station** (door → triage → unbox → test
 → received → history → the operator's *streets*, different *logic*), and **surface** (mobile / sidebar / workspace /
-monitor → different *display*). The fix is a **three-layer model**: (1) a **thin relational spine** — `receiving_carton`
-+ `receiving_line` holding only the facts true for *every* kind and *every* stage; (2) a **polymorphic typed-facts
-layer** — narrow per-concern side-tables for the heavy kinds (`receiving_line_zoho`, `…_testing`, `…_return`,
-`…_putaway`, the existing `receiving_exceptions`) plus a `receiving_line_facts(line_id, fact_kind, payload)` registry
-for the long tail, discriminated by an **`intake_kind_id` catalog FK** so a new org or kind needs **zero schema change**;
-(3) **per-street code lanes** — `src/lib/receiving/{spine,kinds,streets,display}` and per-street read/write endpoints,
-each owning its own query and decisions, sharing only the chokepoints (`transition()`, `recordAudit`,
-`withTenantTransaction`, `clientEventId`) and the already-shared display vocabulary. Because the system isn't live, we
-ship this as a **clean per-street cutover**, not a dual-write strangler.
+monitor → different *display*). The fix is a **four-layer model**: (1) a **thin relational spine** — `receiving_carton`
++ `receiving_line` holding only identity, linkage, and workflow facts true for *every* kind; (2) **street side-tables**
+at carton grain (`receiving_triage`, `receiving_unbox`) and line grain (`receiving_line_*`) so station/mode operations
+never mutate each other's columns; (3) a **polymorphic ops spine** — `ops_events` + `receiving_scans` + `feed_memberships`
+for append-only station events and rail projections (not SoT for business facts); (4) **per-street code lanes** —
+`src/lib/receiving/{spine,kinds,streets,display}` and per-street read/write endpoints, each owning its own query and
+decisions, sharing only the chokepoints (`transition()`, `recordAudit`, `withTenantTransaction`, `clientEventId`) and
+the already-shared display vocabulary.
 
 ---
 
@@ -110,6 +134,32 @@ WIP → `receive-to-zoho` green → redo the writer cutover + value-cutover + tr
 These are deferred deliberately: they rewrite a live 2,075-line route + 5 write routes and must be verified against
 `tests/e2e/receive-to-zoho.spec.ts` per PR — not landed blind in one pass.
 
+**Triage / Unbox station independence — landed 2026-07-05 (semantics + interim columns):**
+- **Surfaces graduated:** `/triage` and `/unbox` (desktop); `/m/triage` and `/m/unbox` (mobile scan). Modes are
+  **independent** — an unbox scan must not stamp triage door timestamps (`received_at`/`received_by`).
+- **Scan writer:** `recordReceivingScan({ intakeSurface: 'triage' | 'unbox' })` — triage stamps door arrival on
+  `receiving`; unbox stamps `unbox_opened_at` only via `recordUnboxScanOpened`. The **Unboxed** milestone
+  (`unboxed_at`, line `UNBOXED`) is owned by the operator action (`mark-received-po`), not by either scan.
+- **Interim denorm (tactical):** migration `2026-07-05_receiving_independent_mode_scans.sql` added
+  `receiving_scans.intake_surface`, `receiving.unbox_only_intake`, `receiving_lines.condition_set_at` on the **wide
+  spine** for fast rails. These are **projections**, not the destination — see §4.1–4.2 for target homes.
+- **Soft recommendations:** `workflow-recommendations.ts` — industry-standard nudges, never hard gates (`triage_complete`
+  is not a blocker for unbox).
+- **Photo intent:** triage = package (`receiving_package`); unbox = item (`receiving_item`).
+- **Schema step 3b — SHIPPED 2026-07-05 (migration `2026-07-05c_receiving_street_tables.sql`):**
+  `receiving_triage` + `receiving_unbox` (carton 1:1, FK `receiving(id)`) created; `condition_set_at` added to
+  `receiving_line_testing`. One-time backfill from the interim spine columns (1907 triage / 1840 unbox rows) verified at
+  **0-drift parity**. Dual-write is a **trigger** (`trg_sync_receiving_street` on `receiving`), mirroring the 29e line-facts
+  approach rather than editing the mid-WIP scan writers — it covers every `receiving.*` triage/unbox column writer
+  (including the staging routes) in one exception-guarded, AFTER-row place. The 29e line-facts trigger was extended to
+  also mirror `condition_set_at`. RLS **armed, not forced** (the owner-run backfill has no GUC, so FORCE would reject it —
+  same precedent as 29c); `app_tenant` grants added. Drizzle models added in the same change. tsc-clean, 24 facts/spine
+  unit tests green.
+- **Still pending (§8 step 3b tail):** cut triage/unbox rails + workspace readers over to the street tables, then drop
+  the interim spine columns (`receiving.received_at`/`unbox_*`/`triage_*`/`unbox_only_intake`, `receiving_lines.condition_set_at`)
+  and remove the `trg_sync_receiving_street` trigger. Deferred until the reader cutover per §7/§8 (needs the receiving-UI
+  WIP committed + `receive-to-zoho` e2e green).
+
 ---
 
 ## 1. The streets — the metaphor made literal
@@ -119,15 +169,15 @@ A "street" = one operator job with one input model and one display archetype. To
 
 | Street | Job / input | Entry | Today's query | Display archetype (shared scaffold) | Owns (target lane) |
 |---|---|---|---|---|---|
-| **Door receive** | scan a carton in at the dock | `m/.../receive` → `Receive.tsx` | `POST /receiving/lookup-po` (1,495 LOC) | **Station** (`StationScanBar`, `OfflineBanner`) | `streets/door` — classify intake-kind, create carton, link STN |
-| **Triage** | decide what an arrived-but-unmatched carton is | `ReceivingSidebarPanel` (`?mode=triage`) | `view=scanned&sort=priority` ∪ `unfound-queue` | **Workbench** (`SidebarRailShell`, `RecentActivityRailBase`) | `streets/triage` — priority rank, unfound merge, pair/claim |
-| **Unbox** | open carton, scan items to PO lines | `ReceivingLineWorkspace` (`?mode=receive`) | `view=all`/`activity`/`scanned`/`viewed` + `mark-received-po` | **Station** (scan→crossfade→display) | `streets/unbox` — match, receive units, qty/condition |
-| **Testing** | route + verdict needs-test units | `TestingSidebarPanel` / tech bench | `view=testing`/`needs-test` + `serial-units/[id]/test` | **Station** (tech scan bench) | `streets/test` — needs-test queue, verdict, disposition |
-| **Incoming** | watch the inbound delivery stream | `IncomingSidebarPanel` (`?mode=incoming`) | `view=incoming` + `delivery_state` CASE + `zoho_po_mirror` | **Monitor** (observe) + drill | `streets/incoming` — delivery-state buckets, ETA |
-| **History (table)** | search what was received | `ReceivingHistorySearchSection` (`?mode=history`) | `view=activity` + search/sort | **Monitor** | `streets/history` — read-only activity projection |
-| **Monitor (audit)** | PO-anchored event trail | `audit-log/receiving/*` | `receiving-aggregator.ts` + `EventTimeline` | **Monitor** (reference timeline) | reads spine + `inventory_events` (already separate) |
-| **Mobile feeds** | phone mirror of unbox/triage/test | `m/.../receiving`, `ScanModeFeeds` | same `view=` params as desktop | **Station** on `MobileShell` | same endpoints as its desktop street (not a 10th street) |
-| **Studio** | model/observe the receiving graph | `/studio`, `stations/data-sources.ts` | `view=incoming&state=AWAITING_TRACKING` + `lines/[id]/advance` | **Canvas** | reads spine; advance via `transition()` (already separate) |
+| **Door receive** | scan a carton in at the dock | `/m/triage`, `POST /receiving/lookup-po` | `POST /receiving/lookup-po` | **Station** | `streets/door` — classify intake-kind, create carton, link STN |
+| **Triage** | classify, stage, pair before unbox | `/triage`, `/m/triage` | `view=scanned&sort=priority` ∪ unfound | **Workbench** | `streets/triage` → **`receiving_triage`** + `completeTriage` |
+| **Unbox** | open carton, inspect, receive lines | `/unbox`, `/m/unbox` | `view=unbox_opened` + `mark-received-po` | **Station** | `streets/unbox` → **`receiving_unbox`** + `receiveLineUnits` |
+| **Testing** | route + verdict needs-test units | `TestingSidebarPanel` / tech bench | `view=testing`/`needs-test` | **Station** | `streets/test` → `receiving_line_testing` |
+| **Incoming** | watch the inbound delivery stream | `IncomingSidebarPanel` | `view=incoming` + `delivery_state` | **Monitor** | `streets/incoming` |
+| **History (table)** | search what was received | `?mode=history` | `view=activity` + search/sort | **Monitor** | `streets/history` |
+| **Monitor (audit)** | PO-anchored event trail | `audit-log/receiving/*` | `receiving-aggregator` + `ops_events` | **Monitor** | spine + `inventory_events` |
+| **Mobile feeds** | phone mirror of triage/unbox | `/triage`, `/unbox` mobile feeds | same street endpoints as desktop | **Station** | same street lane — not a 10th data model |
+| **Studio** | model/observe the receiving graph | `/studio` | `lines/[id]/advance` | **Canvas** | reads spine; advance via `transition()` |
 
 **Anti-mix rule (from `.claude/rules/contextual-display.md`):** a page may *host* several streets (the receiving page
 is a Workbench triage sidebar + a Station unbox workspace), but each **region** is exactly one archetype. The split below
@@ -219,77 +269,193 @@ Inherited from `.claude/rules/backend-patterns.md` + the companion doc's referen
   data (the `order-lifecycle.ts` `UNSHIPPED_LIFECYCLE_RULES` model), consumed by both the SQL builder and the client.
 - **Degrade-not-fail** — a failing sub-resource (a kind-facts fetch) renders empty, never 500s the record (mirror
   `get-title-by-sku`).
+- **Station independence (triage ↔ unbox)** — neither surface may require the other's milestones. Shared cross-mode
+  facts are limited to: the carton spine row, `shipment_id` / STN, `receiving_lines` linkage, and pairing to PO/claim/order.
+  A triage scan must not stamp unbox milestones; an unbox scan must not stamp door arrival. Serial capture is unbox-only.
+- **Station ops off the spine** — timestamps, flags, and staging fields owned by one street live on that street's
+  side-table (or `ops_events`), not as new nullable columns on `receiving` / `receiving_lines`. The spine holds identity
+  + universal workflow; streets hold their operational state.
 
 ---
 
-## 4. Target architecture — three layers
+## 3.5 Stations, modes, and spine data — the separation contract
 
-### Layer 1 — The thin relational spine (shared; universal facts only)
+**Modes** (triage, unbox, test, incoming, …) are operator jobs. **Stations** are where those jobs run (dock scanner,
+bench, tech bench). **Spine tables** (`receiving`, `receiving_lines`) are the shared *identity and linkage* layer —
+they answer "what carton is this?" and "what lines belong to it?" — not "what did the triage operator do last?"
 
-Two tables, renamed to end the "the carton *is* a `receiving` row" confusion the schema agent flagged. Both hold **only
-columns true for every intake-kind and every stage.** This is the "relate everything" backbone.
+Today the rot is **multiplexing station operations into spine columns**: `received_at`, `unbox_opened_at`, `unboxed_at`,
+`triage_complete`, `staging_location_id`, `condition_grade`, etc. all sit on `receiving` / `receiving_lines`, so one
+street's writer accidentally becomes another street's gate.
+
+### What belongs where
+
+| Layer | Tables | Holds | Does NOT hold |
+|-------|--------|-------|----------------|
+| **Spine (identity)** | `receiving_carton`, `receiving_line` | org, intake kind, `shipment_id`, `carton_id` FK, `workflow_status`, qty, sku link | per-street timestamps, staging, triage flags, condition, Zoho cluster |
+| **Carton street ops** | `receiving_triage`, `receiving_unbox` | each street's carton-grain milestones + staging | the other street's fields |
+| **Line street ops** | `receiving_line_zoho`, `_testing`, `_return`, `_putaway`, `_facts` | line-grain facts per concern | carton-grain door/unbox stamps |
+| **Event spine (append-only)** | `ops_events`, `receiving_scans` | who/when/what happened; `intake_surface` per scan | queryable business SoT (derive or project) |
+| **Rail projection** | `feed_memberships` | which entities appear in which feed, sort keys | authoritative workflow state |
+| **Linkage (polymorphic)** | `shipment_links`, `photo_entity_links`, pairing tables | cross-entity edges | street-specific operational fields |
+
+### Cross-mode sharing rule (non-negotiable)
+
+Only these cross from triage → unbox (or bypass triage entirely):
+
+1. `receiving` / `receiving_carton` row (carton identity)
+2. `shipping_tracking_numbers` via `shipment_id` / `receiving_scans.shipment_id`
+3. `receiving_lines` rows + pairing to PO / claim / order (`receiving_line_zoho`, Zendesk link, etc.)
+4. Photos (via `photo_entity_links`; intent = package vs item is a **display filter**, not a gate)
+
+Everything else — door arrival, staging, triage complete, bench opened, unboxed milestone, condition grade — is
+**street-local**. Soft recommendations may *suggest* triage before unbox; they must never *block* unbox.
+
+### Mode → table → writer map (target)
+
+| Mode / street | Read joins | Write chokepoints | Milestones owned |
+|---------------|------------|-------------------|------------------|
+| **Triage** | spine + `receiving_triage` + `receiving_scans` (surface=`triage`) | `recordReceivingScan(intakeSurface:'triage')`, `completeTriage()` | door received, staging, pairing, `triage_complete` |
+| **Unbox** | spine + `receiving_unbox` + `receiving_line_testing` | `recordReceivingScan(intakeSurface:'unbox')`, `recordUnboxScanOpened()`, `receiveLineUnits()` / `mark-received-po` | bench opened, `unboxed_at`, line `UNBOXED`, condition |
+| **Test** | spine + `receiving_line_testing` + `serial_units` | `transitionReceivingLine()`, `serial-units/[id]/test` | QA verdict, disposition |
+| **Door** | spine + STN | `lookup-po`, `recordReceivingScan` | create/link carton |
+
+`ops_events` receives a parallel append for every milestone (`TRACKING_SCANNED`, `UNBOX_SCAN_OPENED`, triage saved,
+condition set, etc.) with `entity_type` + `entity_id` pointing at `receiving` or `receiving_line` as appropriate.
+
+```mermaid
+flowchart TB
+  subgraph spine["Spine — identity + linkage only"]
+    RC[receiving_carton]
+    RL[receiving_line]
+  end
+  subgraph streets["Street ops — 1:1 extensions"]
+    RT[receiving_triage]
+    RU[receiving_unbox]
+    RLT[receiving_line_testing]
+    RLZ[receiving_line_zoho]
+  end
+  subgraph events["Append-only ops"]
+    RS[receiving_scans]
+    OE[ops_events]
+    FM[feed_memberships]
+  end
+  subgraph link["Polymorphic linkages"]
+    STN[shipping_tracking_numbers]
+    SL[shipment_links]
+    PL[photo_entity_links]
+  end
+  RC --> RT
+  RC --> RU
+  RC --> RL
+  RL --> RLT
+  RL --> RLZ
+  RC --> RS
+  RC --> OE
+  RL --> OE
+  RC --> STN
+  RC --> SL
+  FM -.->|projection| RC
+  FM -.->|projection| RL
+```
+
+---
+
+## 4. Target architecture — four layers
+
+### Layer 1 — The thin relational spine (shared identity + linkage only)
+
+Two tables, renamed to end the "the carton *is* a `receiving` row" confusion. Both hold **only columns every intake-kind
+needs and every street must join** — identity, org, kind discriminator, shipment link, coarse workflow. **No per-station
+timestamps or staging fields on the spine** (those move to Layer 2 street tables).
 
 ```sql
--- ── receiving_carton  (was: receiving) — the physical package event ──────────
+-- ── receiving_carton  (was: receiving) — identity + linkage hub ─────────────
 CREATE TABLE receiving_carton (
   id               BIGSERIAL PRIMARY KEY,
-  organization_id  UUID NOT NULL,                       -- enforce_tenant_isolation() installs loud-fail default
-  -- intake discriminator → per-org catalog; NO CHECK enum (orgs add kinds w/o migration)
-  intake_kind_id   BIGINT NOT NULL REFERENCES types(id),-- the polymorphic axis (PO|RETURN|TRADE_IN|PICKUP|…|org-custom)
-  intake_kind_code TEXT NOT NULL,                       -- denormalized stable code for fast filter/index (mirrors catalog)
-  -- physical / dock facts (universal)
+  organization_id  UUID NOT NULL,
+  intake_kind_id   BIGINT NOT NULL REFERENCES types(id),
+  intake_kind_code TEXT NOT NULL,
   carrier          TEXT,
-  arrived_at       TIMESTAMPTZ,                         -- the dock-scan moment (carton grain)
-  arrived_by       INTEGER REFERENCES staff(id) ON DELETE SET NULL,
-  handling_unit_id BIGINT REFERENCES handling_units(id),-- LPN box (replaces dead receiving.lpn)
-  shipment_id      BIGINT REFERENCES shipping_tracking_numbers(id), -- primary-tracking cache; full set via shipment_links
-  -- routing facts (cross-street, promoted so indexes work)
+  handling_unit_id BIGINT REFERENCES handling_units(id),
+  shipment_id      BIGINT REFERENCES shipping_tracking_numbers(id), -- cache; full set via shipment_links
+  source           TEXT NOT NULL,          -- zoho_po | unmatched | … (until fully catalog-driven)
   priority_tier    SMALLINT CHECK (priority_tier IS NULL OR priority_tier BETWEEN 0 AND 3),
-  coarse_status    TEXT NOT NULL DEFAULT 'ARRIVED',     -- carton lifecycle (ARRIVED|TRIAGED|UNBOXING|DONE); enum at cutover
+  coarse_status    TEXT NOT NULL DEFAULT 'OPEN',  -- rollup only: OPEN|IN_TRIAGE|IN_UNBOX|DONE (not street SoT)
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- org-led indexes; shipment_links owner_type='RECEIVING_CARTON'; enforce_tenant_isolation('receiving_carton')
+-- NO received_at, unbox_opened_at, unboxed_at, triage_complete, staging_location_id on spine
 
--- ── receiving_line  (was: receiving_lines) — the operational unit ────────────
+-- ── receiving_line  (was: receiving_lines) — operational unit ─────────────
 CREATE TABLE receiving_line (
   id               BIGSERIAL PRIMARY KEY,
   organization_id  UUID NOT NULL,
-  carton_id        BIGINT REFERENCES receiving_carton(id) ON DELETE CASCADE, -- NULL until a scan matches it
+  carton_id        BIGINT REFERENCES receiving_carton(id) ON DELETE CASCADE,
   sku_catalog_id   INTEGER REFERENCES sku_catalog(id) ON DELETE SET NULL,
-  -- intake kind: line-level override of the carton's (line override ?? carton ?? default)
   intake_kind_id   BIGINT REFERENCES types(id),
-  -- universal operational facts
   quantity_expected INTEGER,
   quantity_received INTEGER NOT NULL DEFAULT 0,
-  workflow_status  inbound_workflow_status_enum NOT NULL DEFAULT 'EXPECTED', -- the 11-state spine lifecycle (KEEP)
-  coarse_status    TEXT,                                -- INCOMING|SCANNED|UNBOXED|RECEIVED, trigger-derived (KEEP trigger)
-  -- universal stage timestamps (per-item grain; distinct in meaning from carton.arrived_at)
-  scanned_at       TIMESTAMPTZ,
-  unboxed_at       TIMESTAMPTZ,
-  received_at      TIMESTAMPTZ,
-  received_by      INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  workflow_status  inbound_workflow_status_enum NOT NULL DEFAULT 'EXPECTED',
+  coarse_status    TEXT,                   -- trigger-derived rollup
+  notes            TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- KEEP: trg_receiving_line_coarse_status (BEFORE INSERT/UPDATE OF workflow_status → derives coarse_status + stamps timestamps)
--- FIX: every zoho/natural UNIQUE key leads with organization_id (close the cross-tenant gap)
--- enforce_tenant_isolation('receiving_line')
+-- NO per-line qa/condition/zoho cluster on spine — see Layer 2
 ```
 
-What **leaves** the spine (everything in §2b that is one-street): returns fields, the Zoho cluster, marketplace/triage
-fields, the testing cluster, putaway, repair flag, dead `lpn`/`quantity`, and the carton-grain duplicates of line
-facts. They go to Layer 2. `qa_status`/`disposition_code`/`condition_grade`/`exception_code` are **not carton facts** —
-they describe a *unit's* outcome, so they move to the line's testing facts (or onto `serial_units`/`receiving_exceptions`
-which already own them).
+What **leaves** the spine: everything in §2b that is one-street or one-concern, **including all triage/unbox carton
+timestamps** currently on `receiving` (`received_at`, `unbox_opened_at`, `unboxed_at`, `triage_complete`,
+`staging_location_id`, `unbox_only_intake`, …). They go to `receiving_triage` / `receiving_unbox` or line facts.
 
-### Layer 2 — Polymorphic typed-facts (the "sort into categories directly" layer)
+### Layer 2 — Street side-tables + typed line facts
 
-This is where "polymorphic" lives. **Two complementary mechanisms, chosen by volume** — exactly the
-narrow-table-vs-validated-jsonb split the companion's Appendix C taxonomy prescribes:
+**(a) Carton-grain street tables (1:1 with spine — NEW, 2026-07-05 spec)**
 
-**(a) Narrow per-concern side-tables** for high-volume, queryable, cross-street facts (the codebase already proved this
-pattern with `receiving_exceptions`, extracted 2026-06-24):
+Mirror `receiving_line_testing` at **carton** grain so triage and unbox operations are fully separable:
+
+```sql
+-- Triage street — door / classify / stage / pair / save-for-unbox
+CREATE TABLE receiving_triage (
+  receiving_id           INTEGER PRIMARY KEY REFERENCES receiving_carton(id) ON DELETE CASCADE,
+  organization_id        UUID NOT NULL,
+  door_received_at       TIMESTAMPTZ,              -- first triage-surface scan (or mirror first triage scan row)
+  door_received_by       INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  staging_location_id    INTEGER REFERENCES locations(id),
+  priority_lane          TEXT,                     -- lane chip (NORMAL|EXPEDITED|…)
+  pairing_state          TEXT,                       -- paired | unmatched | …
+  triage_complete        BOOLEAN NOT NULL DEFAULT FALSE,
+  triage_completed_at    TIMESTAMPTZ,
+  triage_completed_by    INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Unbox street — bench open / inspect / unboxed milestone
+CREATE TABLE receiving_unbox (
+  receiving_id           INTEGER PRIMARY KEY REFERENCES receiving_carton(id) ON DELETE CASCADE,
+  organization_id        UUID NOT NULL,
+  opened_at              TIMESTAMPTZ,              -- first unbox-surface scan (bench queue entry)
+  opened_by              INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  unboxed_at             TIMESTAMPTZ,              -- operator "Unboxed" action (NOT scan-owned)
+  unboxed_by             INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  intake_path            TEXT NOT NULL DEFAULT 'unknown'
+    CHECK (intake_path IN ('triage_first', 'unbox_only', 'unknown')),
+  -- triage_first = door scan preceded bench; unbox_only = bench-first (no door_received_at)
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_receiving_unbox_intake_path ON receiving_unbox(organization_id, intake_path)
+  WHERE intake_path = 'unbox_only';
+```
+
+Writers: `recordReceivingScan` upserts `receiving_triage` on triage; `recordUnboxScanOpened` upserts `receiving_unbox`;
+`completeTriage` → `receiving_triage`; `mark-received-po` / `receiveLineUnits` → `receiving_unbox.unboxed_*` + line
+`workflow_status`. Readers: triage rails join `receiving_triage`; unbox rails join `receiving_unbox` — never the other
+table's columns.
+
+**(b) Line-grain concern tables (EXIST — 2026-06-29c)**
 
 ```sql
 receiving_line_zoho     (line_id PK/FK, org, zoho_item_id, zoho_line_item_id, zoho_purchase_receive_id,
@@ -298,7 +464,8 @@ receiving_line_zoho     (line_id PK/FK, org, zoho_item_id, zoho_line_item_id, zo
                         -- only Zoho-PO-origin lines; ~12 cols leave the spine. Org-led uniques on (org, zoho_po_id, zoho_line_item_id).
 receiving_line_testing  (line_id PK/FK, org, needs_test, assigned_tech_id, qa_status qa_status_enum,
                          disposition_code disposition_enum, disposition_final TEXT, condition_grade condition_grade_enum,
-                         disposition_audit JSONB)  -- testing-street facts (reconcile with serial_units/testing_results, which overlap)
+                         condition_set_at TIMESTAMPTZ,  -- explicit operator pick (NOT the DB default)
+                         disposition_audit JSONB)
 receiving_line_return   (line_id PK/FK, org, return_platform return_platform_enum, return_reason, source_order_id, rma_ref)
 receiving_line_putaway  (line_id PK/FK, org, location_code, bin, put_away_at)  -- or fold onto serial_units location
 receiving_exceptions    (EXISTS — keep; per-line NO_PO|CARRIER_MISMATCH|SHORT|OVER|DAMAGED|WRONG_ITEM + status)
@@ -308,7 +475,7 @@ Each is 1:1 with `receiving_line` (PK = FK), `ON DELETE CASCADE`, org-scoped fro
 a concern simply never joins its table — the spine stays narrow, and **"give me all RETURN lines"** is a single indexed
 join, not a `WHERE` over a nullable column on a 51-wide table.
 
-**(b) A typed-facts registry** for the long tail + org-custom kinds (the `reason_codes` flow-context + workflow
+**(c) Typed-facts registry** for the long tail + org-custom kinds (the `reason_codes` flow-context + workflow
 `registry.ts` pattern):
 
 ```sql
@@ -329,6 +496,22 @@ kind** route here — no migration to add one.
 long tail and org-bespoke kinds earn the registry. This is the companion's "promote queryable facts to columns; keep
 only true variant config in jsonb" rule, applied per concern.
 
+### Layer 2½ — Polymorphic ops spine (append-only; not business SoT)
+
+Station **events** stay out of the spine but also should not duplicate queryable facts without a projection path:
+
+```sql
+receiving_scans   -- per (tracking_number, receiving_id) scan row; intake_surface = triage|unbox
+ops_events        -- entity_type + entity_id + event_type + payload (TRACKING_SCANNED, UNBOX_SCAN_OPENED, …)
+feed_memberships  -- rail projection only (receiving_triage feed, unbox queue, …); rebuildable from street tables
+inventory_events  -- cross-station lifecycle spine (RECEIVED, TEST_*, …) — already separate
+```
+
+**Rule:** `ops_events` is the audit/timeline SoT for "what happened when." `receiving_triage` / `receiving_unbox` /
+`receiving_line_*` are the **queryable SoT** for rails and workspace UI. `feed_memberships` is a **cache** — never the
+only place a milestone is written. Interim spine columns (`receiving.received_at`, `unbox_only_intake`, …) are
+**denormalized projections** until the street tables cut over.
+
 ### Layer 3 — The streets (per-station code lanes + display archetypes)
 
 Reorganize `src/lib/receiving/` and the API around the streets. **Shared at the bottom, forked at the lane.**
@@ -339,8 +522,10 @@ src/lib/receiving/
     carton.ts          create/find carton, intake-kind resolve, shipment_links
     line.ts            create/find line
     transition.ts      = state-machine.ts (the ONE workflow_status writer)
-    record-scan.ts     the ONE dock-scan writer
-    facts.ts           NEW: typed-facts read/write + registry dispatch
+    record-scan.ts     scan writer → receiving_scans + street table + ops_events
+    triage.ts          NEW: receiving_triage read/write (completeTriage, staging)
+    unbox.ts           NEW: receiving_unbox read/write (opened, unboxed milestone)
+    facts.ts           typed-facts read/write + registry dispatch
     exceptions.ts      EXISTS
   kinds/        ← polymorphic-by-intake-kind (NEW grouping)
     registry.ts        intake_kind → { label, factTables, factSchemas, defaultWorkflow, classify() }
@@ -483,6 +668,11 @@ tenancy, idempotency) asserted unchanged.
 1. `…_receiving_carton_create.sql` — `receiving_carton` + `enforce_tenant_isolation` + shipment_links owner-type seed.
 2. `…_receiving_line_create.sql` — `receiving_line` + kept coarse-status trigger + org-led keys.
 3. `…_receiving_line_facts_tables.sql` — `receiving_line_zoho` / `_testing` / `_return` / `_putaway` + `receiving_line_facts` registry table.
+3b. ✅ **DONE** — `2026-07-05c_receiving_street_tables.sql`: **`receiving_triage`** + **`receiving_unbox`** (carton 1:1);
+    `condition_set_at` added to `receiving_line_testing`; backfilled from interim spine columns (0-drift parity);
+    dual-write via `trg_sync_receiving_street` trigger (not writer edits — avoids the mid-WIP scan writers, mirrors 29e);
+    29e line-facts trigger extended for `condition_set_at`. No further triage/unbox columns added to `receiving` /
+    `receiving_lines`. (Reader cutover + interim-column drop remain — §8 step 3b tail.)
 4. **PR:** Drizzle models for all of the above + `src/lib/receiving/facts/registry.ts` + per-kind Zod schemas.
 5. `…_receiving_backfill.sql` (or a guarded backfill script) — one-time projection, dry-run report.
 6. **PR:** `streets/history` lane + endpoint; remove `view=activity` arm. (lowest risk first)
@@ -493,14 +683,30 @@ tenancy, idempotency) asserted unchanged.
 11. **PR:** `streets/door` lane (decompose `lookup-po`); classify via `kinds/registry.ts`.
 12. **PR:** delete the now-empty `/api/receiving-lines` multiplexer + `normalizeRow` DTO-for-all.
 13. `…_receiving_drop_legacy_columns.sql` — drop the moved/dead columns from the (now-thin) spine.
-14. `…_receiving_rename_spine.sql` — `receiving`→`receiving_carton`, `receiving_lines`→`receiving_line` (+ view shims if any external SQL refers by name).
+    - ✅ **dead `lpn` DROPPED** (`2026-07-05e`) — established the drop mechanics: DROP the `SELECT *` compat view →
+      DROP the column's index → recreate the entity-search-outbox `UPDATE OF` trigger minus the column → DROP COLUMN →
+      recreate the view (`security_invoker`). Code refs removed (lookup-po writer, search-outbox SELECT + build-search-text
+      token + test, Drizzle model). Verified: view reads 2057 rows, tsc clean, tests green. (`quantity` was already gone.)
+    - ⛔ **Moved clusters GATED** (interim triage/unbox cols, testing cluster, zoho cluster): each needs its writers
+      INVERTED to write the facts/street tables directly (they currently write the spine cols, mirrored by triggers) —
+      and those writers live in files under active uncommitted WIP (`record-scan.ts`, `unbox-scan-opened.ts`,
+      `mark-received-po`, `lines/[id]/status`) + the 2,075-line multiplexer. Doing that over in-flight edits, without the
+      `receive-to-zoho` e2e (RED), risks corrupting the WIP and the live receive/test flow. Blocked on the WIP committing.
+14. ✅ **DONE (early)** — `2026-07-05d_receiving_spine_rename.sql`: `receiving`→`receiving_carton`,
+    `receiving_lines`→`receiving_line`, done ahead of the reader cutover via `security_invoker=true` auto-updatable
+    compat views under the old names (safe for the ~900 live raw-SQL refs; RLS preserved). `ON CONFLICT` sites +
+    Drizzle models repointed to the base tables. The views are the temporary shim removed once every raw ref is
+    migrated to the canonical names (part of steps 6–12).
 
 ---
 
 ## 9. Risks & mitigations
 
-- **Backfill parity** (51 wide cols → spine + 5 facts tables). *Mitigation:* idempotent, org-by-org, dry-run row-count +
-  null-loss report before the drop; not-live means a reseed-from-Zoho fallback exists.
+- **Station column bleed.** Triage and unbox writers touching the same spine columns caused cross-mode gates
+  (`unbox_only_intake`, shared `received_at`). *Mitigation:* street tables + writer audit; grep for `UPDATE receiving SET`
+  outside `streets/{triage,unbox,door}`; dual-write parity before column drop.
+- **Backfill parity** (51 wide cols → spine + street tables + line facts). *Mitigation:* idempotent, org-by-org, dry-run
+  row-count + null-loss report before the drop; not-live means a reseed-from-Zoho fallback exists.
 - **Hidden readers of dropped columns.** *Mitigation:* drop a column only after grep + tsc prove zero readers; the
   per-street PR order means each column dies with its last street.
 - **Zoho sync writes the spine.** `zoho-receiving-sync` / `po-mirror-sync` seed EXPECTED lines + mirror PO fields.
@@ -518,8 +724,10 @@ tenancy, idempotency) asserted unchanged.
 
 ## 10. Verification & success criteria
 
-- `receiving_carton` ≤ ~14 cols, `receiving_line` ≤ ~14 cols; every remaining column used by **every** street (no
-  one-street columns left on the spine).
+- `receiving_carton` ≤ ~12 cols, `receiving_line` ≤ ~12 cols; **zero per-street columns** on the spine.
+- `receiving_triage` and `receiving_unbox` exist; triage writers never touch `receiving_unbox` and vice versa.
+- Triage scan does not stamp unbox milestones; unbox scan does not stamp door arrival (`door_received_at`).
+- `condition_set_at` lives on `receiving_line_testing`, not `receiving_lines`.
 - "All `<KIND>` lines" and "needs-test queue" are single indexed joins; **no nullable-discriminator scans.**
 - Exactly **one** `workflow_status` writer (`transitionReceivingLine`) and **one** receive writer (`receiveLineUnits`);
   the bypass routes are gone (grep: zero inline `UPDATE … workflow_status`).
@@ -549,6 +757,11 @@ tenancy, idempotency) asserted unchanged.
   `exception_code` on the line for cheap filtering?
 - **Backfill vs reseed** — preserve dev rows via backfill, or take the not-live freedom to reseed PO lines from Zoho and
   start the facts tables clean?
+- **Interim spine columns (2026-07-05).** Drop `receiving.received_at` / `unbox_*` / `triage_*` / `unbox_only_intake`
+  only after `receiving_triage` + `receiving_unbox` readers are cut over and parity-tested. Until then, treat them as
+  write-through projections from the street writers.
+- **`intake_path` derivation.** Set `unbox_only` when first unbox scan occurs with no `receiving_triage.door_received_at`;
+  flip to `triage_first` when a later triage scan arrives (rare) or at backfill time from history.
 
 ---
 
@@ -564,7 +777,9 @@ tenancy, idempotency) asserted unchanged.
   `2026-06-14_rls_enforcement_infra.sql` (`enforce_tenant_isolation`), `2026-06-28g_part_links.sql` (tenant-from-birth
   template), `src/lib/order-lifecycle.ts` (rules-as-data model).
 - Current-state spine: `src/lib/drizzle/schema.ts:1014` (`receiving`), `:1151` (`receiving_lines`), `:1256`
-  (`receiving_exceptions`); the query monolith `src/app/api/receiving-lines/route.ts`; the lib in `src/lib/receiving/*`;
+  (`receiving_exceptions`); triage/unbox semantics `context/WORKFLOW-RECEIVING.md`; interim migration
+  `src/lib/migrations/2026-07-05_receiving_independent_mode_scans.sql`; scan writers `record-scan.ts`,
+  `unbox-scan-opened.ts`, `complete-triage.ts`; the query monolith `src/app/api/receiving-lines/route.ts`; the lib in `src/lib/receiving/*`;
   the kept trigger `2026-06-25_receiving_line_coarse_status_trigger.sql`; the catalog FK `2026-06-14f_catalog_type_fk_accounts_seed.sql`.
 
 ---
@@ -573,33 +788,35 @@ tenancy, idempotency) asserted unchanged.
 
 Where each column lands. **Spine** = stays (universal). **→ table** = moves to a facts table. **drop** = dead.
 
-### `receiving` (carton) → `receiving_carton`
+### `receiving` (carton) → `receiving_carton` + street tables
 | Column(s) | Target |
 |---|---|
-| `carrier`, `received_at`→`arrived_at`, `received_by`→`arrived_by` | **Spine** (dock grain) |
-| `shipment_id`, `priority_tier` | **Spine** (cache + routing) |
-| `intake_type`/`type_id` | **Spine** as `intake_kind_id` (catalog FK) + `intake_kind_code` |
+| `carrier`, `shipment_id`, `priority_tier`, `source`, intake kind | **Spine** (`receiving_carton`) |
+| `received_at`, `received_by` | **→ receiving_triage** (`door_received_at`, `door_received_by`) |
+| `staging_location_id`, `priority_lane`, `pairing_state`, `triage_complete`, `triage_completed_at`, `triage_completed_by` | **→ receiving_triage** |
+| `unbox_opened_at`, `unbox_opened_by` | **→ receiving_unbox** (`opened_at`, `opened_by`) |
+| `unboxed_at`, `unboxed_by` | **→ receiving_unbox** |
+| `unbox_only_intake` | **→ receiving_unbox.intake_path** (`unbox_only` \| `triage_first`) |
+| `intake_surface` on scans | **keep** on `receiving_scans` (+ mirror in `ops_events.payload`) |
 | `lpn` | **drop** (dead 1:1 alias → `handling_unit_id`) |
 | `quantity` (TEXT) | **drop** (legacy; per-line qty is SoT) |
 | `is_return`, `return_platform`, `return_reason` | **→ receiving_line_return** (kind facts) |
-| `source`, `source_platform`, `listing_url` | **→ kinds** (`receiving_line_facts` marketplace) / `intake_kind` |
-| `zoho_purchase_receive_id`, `zoho_warehouse_id`, `zoho_purchaseorder_id`/`_number`, `zoho_notes` | **→ receiving_line_zoho** (or `zoho_po_mirror`) |
-| `qa_status`, `disposition_code`, `condition_grade` | **→ receiving_line_testing** (unit outcome, not carton) |
-| `needs_test`, `assigned_tech_id` | **→ receiving_line_testing** (per-line routing) |
-| `target_channel` | **→ kinds**/routing |
+| `source_platform`, `listing_url` | **→ kinds** (`receiving_line_facts` marketplace) / `intake_kind` |
+| `zoho_*` cluster | **→ receiving_line_zoho** (or `zoho_po_mirror`) |
+| `qa_status`, `disposition_code`, `condition_grade`, `needs_test`, `assigned_tech_id` | **→ receiving_line_testing** |
 | `support_notes`, `zendesk_ticket`, `exception_code` | **→ receiving_exceptions** |
-| `unboxed_at`/`unboxed_by`, `scanned_at`, `intake_type` (line dup) | **resolve dual-grain** → line owns per-item stage; carton keeps dock only |
-| `receiving_date_time` | **drop**/collapse into `arrived_at` |
+| `receiving_date_time` | **drop**/collapse into `receiving_triage.door_received_at` |
 
 ### `receiving_lines` → `receiving_line`
 | Column(s) | Target |
 |---|---|
 | `receiving_id`→`carton_id`, `sku_catalog_id`, `quantity_expected`/`_received` | **Spine** |
 | `workflow_status`, `receiving_line_status`→`coarse_status` | **Spine** (+ keep trigger) |
-| `scanned_at`, `unboxed_at`, `received_at`, `received_by`, `received_done_at` | **Spine** (per-item stage) |
+| `scanned_at`, `unboxed_at`, `received_at`, `received_by`, `received_done_at` | **Spine** (per-line stage rollup) or derive from line events |
+| `condition_set_at` | **→ receiving_line_testing** (NOT spine) |
 | `receiving_type`/`intake_type` | **Spine** as line-level `intake_kind_id` override |
 | `zoho_item_id`, `zoho_line_item_id`, `zoho_purchase_receive_id`, `zoho_purchaseorder_id`/`_number`/`_number_norm`, `zoho_reference_number`, `zoho_sync_source`, `zoho_last_modified_time`, `zoho_synced_at`, `zoho_notes`, `unit_price` | **→ receiving_line_zoho** |
-| `needs_test`, `assigned_tech_id`, `qa_status`, `disposition_code`, `disposition_final`, `condition_grade`, `disposition_audit` | **→ receiving_line_testing** |
+| `needs_test`, `assigned_tech_id`, `qa_status`, `disposition_code`, `disposition_final`, `condition_grade`, `condition_set_at`, `disposition_audit` | **→ receiving_line_testing** |
 | `source_platform_pill`, `listing_url`, `listing_reference`, `source_system`, `source_order_id` | **→ receiving_line_facts** (marketplace/sourcing) or **receiving_line_return** |
 | `is_repair_service` | **→ receiving_line_facts** (repair) / kind |
 | `location_code` | **→ receiving_line_putaway** (or `serial_units` location) |

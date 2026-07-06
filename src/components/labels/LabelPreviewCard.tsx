@@ -74,6 +74,8 @@ export function LabelPreviewCard({
           />
         ) : null}
       </div>
+      {/* Themed frame; the label face inside is theme-aware (dark card + inverted
+          barcode in dark mode). Print output stays black-on-white. */}
       <div className="rounded border border-border-soft bg-surface-card px-2 py-2 shadow-sm">
         <LabelFacePreview model={face} embedded />
       </div>

@@ -47,6 +47,12 @@ export function ShippedNotesComposer({
             <textarea
               value={value}
               onChange={(event) => onChange?.(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  if (!isSaving) onSubmit?.();
+                }
+              }}
               rows={4}
               placeholder="Add a note for this order"
               className="min-h-[108px] w-full resize-none rounded-t-2xl border-0 bg-transparent px-4 pb-3 pt-7 text-sm font-medium leading-6 text-text-default outline-none placeholder:text-text-faint focus:ring-0"

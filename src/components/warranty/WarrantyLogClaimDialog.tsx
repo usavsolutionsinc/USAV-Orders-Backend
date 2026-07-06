@@ -84,7 +84,7 @@ export function WarrantyLogClaimDialog({ open, onClose, onCreated, initial }: Wa
   const input = 'w-full rounded-md border border-border-soft px-2.5 py-1.5 text-sm';
 
   return createPortal(
-    <div className="fixed inset-0 z-panelPopover flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-panelPopover flex items-center justify-center bg-scrim/30 p-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-xl bg-surface-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}

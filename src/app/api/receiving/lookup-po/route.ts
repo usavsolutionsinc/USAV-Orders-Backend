@@ -17,7 +17,7 @@ import {
 } from '@/lib/receiving/intake-classification';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
-import { recordReceivingScan } from '@/lib/receiving/record-scan';
+import { recordReceivingScan, type ReceivingIntakeSurface } from '@/lib/receiving/record-scan';
 import { recordUnboxScanOpened } from '@/lib/receiving/unbox-scan-opened';
 import { resolveShipmentForScan } from '@/lib/receiving/resolve-shipment-for-scan';
 import type { ReceivingExceptionCode } from '@/lib/receiving/exception-codes';
@@ -216,9 +216,12 @@ async function memoizeLookupHit(
   receivingSource: string,
   staffId: number | null,
   carrier: string,
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<number> {
   const scanSource: 'zoho_po' | 'unmatched' = receivingSource === 'zoho_po' ? 'zoho_po' : 'unmatched';
-  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, scanSource);
+  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, scanSource, {
+    intakeSurface,
+  });
 }
 
 /**
@@ -246,6 +249,7 @@ async function findScanByTracking(
   staffId: number | null,
   carrier: string,
   orgId: string,
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<{ scan_id: number; receiving_id: number } | null> {
   // ── 1. STN exact-normalized (last-8 demoted to a logged fallback) ────────
   const resolved = await resolveShipmentForScan(trackingNumber, orgId);
@@ -256,6 +260,7 @@ async function findScanByTracking(
       resolved.receivingSource ?? 'unmatched',
       staffId,
       carrier,
+      intakeSurface,
     );
     return { scan_id, receiving_id: resolved.receivingId };
   }
@@ -446,11 +451,8 @@ async function linkLocalPoLinesToReceiving(poId: string, receivingId: number, or
 async function stampInboundHandlingUnit(receivingId: number, orgId: string): Promise<void> {
   if (!isReceivingUnifiedInbound()) return;
   try {
-    await tenantQuery(
-      orgId,
-      `UPDATE receiving SET lpn = 'RC-' || id::text WHERE id = $1 AND lpn IS NULL`,
-      [receivingId],
-    );
+    // (receiving.lpn dropped 2026-07-05e — it was a dead 'RC-<id>' alias of the
+    // primary key; carton identity is the id / handling_unit_id.)
     await tenantQuery(
       orgId,
       `UPDATE receiving_lines rl
@@ -477,7 +479,9 @@ async function upsertMatchedReceiving(
   const now = formatPSTTimestamp();
   const result = await tenantQuery<{ id: number; xmax: string }>(
     organizationId,
-    `INSERT INTO receiving
+    // Target the base table (not the `receiving` compat view): views cannot do
+    // INSERT ... ON CONFLICT, and xmax is a base-table system column. 2026-07-05d.
+    `INSERT INTO receiving_carton
        (source, zoho_purchaseorder_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at, organization_id)
      VALUES ('zoho_po', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz, $5::uuid)
@@ -491,10 +495,10 @@ async function upsertMatchedReceiving(
        -- the view=scanned predicate (r.received_at IS NOT NULL) and stays
        -- invisible in the Prioritize / unbox Queue feeds. COALESCE keeps the
        -- original scan time + scanner on re-scans (idempotent, never resets).
-       received_at = COALESCE(receiving.received_at, EXCLUDED.received_at),
-       received_by = COALESCE(receiving.received_by, EXCLUDED.received_by),
-       carrier = COALESCE(receiving.carrier, EXCLUDED.carrier),
-       organization_id = COALESCE(receiving.organization_id, EXCLUDED.organization_id)
+       received_at = COALESCE(receiving_carton.received_at, EXCLUDED.received_at),
+       received_by = COALESCE(receiving_carton.received_by, EXCLUDED.received_by),
+       carrier = COALESCE(receiving_carton.carrier, EXCLUDED.carrier),
+       organization_id = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id)
      RETURNING id, xmax::text`,
     [poId, carrier || null, now, staffId, organizationId],
   );
@@ -615,7 +619,9 @@ async function createOrGetTestReceiving(
   // carton into the testing display queue instead of receiving triage.
   await tenantQuery(
     organizationId,
-    `INSERT INTO receiving_lines
+    // Base table (not the `receiving_lines` view): ON CONFLICT is unsupported on
+    // auto-updatable views. 2026-07-05d.
+    `INSERT INTO receiving_line
        (receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchaseorder_id,
         item_name, sku, quantity_expected, quantity_received, workflow_status,
         qa_status, disposition_code, condition_grade, needs_test, updated_at, organization_id)
@@ -639,8 +645,11 @@ async function recordScan(
   carrier: string,
   staffId: number | null,
   source: 'zoho_po' | 'unmatched',
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<number> {
-  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, source);
+  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, source, {
+    intakeSurface,
+  });
 }
 
 /**
@@ -777,6 +786,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             carrier,
             staffId,
             recvSource === 'zoho_po' ? 'zoho_po' : 'unmatched',
+            { intakeSurface },
           );
           await stampUnboxOpened(hit.receivingId, scanId, rawTracking);
           const poIdsSet = new Set<string>();
@@ -944,7 +954,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           }
         });
       }
-      const orderScanId = await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
+      const orderScanId = await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po', intakeSurface);
       await stampUnboxOpened(receivingId, orderScanId, trackingNumber);
       await applyIntakeClassification(receivingId, classification, ctx.organizationId);
 
@@ -1019,7 +1029,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     //    empty (e.g. receiving_lines was truncated, or the row was created
     //    as 'unmatched' before Zoho synced the PO), fall through to the
     //    Zoho lookup so we can repopulate the PO linkage on this same row.
-    const existingScan = await findScanByTracking(trackingNumber, staffId, carrier, ctx.organizationId);
+    const existingScan = await findScanByTracking(trackingNumber, staffId, carrier, ctx.organizationId, intakeSurface);
     let preassignedReceivingId: number | null = null;
     let preassignedScanId: number | null = null;
     if (existingScan) {
@@ -1043,6 +1053,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           carrier,
           staffId,
           recvSource === 'zoho_po' ? 'zoho_po' : 'unmatched',
+          { intakeSurface },
         );
         await stampUnboxOpened(existingScan.receiving_id, dedupScanId, trackingNumber);
         const poIdsSet = new Set<string>();
@@ -1301,6 +1312,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         carrier,
         staffId,
         'zoho_po',
+        intakeSurface,
       );
       await stampUnboxOpened(primaryReceivingId, scanId, trackingNumber);
       // If the scan was attached to a different receiving row (rare race
@@ -1368,7 +1380,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             staffId,
             ctx.organizationId,
           );
-          await recordScan(extraReceivingId, trackingNumber, carrier, staffId, 'zoho_po');
+          await recordScan(extraReceivingId, trackingNumber, carrier, staffId, 'zoho_po', intakeSurface);
           const linkedSecondary = await linkLocalPoLinesToReceiving(poId, extraReceivingId, ctx.organizationId);
           if (linkedSecondary === 0) {
             await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
@@ -1549,6 +1561,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       carrier,
       staffId,
       'unmatched',
+      intakeSurface,
     );
     await stampUnboxOpened(unmatchedReceivingId, unmatchedScanId, trackingNumber);
 

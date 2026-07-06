@@ -1,29 +1,12 @@
-import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
-import { TechPageContent } from '@/components/tech/TechPageContent';
-import { getCurrentUser } from '@/lib/auth/current-user';
+import { TechSurfacePage } from '@/components/tech/TechSurfacePage';
 
 /**
- * /tech — the technician station landing.
- *
- * Identity comes from the verified session cookie. Staff switching happens
- * via the FAB's SwitchStaffSheet, not the URL. The proxy already redirects
- * unauthenticated traffic; this redirect is belt-and-suspenders for the
- * (theoretical) case of a stale cookie that passes proxy but fails server
- * resolution.
+ * /tech — legacy alias for the Testing station. Graduated to `/test` (the
+ * first-class Test surface, operator-surfaces refactor Phase 8); the proxy
+ * redirects `/tech` (incl. `?view=testing`) → `/test` on desktop, so this page
+ * only renders when the proxy is bypassed. It delegates to the same shared shell
+ * so the legacy URL keeps working (the reversible-cut discipline the plan intends).
  */
-export default async function TechPage() {
-  const user = await getCurrentUser();
-  if (!user) {
-    const h = await headers();
-    const path = h.get('x-pathname') || '/tech';
-    redirect(`/signin?next=${encodeURIComponent(path)}`);
-  }
-
-  return (
-    <Suspense fallback={null}>
-      <TechPageContent techId={String(user.staffId)} />
-    </Suspense>
-  );
+export default function TechPage() {
+  return <TechSurfacePage fallbackPath="/tech" />;
 }
