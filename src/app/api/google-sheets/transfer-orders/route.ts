@@ -3,37 +3,45 @@ import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import {
     GoogleSheetsTransferOrdersJobError,
     runGoogleSheetsTransferOrders,
+    resolveTransferSourceSpreadsheetId,
 } from '@/lib/jobs/google-sheets-transfer-orders';
 import { logRouteMetric } from '@/lib/route-metrics';
 import { withAuth } from '@/lib/auth/withAuth';
 import { createNdjsonStream, ndjsonResponseHeaders } from '@/lib/orders-sync/streaming';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
     const startedAt = Date.now();
     let ok = false;
     const body = await req.json().catch(() => ({}));
     const manualSheetName = body?.manualSheetName;
+    const orgId = ctx.organizationId;
+    const spreadsheetId = await resolveTransferSourceSpreadsheetId(orgId);
 
-    // TRANSITIONAL: this transfer endpoint also backs a Vercel cron that has no
-    // session, so there is no ctx.organizationId. Single-tenant (USAV) today;
-    // resolve the service org and pass it into the shared sync job so all its
-    // tenant-table reads/writes run GUC-scoped (app.current_org) + stamp org.
-    // TODO(multi-tenant): resolve org from the per-connection / sheet→org
-    // mapping instead of the USAV service org.
-    // (no-restricted-syntax tenancy guard turned off for this file via the
-    // burn-down allowlist in eslint.config.mjs — delete that entry when refactored.)
-    const orgId = transitionalUsavOrgId();
+    if (!spreadsheetId) {
+        return NextResponse.json(
+            {
+                success: false,
+                error: 'No Google Sheets source configured for this organization. Connect Google Sheets under Settings → Integrations.',
+            },
+            { status: 400 },
+        );
+    }
 
     // Streaming NDJSON response — UI consumes events row-by-row. (Scheduled
     // runs go through the Vercel cron at /api/cron/google-sheets/transfer-orders.)
     const stream = createNdjsonStream();
     (async () => {
         try {
-            const result = await runGoogleSheetsTransferOrders(manualSheetName, 'sheets', stream.emit, orgId);
+            const result = await runGoogleSheetsTransferOrders(
+                manualSheetName,
+                'sheets',
+                stream.emit,
+                orgId,
+                spreadsheetId,
+            );
             stream.emit({ type: 'result', result: result as unknown as Record<string, unknown> });
             ok = true;
         } catch (error: any) {
@@ -57,7 +65,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     return new Response(stream.body, { headers: ndjsonResponseHeaders() });
 }, { permission: 'orders.import' });
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     const startedAt = Date.now();
     if (!isAllowedAdminOrigin(req)) {
         logRouteMetric({
@@ -69,17 +77,16 @@ export const GET = withAuth(async (req: NextRequest) => {
         });
         return NextResponse.json({ success: false, error: 'Origin not allowed' }, { status: 403 });
     }
-    // TRANSITIONAL: session-less cron-style trigger (origin-gated). Single-tenant
-    // (USAV) today; resolve the service org and pass it into the shared sync job
-    // so its tenant-table reads/writes run GUC-scoped (app.current_org) + stamp org.
-    // TODO(multi-tenant): resolve org from the per-connection / sheet→org mapping
-    // instead of the USAV service org.
-    // (no-restricted-syntax tenancy guard turned off for this file via the
-    // burn-down allowlist in eslint.config.mjs — delete that entry when refactored.)
-    const orgId = transitionalUsavOrgId();
+    const orgId = ctx.organizationId;
+    const spreadsheetId = await resolveTransferSourceSpreadsheetId(orgId);
+    if (!spreadsheetId) {
+        return NextResponse.json(
+            { success: false, error: 'No Google Sheets source configured for this organization.' },
+            { status: 400 },
+        );
+    }
     try {
-        // progress=undefined → job falls back to its internal noop; orgId is the 4th arg.
-        const result = await runGoogleSheetsTransferOrders(undefined, 'sheets', undefined, orgId);
+        const result = await runGoogleSheetsTransferOrders(undefined, 'sheets', undefined, orgId, spreadsheetId);
         logRouteMetric({
             route: '/api/google-sheets/transfer-orders',
             method: 'GET',

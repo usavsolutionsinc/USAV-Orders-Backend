@@ -56,7 +56,7 @@ import {
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
 import { EcwidProductSearchInline } from '@/components/receiving/unfound/EcwidProductSearchInline';
-import { PoLinkTab } from '@/components/receiving/workspace/line-edit/PoLinkTab';
+import { ZohoPoPairTab } from '@/components/receiving/workspace/line-edit/ZohoPoPairTab';
 import { EmailPoLinkTab } from '@/components/receiving/workspace/line-edit/EmailPoLinkTab';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MatchCard } from '@/components/receiving/triage/MatchCard';
@@ -302,9 +302,9 @@ function TriageMatchingCard({
     onLinked: ({ carton, line }) => {
       const cartonPatch = {
         zoho_purchaseorder_number: carton.zoho_purchaseorder_number,
-        receiving_source: carton.source ?? 'zoho_po',
-        source_platform: carton.source_platform ?? 'ecwid',
-        source_platform_pill: carton.source_platform ?? 'ecwid',
+        receiving_source: carton.source ?? 'unmatched',
+        source_platform: carton.source_platform ?? null,
+        source_platform_pill: carton.source_platform ?? null,
       };
       // Unfound stub (synthetic negative id, no real line): the new line IS the
       // carton's content, so re-select it — the detail pane upgrades from
@@ -435,8 +435,13 @@ function TriageMatchingCard({
           onClose={() => setTab('po')}
         />
       ) : tab === 'po' ? (
-        // Link a Zoho PO — search the local mirror + relink the carton/line.
-        <PoLinkTab row={row} receivingId={receivingId} />
+        // Zoho SKU acknowledge (no PO link) + optional PO relink below.
+        <ZohoPoPairTab
+          row={row}
+          receivingId={receivingId}
+          allowOffPo={orderLinked}
+          onAddSku={(sel) => u.handleAddLine(sel, { allowOffPo: orderLinked })}
+        />
       ) : tab === 'email' ? (
         // Email PO — search the Gmail-ingested PO worklist + link the carton's
         // tracking to a purchase order that was never imported into the system.

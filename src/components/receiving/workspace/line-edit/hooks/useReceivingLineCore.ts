@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { useResourceMutation } from '@/hooks';
 import { useAblyClient } from '@/contexts/AblyContext';
@@ -11,6 +11,8 @@ import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { useEntitySupportTicket } from '@/hooks/useEntitySupportTicket';
 import { getTrackingUrl, getTrackingUrlByCarrier } from '@/lib/tracking-format';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { useSkuIdentity } from '@/hooks/useSkuIdentity';
+import { collectCartonListingLinks } from '@/lib/receiving/listing-links';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
@@ -84,6 +86,19 @@ export function useReceivingLineCore(
   const { sourcePlatform, setSourcePlatform, platformSaving, savePlatform } = useSourcePlatform(
     row,
     { listingLink },
+  );
+  const isUnmatched = row.receiving_source === 'unmatched';
+  const skuIdentity = useSkuIdentity(isUnmatched ? null : row.sku, sourcePlatform || row.source_platform);
+  const listingLinks = useMemo(
+    () =>
+      collectCartonListingLinks({
+        listingLink,
+        sku: row.sku,
+        sourcePlatform,
+        isUnmatched,
+        platforms: skuIdentity.platforms,
+      }),
+    [listingLink, row.sku, sourcePlatform, isUnmatched, skuIdentity.platforms],
   );
   const { intakeType: receivingType, setIntakeType: setReceivingType, saveType } =
     useReceivingType(row);
@@ -429,15 +444,12 @@ export function useReceivingLineCore(
 
   // ── Derived identity values shared by the carton chip row ──────────────────
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-  // Listing link: an explicit pasted URL wins; otherwise derive the storefront
-  // search by SKU — the SAME resolver sales orders use (getExternalUrlByItemNumber:
-  // usavshop.com/products/search?keyword=SKU, with marketplace patterns inferred),
-  // so a paired Ecwid carton's Listing chip is openable instead of "No link".
-  // Only derive for a LINKED carton: an unmatched (unfound) carton has no listing,
-  // so unlinking resets the chip back to empty instead of leaving a stale SKU link.
+  // Listing link: an explicit pasted URL wins; otherwise derive from catalog
+  // platform rows + storefront search by SKU (collectCartonListingLinks).
   const listingOpenHref =
-    listingUrlForOpen(listingLink) ||
-    (row.receiving_source === 'unmatched' ? null : getExternalUrlByItemNumber(row.sku));
+    listingLinks[0]?.href ??
+    (listingUrlForOpen(listingLink) ||
+      (isUnmatched ? null : getExternalUrlByItemNumber(row.sku)));
   const poOpenHref = (() => {
     const id = (row.zoho_purchaseorder_id || '').trim();
     if (id) return `https://inventory.zoho.com/app#/purchaseorders/${encodeURIComponent(id)}`;
@@ -479,7 +491,7 @@ export function useReceivingLineCore(
     handlePrioritySelect, attachExtraBox,
     handleShare, handleSharePhone, handleCopyAll,
     // derived
-    poNumber, listingOpenHref, poOpenHref,
+    poNumber, listingOpenHref, listingLinks, poOpenHref,
     zendeskTrimmed, zendeskHref, zendeskChipDisplay,
     supportTicket, providerTicketId,
     invalidateSupportTicket: () => void supportTicketQuery.refetch(),

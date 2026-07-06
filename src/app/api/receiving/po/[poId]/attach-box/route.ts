@@ -11,6 +11,10 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { USAV_ORG_ID } from '@/lib/tenancy/constants';
+import { INBOUND_SOURCE_TYPES } from '@/lib/inbound/source-registry';
+
+/** Sargable `= ANY(...)` list for the polymorphic-link fallback (see resolvePo). */
+const NON_ZOHO_INBOUND_SOURCES: string[] = INBOUND_SOURCE_TYPES.filter((t) => t !== 'zoho');
 
 /**
  * POST /api/receiving/po/:poId/attach-box
@@ -30,7 +34,17 @@ import { USAV_ORG_ID } from '@/lib/tenancy/constants';
  * Body: { trackingNumber: string }
  */
 
-/** Resolve a Zoho purchaseorder_id (or PO number/reference) to the canonical id. */
+/**
+ * Resolve a Zoho purchaseorder_id (or PO number/reference) to the canonical id.
+ *
+ * Universal Incoming (plan §7.4): the input may also be an *eBay order id* — the
+ * `source_order_id` an eBay-originated Incoming row carries when it has no Zoho
+ * PO of its own. When that eBay line has since been linked/merged to a Zoho PO
+ * (via `POST /api/receiving/inbound/link`), we resolve through the polymorphic
+ * links to the Zoho id so attach-tracking flows through the same carton path as
+ * a native Zoho PO. (A pure eBay-only line with no Zoho link yet has no carton
+ * anchor in the current physical model — the operator links a Zoho PO first.)
+ */
 async function resolvePo(
   orgId: string,
   poIdInput: string,
@@ -61,6 +75,33 @@ async function resolvePo(
     );
     poId = m.rows[0]?.zoho_purchaseorder_id ?? null;
     poNumber = poNumber ?? m.rows[0]?.zoho_purchaseorder_number ?? null;
+  }
+  // Universal Incoming fallback: treat the input as a non-Zoho external order id
+  // and follow the polymorphic links to a Zoho PO on the same spine row. Use an
+  // explicit `= ANY(<non-zoho sources>)` (not `<> 'zoho'`) so the composite index
+  // idx_inbound_po_links_source_lookup (org, source_type, source_order_id) stays
+  // fully sargable instead of degrading to a per-org Filter scan.
+  if (!poId) {
+    const link = await tenantQuery<{ zoho_purchaseorder_id: string; zoho_purchaseorder_number: string | null }>(
+      orgId,
+      `SELECT z.source_order_id AS zoho_purchaseorder_id,
+              rl.zoho_purchaseorder_number
+         FROM inbound_purchase_order_links l
+         JOIN inbound_purchase_order_links z
+           ON z.receiving_line_id = l.receiving_line_id
+          AND z.organization_id  = l.organization_id
+          AND z.source_type = 'zoho'
+         JOIN receiving_lines rl
+           ON rl.id = l.receiving_line_id AND rl.organization_id = l.organization_id
+        WHERE l.organization_id = $1
+          AND l.source_type = ANY($3::text[])
+          AND l.source_order_id = $2
+        ORDER BY z.is_primary DESC, z.id
+        LIMIT 1`,
+      [orgId, poIdInput, NON_ZOHO_INBOUND_SOURCES],
+    );
+    poId = link.rows[0]?.zoho_purchaseorder_id ?? null;
+    poNumber = poNumber ?? link.rows[0]?.zoho_purchaseorder_number ?? null;
   }
   return poId ? { poId, poNumber } : null;
 }

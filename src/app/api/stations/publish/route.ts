@@ -23,6 +23,9 @@ import { StationPublishBody } from '@/lib/schemas/stations';
 import { validateStationConfig } from '@/lib/stations/validate';
 import type { StationConfig } from '@/lib/stations/contract';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { validateInboundPublish } from '@/lib/inbound/publish-validation';
+import { isIncomingUniversal } from '@/lib/feature-flags';
+import { resolveInboundSettings } from '@/lib/inbound/org-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +64,29 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (issues.length > 0) {
       return NextResponse.json(
         { success: false, error: 'INVALID_CONFIG', issues },
+        { status: 422 },
+      );
+    }
+
+    // Universal Incoming publish gate (plan §8.3, §9.6): a station binding eBay
+    // incoming sources needs the flag + a connected buyer account, and every
+    // pinned inbound source_type must be enabled in org policy.
+    const inboundIssues = await validateInboundPublish(row.config, {
+      isFlagOn: () => isIncomingUniversal(ctx.organizationId),
+      hasConnectedBuyerAccount: async () => {
+        const r = await tenantQuery<{ n: number }>(
+          ctx.organizationId,
+          `SELECT COUNT(*)::int AS n FROM ebay_accounts
+            WHERE organization_id = $1 AND account_role = 'buyer' AND is_active = true`,
+          [ctx.organizationId],
+        );
+        return (r.rows[0]?.n ?? 0) > 0;
+      },
+      getEnabledSources: async () => (await resolveInboundSettings(ctx.organizationId)).enabledSources,
+    });
+    if (inboundIssues.length > 0) {
+      return NextResponse.json(
+        { success: false, error: 'INVALID_CONFIG', issues: inboundIssues },
         { status: 422 },
       );
     }

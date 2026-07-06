@@ -33,6 +33,7 @@ export function LineCartonContextSection({ row, staffId, c }: LineCartonContextS
       listingEditorOpen={c.listingEditorOpen}
       setListingEditorOpen={c.setListingEditorOpen}
       listingOpenHref={c.listingOpenHref}
+      listingLinks={c.listingLinks}
       poOpenHref={c.poOpenHref}
       trackingOpenHref={c.trackingOpenHref}
       poDisplay={c.poNumber}

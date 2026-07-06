@@ -113,6 +113,62 @@ const attachTracking: ActionDefinition = {
   confirm: 'none',
 };
 
+/**
+ * Link an eBay (or other non-Zoho) Incoming line to its Zoho PO — wraps
+ * POST /api/receiving/inbound/link (Universal Incoming §7.2, §9.4). Like
+ * attach-tracking, the target PO isn't on the row, so this fires a window event
+ * (`station:link-zoho-po`) carrying the row's `id` + `po_number`/`po_id` so a PO
+ * picker can open and the picked PO POSTs the merge. Descriptor-only here.
+ */
+const linkZohoPo: ActionDefinition = {
+  id: 'incoming.link_zoho_po',
+  label: 'Link Zoho PO',
+  icon: 'Link2',
+  endpoint: { method: 'POST', path: '/api/receiving/inbound/link' },
+  // body omitted — the picker builds { receiving_line_id, target } after the
+  // operator selects the Zoho PO to merge into.
+  permission: 'receiving.mark_received',
+  appliesTo: ['po_ref', 'order_ref'],
+  integration: 'receiving',
+  confirm: 'none',
+};
+
+/**
+ * Re-pull the Incoming feed from its upstream sources (Zoho + eBay) for the
+ * bound org — wraps POST /api/receiving-lines/incoming/refresh (§9.4). A
+ * source-level refresh (no row target); the route re-syncs and the feed
+ * invalidates.
+ */
+const refreshInbound: ActionDefinition = {
+  id: 'incoming.refresh_inbound',
+  label: 'Refresh from sources',
+  icon: 'RefreshCw',
+  endpoint: { method: 'POST', path: '/api/receiving-lines/incoming/refresh' },
+  body: () => ({}),
+  // Must match the wrapped route's gate (the route is `receiving.view`).
+  permission: 'receiving.view',
+  appliesTo: [],
+  integration: 'receiving',
+  confirm: 'none',
+};
+
+/**
+ * Manually import an eBay buyer purchase onto the Incoming spine — wraps the
+ * Phase 2 bridge route POST /api/receiving/inbound/import-ebay (§9.4). Fires a
+ * window event (`station:import-ebay-order`) so a form opens for the order#,
+ * account, tracking, and SKU. Descriptor-only here.
+ */
+const importEbayOrder: ActionDefinition = {
+  id: 'incoming.import_ebay_order',
+  label: 'Import eBay order',
+  icon: 'Plus',
+  endpoint: { method: 'POST', path: '/api/receiving/inbound/import-ebay' },
+  permission: 'integrations.ebay',
+  appliesTo: ['order_ref'],
+  integration: 'receiving',
+  confirm: 'none',
+};
+
 let builtinsRegistered = false;
 export function registerBuiltinActions(): void {
   if (builtinsRegistered) return;
@@ -121,4 +177,7 @@ export function registerBuiltinActions(): void {
   registerAction(markEmailDone);
   registerAction(startSourcing);
   registerAction(attachTracking);
+  registerAction(linkZohoPo);
+  registerAction(refreshInbound);
+  registerAction(importEbayOrder);
 }

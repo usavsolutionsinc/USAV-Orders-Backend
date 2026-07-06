@@ -20,6 +20,8 @@ import { checkRateLimit } from '@/lib/api-guard';
 import { syncShipmentsByIds } from '@/lib/shipping/scheduler';
 import { selectIncomingShipmentIds } from '@/lib/receiving/incoming-shipments';
 import { getCachedJson, setCachedJson, invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { isIncomingUniversal } from '@/lib/feature-flags';
+import { syncEbayPurchasesToReceiving } from '@/lib/inbound/sync-ebay-purchases';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -35,6 +37,9 @@ interface RefreshSummary {
   errors: number;
   capped: boolean;   // true when more incoming shipments exist than BATCH_CAP
   throttled?: boolean;
+  // Universal Incoming (plan §9.4): eBay buyer-purchase pull, when the flag is on.
+  ebay_ingested?: number;
+  ebay_created?: number;
 }
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
@@ -79,9 +84,26 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const batch = rows.slice(0, BATCH_CAP);
     const result = await syncShipmentsByIds(batch, { concurrency: 5 });
 
-    // Carrier statuses changed → drop the row/summary caches so the next
-    // refetch reflects freshly-delivered packages.
-    if (result.terminal > 0 || result.synced > 0) {
+    // Universal Incoming (plan §9.4): "Refresh from sources" also re-pulls eBay
+    // buyer purchases when the org is on the flag. Track A eBay sync is a no-op
+    // until buy.order.readonly is approved, so this is safe/zero for most orgs;
+    // an eBay failure is isolated (collected in the sync's errors) and never
+    // fails the carrier refresh the operator actually clicked for.
+    let ebayIngested = 0;
+    let ebayCreated = 0;
+    try {
+      if (await isIncomingUniversal(ctx.organizationId)) {
+        const ebay = await syncEbayPurchasesToReceiving(ctx.organizationId);
+        ebayIngested = ebay.ingested;
+        ebayCreated = ebay.created;
+      }
+    } catch (e) {
+      console.warn('[incoming/refresh] eBay purchase sync failed (non-fatal)', e);
+    }
+
+    // Carrier statuses changed or new eBay lines landed → drop the row/summary
+    // caches so the next refetch reflects freshly-delivered/imported purchases.
+    if (result.terminal > 0 || result.synced > 0 || ebayCreated > 0) {
       try {
         await invalidateCacheTags(['receiving-lines', 'receiving-logs']);
       } catch { /* non-fatal */ }
@@ -94,6 +116,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       updated: result.synced,
       errors: result.errors,
       capped,
+      ebay_ingested: ebayIngested,
+      ebay_created: ebayCreated,
     };
 
     await setCachedJson('incoming-refresh', cooldownKey, summary, COOLDOWN_SECONDS);

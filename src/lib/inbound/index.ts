@@ -11,4 +11,7 @@ export * from './mirror';
 export * from './equivalence';
 export * from './ingest-purchase';
 export * from './merge-purchase-lines';
+export * from './manual-link';
+export * from './org-settings';
 export * from './sync-ebay-purchases';
+export * from './sync-one-inbound';

@@ -14,6 +14,11 @@ import {
 } from '@/utils/upnext-helpers';
 import { formatMonthDay } from '@/utils/date';
 import { getTrackingUrl } from '@/utils/order-links';
+import { isEmptyDisplayValue } from '@/utils/empty-display-value';
+import {
+  getExternalUrlByItemNumber,
+  getPlatformLabelByItemNumber,
+} from '@/utils/external-item-url';
 import type { Order } from '@/components/station/upnext/upnext-types';
 
 interface OrderPreviewPanelProps {
@@ -101,8 +106,8 @@ function getQtyBadgeClasses(quantity: number): string {
  *   3. Out-of-stock card (if applicable).
  *
  * The Tracking cell always shows copy + external icons inline; no hover
- * gating, so the affordances are discoverable. SKU is intentionally not
- * surfaced — opening the listing externally already routes by item number.
+ * gating, so the affordances are discoverable. A full-width listing CTA
+ * below the order title opens the marketplace page in a new tab.
  */
 export function OrderPreviewPanel({ order, revealItem }: OrderPreviewPanelProps) {
   const [copiedKey, setCopiedKey] = useState<CopyKey | null>(null);
@@ -118,6 +123,14 @@ export function OrderPreviewPanel({ order, revealItem }: OrderPreviewPanelProps)
 
   const trackingNumber = String(order.shipping_tracking_number || '').trim();
   const trackingUrl = getTrackingUrl(trackingNumber);
+
+  const itemNumberRaw = String(order.item_number || '').trim();
+  const itemNumberValue = isEmptyDisplayValue(order.item_number) ? '' : itemNumberRaw;
+  const listingItemKey = itemNumberValue || String(order.sku || '').trim();
+  const listingUrl = getExternalUrlByItemNumber(listingItemKey);
+  const listingPlatformLabel = listingItemKey
+    ? getPlatformLabelByItemNumber(listingItemKey)
+    : null;
 
   const hasOutOfStock = Boolean(String(order.out_of_stock || '').trim());
   const title = stripConditionPrefix(order.product_title, order.condition);
@@ -140,6 +153,18 @@ export function OrderPreviewPanel({ order, revealItem }: OrderPreviewPanelProps)
           <h2 className="text-xl font-bold leading-tight tracking-tight text-text-default">
             {title || 'Untitled order'}
           </h2>
+          {listingUrl ? (
+            <button
+              type="button"
+              onClick={() => window.open(listingUrl, '_blank', 'noopener,noreferrer')}
+              className="ds-raw-button mt-4 inline-flex h-12 w-full min-h-[44px] items-center justify-center gap-2 rounded-xl bg-blue-600 text-white text-label font-black uppercase tracking-[0.18em] shadow-[0_6px_14px_-6px_rgba(37,99,235,0.55)] transition-transform active:scale-[0.98] active:bg-blue-700"
+            >
+              <ExternalLink className="h-5 w-5 shrink-0" />
+              {listingPlatformLabel && listingPlatformLabel !== 'Unknown'
+                ? `Open ${listingPlatformLabel} listing`
+                : 'Open listing'}
+            </button>
+          ) : null}
         </WorkspaceCard>
       </RevealSection>
 

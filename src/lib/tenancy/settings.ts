@@ -168,6 +168,29 @@ export const OrgSettingsSchema = z.object({
         .optional(),
     })
     .default({}),
+  // Per-org Universal Incoming policy (docs/incoming-universal-purchase-orders-plan.md §9.6).
+  // Tenant-tunable without code: which badge wins after an eBay↔Zoho merge, which
+  // Zoho PO fields carry the eBay order# (Zoho layout varies per tenant), which
+  // signals may auto-merge, whether a fuzzy SKU match needs staff review, and which
+  // inbound sources are enabled (a subset of the source registry — the Studio
+  // publish gate validates bound sources ⊆ this list). Read only when the
+  // `incoming_universal` flag is on; the merge helper's built-in defaults match
+  // these, so an org with no `inbound` block behaves identically.
+  inbound: z
+    .object({
+      displaySourceAfterMerge: z.enum(['ebay', 'zoho', 'both']).default('ebay'),
+      zohoOrderNumberFields: z.array(z.string()).default(['reference_number', 'notes']),
+      autoMergeSignals: z.array(z.enum(['tracking', 'order_number'])).default(['tracking', 'order_number']),
+      fuzzyMergeRequiresReview: z.boolean().default(true),
+      enabledSources: z.array(z.string()).default(['zoho', 'ebay']),
+    })
+    .default({
+      displaySourceAfterMerge: 'ebay',
+      zohoOrderNumberFields: ['reference_number', 'notes'],
+      autoMergeSignals: ['tracking', 'order_number'],
+      fuzzyMergeRequiresReview: true,
+      enabledSources: ['zoho', 'ebay'],
+    }),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
@@ -221,6 +244,21 @@ export function getSubstitutionEnforcement(settings: OrgSettings): SubstitutionE
 
 export function getSubstitutionAllowedNodes(settings: OrgSettings): SubstitutionNode[] {
   return settings.fulfillment?.substitutionAllowedNodes ?? ['pick'];
+}
+
+/** Per-org Universal Incoming policy. See OrgSettingsSchema.inbound + plan §9.6. */
+export type InboundOrgSettings = OrgSettings['inbound'];
+
+const DEFAULT_INBOUND_SETTINGS: InboundOrgSettings = {
+  displaySourceAfterMerge: 'ebay',
+  zohoOrderNumberFields: ['reference_number', 'notes'],
+  autoMergeSignals: ['tracking', 'order_number'],
+  fuzzyMergeRequiresReview: true,
+  enabledSources: ['zoho', 'ebay'],
+};
+
+export function getInboundSettings(settings: OrgSettings): InboundOrgSettings {
+  return settings.inbound ?? DEFAULT_INBOUND_SETTINGS;
 }
 
 export type NasStorageTargetKey = keyof typeof DEFAULT_NAS_STORAGE_TARGETS;

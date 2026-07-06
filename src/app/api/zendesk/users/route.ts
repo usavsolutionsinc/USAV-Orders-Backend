@@ -3,7 +3,7 @@ import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   getUsers,
-  isZendeskConfigured,
+  isZendeskConfiguredForOrg,
   ZendeskApiError,
   ZendeskNotConfiguredError,
   type ZendeskUser,
@@ -42,7 +42,7 @@ export const GET = withAuth(
   async (req: NextRequest, ctx) => {
     const context = 'GET /api/zendesk/users';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
 
       const ids = (req.nextUrl.searchParams.get('ids') ?? '')
         .split(',')
@@ -57,7 +57,7 @@ export const GET = withAuth(
       const missing = ids.filter((id) => !cached.has(id));
       let fetched: ZendeskUser[] = [];
       if (missing.length) {
-        fetched = await getUsers(missing);
+        fetched = await getUsers(missing, ctx.organizationId);
         if (fetched.length) await upsertCachedUsers(ctx.organizationId, fetched);
       }
 

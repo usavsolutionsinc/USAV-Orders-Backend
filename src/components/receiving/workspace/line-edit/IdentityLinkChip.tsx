@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { Copy, ExternalLink, Pencil } from '@/components/Icons';
+import { Copy, ChevronDown, ExternalLink, Pencil } from '@/components/Icons';
 import { IconButton } from '@/design-system/primitives';
 import { CopyChip, type ChipTone } from '@/components/ui/CopyChip';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
@@ -32,6 +32,7 @@ export function IdentityLinkChip({
   chipAction = 'copy',
   showExternalIcon = false,
   menuFirstAction = 'open',
+  linkOptions,
 }: {
   openHref: string | null | undefined;
   openTitle: string;
@@ -62,6 +63,8 @@ export function IdentityLinkChip({
   showExternalIcon?: boolean;
   /** First menu row. Listing uses Copy; PO/tracking use Open. */
   menuFirstAction?: 'open' | 'copy';
+  /** Additional open targets — when length > 1, the hover menu lists every link. */
+  linkOptions?: Array<{ href: string; label: string }>;
 }) {
   const [menuHover, setMenuHover] = useState(false);
   const normalizedValue = normalizeCopyText(value);
@@ -74,7 +77,10 @@ export function IdentityLinkChip({
     void navigator.clipboard.writeText(normalizedValue);
     recordCopy(normalizedValue, { kind: tone, display });
   };
-  const hasMenuActions = actionsInMenu && (!!onEdit || menuFirstAction === 'copy' || !!openHref);
+  const multiLinks = (linkOptions?.length ?? 0) > 1 ? linkOptions! : null;
+  const hasMenuActions =
+    actionsInMenu &&
+    (!!onEdit || menuFirstAction === 'copy' || !!openHref || multiLinks != null);
   const showActionMenu = hasMenuActions && !editOpen;
 
   return (
@@ -99,29 +105,34 @@ export function IdentityLinkChip({
           />
         </HoverTooltip>
       ) : null}
-      <CopyChip
-        value={value}
-        display={display}
-        tone={tone}
-        icon={showExternalIcon ? <ExternalLink className="h-4 w-4 shrink-0" /> : undefined}
-        underlineClass={underlineClass}
-        iconClass={iconClass}
-        width={grow ? 'min-w-0 flex-1 max-w-full' : 'w-auto'}
-        outerPad="flush"
-        disableCopy={disableCopy}
-        fitDisplayWidth={!grow}
-        truncateDisplay={grow}
-        onActivate={chipAction === 'open' ? openExternal : undefined}
-        activationLabel={chipAction === 'open' ? openTitle : undefined}
-        activationTitle={
-          chipAction === 'open'
-            ? openHref
-              ? openTitle
-              : 'No link available'
-            : undefined
-        }
-        activationDisabled={chipAction === 'open' && !openHref && !onEdit}
-      />
+      <div className={`flex min-w-0 items-center gap-0.5 ${grow ? 'flex-1' : ''}`}>
+        <CopyChip
+          value={value}
+          display={display}
+          tone={tone}
+          icon={showExternalIcon ? <ExternalLink className="h-4 w-4 shrink-0" /> : undefined}
+          underlineClass={underlineClass}
+          iconClass={iconClass}
+          width={grow ? 'min-w-0 flex-1 max-w-full' : 'w-auto'}
+          outerPad="flush"
+          disableCopy={disableCopy}
+          fitDisplayWidth={!grow}
+          truncateDisplay={grow}
+          onActivate={chipAction === 'open' ? openExternal : undefined}
+          activationLabel={chipAction === 'open' ? openTitle : undefined}
+          activationTitle={
+            chipAction === 'open'
+              ? openHref
+                ? openTitle
+                : 'No link available'
+              : undefined
+          }
+          activationDisabled={chipAction === 'open' && !openHref && !onEdit}
+        />
+        {multiLinks ? (
+          <ChevronDown className="h-3 w-3 shrink-0 text-text-faint" aria-hidden />
+        ) : null}
+      </div>
       {!actionsInMenu && onEdit ? (
         <HoverTooltip label={editOpen ? 'Done editing' : (editLabel ?? '')} asChild>
           <IconButton
@@ -140,8 +151,7 @@ export function IdentityLinkChip({
           // anchored previews (ticket history) are the only panel shown.
           // Hover-only visibility — focus-within kept menus stuck open after a
           // chip click (especially chips on the wrapped second row).
-          // eslint-disable-next-line no-restricted-syntax
-          className={`absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 transition-opacity duration-100 ${
+          className={`absolute left-1/2 top-full z-panelPopover -translate-x-1/2 pt-1 transition-opacity duration-100 ${
             menuHover
               ? 'visible pointer-events-auto opacity-100'
               : 'invisible pointer-events-none opacity-0'
@@ -152,6 +162,26 @@ export function IdentityLinkChip({
             aria-label={`${display} actions`}
             className="min-w-[128px] overflow-hidden rounded-lg border border-border-soft bg-surface-card shadow-lg"
           >
+            {multiLinks ? (
+              <>
+                {multiLinks.map((opt) => (
+                  <HoverTooltip key={opt.href} label={opt.label} asChild>
+                    {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => window.open(opt.href, '_blank', 'noopener,noreferrer')}
+                      aria-label={`Open ${opt.label}`}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                      <span className="min-w-0 truncate normal-case tracking-normal">{opt.label}</span>
+                    </button>
+                  </HoverTooltip>
+                ))}
+                <div className="border-t border-border-hairline" role="separator" />
+              </>
+            ) : null}
             {menuFirstAction === 'open' ? (
               <HoverTooltip label={openHref ? openTitle : 'No link available'} asChild>
                 {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}

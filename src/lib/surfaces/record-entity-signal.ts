@@ -147,13 +147,16 @@ async function writeSignal(
   // Same-transaction ops_events emission (the event spine stays the SoT
   // timeline; rolls back with the signal if the caller's tx aborts).
   const opsEntityType = SURFACE_ENTITY_TYPES[input.entityType as SurfaceEntityType].opsEventEntityType;
+  // workflow_node_id carries the signal's Studio-node placement onto the event
+  // spine's tenant-customizable "where" axis (plan Phase 2). FK-free TEXT, so a
+  // draft-only / since-replaced node id is stored, never rejected.
   await client.query(
     `INSERT INTO ops_events (
        organization_id, occurred_at, event_type, entity_type, entity_id,
-       actor_staff_id, client_event_id, payload
+       actor_staff_id, client_event_id, workflow_node_id, payload
      ) VALUES (
        $1::uuid, COALESCE($2::timestamptz, NOW()), 'signal_recorded', $3, $4::bigint,
-       $5::int, $6, $7::jsonb
+       $5::int, $6, $7, $8::jsonb
      )
      ON CONFLICT (client_event_id) DO NOTHING`,
     [
@@ -163,6 +166,7 @@ async function writeSignal(
       input.entityId,
       input.actorStaffId ?? null,
       `entity-signal:${id}`,
+      input.nodeId ?? null,
       JSON.stringify({
         signalId: id,
         signalKind: input.signalKind,

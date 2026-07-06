@@ -97,7 +97,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const body = LinkBody.parse(await req.json().catch(() => null));
     const { entityType, entityId } = entityRef(body.receivingId, body.lineId);
 
-    const ticket = await getTicket(body.ticketId);
+    const ticket = await getTicket(body.ticketId, ctx.organizationId);
     if (!ticket) throw ApiError.notFound('Zendesk ticket', body.ticketId);
 
     // One entity per ticket (ticket_links upserts on ticket id), so linking a
@@ -121,7 +121,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // anyway).
     if (!ticket.external_id) {
       try {
-        await updateTicket(ticket.id, { external_id: buildExternalId(entityType, entityId) });
+        await updateTicket(ticket.id, { external_id: buildExternalId(entityType, entityId) }, ctx.organizationId);
       } catch (extErr) {
         console.warn(`[${context}] external_id backfill failed`, extErr);
       }
@@ -188,6 +188,7 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
     // external_id fallback after the ticket_links row is gone. Mirrors the
     // warranty unlink — full clean detach.
     await clearTicketExternalIdIfMatches({
+      orgId: ctx.organizationId,
       zendeskTicketId: parsed.ticketId,
       entityType,
       entityId,

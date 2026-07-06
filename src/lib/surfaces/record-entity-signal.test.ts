@@ -85,6 +85,15 @@ test('happy path: opens a tenant tx, writes signal + ops_event, returns id', asy
   assert.equal(ops.params[3], 9041);
   assert.equal(ops.params[4], 12); // actor threaded
   assert.equal(ops.params[5], 'entity-signal:77'); // idempotent client_event_id
+  assert.equal(ops.params[6], null); // workflow_node_id: none in scope → NULL
+});
+
+test('nodeId flows onto the ops_events workflow_node_id "where" axis', async () => {
+  const { deps, cap } = fakes();
+  await recordEntitySignal({ ...baseInput, nodeId: 'node-abc-123' }, deps);
+  const [, ops] = cap.queries;
+  assert.ok(ops.text.includes('workflow_node_id'));
+  assert.equal(ops.params[6], 'node-abc-123'); // Studio-node placement carried to the event spine
 });
 
 test('caller-owned client: rides the caller tx under a SAVEPOINT, never opens its own', async () => {

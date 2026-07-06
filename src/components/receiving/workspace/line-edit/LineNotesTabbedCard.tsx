@@ -1,13 +1,30 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { FileText, Download, ClipboardList, Check, Loader2, Pencil, Tag, History, DollarSign } from '@/components/Icons';
+import { FileText, Download, ClipboardList, Check, Loader2, Pencil, Tag, History, DollarSign, User } from '@/components/Icons';
 import { Button } from '@/design-system/primitives';
 import { WorkspaceCard } from '@/design-system/components';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/toast';
+import { NoteComposerInsertRail, type NoteComposerInsertAction } from '../NoteComposerInsertRail';
 import { LineChecklistTab } from './LineChecklistTab';
+import {
+  appendNoteLine,
+  buildStaffStampText,
+  focusTextEnd,
+  formatUnitPriceForNotes,
+  NOTE_DOWNLOAD_INSERT_BTN,
+  NOTE_DOWNLOAD_SYNC_BTN,
+  NOTE_OVERLAY_ICON,
+  NOTE_OVERLAY_ICON_BTN,
+  NOTE_SAVE_BTN,
+  NOTE_STAFF_STAMP_BTN,
+  NOTE_TAG_BTN,
+  NOTE_UNIT_PRICE_BTN,
+  parseZendeskTicketId,
+} from '../note-composer-helpers';
 
 /**
  * Tabbed notes card for the receiving workspace. Four surfaces:
@@ -32,58 +49,8 @@ import { LineChecklistTab } from './LineChecklistTab';
  */
 type NotesTab = 'label' | 'notes' | 'po' | 'checklist';
 
-function focusTextEnd(el: HTMLTextAreaElement | HTMLInputElement | null) {
-  if (!el) return;
-  const len = el.value.length;
-  el.focus();
-  el.setSelectionRange(len, len);
-  if ('scrollTop' in el) el.scrollTop = el.scrollHeight;
-}
-
-function appendNoteLine(current: string, addition: string): string {
-  const trimmedAddition = addition.trim();
-  if (!trimmedAddition) return current;
-  const trimmedCurrent = current.trimEnd();
-  return trimmedCurrent ? `${trimmedCurrent}\n${trimmedAddition}` : trimmedAddition;
-}
-
-/** Zoho PO unit cost — same `$88.77` shape as {@link UnitPriceChip}. */
-function formatUnitPriceForNotes(unitPrice: string | number | null | undefined): string | null {
-  if (unitPrice == null || unitPrice === '') return null;
-  const n = Number(unitPrice);
-  if (!Number.isFinite(n)) return null;
-  return `$${n.toFixed(2)}`;
-}
-
-/** Numeric Zendesk id from "#9395", a bare id, or a ticket URL. */
-function parseZendeskTicketId(raw: string | number | null | undefined): string | null {
-  if (raw == null || raw === '') return null;
-  if (typeof raw === 'number') return Number.isInteger(raw) && raw > 0 ? String(raw) : null;
-  const fromUrl = raw.match(/tickets\/(\d+)/);
-  const digits = (fromUrl ? fromUrl[1] : raw.replace(/^#/, '')).match(/\d+/);
-  if (!digits) return null;
-  const n = Number(digits[0]);
-  return Number.isInteger(n) && n > 0 ? String(n) : null;
-}
-
 const NOTES_TEXTAREA_FOCUS =
   'focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
-
-/** Fixed square hit target — top-right inserts and bottom-right actions share one size. */
-const LABEL_OVERLAY_ICON_BTN =
-  'ds-raw-button inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded';
-
-const LABEL_OVERLAY_ICON = 'h-3.5 w-3.5';
-
-const LABEL_RAIL_SPACER_CLASS = 'inline-flex h-[22px] w-[22px] shrink-0';
-
-const LABEL_TAG_BTN = `${LABEL_OVERLAY_ICON_BTN} text-orange-500 transition hover:bg-orange-100/60 hover:text-orange-600 hover:shadow-sm hover:ring-1 hover:ring-orange-200/80`;
-
-const LABEL_DOWNLOAD_INSERT_BTN = `${LABEL_OVERLAY_ICON_BTN} text-blue-600 transition hover:bg-blue-100/60 hover:text-blue-700 hover:shadow-sm hover:ring-1 hover:ring-blue-200/80`;
-
-const LABEL_DOWNLOAD_SYNC_BTN = `${LABEL_OVERLAY_ICON_BTN} text-text-faint transition hover:bg-blue-100/60 hover:text-blue-600 hover:shadow-sm hover:ring-1 hover:ring-blue-200/80`;
-
-const LABEL_SAVE_BTN = `${LABEL_OVERLAY_ICON_BTN} text-text-faint transition hover:bg-emerald-100/60 hover:text-emerald-600 hover:shadow-sm hover:ring-1 hover:ring-emerald-200/80`;
 
 export function LineNotesTabbedCard({
   internalNotes,
@@ -284,6 +251,93 @@ export function LineNotesTabbedCard({
   const trimmedInternalNotes = internalNotes.trim();
   const trimmedSyncNotes = (overallZohoNotes ?? '').trim();
   const hasTicket = Boolean(resolvedTicketId);
+  const { user } = useAuth();
+  const staffStamp = buildStaffStampText({ name: user?.name, staffId: user?.staffId });
+
+  const labelInsertActions = useMemo((): NoteComposerInsertAction[] => {
+    const actions: NoteComposerInsertAction[] = [];
+
+    if (staffStamp) {
+      actions.push({
+        id: 'staff-stamp',
+        label: `Stamp: ${staffStamp}`,
+        ariaLabel: 'Stamp staff name and time',
+        icon: <User className={NOTE_OVERLAY_ICON} />,
+        buttonClassName: NOTE_STAFF_STAMP_BTN,
+        onClick: () => appendToLabelNotes(staffStamp),
+      });
+    }
+
+    if (hasTicket) {
+      actions.push({
+        id: 'ticket-subject',
+        label: 'Insert linked ticket subject',
+        ariaLabel: 'Insert the linked Zendesk ticket subject',
+        icon: <Tag className={NOTE_OVERLAY_ICON} />,
+        buttonClassName: NOTE_TAG_BTN,
+        onClick: () => void handlePrefillTicketSubject(),
+        disabled: fetchingTicketSubject,
+        loading: fetchingTicketSubject,
+      });
+    }
+
+    if (trimmedInternalNotes) {
+      actions.push({
+        id: 'internal-notes',
+        label: 'Insert internal notes into the label',
+        ariaLabel: 'Insert internal notes into the label',
+        icon: <FileText className={NOTE_OVERLAY_ICON} />,
+        buttonClassName: `${NOTE_OVERLAY_ICON_BTN} text-text-faint transition hover:bg-surface-sunken/80 hover:text-text-muted hover:shadow-sm hover:ring-1 hover:ring-border-soft/80`,
+        onClick: () => appendToLabelNotes(trimmedInternalNotes),
+      });
+    }
+
+    if (formattedUnitPrice) {
+      actions.push({
+        id: 'unit-price',
+        label: `Insert unit price: ${formattedUnitPrice}`,
+        ariaLabel: 'Insert unit price',
+        icon: <DollarSign className={NOTE_OVERLAY_ICON} />,
+        buttonClassName: NOTE_UNIT_PRICE_BTN,
+        onClick: () => appendToLabelNotes(formattedUnitPrice),
+      });
+    }
+
+    if (showZohoTab && trimmedSyncNotes) {
+      actions.push({
+        id: 'sync-notes',
+        label: 'Insert sync (Zoho PO) notes into the label',
+        ariaLabel: 'Insert sync notes into the label',
+        icon: <Download className={NOTE_OVERLAY_ICON} />,
+        buttonClassName: NOTE_DOWNLOAD_INSERT_BTN,
+        onClick: () => appendToLabelNotes(trimmedSyncNotes),
+      });
+    }
+
+    if (trimmedSkuTitle) {
+      actions.push({
+        id: 'product-title',
+        label: `Insert product title: "${trimmedSkuTitle}"`,
+        ariaLabel: 'Insert product title',
+        icon: <Pencil className={NOTE_OVERLAY_ICON} />,
+        buttonClassName: `${NOTE_OVERLAY_ICON_BTN} text-yellow-600 transition hover:bg-yellow-100/60 hover:text-yellow-700 hover:shadow-sm hover:ring-1 hover:ring-yellow-200/80`,
+        onClick: () => appendToLabelNotes(trimmedSkuTitle),
+      });
+    }
+
+    return actions;
+  }, [
+    staffStamp,
+    hasTicket,
+    fetchingTicketSubject,
+    handlePrefillTicketSubject,
+    trimmedInternalNotes,
+    formattedUnitPrice,
+    showZohoTab,
+    trimmedSyncNotes,
+    trimmedSkuTitle,
+    appendToLabelNotes,
+  ]);
 
   return (
     // Glass workspace surface — matches the carton context / PO items cards so
@@ -310,11 +364,10 @@ export function LineNotesTabbedCard({
             value={labelNotes}
             onChange={(e) => onLabelNotesChange(e.target.value)}
             placeholder="Compose label notes"
-            className={`w-full resize-none rounded-lg border border-border-soft px-3 pb-11 pt-2 text-caption text-text-default placeholder:text-text-faint ${NOTES_TEXTAREA_FOCUS}`}
+            className={`w-full resize-none rounded-lg border border-border-soft px-3 pb-11 pt-12 text-caption text-text-default placeholder:text-text-faint ${NOTES_TEXTAREA_FOCUS}`}
           />
 
-          {/* Top-left repeat-previous; top-right insert rail; bottom-right save actions.
-              All overlay buttons share {@link LABEL_OVERLAY_ICON_BTN} sizing. */}
+          {/* Top-left repeat-previous; top-right insert rail; bottom-right save actions. */}
           {trimmedPreviousNotes && (
             <div className="pointer-events-none absolute left-1.5 top-1.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
               <div className="pointer-events-auto">
@@ -324,102 +377,18 @@ export function LineNotesTabbedCard({
                     type="button"
                     onClick={() => appendToLabelNotes(trimmedPreviousNotes)}
                     aria-label="Repeat the previous line's notes"
-                    className={`${LABEL_OVERLAY_ICON_BTN} bg-surface-card/80 text-text-faint shadow-sm ring-1 ring-border-soft/60 transition hover:bg-surface-sunken hover:text-text-muted`}
+                    className={`${NOTE_OVERLAY_ICON_BTN} bg-surface-card/80 text-text-faint shadow-sm ring-1 ring-border-soft/60 transition hover:bg-surface-sunken hover:text-text-muted`}
                   >
-                    <History className={LABEL_OVERLAY_ICON} />
+                    <History className={NOTE_OVERLAY_ICON} />
                   </button>
                 </HoverTooltip>
               </div>
             </div>
           )}
 
-          <div className="pointer-events-none absolute right-1.5 top-1.5 flex items-center gap-0.5">
-            {hasTicket && (
-              <div className="pointer-events-auto">
-                <HoverTooltip label="Insert the linked Zendesk ticket's subject" asChild>
-                  {/* ds-raw-button */}
-                  <button
-                    type="button"
-                    onClick={() => void handlePrefillTicketSubject()}
-                    disabled={fetchingTicketSubject}
-                    aria-label="Insert the linked Zendesk ticket's subject"
-                    className={`${LABEL_TAG_BTN} disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    {fetchingTicketSubject ? (
-                      <Loader2 className={`${LABEL_OVERLAY_ICON} animate-spin`} />
-                    ) : (
-                      <Tag className={LABEL_OVERLAY_ICON} />
-                    )}
-                  </button>
-                </HoverTooltip>
-              </div>
-            )}
-            {trimmedInternalNotes && (
-              <div className="pointer-events-auto">
-                <HoverTooltip label="Insert internal notes into the label" asChild>
-                  {/* ds-raw-button */}
-                  <button
-                    type="button"
-                    onClick={() => appendToLabelNotes(trimmedInternalNotes)}
-                    aria-label="Insert internal notes into the label"
-                    className={`${LABEL_OVERLAY_ICON_BTN} text-text-faint transition hover:bg-surface-sunken/80 hover:text-text-muted hover:shadow-sm hover:ring-1 hover:ring-border-soft/80`}
-                  >
-                    <FileText className={LABEL_OVERLAY_ICON} />
-                  </button>
-                </HoverTooltip>
-              </div>
-            )}
-            {formattedUnitPrice && (
-              <div className="pointer-events-auto">
-                <HoverTooltip label={`Insert unit price: ${formattedUnitPrice}`} asChild>
-                  {/* ds-raw-button */}
-                  <button
-                    type="button"
-                    onClick={() => appendToLabelNotes(formattedUnitPrice)}
-                    aria-label="Insert unit price"
-                    className={`${LABEL_OVERLAY_ICON_BTN} text-emerald-600 transition hover:bg-emerald-100/60 hover:text-emerald-700 hover:shadow-sm hover:ring-1 hover:ring-emerald-200/80`}
-                  >
-                    <DollarSign className={LABEL_OVERLAY_ICON} />
-                  </button>
-                </HoverTooltip>
-              </div>
-            )}
-            {showZohoTab && trimmedSyncNotes && (
-              <div className="pointer-events-auto">
-                <HoverTooltip label="Insert sync (Zoho PO) notes into the label" asChild>
-                  {/* ds-raw-button */}
-                  <button
-                    type="button"
-                    onClick={() => appendToLabelNotes(trimmedSyncNotes)}
-                    aria-label="Insert sync notes into the label"
-                    className={LABEL_DOWNLOAD_INSERT_BTN}
-                  >
-                    <Download className={LABEL_OVERLAY_ICON} />
-                  </button>
-                </HoverTooltip>
-              </div>
-            )}
-            {trimmedSkuTitle && (
-              <div className="pointer-events-auto">
-                <HoverTooltip label={`Insert product title: "${trimmedSkuTitle}"`} asChild>
-                  {/* ds-raw-button */}
-                  <button
-                    type="button"
-                    onClick={() => appendToLabelNotes(trimmedSkuTitle)}
-                    aria-label="Insert product title"
-                    className={`${LABEL_OVERLAY_ICON_BTN} text-yellow-600 transition hover:bg-yellow-100/60 hover:text-yellow-700 hover:shadow-sm hover:ring-1 hover:ring-yellow-200/80`}
-                  >
-                    <Pencil className={LABEL_OVERLAY_ICON} />
-                  </button>
-                </HoverTooltip>
-              </div>
-            )}
-          </div>
+          <NoteComposerInsertRail actions={labelInsertActions} />
 
           <div className="pointer-events-none absolute bottom-2.5 right-1.5 flex items-center gap-0.5">
-            {hasTicket ? <span className={LABEL_RAIL_SPACER_CLASS} aria-hidden /> : null}
-            {trimmedInternalNotes ? <span className={LABEL_RAIL_SPACER_CLASS} aria-hidden /> : null}
-            {formattedUnitPrice ? <span className={LABEL_RAIL_SPACER_CLASS} aria-hidden /> : null}
             {showZohoTab ? (
               <div className="pointer-events-auto">
                 <HoverTooltip label="Sync to the inventory system (Zoho PO note)" asChild>
@@ -429,12 +398,12 @@ export function LineNotesTabbedCard({
                     onClick={() => void handleSyncToInventory()}
                     disabled={syncingToInventory}
                     aria-label="Sync to the inventory system"
-                    className={`${LABEL_DOWNLOAD_SYNC_BTN} disabled:cursor-not-allowed disabled:opacity-40`}
+                    className={`${NOTE_DOWNLOAD_SYNC_BTN} disabled:cursor-not-allowed disabled:opacity-40`}
                   >
                     {syncingToInventory ? (
-                      <Loader2 className={`${LABEL_OVERLAY_ICON} animate-spin`} />
+                      <Loader2 className={`${NOTE_OVERLAY_ICON} animate-spin`} />
                     ) : (
-                      <Download className={LABEL_OVERLAY_ICON} />
+                      <Download className={NOTE_OVERLAY_ICON} />
                     )}
                   </button>
                 </HoverTooltip>
@@ -447,9 +416,9 @@ export function LineNotesTabbedCard({
                   type="button"
                   onClick={handleSaveInternal}
                   aria-label="Save to internal notes"
-                  className={LABEL_SAVE_BTN}
+                  className={NOTE_SAVE_BTN}
                 >
-                  <Check className={LABEL_OVERLAY_ICON} />
+                  <Check className={NOTE_OVERLAY_ICON} />
                 </button>
               </HoverTooltip>
             </div>

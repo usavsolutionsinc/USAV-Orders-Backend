@@ -138,6 +138,7 @@ export async function unlinkClaimTicket(args: {
 
   // Clear the dangling external_id (only when it still points at this claim).
   await clearTicketExternalIdIfMatches({
+    orgId: args.organizationId,
     zendeskTicketId: args.zendeskTicketId,
     entityType: 'WARRANTY_CLAIM',
     entityId: args.claimId,

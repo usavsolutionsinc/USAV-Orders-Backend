@@ -136,15 +136,16 @@ export async function unlinkTicket(args: {
  * Returns true when an external_id was cleared.
  */
 export async function clearTicketExternalIdIfMatches(args: {
+  orgId: string;
   zendeskTicketId: number;
   entityType: string;
   entityId: number;
 }): Promise<boolean> {
   try {
-    const ticket = await getTicket(args.zendeskTicketId);
+    const ticket = await getTicket(args.zendeskTicketId, args.orgId);
     const parsed = parseExternalId(ticket?.external_id as string | undefined);
     if (parsed && parsed.type === args.entityType && parsed.id === args.entityId) {
-      await updateTicket(args.zendeskTicketId, { external_id: null });
+      await updateTicket(args.zendeskTicketId, { external_id: null }, args.orgId);
       return true;
     }
   } catch (err) {
@@ -178,7 +179,7 @@ export async function getTicketEntity(
   }
 
   // 2. external_id off the live ticket (covers tickets created with it but not yet linked)
-  const ticket = await getTicket(zendeskTicketId);
+  const ticket = await getTicket(zendeskTicketId, orgId);
   const parsed = parseExternalId(ticket?.external_id as string | undefined);
   if (parsed) return { ...parsed, source: 'external_id' };
 

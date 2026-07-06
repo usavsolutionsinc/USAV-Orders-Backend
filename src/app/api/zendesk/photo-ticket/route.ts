@@ -5,7 +5,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import {
   addTicketComment,
   createTicket,
-  isZendeskConfigured,
+  isZendeskConfiguredForOrg,
   ZendeskApiError,
   ZendeskNotConfiguredError,
 } from '@/lib/zendesk';
@@ -87,7 +87,7 @@ export const POST = withAuth(
   async (req: NextRequest, ctx) => {
     const context = 'POST /api/zendesk/photo-ticket';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
 
       const form = await req.formData();
       const metaRaw = form.get('meta');
@@ -116,7 +116,7 @@ export const POST = withAuth(
       const photoIds = meta.photoIds ?? [];
       const uploadResult = mergeUploadResults(
         await uploadLibraryPhotosToZendesk(ctx.organizationId, photoIds),
-        await uploadRawFilesToZendesk(rawFiles),
+        await uploadRawFilesToZendesk(rawFiles, ctx.organizationId),
       );
       const uploads = uploadResult.tokens.length ? uploadResult.tokens : undefined;
 
@@ -132,7 +132,7 @@ export const POST = withAuth(
           status: meta.status,
           tags: meta.tags,
           requester,
-        });
+        }, {}, ctx.organizationId);
 
         // Self-link the ticket to its own ZENDESK_TICKET entity + link the photos
         // to it, so the support detail strip and claims scope both resolve them.
@@ -179,6 +179,7 @@ export const POST = withAuth(
               ? meta.emailCcs.map((user_email) => ({ user_email, action: 'put' as const }))
               : undefined,
         },
+        ctx.organizationId,
       );
       if (!updated) throw new ApiError(404, 'Ticket not found', `Ticket #${meta.ticketId} no longer exists.`);
 

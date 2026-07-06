@@ -21,6 +21,7 @@ import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
 import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
 import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
 import { usePlatformCatalog, useReceivingTypeCatalog, usePlatformMeta } from '@/hooks/useCatalog';
+import type { CartonListingLink } from '@/lib/receiving/listing-links';
 
 
 /**
@@ -55,6 +56,7 @@ export function CartonContextCard({
   listingEditorOpen,
   setListingEditorOpen,
   listingOpenHref,
+  listingLinks = [],
   poOpenHref,
   trackingOpenHref,
   poDisplay,
@@ -98,6 +100,8 @@ export function CartonContextCard({
   listingEditorOpen: boolean;
   setListingEditorOpen: Dispatch<SetStateAction<boolean>>;
   listingOpenHref: string | null | undefined;
+  /** All resolvable listing URLs (inventory catalog + manual + derived). */
+  listingLinks?: CartonListingLink[];
   /** External link target for the PO# chip (Zoho purchase order). */
   poOpenHref: string | null | undefined;
   /** External link target for the tracking# chip (carrier tracking page). */
@@ -169,6 +173,10 @@ export function CartonContextCard({
   // receiving.zoho_purchaseorder_number as the display representative).
   const isReturn = receivingType.trim().toUpperCase() === 'RETURN';
   const listingHasTarget = !!(listingLink || listingOpenHref);
+  const listingLinkOptions =
+    listingLinks.length > 1
+      ? listingLinks.map((l) => ({ href: l.href, label: l.label }))
+      : undefined;
   const listingChipDisplay = isReturn
     ? platformValue
       ? platformMeta.label
@@ -320,6 +328,7 @@ export function CartonContextCard({
               grow
               openHref={listingOpenHref}
               openTitle="Open listing in new tab"
+              linkOptions={listingLinkOptions}
               // An explicit pasted URL wins; otherwise fall back to the derived
               // storefront href (listingOpenHref) so the chip reads as a real,
               // copyable/openable Listing instead of "----".

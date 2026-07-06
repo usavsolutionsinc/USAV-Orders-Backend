@@ -81,7 +81,8 @@ export const GET = withAuth(async (request, ctx) => {
               platform,
               platform_sku     AS "platformSku",
               platform_item_id AS "platformItemId",
-              account_name     AS "accountName"
+              account_name     AS "accountName",
+              listing_url      AS "listingUrl"
          FROM sku_platform_ids
         WHERE (sku_catalog_id = $1 OR platform_sku = $2)
           AND is_active = true
@@ -92,6 +93,7 @@ export const GET = withAuth(async (request, ctx) => {
       platformSku: string | null;
       platformItemId: string | null;
       accountName: string | null;
+      listingUrl: string | null;
     }>(platformsSql, orgId ? [catalogRow.id, catalogRow.sku, orgId] : [catalogRow.id, catalogRow.sku]);
 
     return NextResponse.json({

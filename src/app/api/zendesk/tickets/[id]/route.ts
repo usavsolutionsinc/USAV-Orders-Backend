@@ -5,7 +5,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import {
   deleteTicket,
   getTicket,
-  isZendeskConfigured,
+  isZendeskConfiguredForOrg,
   updateTicket,
   ZendeskApiError,
   ZendeskNotConfiguredError,
@@ -51,12 +51,12 @@ function ticketIdFromUrl(req: NextRequest): number {
 }
 
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     const context = 'GET /api/zendesk/tickets/[id]';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
       const id = ticketIdFromUrl(req);
-      const ticket = await getTicket(id);
+      const ticket = await getTicket(id, ctx.organizationId);
       if (!ticket) throw ApiError.notFound('Zendesk ticket', id);
       return NextResponse.json({ success: true, ticket });
     } catch (err) {
@@ -87,16 +87,16 @@ const UpdateBody = z
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
 
 export const PATCH = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     const context = 'PATCH /api/zendesk/tickets/[id]';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
       const id = ticketIdFromUrl(req);
       const json = await req.json().catch(() => null);
       if (!json) throw ApiError.badRequest('Missing JSON body');
       const input = UpdateBody.parse(json);
 
-      const ticket = await updateTicket(id, input);
+      const ticket = await updateTicket(id, input, ctx.organizationId);
       if (!ticket) throw ApiError.notFound('Zendesk ticket', id);
       return NextResponse.json({ success: true, ticket });
     } catch (err) {
@@ -116,12 +116,12 @@ export const PATCH = withAuth(
 );
 
 export const DELETE = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     const context = 'DELETE /api/zendesk/tickets/[id]';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
       const id = ticketIdFromUrl(req);
-      const ok = await deleteTicket(id);
+      const ok = await deleteTicket(id, ctx.organizationId);
       if (!ok) throw ApiError.notFound('Zendesk ticket', id);
       return NextResponse.json({ success: true, id });
     } catch (err) {

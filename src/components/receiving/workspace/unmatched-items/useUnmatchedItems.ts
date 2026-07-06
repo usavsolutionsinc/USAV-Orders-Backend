@@ -352,16 +352,19 @@ export function useUnmatchedItems({
   );
 
   const handleAddLine = useCallback(
-    async (selection: {
-      sku_platform_id_row: number | null;
-      sku_catalog_id: number | null;
-      sku: string;
-      item_name: string;
-      image_url: string | null;
-      is_repair_service?: boolean;
-      ecwid_order_id?: string;
-      ecwid_product_url?: string | null;
-    }) => {
+    async (
+      selection: {
+        sku_platform_id_row: number | null;
+        sku_catalog_id: number | null;
+        sku: string;
+        item_name: string;
+        image_url: string | null;
+        is_repair_service?: boolean;
+        ecwid_order_id?: string;
+        ecwid_product_url?: string | null;
+      },
+      opts?: { allowOffPo?: boolean },
+    ) => {
       const clientEventId = `add-line-${receivingId}-${Date.now()}`;
       // For repair-service links we prefer the Ecwid product URL as the
       // line's listing URL so the operator can click straight to the
@@ -385,6 +388,7 @@ export function useUnmatchedItems({
         },
         body: JSON.stringify({
           receiving_id: receivingId,
+          ...(opts?.allowOffPo ? { allow_off_po: true } : {}),
           // Only send a POSITIVE platform-row id — an Ecwid line with no catalog
           // platform row carries 0, which the server rejects ("must be a positive
           // integer"). Omit it (→ null) instead so the add still succeeds.
@@ -452,7 +456,26 @@ export function useUnmatchedItems({
         });
         toast.success(repId ? `Linked Ecwid order #${repId}` : 'Repair service linked');
       } else {
-        toast.success('Item added');
+        const label = selection.item_name || selection.sku || 'item';
+        toast.success(
+          opts?.allowOffPo ? `Added off-PO · ${label}` : `Acknowledged · ${label}`,
+        );
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        // Upgrade an unfound stub / refresh the open panel — carton stays unmatched
+        // unless the server promoted it (no source_order_id on catalog-only adds).
+        onLinked?.({
+          carton: {
+            zoho_purchaseorder_number:
+              (body.carton as { zoho_purchaseorder_number?: string | null } | null)
+                ?.zoho_purchaseorder_number ?? null,
+            source:
+              (body.carton as { source?: string | null } | null)?.source ?? 'unmatched',
+            source_platform:
+              (body.carton as { source_platform?: string | null } | null)?.source_platform ??
+              null,
+          },
+          line: body.line ?? null,
+        });
       }
     },
     [listingUrlHint, onLinked, receivingId, receivingTypeHint, sourcePlatformHint],
