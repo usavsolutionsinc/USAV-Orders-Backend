@@ -37,6 +37,26 @@ export type ForcedTestingType = 'tracking' | 'po' | 'serial' | 'sku';
 export type ResolvedTestingScan =
   | { kind: 'line'; row: ReceivingLineRow; via?: ResolvedVia }
   | { kind: 'multi'; rows: ReceivingLineRow[]; receivingId: number; via?: ResolvedVia }
+  /**
+   * A license-plated box/tray (H-####) scan. Carries the resolved
+   * `handlingUnitId` so a workbench consumer can open the box panel to re-sort
+   * its units; `rows` (the box's receiving lines) are kept so consumers that
+   * only want the lines — the mobile list, the receiving picker — degrade to
+   * the same behaviour as `multi`.
+   */
+  | {
+      kind: 'box';
+      handlingUnitId: number;
+      rows: ReceivingLineRow[];
+      receivingId: number;
+      via: 'lpn';
+    }
+  /**
+   * A preboxed KIT master label (KIT-####). Carries the scanned `manifestRef`
+   * (the manifest_uid) so a workbench consumer can open the manifest detail
+   * panel; the mobile/receiving consumers ignore it (no manifest surface there).
+   */
+  | { kind: 'manifest'; manifestRef: string }
   | { kind: 'not_found'; query: string }
   | { kind: 'error'; message: string };
 
@@ -218,12 +238,15 @@ async function fetchLinesByPartial(
  * (and its Zoho fallback) behind the "Opening your PO" loader.
  */
 export async function fetchLinesByTracking(tracking: string) {
-  // Lightweight resolve — rail rows never need serials; a small limit is enough
-  // to find the carton already in the system and skip lookup-po entirely.
+  // Small limit is enough to find the carton already in the system and skip
+  // lookup-po entirely. `include=serials` is cheap at this limit and lets the
+  // testing multi-picker show serial chips on tracking-resolved rows too (the
+  // receiving unbox short-circuit ignores the extra field harmlessly).
   const params = new URLSearchParams({
     limit: '5',
     offset: '0',
     view: 'all',
+    include: 'serials',
     search: tracking,
   });
   const res = await fetch(`/api/receiving-lines?${params.toString()}`);
@@ -485,17 +508,23 @@ export async function resolveReceivingCodeToLine(
           return row ? { kind: 'line', row, via: 'unit_id' } : { kind: 'not_found', query: value };
         }
       }
-      // H-class — a license-plated box/tray. One scan resolves to every unit in
-      // the box, mapped to their receiving lines → the existing multi-picker.
+      // H-class — a license-plated box/tray. The scan opens the box workbench
+      // (desktop drawer) so the operator can re-sort its units across lines; the
+      // box's receiving `rows` ride along for consumers that only want the lines
+      // (mobile list, receiving picker) and degrade to `multi`-style behaviour.
       if (routed.type === 'handling-unit') {
         const id = Number(routed.redirect?.match(/\/m\/h\/(\d+)$/)?.[1]);
         if (Number.isFinite(id)) {
           const rows = await fetchLinesByHandlingUnit(id);
           if (rows.length === 0) return { kind: 'not_found', query: value };
-          if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'lpn' };
           const receivingId = rows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
-          return { kind: 'multi', rows, receivingId, via: 'lpn' };
+          return { kind: 'box', handlingUnitId: id, rows, receivingId, via: 'lpn' };
         }
+      }
+      // KIT-class — a preboxed kit master label. The whole value is the
+      // manifest_uid; the workbench opens its detail panel (fetched by uid).
+      if (routed.type === 'manifest') {
+        return { kind: 'manifest', manifestRef: value };
       }
     }
 

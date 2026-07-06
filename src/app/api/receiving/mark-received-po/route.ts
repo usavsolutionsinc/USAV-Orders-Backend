@@ -19,6 +19,7 @@ import {
 } from '@/lib/zoho';
 import { getZohoHttpClientStatus } from '@/lib/zoho/httpClient';
 import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { transitionReceivingLine } from '@/lib/receiving/state-machine';
 import { attachSerialToLine } from '@/lib/receiving/serial-attach';
 import { tapWorkflow } from '@/lib/workflow/tap';
 import {
@@ -715,29 +716,32 @@ export const POST = withAuth(async (request, ctx) => {
         if (String(l.zoho_purchaseorder_id || '').trim()) zohoPendingIds.push(l.id);
         else localOnlyIds.push(l.id);
       }
+      // Route these workflow_status advances through the guarded chokepoint
+      // (was inline raw UPDATEs — §7 Step D). One shared tx per batch keeps the
+      // atomicity the batch UPDATE had; skipEvent because this route emits its own
+      // UNBOX_CONFIRMED ops-event + audit (and receiveLineUnits emitted the receive
+      // events) — no double-write.
       if (zohoPendingIds.length > 0) {
-        await withTenantTransaction(ctx.organizationId, (client) =>
-          client.query(
-            `UPDATE receiving_lines
-               SET workflow_status = 'UNBOXED'::inbound_workflow_status_enum,
-                   updated_at = NOW()
-             WHERE id = ANY($1::int[])
-               AND organization_id = $2`,
-            [zohoPendingIds, ctx.organizationId],
-          ),
-        );
+        await withTenantTransaction(ctx.organizationId, async (client) => {
+          for (const id of zohoPendingIds) {
+            await transitionReceivingLine(
+              { receivingLineId: id, to: 'UNBOXED', actorStaffId: staffId, station, skipEvent: true },
+              client,
+              ctx.organizationId,
+            );
+          }
+        });
       }
       if (localOnlyIds.length > 0) {
-        await withTenantTransaction(ctx.organizationId, (client) =>
-          client.query(
-            `UPDATE receiving_lines
-               SET workflow_status = 'DONE'::inbound_workflow_status_enum,
-                   updated_at = NOW()
-             WHERE id = ANY($1::int[])
-               AND organization_id = $2`,
-            [localOnlyIds, ctx.organizationId],
-          ),
-        );
+        await withTenantTransaction(ctx.organizationId, async (client) => {
+          for (const id of localOnlyIds) {
+            await transitionReceivingLine(
+              { receivingLineId: id, to: 'DONE', actorStaffId: staffId, station, skipEvent: true },
+              client,
+              ctx.organizationId,
+            );
+          }
+        });
       }
       for (const l of updatedLines) {
         l.workflow_status = String(l.zoho_purchaseorder_id || '').trim() ? 'UNBOXED' : 'DONE';
@@ -973,17 +977,27 @@ export const POST = withAuth(async (request, ctx) => {
           .map((l) => l.id);
         if (confirmIds.length > 0) {
           try {
-            await withTenantTransaction(ctx.organizationId, (client) =>
-              client.query(
-                `UPDATE receiving_lines
-                   SET workflow_status = 'DONE'::inbound_workflow_status_enum,
-                       updated_at = NOW()
-                 WHERE id = ANY($1::int[])
-                   AND organization_id = $2
-                   AND workflow_status = 'UNBOXED'::inbound_workflow_status_enum`,
-                [confirmIds, ctx.organizationId],
-              ),
-            );
+            // Chokepoint fold (§7 Step D). expectedFrom:'UNBOXED' reproduces the
+            // former `AND workflow_status = 'UNBOXED'` guard per line — a line
+            // advanced elsewhere meanwhile returns 409 and is skipped (no ROLLBACK
+            // on the shared tx in the executor path), never clobbered. skipEvent:
+            // the carton UNBOX_CONFIRMED event already covers this.
+            await withTenantTransaction(ctx.organizationId, async (client) => {
+              for (const id of confirmIds) {
+                await transitionReceivingLine(
+                  {
+                    receivingLineId: id,
+                    to: 'DONE',
+                    expectedFrom: 'UNBOXED',
+                    actorStaffId: staffId,
+                    station,
+                    skipEvent: true,
+                  },
+                  client,
+                  ctx.organizationId,
+                );
+              }
+            });
           } catch (err) {
             console.warn('mark-received-po: UNBOXED→DONE promotion failed', err);
           }

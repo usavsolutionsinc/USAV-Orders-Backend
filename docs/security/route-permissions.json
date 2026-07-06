@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-06T04:32:22Z",
-  "totalRoutes": 760,
+  "generatedAt": "2026-07-06T07:40:12Z",
+  "totalRoutes": 769,
   "summary": {
-    "permissionGated": 650,
+    "permissionGated": 659,
     "authenticatedNoPermission": 36,
     "anonymousIntentional": 72,
     "serviceToService": 2,
@@ -2512,6 +2512,69 @@
       ],
       "gate": "withAuth",
       "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/label-manifests/[id]/dissolve/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "label.manifest.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/label-manifests/[id]/items/[serialUnitId]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "gate": "withAuth",
+      "permission": "label.manifest.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/label-manifests/[id]/items/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "label.manifest.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/label-manifests/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/label-manifests/[id]/seal/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "label.manifest.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/label-manifests/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "label.manifest.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/label-print-jobs/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
       "exemptReason": null
     },
     {
@@ -5140,6 +5203,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/serial-units/[id]/print-history/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
+      "exemptReason": null
+    },
+    {
       "path": "/api/serial-units/[id]/quality/route.ts",
       "methods": [
         "GET"
@@ -5201,6 +5273,15 @@
       ],
       "gate": "withAuth (no permission)",
       "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/resolve-batch/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
       "exemptReason": null
     },
     {

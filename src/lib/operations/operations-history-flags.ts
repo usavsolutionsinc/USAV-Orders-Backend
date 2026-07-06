@@ -8,20 +8,22 @@
  * component. `NEXT_PUBLIC_*` is inlined into the client bundle at build time,
  * so a direct static `process.env.NEXT_PUBLIC_…` read resolves in the browser.
  *
- * Default OFF: when off, `/operations?mode=history` renders byte-identical to
- * today — the empty dashed record-lookup prompt — so the browse feed is opt-in.
- * Flip `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE=true` to land the org-wide
- * filterable browse region (Phase 2) in place of the empty state.
+ * Default ON as of the **Phase 7 cutover** (2026-07-06): the `/audit-log` routes
+ * are removed and redirect here, so the History browse feed IS the forensic/audit
+ * surface — it can't be opt-in anymore. Set
+ * `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE=false` to force it off (break-glass).
+ *
+ * ⚠️ ROLLOUT NOTE: flipping this default ON turns on every Phase 2–5 browse
+ * behavior (browse feed, sidebar filters, `/receiving/history` redirect). It is a
+ * one-line, reversible change — revert to the default-OFF form if you want an
+ * env-controlled staged rollout instead. **Live-smoke before deploying.**
  *
  * Scope note: this flag gates the History UI's Browse region only. The browse
  * backend branch (`GET /api/operations/journey` → `mode:'browse'`, Phase 1) is
- * additive and unguarded — nothing calls it until this flag turns the region
- * on. Independent of `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH`, which gates the
+ * additive. Independent of `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH`, which gates the
  * separate `?q=` Search-hits region.
  */
 export function isOperationsHistoryBrowseEnabled(): boolean {
-  const raw = process.env.NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE;
-  if (!raw) return false;
-  const v = raw.trim().toLowerCase();
-  return v === 'true' || v === '1' || v === 'on' || v === 'yes';
+  const v = (process.env.NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE ?? '').trim().toLowerCase();
+  return v !== 'false' && v !== '0' && v !== 'off' && v !== 'no';
 }

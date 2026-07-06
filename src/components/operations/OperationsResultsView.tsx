@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { SearchResultsSurface } from '@/components/search/SearchResultsSurface';
 import { defaultTabForScope, type TabId } from '@/components/search/search-tabs';
+import { setOperationsSearchBusy } from '@/components/operations/operations-search-status';
 import type { OperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
 
 export function OperationsResultsView({ url }: { url: OperationsTimelineUrlState }) {
@@ -22,6 +23,7 @@ export function OperationsResultsView({ url }: { url: OperationsTimelineUrlState
       query={url.q}
       activeTab={tab}
       onTabChange={setTab}
+      onLoadingChange={setOperationsSearchBusy}
       onSelectHit={(hit, event) => {
         // Orders drill into their journey timeline (stay in operations);
         // other entities keep their own deep-link.

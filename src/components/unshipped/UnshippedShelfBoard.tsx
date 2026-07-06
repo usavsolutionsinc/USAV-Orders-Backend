@@ -20,7 +20,7 @@
  * + FULFILLMENT_STATE_META; the bubble appears with no change here.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type RefObject } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { AlertTriangle, Check, ChevronDown, Clock, User } from '@/components/Icons';
 import {
@@ -36,6 +36,7 @@ import { TableColumnConfigProvider } from '@/components/ui/table-column-config/T
 import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
 import { BoardSelectToggle } from '@/components/board/BoardSelectToggle';
 import { ToolbarButton } from '@/components/ui/ToolbarButton';
+import { TableOptionsMenu } from '@/components/ui/table-options/TableOptionsMenu';
 import {
   deriveFulfillmentState,
   FULFILLMENT_STATE_META,
@@ -80,6 +81,9 @@ const UNSHIPPED_SORT_OPTIONS: SwimlaneSortOption<OrdersQueueSort>[] = ORDERS_QUE
   id: s,
   label: ORDERS_QUEUE_SORT_LABEL[s],
 }));
+
+/** Params that define an Unshipped saved view (filters only — never search text). */
+const UNSHIPPED_VIEW_PARAMS = ['stage', 'ustatus', 'staff'] as const;
 
 /** Runtime-only fields the queue rows carry but ShippedOrder doesn't type. */
 type FulfillmentRow = ShippedOrder & {
@@ -193,6 +197,7 @@ export function UnshippedShelfBoard({
       maxBodyHeightClass,
       maxBodyHeightPx,
       growToContent,
+      scrollParentRef,
     }: {
       laneLabel: string;
       rows: ShippedOrder[];
@@ -200,6 +205,7 @@ export function UnshippedShelfBoard({
       maxBodyHeightClass?: string;
       maxBodyHeightPx?: number;
       growToContent?: boolean;
+      scrollParentRef?: RefObject<HTMLElement | null>;
     }) => (
       <OrdersQueueTable
         hideHeader
@@ -210,6 +216,7 @@ export function UnshippedShelfBoard({
         maxBodyHeightClass={maxBodyHeightClass}
         maxBodyHeightPx={maxBodyHeightPx}
         growToContent={growToContent}
+        scrollParentRef={scrollParentRef}
         records={rows}
         queueMode="fulfillment"
         sort={sort}
@@ -244,6 +251,10 @@ export function UnshippedShelfBoard({
         {onToggleSelectMode ? (
           <BoardSelectToggle active={selectMode} onToggle={onToggleSelectMode} />
         ) : null}
+        <TableOptionsMenu
+          showDensity={false}
+          savedViews={{ storageKey: 'unshipped_saved_views', paramKeys: UNSHIPPED_VIEW_PARAMS }}
+        />
       </div>
     ),
     [selectMode, onToggleSelectMode],

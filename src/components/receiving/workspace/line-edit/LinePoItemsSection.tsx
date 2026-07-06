@@ -44,6 +44,8 @@ interface LinePoItemsSectionProps {
   onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
   embedded?: boolean;
   headerRight?: React.ReactNode;
+  /** Hide the embedded "PO items · N" eyebrow — the tab slider owns the label. */
+  suppressHeader?: boolean;
 }
 
 interface SiblingsResponse {
@@ -62,6 +64,7 @@ export function LinePoItemsSection({
   onItemDescSaved,
   embedded = false,
   headerRight,
+  suppressHeader = false,
 }: LinePoItemsSectionProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -110,6 +113,7 @@ export function LinePoItemsSection({
         staffId={staffId}
         embedded={embedded}
         headerRight={headerRight}
+        suppressHeader={suppressHeader}
         showSerialScan={serialScan}
         onOpenInUnbox={openInUnboxHandler}
         sourcePlatformHint={c.sourcePlatform || undefined}
@@ -174,6 +178,7 @@ export function LinePoItemsSection({
       activeLineId={row.id}
       embedded={embedded}
       headerRight={headerRight}
+      suppressHeader={suppressHeader}
       placeholderActiveRow={row}
       readOnly={!editLines}
       onItemDescFeedback={onItemDescFeedback}

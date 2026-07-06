@@ -23,6 +23,10 @@ import {
   readSelectLineDetail,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { SerialPreviewStrip, BoxMembershipHint, serialLast4 } from '@/components/receiving/SerialPreviewStrip';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
+import { BoxWorkbenchPanel } from '@/components/receiving/BoxWorkbenchPanel';
+import { ManifestWorkbenchPanel } from '@/components/receiving/ManifestWorkbenchPanel';
 
 interface Props {
   /**
@@ -60,6 +64,19 @@ function viaAckMeta(via: ResolvedVia): { label: string; Icon: typeof MapPin; chi
   }
 }
 
+/** Compact line summary shown in the enriched post-scan ack strip. */
+function lineAckSummary(row: ReceivingLineRow): {
+  title: string;
+  received?: number | null;
+  expected?: number | null;
+} {
+  return {
+    title: row.item_name || row.sku || `Line #${row.id}`,
+    received: row.quantity_received,
+    expected: row.quantity_expected,
+  };
+}
+
 /**
  * Tech sidebar for Testing mode — receiving scan band plus the To Test /
  * Tested activity rail. Shares the same shell anatomy as
@@ -75,8 +92,14 @@ export function TestingSidebarPanel({
   const [scanValue, setScanValue] = useState('');
   const [isResolving, setIsResolving] = useState(false);
   const [armedMode, setArmedMode] = useState<ForcedTestingType | null>(null);
-  const [lastAck, setLastAck] = useState<{ via: ResolvedVia; value: string } | null>(null);
+  const [lastAck, setLastAck] = useState<{
+    via: ResolvedVia;
+    value: string;
+    line?: ReturnType<typeof lineAckSummary> | null;
+  } | null>(null);
   const [picker, setPicker] = useState<ResolvedTestingScan & { kind: 'multi' } | null>(null);
+  const [boxPanel, setBoxPanel] = useState<{ id: number; lines: ReceivingLineRow[] } | null>(null);
+  const [manifestPanel, setManifestPanel] = useState<{ ref: string } | null>(null);
   const [internalSelectedRow, setInternalSelectedRow] =
     useState<ReceivingLineRow | null>(null);
   const internalSelectedId = internalSelectedRow?.id ?? null;
@@ -107,7 +130,7 @@ export function TestingSidebarPanel({
           dispatchSelectLine(result.row);
           setScanValue('');
           setArmedMode(null);
-          if (result.via) setLastAck({ via: result.via, value });
+          if (result.via) setLastAck({ via: result.via, value, line: lineAckSummary(result.row) });
           const label = viaFoundLabel(result.via);
           if (label) {
             toast.success(`Found via ${label}`, { description: 'Opened the matching receiving line.' });
@@ -120,6 +143,26 @@ export function TestingSidebarPanel({
           if (result.via) setLastAck({ via: result.via, value });
           const label = viaFoundLabel(result.via);
           if (label) toast.success(`Found via ${label}`, { description: 'Pick the line to test.' });
+          break;
+        }
+        case 'box': {
+          // A license-plate (H-####) scan opens the box workbench drawer so the
+          // operator can re-sort its units — desktop parity with /m/h/[id].
+          setBoxPanel({ id: result.handlingUnitId, lines: result.rows });
+          setPicker(null);
+          setScanValue('');
+          setArmedMode(null);
+          setLastAck({ via: result.via, value });
+          toast.success('Opened box', { description: `H-${result.handlingUnitId}` });
+          break;
+        }
+        case 'manifest': {
+          // A KIT- master-label scan opens the manifest workbench drawer.
+          setManifestPanel({ ref: result.manifestRef });
+          setPicker(null);
+          setScanValue('');
+          setArmedMode(null);
+          toast.success('Opened kit', { description: result.manifestRef });
           break;
         }
         case 'not_found': {
@@ -198,9 +241,17 @@ export function TestingSidebarPanel({
                   <meta.Icon className="h-3 w-3 shrink-0" />
                   {meta.label}
                 </span>
-                <span className="min-w-0 truncate font-mono text-micro font-bold text-text-muted" title={lastAck.value}>
+                <span className="min-w-0 shrink-0 truncate font-mono text-micro font-bold text-text-muted" title={lastAck.value}>
                   {lastAck.value}
                 </span>
+                {lastAck.line ? (
+                  <span className="min-w-0 truncate text-micro font-semibold text-text-soft">
+                    · {lastAck.line.title}
+                    {typeof lastAck.line.received === 'number'
+                      ? ` · ${lastAck.line.received}/${lastAck.line.expected ?? '?'}`
+                      : ''}
+                  </span>
+                ) : null}
               </div>
             );
           })() : null}
@@ -208,7 +259,7 @@ export function TestingSidebarPanel({
       ) : null}
 
       {picker ? (
-        <div className={`border-b border-amber-200 bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
+        <div data-testing-picker className={`border-b border-amber-200 bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
           <p className="mb-1 text-eyebrow font-black uppercase tracking-widest text-amber-700">
             {picker.via === 'serial'
               ? `Pick a unit — ${picker.rows.length} serial matches`
@@ -223,6 +274,14 @@ export function TestingSidebarPanel({
                   type="button"
                   onClick={() => {
                     dispatchSelectLine(row);
+                    // Carry the chosen line into the ack strip so the post-pick
+                    // context (serial via + line + qty) reads the same as a
+                    // direct single-line resolve.
+                    setLastAck((prev) => ({
+                      via: picker.via ?? prev?.via ?? 'receiving_id',
+                      value: prev?.value ?? '',
+                      line: lineAckSummary(row),
+                    }));
                     setPicker(null);
                     setScanValue('');
                   }}
@@ -231,7 +290,14 @@ export function TestingSidebarPanel({
                   <span className="block truncate">{row.item_name || row.sku || `Line #${row.id}`}</span>
                   <span className="block text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
                     {row.quantity_received}/{row.quantity_expected ?? '?'} · {row.workflow_status || 'EXPECTED'}
+                    {row.tracking_number ? ` · TRK …${serialLast4(String(row.tracking_number))}` : ''}
                   </span>
+                  {row.serials && row.serials.length > 0 ? (
+                    <span className="mt-1 flex flex-wrap items-center gap-1">
+                      <SerialPreviewStrip serials={row.serials} />
+                      <BoxMembershipHint serials={row.serials} />
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}
@@ -266,6 +332,27 @@ export function TestingSidebarPanel({
         <div className={`flex-shrink-0 border-t border-border-hairline bg-surface-card ${SIDEBAR_GUTTER} pb-[max(1.125rem,env(safe-area-inset-bottom))] pt-3`}>
           {scanBarBlock}
         </div>
+      ) : null}
+
+      {/* Box workbench — an H-#### scan opens this into the global right-rail
+          drawer (RightRailHost). Returns null here; it only registers the panel. */}
+      {boxPanel ? (
+        <DetailStackRailRegistrar id={`box:${boxPanel.id}`} onClose={() => setBoxPanel(null)}>
+          <BoxWorkbenchPanel
+            handlingUnitId={boxPanel.id}
+            onClose={() => setBoxPanel(null)}
+            lines={boxPanel.lines}
+          />
+        </DetailStackRailRegistrar>
+      ) : null}
+
+      {manifestPanel ? (
+        <DetailStackRailRegistrar
+          id={`manifest:${manifestPanel.ref}`}
+          onClose={() => setManifestPanel(null)}
+        >
+          <ManifestWorkbenchPanel manifestRef={manifestPanel.ref} onClose={() => setManifestPanel(null)} />
+        </DetailStackRailRegistrar>
       ) : null}
     </div>
   );

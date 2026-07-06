@@ -66,7 +66,7 @@ export function ActiveLineConditionSerial({
   requireSerialConfirmation: boolean;
   /** RETURN match CTA — pair the order + open the prefilled claim. */
   onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null) => void;
-  onSubmitSerial: (raw?: string, conditionGrade?: string | null) => void;
+  onSubmitSerial: (raw?: string, conditionGrade?: string | null) => void | Promise<void>;
   onDeleteSerialUnit: (serialUnitId: number, lineId?: number) => void;
   onReplaceSerialUnit: (
     original: { id: number; serial_number: string; condition_grade?: string | null },

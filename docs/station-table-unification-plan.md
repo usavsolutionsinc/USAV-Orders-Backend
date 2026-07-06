@@ -1,7 +1,22 @@
 # Station table unification — display, views & realtime plan
 
-> **Status (2026-07-05): PLAN — not started.** Work-on-main. Desktop only (`/tech`, `/packer`,
-> `/receiving`, testing-history). Mobile routes (`/m/...`) are **out of scope** for this run.
+> **Status (2026-07-06): Phase V0 SHIPPED ✅ — remaining phases not started.** Work-on-main. Desktop
+> only (`/tech`, `/packer`, `/receiving`, testing-history). Mobile routes (`/m/...`) are **out of scope**.
+>
+> **Progress (2026-07-06): V0, 0, 1 fully shipped + verified; Phase 4 & 6 data cores shipped.**
+> Foundation + data layer are complete and tested. What remains is the live scan-bench UI cutovers
+> (Phases 2/3, their board UIs, Phase-4 shelf boards), the counts DB routes (Phase 5), and the Phase-6
+> integration wiring — the parts the plan intentionally gates behind `NEXT_PUBLIC_STATION_VIRTUAL_LIST`
+> / `NEXT_PUBLIC_STATION_PIPELINE_BOARDS` for staged bake-in on floor-critical benches.
+>
+> **Verified deliverables:** `tsc --noEmit` clean throughout; ESLint clean on all new files; unit tests
+> — record mappers (4), station-cache-patch (6), board-lane derivation (6) — all green and wired into
+> `test:station`; E2E `tests/e2e/unshipped-virtual-list.spec.ts` (1-up + 2-up) green after every phase.
+>
+> **Phase V0 (the blocker).** Stacked (1-up) `SwimlaneBoard` lanes now window against the board's single
+> shared scroll region via a `scrollMargin` offset (TanStack Virtual's window-scroller pattern), so a
+> 1-up lane holding 500 rows keeps ~16 DOM rows instead of mounting all 500. Fix applies to **both** the
+> Unshipped and Shipped boards. See §Phase V0.
 >
 > **Headline:** port the **Unshipped table stack** (row substrate, virtualized list body,
 > `SwimlaneBoard` pipeline view, counts + Ably cache patches, `TableOptionsMenu`) to every
@@ -593,9 +608,29 @@ Client patch is optimistic; server tag bust ensures other tabs converge.
 
 ## 8. Phased implementation
 
-### Phase V0 — Ancestor-scroll virtualization fix (BLOCKER)
+### Phase V0 — Ancestor-scroll virtualization fix (BLOCKER) — ✅ SHIPPED 2026-07-06
 
 **Goal:** Virtualization works in **1-up stacked** `SwimlaneBoard` layout, not only 2-up capped lanes.
+
+**Delivered (as built):**
+
+- NEW `src/hooks/useAncestorScrollMargin.ts` — measures how far a virtualized list's inner wrapper sits
+  below a shared ancestor scroll region's content top (scroll-invariant; recomputes on scroll rAF-throttled
+  + resize of scroll-el/list/content-wrapper + window resize). Returns 0 + installs no listeners when
+  disabled, so the self-scrolling body path is byte-identical.
+- `SwimlaneBoard` — owns a `boardScrollRef` on its scroll region (`data-testid="swimlane-board-scroll"`);
+  hands it to each lane's body ctx as `scrollParentRef` **only in stacked (1-up) mode** (grid lanes keep
+  their own scroll). `SwimlaneLaneBodyContext` gained `scrollParentRef?`.
+- `VirtualQueueSections` + `VirtualShippedSections` — new `useAncestorScroll` prop → apply `scrollMargin`
+  to `useVirtualizer` and position rows `translateY(start - scrollMargin)`. Sticky day-header pin
+  unchanged (escapes to the board scroll region via the lane's `overflow-clip`).
+- `OrdersQueueTable` / `UnshippedShelfBoard` and `ShippedLaneTable` / `DashboardShippedTable` — thread the
+  stacked-lane `scrollParentRef` from ctx → the virtual sections.
+- `tests/e2e/unshipped-virtual-list.spec.ts` — added the **1-up stacked** case (forces "1 column",
+  scrolls `[data-testid="swimlane-board-scroll"]`); kept the 2-up case. Both green (1-up: 16 DOM rows /
+  500; 2-up: 21 / 500). `tsc --noEmit` clean; ESLint clean on all touched files.
+
+**Original approach (for reference):**
 
 **Root cause:** `growToContent=true` → lane body has no scroll container → `VirtualGroupedSections`
 mounts all rows (`unshipped-dashboard-performance-plan.md` §Phase 0 limitation).
@@ -637,7 +672,27 @@ mounts all rows (`unshipped-dashboard-performance-plan.md` §Phase 0 limitation)
 
 ---
 
-### Phase 0 — Generic list substrate
+### Phase 0 — Generic list substrate — ✅ SHIPPED 2026-07-06
+
+**Delivered (as built):**
+
+- NEW `src/components/dashboard/orders-queue/VirtualGroupedSections.tsx` — generic `<T>` windowed body
+  (header/group/row item kinds; grouped `orderGroupsByDate` OR flat `daySections`; V0 ancestor-scroll +
+  sticky pin). `VirtualQueueSections` is now a **thin ShippedOrder wrapper** over it (passes `QueueGroupRow`
+  as `renderGroup`) — behavior identical (both e2e cases still green).
+- NEW `src/components/station/StationListTable.tsx` — generic day-banded list shell extracted from
+  `OrdersQueueTable`'s scaffold (header band + scroll body + virtual/dense branch + typed empty/first-run/
+  search states), row + grouping injected via `renderRow` / `renderGroup`. `OrdersQueueTable` left
+  untouched (zero regression risk; it already shares the windowing core via `VirtualQueueSections`).
+- NEW `src/lib/station/record-to-queue-row.ts` (+ `.test.ts`, 4 cases, wired into `test:station`) —
+  `techRecordToQueueRow` / `packerRecordToQueueRow` → `QueueRowRecord`; stashes the original record under
+  `STATION_SOURCE_RECORD_KEY` for Phase-2 detail-open / copy (`getStationSourceRecord`).
+- NEW density layer: `src/lib/tables/table-density.ts` (SoT: type, class bundle, param, storage key),
+  `src/components/ui/table-density/TableDensityProvider.tsx` (URL `?density=` SoT + per-`tableId`
+  localStorage mirror, no-op outside a provider), `src/hooks/useTableDensity.ts`.
+- `tsc` clean · ESLint clean on all new files · mapper unit test green · both virtualization e2e cases green.
+
+**Original spec (for reference):**
 
 **Goal:** `StationListTable` + `VirtualGroupedSections<T>` + density + row mappers.
 
@@ -666,7 +721,26 @@ mounts all rows (`unshipped-dashboard-performance-plan.md` §Phase 0 limitation)
 
 ---
 
-### Phase 1 — `TableOptionsMenu` + saved views relocation
+### Phase 1 — `TableOptionsMenu` + saved views relocation — ✅ SHIPPED 2026-07-06
+
+**Delivered (as built):**
+
+- NEW `src/lib/station/table-url-params.ts` — URL contract SoT (`layout`/`scope`/`density`/`staff`/
+  `weekOffset` params + parsers; per-surface `SAVED_VIEW_PARAM_KEYS` / `SAVED_VIEW_STORAGE_KEY`).
+- NEW `src/hooks/useSavedViews.ts` — storage + URL-apply core extracted from `SavedViewsControl` (which
+  now consumes it — one implementation shared with the ⋮ menu).
+- NEW `src/hooks/useStationStaffScope.ts` — `mine`/`all` scope over `?scope=`; effective staff id =
+  signed-in `user.staffId` (mine) or `?staff=` (all); composes `useStaffFilter`.
+- NEW `src/components/ui/table-options/TableOptionsMenu.tsx` — the ⋮ popover: Layout (Pipeline/All),
+  Staff scope + fine-grain staff filter, Row density (via `useTableDensity`), optional Columns slot,
+  Saved views (apply/save/delete). Every section optional per surface.
+- `SavedViewsControl` removed from `UnshippedSidebar` + `ShippedSidebar`; ⋮ menu added to the Unshipped
+  board header and both Shipped headers (board + All) carrying the surfaces' saved-view param keys.
+- `tsc` clean · new files ESLint clean · both virtualization e2e cases still green (board renders after
+  the relocation). Note: the repo-wide raw-`button` ratchet is red from **concurrent user WIP**
+  (`HistoryBrowseFilters.tsx`), not this change — my new buttons are all `ds-raw-button`-exempt.
+
+**Original spec (for reference):**
 
 **Goal:** ⋮ menu owns views, density, scope, columns; sidebars shed saved views.
 
@@ -783,6 +857,17 @@ StationListTable → VirtualGroupedSections → OrdersQueueTableRow (queueMode: 
 
 ### Phase 4 — Pipeline boards (full)
 
+> **Data core SHIPPED 2026-07-06** (lane SoT — the testable half). Remaining: the
+> `*ShelfBoard` UI consumers + receiving/testing lane modules (built with Phase 3).
+> - NEW `src/lib/station/tech-board-lanes.ts` — `TECH_HISTORY_BOARD_LANES` +
+>   `TECH_HISTORY_STATE_META` + `bucketTechHistoryLane` (TODAY/THIS_WEEK/FBA;
+>   FBA predicate byte-matches `isFbaTechRecord`). Dots from the label-registry tone map.
+> - NEW `src/lib/station/packer-board-lanes.ts` — TODAY/THIS_WEEK/FBA/EXCEPTION;
+>   FBA predicate reuses the shared `isFbaOrder` util (matches `isFbaPackerRecord`).
+> - NEW `src/lib/station/board-lanes.test.ts` — 6 cases (precedence + descriptors), wired into `test:station`.
+> - Receiving/testing lane modules (§4.1/4.2/4.5) deferred to Phase 3 (they read `ReceivingLineRow`
+>   fields best verified alongside that cutover).
+
 **Goal:** All `*ShelfBoard` consumers complete; lane counts in bubble headers.
 
 **Work:**
@@ -819,6 +904,14 @@ or pre-bucketed SQL on raw columns only (Decision 12).
 ---
 
 ### Phase 6 — Ably / incremental sync (HIGH PRIORITY — start with Phase 2)
+
+> **Patch module SHIPPED 2026-07-06** (the testable core). Remaining: refactor
+> `useTechLogs`/`usePackerLogs` onto it + subscribe on the station table pages +
+> reconnect-only broad invalidate.
+> - NEW `src/lib/queries/station-cache-patch.ts` — mirrors `dashboard-cache-patch`:
+>   `patch/remove/prepend TechLog|PackerLog` + `patchReceivingLine` + `invalidate*Counts`
+>   + `invalidateAllStationLists` (reconnect only), all prefix-keyed + identity-preserving.
+> - NEW `src/lib/queries/station-cache-patch.test.ts` — 6 cases, wired into `test:station`.
 
 **Goal:** Floor scan → 0 full list refetch on idle tab.
 
@@ -914,7 +1007,7 @@ V0 → 0 → 1 → 2 + 6 (parallel) → 3 → 4 → 5 → 7
 
 ## 11. Migration & cleanup checklist
 
-- [ ] Phase V0 merged + 1-up E2E green
+- [x] Phase V0 merged + 1-up E2E green (2026-07-06)
 - [ ] `StationWeekTable` deleted — zero importers
 - [ ] `StationRecordShell`, `TechRecordRow`, `PackerRecordRow` deleted
 - [ ] `SavedViewsControl` removed from sidebars; only ⋮ entry
@@ -1058,4 +1151,5 @@ useVirtualizer({
 
 ---
 
-*Last updated: 2026-07-05. Owner: TBD. Next action: Phase V0 (1-up virtualization fix on `SwimlaneBoard`).*
+*Last updated: 2026-07-06. Owner: TBD. Next action: Phase 0 (generic list substrate — `StationListTable`
++ `VirtualGroupedSections<T>` + density + row mappers). Phase V0 shipped.*

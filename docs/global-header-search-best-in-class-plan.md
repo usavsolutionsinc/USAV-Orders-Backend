@@ -3,10 +3,18 @@
 > **Status:** Proposed · Created 2026-07-05 · **Detailed build-out** 2026-07-05 (verified against live code)
 > **Owner surfaces:** `src/components/layout/GlobalHeaderSearch.tsx` (the one header search) + `/operations?mode=history` (the scoped results destination)
 > **Builds on:** `docs/unified-global-search-consolidation-plan.md` (Phase 0 SHIPPED — unified recents SoT + `/search/history`) · `docs/ai-search-modernization-plan.md` (Phases 0–3 shipped — `hybridSearch` engine, `SearchHit`, `/api/ai/retrieve`)
-> **Flag:** `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH` (client-safe, default OFF — everything below is byte-identical to today until flipped)
+> **Flag:** `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH` (client-safe). **Default flipped ON 2026-07-06** — set `=false`/`0`/`off`/`no` as a kill switch to restore the pre-unification header + paste-a-number operations lookup.
 > **Design method:** authored through `/ui-ux-pro-max` — priority order Accessibility → Touch/Interaction → Performance → Style → Layout → Typography/Color → Animation → Forms/Feedback → Navigation. Every visual decision below cites the rule it satisfies.
 
-> **Implementation status (2026-07-05): Phases A–D BUILT behind the flag.** `SearchResultRow` + `search-result-chips` + `search-tabs` (A); `GlobalSearchDropdown` combobox + glass (B); `SearchResultsSurface` + thin `SearchWorkspace` (C); operations `?q=` browse → drill, `usePageHeaderSearch` wiring, sidebar recents, right-pane crossfade (D). `tsc` clean, `eslint` clean, `test:ai-search` = **95 pass** (5 new for `search-tabs`). Flag `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH` default OFF → byte-identical to today. **Not yet done:** Phase E (facet enrich, optional); the e2e spec + component tests (harness is node:test — pure-logic only); live exercise with the flag ON.
+> **Implementation status (2026-07-05): Phases A–D BUILT behind the flag.** `SearchResultRow` + `search-result-chips` + `search-tabs` (A); `GlobalSearchDropdown` combobox + glass (B); `SearchResultsSurface` + thin `SearchWorkspace` (C); operations `?q=` browse → drill, `usePageHeaderSearch` wiring, sidebar recents, right-pane crossfade (D).
+>
+> **Update (2026-07-06): Phase E BUILT + flag flipped ON + tests + live-exercised.**
+> - **Phase E (tracking + carrier order row):** migration `2026-07-06a` adds `tracking_number`/`carrier` facet columns (+ Drizzle model); `buildOrderDoc`/`buildReceivingDoc` populate them; the worker upsert + both `hybrid-retrieval` SELECTs thread them through; `SearchResultRow` renders a carrier + last-4 `TrackingChip` (CopyChip SoT). Migration applied + backfilled: **2 979/3 084 ORDER docs and 1 896/2 057 RECEIVING docs now carry tracking/carrier**.
+> - **`isSearching` plumbing (§17):** a tiny operations-scoped store (`operations-search-status.ts`, `useSyncExternalStore`) bridges `SearchResultsSurface`'s in-flight state to the contextual header pill spinner.
+> - **Flag ON:** `isUnifiedHeaderSearchEnabled()` now defaults ON (explicit `false`/`0`/`off`/`no` kill switch).
+> - **Tests:** `search-result-chips.test.ts` (`orderStatusTone` table) added to `test:ai-search` (**102 pass**); `hybrid-retrieval.test.ts` extended to assert the tracking/carrier facet passthrough; `tests/e2e/operations-history-search.spec.ts` (orders-first hydration, `?order=` drill + Clear, contextual-header browse) — **3/3 pass** against the live dev server with the flag ON.
+> - **Incidental fix:** the RECEIVING outbox loader was silently failing (`column "r.carrier" must appear in the GROUP BY clause`) since `receiving` became a `security_invoker` view — a view has no PK functional dependency, so `GROUP BY r.id` rejected the bare `r.*` columns. Rewrote the 1:many `receiving_lines` aggregation as a LATERAL subquery (no `GROUP BY` on `r.*`); receiving docs now index (previously 0). `tsc` + `eslint` clean.
+> - **Not done (intentional, per §17 "defer"):** auto-drill on a single exact operations match; non-order operations drill; jsdom component-render tests (harness is `node:test` — pure-logic + e2e only).
 
 ---
 

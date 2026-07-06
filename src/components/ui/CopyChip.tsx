@@ -17,6 +17,7 @@ import { Barcode, DollarSign, ExternalLink, MapPin, Package, Pencil, Tags } from
 import { IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { monoValue } from '@/design-system/tokens/typography/presets';
+import type { OptimisticSerialFlag } from '@/lib/receiving/optimistic-serials';
 import { useChipTooltip, useCopyChip } from '@/hooks';
 import { conditionGradeChipStyleOrPending } from '@/lib/condition-tone';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
@@ -533,6 +534,7 @@ export const SerialChip = ({
   width = 'w-[84px] shrink-0',
   disableTooltip = false,
   dense,
+  pending,
 }: {
   value: string;
   /** Optional label override; normally derived from `value`. */
@@ -543,16 +545,21 @@ export const SerialChip = ({
   width?: string;
   disableTooltip?: boolean;
   dense?: boolean;
+  /** Optimistic add/remove — mutes the chip while the server round-trip is in flight. */
+  pending?: OptimisticSerialFlag;
 }) => (
   <CopyChip
     value={value}
     display={resolveSerialDisplay(display ?? value)}
-    tone="serial"
+    tone={pending === 'removing' ? 'id' : 'serial'}
     width={width}
     truncateDisplay={false}
     fitDisplayWidth
     disableTooltip={disableTooltip}
+    disableCopy={pending != null}
     dense={dense}
+    iconClass={pending === 'removing' ? 'text-text-faint' : pending === 'adding' ? 'text-emerald-400' : undefined}
+    underlineClass={pending === 'removing' ? 'border-border-soft' : undefined}
   />
 );
 

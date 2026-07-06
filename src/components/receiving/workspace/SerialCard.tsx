@@ -12,6 +12,7 @@ interface SavedSerial {
   id?: number;
   serial_number: string;
   condition_grade?: string | null;
+  _optimistic?: 'adding' | 'removing';
 }
 
 interface Props {
@@ -222,6 +223,13 @@ export function SerialCard({
         /* Parent handles toasts on its own; keep the loop going. */
       }
     }
+    // Barcode wedge: keep the scan field focused after each Enter so multi-part
+    // PARTS lines can accept serial after serial without re-clicking.
+    window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled || editing || noSerialActive) return;
+      el.focus();
+    }, 0);
   };
 
   const Shell = embedded ? 'div' : 'section';
@@ -271,7 +279,7 @@ export function SerialCard({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                submit();
+                void submit();
               } else if (e.key === 'Escape' && editing) {
                 e.preventDefault();
                 cancelEdit();
@@ -314,7 +322,7 @@ export function SerialCard({
           /* ds-raw-button: solid-emerald scan-submit CTA with add-glyph / Saving… text-swap */
           <button
             type="button"
-            onClick={submit}
+            onClick={() => void submit()}
             disabled={!scan.trim() || isSubmitting || disabled}
             className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-surface-strong ${
               editing || (showSavingLabel && isSubmitting) ? 'px-4' : 'w-14'
@@ -408,12 +416,19 @@ export function SerialChipWithMenu({
   onSetCondition?: (s: SavedSerial, grade: string) => void;
 }) {
   const sn = serial.serial_number;
-  const hasActions = !!(onEdit || onDelete || onSetCondition);
+  const pending = serial._optimistic;
+  const hasActions = !pending && !!(onEdit || onDelete || onSetCondition);
   const [menuHover, setMenuHover] = useState(false);
 
   return (
     <div
-      className="group relative inline-flex"
+      className={`group relative inline-flex rounded-md transition-opacity ${
+        pending === 'removing'
+          ? 'bg-surface-sunken opacity-50 ring-1 ring-inset ring-border-soft'
+          : pending === 'adding'
+            ? 'opacity-70'
+            : ''
+      }`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
       onMouseEnter={() => {
@@ -426,16 +441,13 @@ export function SerialChipWithMenu({
           isEditing ? 'ring-2 ring-emerald-400 ring-offset-1' : ''
         }`}
       >
-        <SerialChip value={sn} width="w-fit max-w-full" />
+        <SerialChip value={sn} width="w-fit max-w-full" pending={pending} />
       </div>
       {hasActions ? (
         <div
-          // Intentional exception (memory: z-index-scale-sot): a purely in-flow
-          // CSS hover tooltip stacking within this card's local context — not
-          // part of the global portal/overlay system, so it stays a raw z-[100].
-          // Hover-only — focus-within kept menus stuck after chip click.
+          // Hover-only menu within the card's local stacking context.
           // eslint-disable-next-line no-restricted-syntax
-          className={`absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 transition-opacity duration-100 ${
+          className={`absolute left-1/2 top-full z-panel -translate-x-1/2 pt-1 transition-opacity duration-100 ${
             menuHover
               ? 'visible pointer-events-auto opacity-100'
               : 'invisible pointer-events-none opacity-0'

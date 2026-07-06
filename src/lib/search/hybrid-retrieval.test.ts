@@ -25,6 +25,8 @@ const doc = (entityType: SearchEntityType, id: number, title = `T${id}`): DocHit
   status: 'ACTIVE',
   condition_grade: null,
   source_platform: 'ebay',
+  tracking_number: null,
+  carrier: null,
   happened_at: null,
 });
 
@@ -216,6 +218,8 @@ test('boostEntityTypes threads through hybridSearch into the merge', async () =>
 test('hits map facets to chips and carry machine-readable facets', async () => {
   const row = doc('RECEIVING', 7);
   row.condition_grade = 'USED_GOOD';
+  row.tracking_number = '9400111899561234567890';
+  row.carrier = 'USPS';
   const { deps } = fakes({ keyword: [row] });
   const res = await hybridSearch(ORG, 'ebay carton', {}, deps);
 
@@ -224,6 +228,10 @@ test('hits map facets to chips and carry machine-readable facets', async () => {
   assert.equal(hit.href, '/unbox?openReceivingId=7');
   assert.deepEqual(hit.chips.map((c) => c.label).sort(), ['ACTIVE', 'USED_GOOD', 'ebay'].sort());
   assert.equal(hit.facets?.condition_grade, 'USED_GOOD');
+  // Phase E: tracking/carrier pass through to the machine-readable facets so
+  // the row can render the carrier + last-4 tracking chip (CopyChip SoT).
+  assert.equal(hit.facets?.tracking_number, '9400111899561234567890');
+  assert.equal(hit.facets?.carrier, 'USPS');
 });
 
 test('entityTypes option is threaded into the keyword arm', async () => {

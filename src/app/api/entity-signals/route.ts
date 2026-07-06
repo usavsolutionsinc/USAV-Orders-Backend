@@ -8,9 +8,10 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/entity-signals — the org's entity_signals spine for the history
  * surfaces (universal-feed plan Phase 5). Newest-first, org-scoped (never
- * cross-tenant). Query params: ?limit ?sinceDays ?signalKind ?entityType ?q
- * (full-text over notes_tsv). Degrades to [] on failure — a Monitor sub-resource
- * must never 500 the page.
+ * cross-tenant). Query params: ?limit ?sinceDays ?signalKind ?entityType ?entityId ?q
+ * (full-text over notes_tsv). `entityId` (with `entityType`) narrows to one
+ * record's signals — the History→Signals related strip. Degrades to [] on
+ * failure — a Monitor sub-resource must never 500 the page.
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx) => {
@@ -25,6 +26,7 @@ export const GET = withAuth(
         sinceDays: num(sp.get('sinceDays')),
         signalKind: sp.get('signalKind'),
         entityType: sp.get('entityType'),
+        entityId: num(sp.get('entityId')),
         q: sp.get('q'),
       });
       return NextResponse.json({ success: true, signals });

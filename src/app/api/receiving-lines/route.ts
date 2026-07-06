@@ -56,6 +56,10 @@ type LineSerial = {
   sku_catalog_id: number | null;
   condition_grade: string | null;
   created_at: string;
+  /** Handling-unit (H-#### tote) this unit currently sits in, if any. */
+  handling_unit_id: number | null;
+  /** Minted unit identity; presence = this unit has been labeled at least once. */
+  unit_uid: string | null;
 };
 
 async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Map<number, LineSerial[]>> {
@@ -68,11 +72,14 @@ async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Ma
   // ever updating origin_receiving_line_id). serial_units is org-owned;
   // org-scope so a cross-tenant line id can never surface another tenant's
   // serials.
-  const result = await tenantQuery<SerialUnitRow & { origin_receiving_line_id: number | null }>(
+  const result = await tenantQuery<
+    SerialUnitRow & { origin_receiving_line_id: number | null; handling_unit_id: number | null }
+  >(
     orgId,
     // Phase 3: frozen-origin candidate set via provenance; origin value via view.
     `SELECT DISTINCT su.id, su.serial_number, su.current_status, su.sku_catalog_id,
-            su.condition_grade, vo.origin_receiving_line_id, su.created_at
+            su.condition_grade, su.handling_unit_id, su.unit_uid,
+            vo.origin_receiving_line_id, su.created_at
        FROM serial_units su
        JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
       WHERE su.organization_id = $2
@@ -108,6 +115,8 @@ async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Ma
       sku_catalog_id: row.sku_catalog_id,
       condition_grade: row.condition_grade,
       created_at: row.created_at,
+      handling_unit_id: row.handling_unit_id ?? null,
+      unit_uid: row.unit_uid ?? null,
     };
     const bucket = grouped.get(lineId);
     if (bucket) bucket.push(slim);

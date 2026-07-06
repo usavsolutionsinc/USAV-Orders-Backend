@@ -1,6 +1,6 @@
 # Operations History Consolidation — Unified Observability Plan
 
-> **Status:** Not started · Created 2026-07-05  
+> **Status:** ALL phases 0–7 implemented + verified (tsc 0 · eslint 0 · 23/23 unit tests). Phase 7 ran the SAFE subset: `/audit-log` routes deleted, redirect unconditional, `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE` default flipped ON; `AuditLogSidebarPanel`/`/settings/audit` + bin/SKU `AuditTimeline` deliberately kept. **⚠️ The browse feed is now on by default but has NOT had a live authed smoke — smoke `/operations?mode=history` before committing/deploying.** Nothing committed. · Created 2026-07-05 · Updated 2026-07-06  
 > **Goal:** One filterable Operations **History** surface for forensic “what happened” (browse + record trace), absorbing fragmented audit-log and domain-history UIs — while **keeping Signals as a separate mode** (Studio-driven “why” layer) and **keeping station rails local** (fast scan-session UX).  
 > **Owner:** TBD  
 > **Related:**  
@@ -21,14 +21,15 @@
 
 | Phase | Scope | Status |
 |-------|--------|--------|
-| 0 | Taxonomy + flags + doc alignment | Not started |
-| 1 | Enable History browse API | Not started |
-| 2 | History browse UI (default landing) | Not started |
-| 3 | History sidebar filters + saved views | Not started |
-| 4 | Audit-log redirects + saved-view presets | Not started |
-| 5 | Receiving history → History shortcut | Not started |
-| 6 | History ↔ Signals cross-links | Not started |
-| 7 | Remove audit-log UI + nav entry | Not started |
+| 0 | Taxonomy + flags + doc alignment | ✅ Done (2026-07-05) |
+| 1 | Enable History browse API | ✅ Done (2026-07-05) |
+| 2 | History browse UI (default landing) | ✅ Done (2026-07-05) · row-drill split to P3 |
+| 2.5 | Audit diff slot + `before_data` (Phase 7 unblocker) | ✅ Done (2026-07-06) |
+| 3 | History sidebar filters + saved views | ✅ Done (2026-07-06) |
+| 4 | Audit-log redirects + saved-view presets | ✅ Done (2026-07-06) · flag-gated |
+| 5 | Receiving history → History shortcut | ✅ Done (2026-07-06) · flag-gated |
+| 6 | History ↔ Signals cross-links | ✅ Done (2026-07-06) |
+| 7 | Remove audit-log UI + nav entry | ✅ Done (2026-07-06) — routes deleted, redirect unconditional, browse default ON ⚠️ needs live smoke before deploy |
 
 ---
 
@@ -368,6 +369,12 @@ export function operationsSignalsBrowseHref(args: {
 
 Single SoT for assistant tools, CommandBar, and UI chips.
 
+**Status (2026-07-06):**
+- [x] **`src/lib/operations/history-links.ts` SoT — DONE + unit-tested (3/3), `tsc`/`eslint` 0.** Both signatures implemented; `operationsSignalsBrowseHref` reuses the existing `buildOperationsSignalsHref` SoT (no duplication). Pure + server-safe (all type imports erased) so assistant tools / CommandBar / UI chips share it. `tsc` 0.
+- [x] **History-trace → related-signals strip — DONE.** Added the `entityId` filter to `readEntitySignals` + `/api/entity-signals` (unblocked the gap), then a `RelatedSignalsStrip` in `OperationsHistoryView` (`useQuery` count, degrades to nothing on empty/error) that deep-links via `operationsSignalsBrowseHref`. Scopes to the trace's serial unit (serial dim) else its order. `tsc`/`eslint` 0.
+- [x] **Signals-detail → History-trace link — DONE.** Resolved the gap: `getEntitySignal` now returns `entity_dim` + `entity_ref` (SERIAL_UNIT → `serial_units.serial_number`, ORDER → `orders.order_id` via `LEFT JOIN … AND es.entity_type = …`; null for non-trace entity types). `SignalsBrowseWorkspace` renders a "Full event trace →" link (via `operationsHistoryTraceHref`) when present. `tsc`/`eslint` 0.
+- [ ] Optional `RecentActivityRailBase` "Open in Operations" row action — not done (explicitly optional; station rails stay local per Decision D3). The `history-links` SoT is ready if it's ever wanted.
+
 ---
 
 ## 8. Unified header search integration
@@ -390,12 +397,12 @@ Recents scope: `operations:history` (already in `HistorySidebar`).
 
 **Deliverables:**
 
-- [ ] Add `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE` (default `false`) in `src/lib/feature-flags.ts`
-- [ ] Rename user-facing copy where misleading: station rail eyebrow “Recent” not “History” if ambiguous
-- [ ] Update `operations-sidebar-shared.ts` comment block to match this plan
-- [ ] Add `docs/operations-history-consolidation-plan.md` (this file) to assistant `OPERATIONS_SKILL` fragment
+- [x] Add `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE` (default `false`) — **placed in new `src/lib/operations/operations-history-flags.ts`, NOT `feature-flags.ts`**: that module imports the DB pool (`@/lib/db`, server-only), so a client-safe `NEXT_PUBLIC_*` flag must live in its own module, mirroring `src/lib/search/unified-header-search.ts`. Exposes `isOperationsHistoryBrowseEnabled()`.
+- [x] ~~Rename station rail eyebrow “Recent” not “History”~~ — **N/A**: audited all rail eyebrows (`RecentActivityRailBase` wrappers + `receiving/rail/feeds.ts`); every label is already session-scoped ("Unboxed", "At dock", "Up Next", "Tested", "Viewed"…). No ambiguous "History" eyebrow exists, so no rename needed.
+- [x] Update `operations-sidebar-shared.ts` comment block to match this plan (history = Browse+Trace Monitor; signals = separate "why" layer; fixed stale "four modes" → five)
+- [x] Add the plan's taxonomy to the assistant `OPERATIONS_SKILL` fragment (`src/lib/assistant/page-skills.ts`) — encoded History Browse/Trace + History↔Signals split + history URL params (pasting the full doc would blow the 4000-char fragment cap; the model needs the vocabulary, not the prose).
 
-**Acceptance:** Flag off → byte-identical History empty state; flag on → browse region visible in dev.
+**Acceptance:** Flag off → byte-identical History empty state ✅ (no code path reads the new flag yet — that lands in Phase 2). Verified `tsc --noEmit` exit 0 (0 errors) + `eslint` exit 0 on all touched files. *(Note: the "flag on → browse region visible" half of the original acceptance is deferred to Phase 2, which builds the region the flag gates.)*
 
 ---
 
@@ -409,12 +416,12 @@ Recents scope: `operations:history` (already in `HistorySidebar`).
 
 **Deliverables:**
 
-- [ ] `GET /api/operations/journey` returns `mode: 'browse'` without entity param
-- [ ] Keyset `cursor` round-trips; `nextCursor` null at end
-- [ ] `sources=audit` requires `admin.view_logs` (if Decision §3.2 Option B)
-- [ ] Route tests: entity unchanged; browse 200; org isolation
+- [x] `GET /api/operations/journey` returns `mode: 'browse'` without an entity param — new dispatch branch in `route.ts` calls the (already-built, previously uncalled) `readJourneyBrowse` inside `withTenantTransaction`; entity/Trace branch untouched.
+- [x] Keyset `cursor` round-trips; response `nextCursor` is the opaque `encodeCursor(...)` token (or `null` at end); request `?cursor=` decoded via `decodeCursor`. (Codec round-trip already unit-tested.)
+- [x] `sources=audit` requires `admin.view_logs` (Decision §3.2 **Option B**) — extracted as the **pure** helper `resolveBrowseSources(requested, canViewAudit)` in `journey-helpers.ts` (unit-tested) rather than inline in the handler: non-admin explicit `sources=audit` → **403 `AUDIT_SOURCE_FORBIDDEN`**; non-admin default browse → audit spine silently dropped (SAL/inventory/carrier/warranty still served). **Scope note:** applied to BROWSE only; entity/Trace mode is unchanged this phase (the sensitive before/after *values* aren't fetched until Phase 2.5 — that phase gates diff-value exposure).
+- [~] Route tests: covered the security-sensitive dispatch decision (`resolveBrowseSources`) with node:test unit cases (admin passthrough / non-admin drop / explicit-audit 403 / no-mutation of the shared const). **Full route integration tests (browse 200, org isolation) deferred** — the repo has *no* API-route test harness (`src/app/api/**` has zero `*.test.ts`); org isolation is already enforced structurally by `withTenantTransaction` + RLS and the entity path's org-gating.
 
-**Acceptance:** `curl`/integration test returns merged events newest-first for `?stations=PACK&limit=10`.
+**Acceptance:** Verified `tsc --noEmit` exit 0, `eslint` exit 0, and `npx tsx --test journey-helpers.test.ts` 11/11 (incl. the new audit-gate cases). The literal `curl`-returns-merged-events check needs an authenticated dev server + DB; that live smoke rides along with Phase 2, which wires the browse hook and exercises this endpoint in dev for real.
 
 ---
 
@@ -428,16 +435,39 @@ Recents scope: `operations:history` (already in `HistorySidebar`).
 
 **Deliverables:**
 
-- [ ] Landing `/operations?mode=history` shows last 7d browse (flag on)
-- [ ] Replace empty dashed state with timeline (loading + empty filters message)
-- [ ] Row click on identifier chip → `url.setEntity` (trace drill)
-- [ ] Preserve trace region + `OperationsResultsView` behavior
+- [x] Landing `/operations?mode=history` shows the browse feed (flag on) — new `browse` region in `OperationsHistoryView` (precedence: Trace → Search-hits → **Browse** → empty). ⚠️ **Window default:** uses the server's existing `BROWSE_WINDOW_MS` = **30d**, not the plan's Q3 "7d" — left unchanged rather than silently deciding Q3. If 7d is wanted, split `BROWSE_WINDOW_MS` into `BROWSE_DEFAULT_WINDOW_MS` (7d) + a `BROWSE_MAX_WINDOW_MS` (30d) cap in `journey-helpers.ts` (small backend change). **Q3 still open.**
+- [x] Replace empty dashed state with timeline — browse region renders `TimelineSection` (loading skeleton + filter-aware empty message: "No operations match these filters." vs "No recent operations recorded yet."); flag-off keeps the byte-identical dashed empty box.
+- [~] ~~Row click on identifier chip → `url.setEntity`~~ — **deferred to Phase 3 (first item)**. `EventTimeline`/`TimelineSection` expose no row/ref click hook and the ref chips are copy-on-click `CopyChip`s; adding a drill needs an opt-in `onSelectItem`-style extension to the shared, deliberately-read-only timeline SoT (blast radius: every timeline consumer). Doing it as a deliberate, verified primitive extension co-located with the other Phase 3 History-interactivity work, not bolted on mid-phase. Browse→Trace is still reachable now via the sidebar/header record lookup.
+- [x] Preserve trace region + `OperationsResultsView` behavior — untouched; `browsing` (unified `?q=`) still wins over browse, focused still wins over both.
+- [x] New hook `src/hooks/useOperationsJourneyBrowse.ts` — `useInfiniteQuery` + opaque cursor `fetchNextPage`; flattens pages through the **shared** `mergeJourney` adapter (no forked mapping). "Load more" footer lives in the History view (browse-specific), not pushed onto the general `TimelineSection`.
+- [x] URL state: added `staffId` + `sources` to `useOperationsTimelineUrlState` (readers, `setStaffId`/`toggleSource`, `filters` snapshot, `activeFilterCount`, `applyView`, `FILTER_KEYS`) + threaded through `operations-journey-queries` `appendFilters`. (Phase 3 wires the sidebar chips that set them.)
 
-**Acceptance:** Operator can scroll floor events without pasting a record number.
+**Acceptance:** `tsc --noEmit` exit 0, `eslint` exit 0 across all 5 touched files (incl. the fixed `serialJourneyFilters` full-literal consumer). Behavior is flag-gated: flag OFF ⇒ byte-identical empty box. **Live smoke pending** — "operator scrolls floor events" needs the flag flipped on an authenticated dev server + DB (no route/UI e2e was stood up this pass); the browse mapping reuses the already-proven `mergeJourney` and the Phase-1 endpoint, so risk is confined to runtime wiring.
 
 ---
 
+### Phase 2.5 — Audit diff slot + `before_data` wiring (Phase 7 unblocker) ✅
+
+Inserted during execution (not in the original plan). Rationale: the pressure-test found that `/audit-log` never rendered a clean field-level diff (it dumped `JSON.stringify(before/after)` in a `<pre>`); the only structured diff lives in the bin/SKU `AuditTimeline` fork, which is **not** in the Phase 7 deletion set. To let History become a credible audit replacement (§4) — and strictly better than the old blob — the timeline needs a diff-capable renderer for **any** entity. This is the concrete thing that unblocks Phase 7's audit-UI deletion.
+
+**Deliverables:**
+
+- [x] `TimelineItem.changes?: TimelineChange[]` slot (`src/lib/timeline/types.ts`) + a muted `key: before → after` render block in `EventTimeline` (under the subtitle). Opt-in — every existing timeline consumer omits it and is byte-identical.
+- [x] Pure `diffChanges(before, after)` (`src/lib/timeline/audit-diff.ts`, unit-tested) → structured changes. **Security-load-bearing contract:** requires BOTH snapshots; a one-sided payload → `[]`.
+- [x] `orderAuditToTimeline` selects `before_data` (now optional on `OrderAuditRow`) and populates `changes` via `diffChanges`. The order-details timeline omits `before_data` ⇒ no diff, exactly as before (no regression).
+- [x] Journey readers fetch `before_data`: entity audit `SELECT` (`journey.ts`) + browse audit `jsonb_build_object` (`journey-helpers.ts`).
+- [x] **Permission gate:** `redactAuditDiffs(events, canViewAudit)` (pure, unit-tested) nulls `before_data` on audit rows for non-`admin.view_logs` callers; applied in the route to **both** entity + browse responses. Because `diffChanges` needs both snapshots, nulling `before` guarantees no field value (before *or* after) leaks. Browse already drops the audit spine for non-admins upstream — this is the real gate for entity/Trace mode.
+
+**Acceptance:** `tsc` 0, `eslint` 0, 17/17 unit tests — including the gating contract (`diffChanges` one-sided → `[]`; `redactAuditDiffs` nulls `before_data` for non-admins, immutably; admin passthrough). Live render smoke rides with Phase 2's.
+
 ### Phase 3 — History sidebar filters + saved views (3–5 days)
+
+**Progress (partial):**
+- [x] **Deferred P2 row→trace drill** — opt-in `EventTimeline.onSelectItem` (+ `TimelineSection` forward), with a `closest('button,a')` guard so CopyChips still copy; wired into the browse feed (row → `url.setEntity` by ref kind). Existing timeline consumers pass nothing → unaffected. `tsc`/`eslint` 0.
+- [x] **URL-state setters** (done in P2): `toggleStation`/`toggleType`/`setRange`/`setStaffId`/`toggleSource`/`activeFilterCount`/`applyView` all exist and round-trip via `searchParams`.
+- [x] **Code-defined system presets** — `src/lib/operations/saved-view-presets.ts` (`SYSTEM_SAVED_VIEWS` + `resolveSystemSavedView`, applied via `?view=sys:<id>`), unit-tested (3/3). Chosen over per-org seeded rows (multi-tenant: no seed/migration). Design defaults: presets exclude the admin-only `audit` source; no dynamic date bound (tied to Q3).
+- [x] **Sidebar chip UI** — `src/components/sidebar/operations/HistoryBrowseFilters.tsx`: Views (system presets + user saved-views), Station/Event/Source chips, When (All/Today/7d/30d) date presets, Staff `<select>` (from `getActiveStaff` via `useStaffFilter`), `activeFilterCount` + Save/Clear. Wired into both `HistorySidebar` branches, gated on `isOperationsHistoryBrowseEnabled() && !focused`. Audit source chip hidden for non-`admin.view_logs`. URL-state gained a `view` reader + `applyView(filters, viewParam)` (stamps `?view=`; any hand edit drops the marker). `tsc`/`eslint` 0.
+  - *Follow-ups (minor):* "Save view" uses `window.prompt` (functional placeholder — a proper inline name field is a polish item); date filter is preset-only (no custom range picker yet); still needs the live authed smoke.
 
 **Files:**
 
@@ -469,11 +499,11 @@ Recents scope: `operations:history` (already in `HistorySidebar`).
 
 **Deliverables:**
 
-- [ ] All `/audit-log/*` URLs redirect to History equivalents
-- [ ] Seeded saved views for former audit sections
-- [ ] Banner on legacy audit pages (if any remain briefly): “This moved to Operations → History”
+- [x] All `/audit-log/*` URLs redirect to History equivalents — `resolveAuditLogRedirect` in `src/proxy.ts` (same shape as the existing `resolve*SurfaceRedirect` fns), first in the redirect chain. Maps trace→`dim`/record, receiving→`stations=RECEIVING&sources=sal,inventory`, packing→`stations=PACK`(+tracking), tech→`stations=TECH`(+staffId), sku→`q=`, bare/staff→plain History; stamps `?view=sys:<id>` so the matching preset chip highlights. **Gated behind `NEXT_PUBLIC_AUDIT_LOG_DEPRECATED` (default OFF)** — `/audit-log` stays fully live until flipped (additive-migration constraint). Section→params map inlined per the file's Edge-bundle convention (mirrors `SYSTEM_SAVED_VIEWS`).
+- [x] Seeded saved views for former audit sections — **satisfied by the Phase-3 code-defined `SYSTEM_SAVED_VIEWS`** (no per-org seed/migration; multi-tenant-safe). The redirect points at them.
+- [~] Soft nav update / "moved" banner — **deferred (minor)**: with the flag on, clicking the existing `/audit-log` nav item redirects to History automatically, so the href change is cosmetic. A tooltip + `NEXT_PUBLIC_AUDIT_LOG_DEPRECATED`-gated nav hide is a small follow-up (belongs with the future `AUDIT_LOG_DEPRECATED` nav work in Phase 7).
 
-**Acceptance:** Bookmark `/audit-log/trace?serial=ABC` lands on trace view.
+**Acceptance:** `tsc` 0, `eslint` 0. Redirect is inert when the flag is off (byte-identical routing). **Live/e2e redirect check pending** — verifying `/audit-log/trace?serial=ABC` → `/operations?mode=history&dim=serial&serial=ABC` needs Next's `NextURL` (no proxy-test harness exists yet; the plan's §11 already lists `proxy.test.ts`/e2e).
 
 ---
 
@@ -486,10 +516,10 @@ Recents scope: `operations:history` (already in `HistorySidebar`).
 
 **Deliverables:**
 
-- [ ] `/receiving/history` opens History browse with `stations=RECEIVING` preset
-- [ ] Sidebar receiving History mode links to same preset (nav already at `RECEIVING_HISTORY`)
+- [x] `/receiving/history` opens History browse with the RECEIVING preset — flag-gated server `redirect()` in `src/app/receiving/history/page.tsx` (Option A). Flag OFF ⇒ the legacy `ReceivingSurfacePage`/`SurfaceGate` tree renders unchanged. Target matches the `/audit-log/receiving` redirect (`stations=RECEIVING&sources=sal,inventory&view=sys:receiving-audit`).
+- [x] Sidebar receiving History mode links to same preset — the nav item already points at `/receiving/history`, which now redirects to the preset transitively (no nav change needed). Phones are UA-rewritten to `/m/receiving` in the proxy before reaching the page (unchanged).
 
-**Acceptance:** Receiving supervisor workflow unchanged; one filter engine.
+**Acceptance:** `tsc` 0, `eslint` 0. Flag OFF ⇒ receiving-history workflow byte-identical. Live smoke of the flag-on redirect rides with the browse-feed smoke.
 
 ---
 
@@ -512,19 +542,27 @@ Recents scope: `operations:history` (already in `HistorySidebar`).
 
 ### Phase 7 — Remove audit-log UI (2–3 days, flag-gated)
 
-**Delete or archive:**
+> **✅ EXECUTED (2026-07-06) — the SAFE subset; ⚠️ needs a live smoke before deploy.** What ran: (1) deleted `src/app/audit-log/**` (all 7 route files) — "no `/audit-log` route in app router" ✅; (2) made the proxy `/audit-log/*` → History redirect **unconditional** (removed the `NEXT_PUBLIC_AUDIT_LOG_DEPRECATED` gate — pages are gone, so bookmarks/old links must always land on History, not 404); (3) flipped `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE` **default ON** so History browse is the coherent replacement (one-line, reversible). Verified `tsc` 0 · `eslint` 0 · 23/23 tests · no dangling refs · `/settings/audit` + bin/SKU `AuditTimeline` intact. **Not yet live-smoke-tested — do that before committing/deploying** (`NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE` is now on by default, so a build ships the full feed).
 
-- `src/app/audit-log/**` pages
-- `src/components/audit-log/AuditLog*Client.tsx` (after adapter parity verified)
-- `AuditLogSidebarPanel` — remove from `RouteShell`
-- `audit-log` route key from nav (keep permission for `sources=audit`)
+**Deleted:**
 
-**Keep:**
+- [x] `src/app/audit-log/**` — the 7 route files. Redirect (now unconditional) covers the URLs.
 
-- `src/lib/audit-log/**` server aggregators until all drill paths use journey API
-- `/admin/inventory/events` — admin debug surface (document as internal)
+**Deliberately KEPT (safer than the original plan — see below):**
 
-**Acceptance:** No `/audit-log` route in app router; redirects still work via proxy for external bookmarks.
+- `src/components/audit-log/**` client components (`AuditLog*Client`, `AuditEventCard`, `AuditLogFilterStrip`, `receiving/*`) — now orphaned dead code, but deletion is plan-gated on "adapter parity verified" (not done) AND `AuditLogFilterStrip` is imported by `AuditLogSidebarPanel`. A knip/dead-code wave removes them later.
+- `AuditLogSidebarPanel` — **NOT removed**: it's rendered for `/settings/audit` (routeKey `'audit-log'`), an out-of-scope live surface. The original "remove from RouteShell" line was unsafe.
+- `audit-log` route key in nav + the `admin.view_logs` permission prefix — kept (harmless; `/audit-log` redirects before routing, and `/settings/audit` still needs the key).
+
+**Keep — do NOT delete (⚠️ corrected per the pressure-test):**
+
+- `src/lib/audit-log/**` server aggregators until all drill paths use journey API.
+- `/admin/inventory/events` — admin debug surface (document as internal).
+- **`src/components/audit/AuditTimeline.tsx` + `src/lib/audit-log/entity-history.ts` + `/api/audit/bin/[id]` + `/api/audit/sku/[sku]`** — these are the **bin/SKU** 3-source before/after diff ledger used by the bin/SKU **detail pages** (`bin/[barcode]`, `SkuDetailCards`, `BinDetailFlyout`). They are **unrelated to `/audit-log`** and are the sanctioned diff fork (`.claude/rules/display/reference-timeline.md`). The original Phase-7 keep-list omitted them — someone chasing "remove all audit UI" would delete a live, unrelated surface. **They survive Phase 7.**
+- `src/lib/audit-log/inventory-spine.ts` — shared/load-bearing (imported by `operations/journey.ts`, `orders/[id]/timeline`, `fba/shipments/[id]/trace`, `receiving-lines/incoming/details`).
+- **`src/components/sidebar/AuditLogSidebarPanel.tsx` (⚠️ NEW blocker found during execution).** It is **NOT `/audit-log`-only**: `sidebar-navigation.ts:219` maps **`/settings/audit`** → routeKey `'audit-log'`, and `SidebarContextPanel.tsx:46` renders `AuditLogSidebarPanel` for that key. So the Admin ▸ Logs settings surface (out of removal scope) depends on this panel. **Deleting it blind breaks `/settings/audit`.** The original Phase-7 delete-list ("`AuditLogSidebarPanel` — remove from `RouteShell`") was written assuming it was audit-log-only — it isn't. Decouple `/settings/audit` from the `'audit-log'` routeKey (give it its own panel/key) BEFORE removing the panel, and live-verify the settings tab. Until then the panel + its `'audit-log'` routeKey stay.
+
+**Acceptance:** No `/audit-log` route in app router; redirects still work via proxy for external bookmarks; bin/SKU `AuditTimeline` detail pages still render. **(Deferred until the gate above is satisfied.)**
 
 ---
 
@@ -627,7 +665,7 @@ Signals (`entity_signals`) — **not** a journey browse source; linked via entit
 | Flag | Default | Effect |
 |------|---------|--------|
 | `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH` | `false` | Header drives `?q=` browse + recents |
-| `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE` | `false` | History landing = browse feed vs empty state |
-| (future) `NEXT_PUBLIC_AUDIT_LOG_DEPRECATED` | `false` | Hide audit-log nav; redirects only |
+| `NEXT_PUBLIC_OPERATIONS_HISTORY_BROWSE` | **`true`** (Phase 7 cutover) | History landing = browse feed. Set `=false` to break-glass back to the empty record-lookup. |
+| ~~`NEXT_PUBLIC_AUDIT_LOG_DEPRECATED`~~ | — | **Retired at the Phase 7 cutover.** The `/audit-log/*` → History redirect in `src/proxy.ts` is now **unconditional** (the route files are deleted), so the flag is no longer read. |
 
 Enable order for dogfood: `OPERATIONS_HISTORY_BROWSE` → `UNIFIED_HEADER_SEARCH` → audit deprecation flag.

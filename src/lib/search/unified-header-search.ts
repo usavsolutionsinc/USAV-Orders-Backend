@@ -7,13 +7,18 @@
  * component. `NEXT_PUBLIC_*` is inlined into the client bundle at build time,
  * so this reads correctly in the browser.
  *
- * Default OFF: when off, the header renders byte-identical to today (no recents
- * dropdown, no legacy migration, nothing recorded) so the transition is opt-in.
- * Flip `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH=true` to enable the recents layer.
+ * Default ON as of 2026-07-06 (Phases A–E built out per
+ * docs/global-header-search-best-in-class-plan.md): the unified header search
+ * — recents dropdown, rich preview rows, and the operations browse→drill
+ * surface — is the shipped experience. An explicit kill switch remains for a
+ * fast rollback without a code change: set
+ * `NEXT_PUBLIC_UNIFIED_HEADER_SEARCH=false` (or `0` / `off` / `no`) to restore
+ * the pre-unification header + paste-a-number operations lookup. Any other
+ * value (or unset) keeps it ON.
  */
 export function isUnifiedHeaderSearchEnabled(): boolean {
   const raw = process.env.NEXT_PUBLIC_UNIFIED_HEADER_SEARCH;
-  if (!raw) return false;
+  if (!raw) return true; // default ON — flipped 2026-07-06
   const v = raw.trim().toLowerCase();
-  return v === 'true' || v === '1' || v === 'on' || v === 'yes';
+  return !(v === 'false' || v === '0' || v === 'off' || v === 'no');
 }

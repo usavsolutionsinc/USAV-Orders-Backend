@@ -32,6 +32,8 @@ export interface TimelineSectionProps {
   collapsibleGroups?: boolean;
   /** Serial mode: custom band header, forwarded to {@link EventTimeline}. */
   renderGroupHeader?: (group: TimelineGroupView) => ReactNode;
+  /** Opt-in row activation (Monitor→detail drill), forwarded to {@link EventTimeline}. */
+  onSelectItem?: (item: TimelineItem) => void;
   /** Outer wrapper classes — spacing/divider live with the caller. */
   className?: string;
 }
@@ -66,6 +68,7 @@ export function TimelineSection({
   richTime = false,
   collapsibleGroups = false,
   renderGroupHeader,
+  onSelectItem,
   className = 'mx-8 mt-2 border-t border-border-hairline pt-4 pb-8',
 }: TimelineSectionProps) {
   return (
@@ -88,6 +91,7 @@ export function TimelineSection({
           richTime={richTime}
           collapsibleGroups={collapsibleGroups}
           renderGroupHeader={renderGroupHeader}
+          onSelectItem={onSelectItem}
         />
       )}
     </section>

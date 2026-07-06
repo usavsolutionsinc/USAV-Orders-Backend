@@ -168,6 +168,7 @@ export const PERMISSIONS = [
   { id: 'reports.export',           category: 'ops', label: 'Export reports' },
   { id: 'print.label',              category: 'ops', label: 'Print labels' },
   { id: 'print.silent',             category: 'ops', label: 'Silent print' },
+  { id: 'label.manifest.manage',    category: 'ops', label: 'Create / seal / dissolve label manifests' },
 
   // ─ Integrations ─
   { id: 'integrations.zoho',        category: 'integrations', label: 'Manage Zoho integration' },

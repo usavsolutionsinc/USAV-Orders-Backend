@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, X } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton, TextField } from '@/design-system/primitives';
@@ -89,6 +89,14 @@ export function InlineSerialAdder({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const count = saved.length;
 
+  const refocusScanInput = useCallback(() => {
+    window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled || editing) return;
+      el.focus();
+    }, 0);
+  }, [editing]);
+
   useEffect(() => {
     if (!autoFocus) return;
     // Defer one tick so the parent's layout settles before grabbing focus.
@@ -165,6 +173,7 @@ export function InlineSerialAdder({
         /* parent shows toast; loop continues */
       }
     }
+    refocusScanInput();
   };
 
   return (

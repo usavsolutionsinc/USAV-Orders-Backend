@@ -89,11 +89,14 @@ export function ScanTestingPanel({ query }: { query: string }) {
         receivingIdRef.current = result.row.receiving_id ?? null;
         setLines([result.row]);
         setState('ready');
-      } else if (result.kind === 'multi') {
+      } else if (result.kind === 'multi' || result.kind === 'box') {
+        // A box (H-####) scan on mobile lists its lines just like a multi match
+        // (the desktop box drawer is a workbench-only affordance).
         receivingIdRef.current = result.receivingId || (result.rows[0]?.receiving_id ?? null);
         setLines(result.rows);
         setState('ready');
-      } else if (result.kind === 'not_found') {
+      } else if (result.kind === 'not_found' || result.kind === 'manifest') {
+        // No mobile manifest surface — a KIT- scan resolves to nothing here.
         setLines([]);
         setState('empty');
       } else {

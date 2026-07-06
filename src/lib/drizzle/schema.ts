@@ -2520,6 +2520,86 @@ export const serialUnits = pgTable('serial_units', {
 });
 
 /**
+ * label_print_jobs — immutable per-print ledger (serial↔label pairing plan §5.1,
+ * migration 2026-07-06a). One row per PHYSICAL label print; reprints append a
+ * new row (isReprint=true) pointing at the same unitUid — identity is never
+ * re-minted. `jobType` is a CHECK-constrained discriminator:
+ * 'UNIT' | 'MANIFEST' | 'HANDLING_UNIT' | 'REPRINT'. `manifestId`'s FK to
+ * label_manifests is added in Phase 3 (the table doesn't exist yet). RLS +
+ * org-default installed by enforce_tenant_isolation() in the migration.
+ */
+export const labelPrintJobs = pgTable('label_print_jobs', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  /** Discriminator: 'UNIT' | 'MANIFEST' | 'HANDLING_UNIT' | 'REPRINT'. */
+  jobType: text('job_type').notNull(),
+  serialUnitId: integer('serial_unit_id'),
+  manifestId: bigint('manifest_id', { mode: 'number' }),
+  handlingUnitId: bigint('handling_unit_id', { mode: 'number' }),
+  unitUid: text('unit_uid'),
+  qrPayload: text('qr_payload').notNull(),
+  symbology: text('symbology').notNull().default('datamatrix'),
+  templateId: text('template_id'),
+  printerProfileId: integer('printer_profile_id'),
+  copies: smallint('copies').notNull().default(1),
+  isReprint: boolean('is_reprint').notNull().default(false),
+  reprintOfId: bigint('reprint_of_id', { mode: 'number' }),
+  actorStaffId: integer('actor_staff_id'),
+  clientEventId: text('client_event_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * label_manifests — "one label, many serials" preboxed-kit grouping (serial↔
+ * label pairing plan §5.2, migration 2026-07-06b). status: OPEN|SEALED|DISSOLVED;
+ * manifest_type: PREBOX|KIT|MASTER_CARTON (both CHECK-constrained). manifest_uid
+ * is KIT-{SKU_SHORT}-{YYWW}-{SEQ6}. RLS + org-default installed by
+ * enforce_tenant_isolation().
+ */
+export const labelManifests = pgTable('label_manifests', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  manifestUid: text('manifest_uid').notNull(),
+  /** Discriminator: 'PREBOX' | 'KIT' | 'MASTER_CARTON'. */
+  manifestType: text('manifest_type').notNull(),
+  sku: text('sku'),
+  skuCatalogId: integer('sku_catalog_id'),
+  conditionGrade: text('condition_grade'),
+  /** Lifecycle: 'OPEN' | 'SEALED' | 'DISSOLVED'. */
+  status: text('status').notNull().default('OPEN'),
+  notes: text('notes'),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  sealedAt: timestamp('sealed_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * label_manifest_items — membership rows for a manifest (migration 2026-07-06b).
+ * A unit appears once per manifest (ux natural); at most one LIVE manifest per
+ * unit (ux one_live — dissolve deletes items to free the unit).
+ */
+export const labelManifestItems = pgTable('label_manifest_items', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  manifestId: bigint('manifest_id', { mode: 'number' }).notNull(),
+  serialUnitId: integer('serial_unit_id').notNull(),
+  ordinal: smallint('ordinal').notNull().default(0),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * label_manifest_sequences — per-org+year running counter for the KIT SEQ6
+ * (migration 2026-07-06b). Allocated atomically via INSERT … ON CONFLICT DO
+ * UPDATE next_seq = next_seq + 1 RETURNING.
+ */
+export const labelManifestSequences = pgTable('label_manifest_sequences', {
+  organizationId: uuid('organization_id').notNull(),
+  year: integer('year').notNull(),
+  nextSeq: integer('next_seq').notNull().default(0),
+});
+
+/**
  * serial_unit_provenance — typed origin spine for serial_units (Phase 1 of the
  * schema-wide polymorphic refactor; migration 2026-07-01n). Collapses the
  * denormalized origin_source / origin_receiving_line_id / origin_tsn_id /
@@ -3319,6 +3399,10 @@ export const entitySearchDocs = pgTable('entity_search_docs', {
   status: text('status'),
   conditionGrade: text('condition_grade'),
   sourcePlatform: text('source_platform'),
+  // Order/receiving carrier + tracking facets (migration 2026-07-06a) — surface
+  // a carrier + last-4 tracking chip on the order row without a second fetch.
+  trackingNumber: text('tracking_number'),
+  carrier: text('carrier'),
   happenedAt: timestamp('happened_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

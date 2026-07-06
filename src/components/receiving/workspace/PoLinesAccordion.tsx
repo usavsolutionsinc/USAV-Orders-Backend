@@ -16,6 +16,7 @@ import {
 } from '@/design-system/foundations/motion-framer-hooks';
 import type { InlineActionFeedbackPayload } from './InlineActionFeedbackCard';
 import { toast } from '@/lib/toast';
+import { readOptimisticFlag } from '@/lib/receiving/optimistic-serials';
 import { ConditionGradeChip, SerialChip, SkuScanRefChip, UnitPriceChip, getLast4 } from '@/components/ui/CopyChip';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
@@ -69,7 +70,12 @@ const PO_LINE_BODY_COLLAPSE = {
 
 // `id` is optional to stay structurally compatible with the chip menu's
 // `SavedSerial` (whose id is optional). Callbacks guard with `if (s.id == null)`.
-export type ActiveRowSerial = { id?: number; serial_number: string; condition_grade?: string | null };
+export type ActiveRowSerial = {
+  id?: number;
+  serial_number: string;
+  condition_grade?: string | null;
+  _optimistic?: 'adding' | 'removing';
+};
 
 export interface PoLineSerialActions {
   editingSerialId?: number | null;
@@ -159,6 +165,8 @@ interface Props {
    * single control on the same row as the item count.
    */
   headerRight?: React.ReactNode;
+  /** Hide the embedded "PO items · N" eyebrow — the tab slider owns the label. */
+  suppressHeader?: boolean;
 }
 
 /**
@@ -183,6 +191,7 @@ export function PoLinesAccordion({
   placeholderActiveRow,
   embedded = false,
   headerRight,
+  suppressHeader = false,
 }: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => receivingSiblingsQueryKey(receivingId), [receivingId]);
@@ -281,7 +290,7 @@ export function PoLinesAccordion({
       allRows.flatMap((r) =>
         (r.serials ?? [])
           .map((s) => s.id)
-          .filter((id): id is number => typeof id === 'number'),
+          .filter((id): id is number => typeof id === 'number' && id > 0),
       ),
     [allRows],
   );
@@ -398,16 +407,18 @@ export function PoLinesAccordion({
           : 'min-w-0 overflow-hidden rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60'
       }
     >
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
-          PO items · {rows.length}
-        </h3>
-        {embedded ? (
-          headerRight ?? null
-        ) : !readOnly ? (
-          <CartonAddAction receivingId={receivingId} unitIds={cartonUnitIds} />
-        ) : null}
-      </div>
+      {suppressHeader ? null : (
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
+            PO items · {rows.length}
+          </h3>
+          {embedded ? (
+            headerRight ?? null
+          ) : !readOnly ? (
+            <CartonAddAction receivingId={receivingId} unitIds={cartonUnitIds} />
+          ) : null}
+        </div>
+      )}
       <LayoutGroup id={`po-lines-${receivingId}`}>
       <ul className="flex min-w-0 flex-col gap-1">
         {rows.map((line) => {
@@ -577,6 +588,7 @@ export function PoLinesAccordion({
                             serial_number: sn,
                             condition_grade:
                               (s as { condition_grade?: string | null }).condition_grade ?? null,
+                            _optimistic: readOptimisticFlag(s as { _optimistic?: 'adding' | 'removing' }),
                           };
                           // Offer the Edit/Delete menu on EVERY row, not just
                           // the active one. Editing a chip on a collapsed row
@@ -617,6 +629,7 @@ export function PoLinesAccordion({
                               key={`${sn}-${i}`}
                               value={sn}
                               width="w-fit max-w-full"
+                              pending={readOptimisticFlag(s as { _optimistic?: 'adding' | 'removing' })}
                             />
                           );
                         })}

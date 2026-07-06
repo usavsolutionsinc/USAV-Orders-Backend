@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, type ReactNode } from 'react';
+import { useCallback, useRef, type ReactNode, type RefObject } from 'react';
 import { sectionLabel, SkeletonList } from '@/design-system';
 import { Button } from '@/design-system/primitives';
 import { Loader2 } from '@/components/Icons';
@@ -103,6 +103,12 @@ export interface OrdersQueueTableProps {
    *  `growToContent` (1-up lanes) the ancestor owns the scroll, so windowing
    *  degrades to rendering all rows — same as today, no regression. */
   virtualized?: boolean;
+  /** When embedded in a stacked (1-up) {@link SwimlaneBoard} lane, the board's
+   *  shared scroll region. The virtualizer windows against THIS element instead
+   *  of the (absent) internal body scroll, so a stacked lane stays windowed
+   *  rather than mounting every row (Phase V0 fix). Omitted → the internal body
+   *  `scrollRef` owns the scroll (dense table + grid lanes), unchanged. */
+  scrollParentRef?: RefObject<HTMLElement | null>;
 }
 
 export function OrdersQueueTable({
@@ -140,6 +146,7 @@ export function OrdersQueueTable({
   growToContent = false,
   inheritColumnConfig = false,
   virtualized = false,
+  scrollParentRef,
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
@@ -340,7 +347,10 @@ export function OrdersQueueTable({
           ) : virtualized ? (
             <VirtualQueueSections
               orderGroupsByDate={orderGroupsByDate}
-              scrollParentRef={scrollRef}
+              // Stacked lane: window against the board's shared scroll region.
+              // Otherwise the internal body `scrollRef` owns the scroll.
+              scrollParentRef={scrollParentRef ?? scrollRef}
+              useAncestorScroll={Boolean(scrollParentRef)}
               isMobile={isMobile}
               renderRow={renderRow}
             />

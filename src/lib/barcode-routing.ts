@@ -19,7 +19,8 @@ export type ScanType =
   | 'receiving'        // R-class — carton handle
   | 'receiving-line'   // L-class — single line within a carton
   | 'serial-unit'      // U-class — one physical unit
-  | 'handling-unit';   // H-class — a license-plated box/tray (LPN)
+  | 'handling-unit'    // H-class — a license-plated box/tray (LPN)
+  | 'manifest';        // KIT-class — a preboxed kit master label (label_manifests)
 
 export interface ScanRoute {
   type: ScanType;
@@ -193,6 +194,12 @@ export function routeScan(raw: string): ScanRoute | null {
   // misread as a bin (section 6 keys on a leading letter).
   const huShort = /^H-(\d+)$/i.exec(value);
   if (huShort) return { type: 'handling-unit',   value, redirect: `/m/h/${huShort[1]}` };
+
+  // KIT-class — a preboxed kit master label (label_manifests). The whole scanned
+  // value IS the manifest_uid (KIT-{SKU}-{YYWW}-{SEQ6}); the desktop testing
+  // resolver looks it up and opens the manifest detail. Anchored here, before the
+  // letter→bin fallback, so "KIT-…" isn't misread as a bin. No mobile page yet.
+  if (/^KIT-/i.test(value)) return { type: 'manifest', value };
   // REP-class repair label. Routes to the mobile repair-service detail page
   // `/m/rs/{id}` — the SAME target the walk-in `?openRepair=` deep-link
   // redirects to. (Previously emitted `/repair/{id}`, a path with no [id] route

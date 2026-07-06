@@ -33,7 +33,7 @@
  * lanes/bucket/renderLaneBody triple; no schema change (see BOARD_PREFS).
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import * as Popover from '@radix-ui/react-popover';
@@ -85,6 +85,11 @@ export interface SwimlaneLaneBodyContext<Row, LaneId extends string, SortId exte
    *  internal scroll/cap so the board's single scroll region owns the wheel
    *  (no per-lane scroll trap). The height props are omitted in this mode. */
   growToContent?: boolean;
+  /** Stacked (1-up) layout only: the board's shared scroll region. A virtualized
+   *  lane body windows its rows against THIS element (instead of its own — absent
+   *  — scroll body), so a stacked lane stays windowed instead of mounting every
+   *  row. Undefined in grid (2/3-up) mode, where each lane owns its own scroll. */
+  scrollParentRef?: RefObject<HTMLElement | null>;
 }
 
 export interface SwimlaneBoardProps<Row, LaneId extends string, SortId extends string> {
@@ -250,6 +255,9 @@ interface SwimlaneBubbleProps<Row, LaneId extends string, SortId extends string>
   showDateFilter: boolean;
   /** Optional board-level control rendered beside sort/date (e.g. staff filter). */
   laneHeaderSlot?: ReactNode;
+  /** The board's shared scroll region — handed to the body ctx in stacked mode
+   *  so a virtualized lane windows against it. */
+  boardScrollRef: RefObject<HTMLElement | null>;
   onSortChange: (sort: SortId) => void;
   onRangeChange: (range: DateRange | undefined) => void;
   onToggleExpanded: () => void;
@@ -270,6 +278,7 @@ function SwimlaneBubble<Row, LaneId extends string, SortId extends string>({
   range,
   showDateFilter,
   laneHeaderSlot,
+  boardScrollRef,
   onSortChange,
   onRangeChange,
   onToggleExpanded,
@@ -402,6 +411,9 @@ function SwimlaneBubble<Row, LaneId extends string, SortId extends string>({
           maxBodyHeightClass: stacked ? undefined : localHeight == null ? presetMaxClass : undefined,
           maxBodyHeightPx: stacked ? undefined : (localHeight ?? undefined),
           growToContent: stacked,
+          // Stacked lanes window against the board's shared scroll region; grid
+          // lanes each own their own scroll body, so no ancestor ref is handed down.
+          scrollParentRef: stacked ? boardScrollRef : undefined,
         })}
       </div>
 
@@ -465,6 +477,11 @@ export function SwimlaneBoard<Row, LaneId extends string, SortId extends string>
   renderLaneBody,
 }: SwimlaneBoardProps<Row, LaneId, SortId>) {
   const { prefs, update } = useStaffPreferences();
+
+  // The board's single scroll region (the `flex-1 overflow-y-auto` body below).
+  // In stacked (1-up) mode each lane's virtualized body windows against THIS
+  // element instead of its own (absent) scroll body — see `useAncestorScrollMargin`.
+  const boardScrollRef = useRef<HTMLDivElement>(null);
 
   // Only offer column layouts up to `maxColumns` (e.g. a 7-lane pipeline drops
   // the cramped 3-up option). The toggle hides the rest; clamping below keeps a
@@ -647,7 +664,7 @@ export function SwimlaneBoard<Row, LaneId extends string, SortId extends string>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-4">
+      <div ref={boardScrollRef} data-testid="swimlane-board-scroll" className="flex-1 overflow-y-auto scrollbar-hide p-4">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderLanes}>
           <SortableContext items={effectiveOrder} strategy={isGrid ? rectSortingStrategy : verticalListSortingStrategy}>
             <LayoutGroup id={`swimlane-board-${prefsKey}`}>
@@ -670,6 +687,7 @@ export function SwimlaneBoard<Row, LaneId extends string, SortId extends string>
                     range={laneState.range}
                     showDateFilter={Boolean(getRowDate)}
                     laneHeaderSlot={laneHeaderSlot}
+                    boardScrollRef={boardScrollRef}
                     onSortChange={(s) => mutateLane(id, { sort: s })}
                     onRangeChange={(r) => mutateLane(id, { range: r })}
                     // Snapping to a preset clears any drag-resized height.

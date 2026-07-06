@@ -26,7 +26,11 @@ import { ToolbarButton } from '@/components/ui/ToolbarButton';
 import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
 import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
 import { BoardSelectToggle } from '@/components/board/BoardSelectToggle';
+import { TableOptionsMenu } from '@/components/ui/table-options/TableOptionsMenu';
 import { DateRangePickerPill } from '@/components/ui/DateRangeHeader';
+
+/** Params that define a Shipped saved view (type + status-dot filter, not search). */
+const SHIPPED_VIEW_PARAMS = ['shippedFilter', 'shippedSearchField', 'ostatus'] as const;
 
 /** Icon binding — maps the lib's outbound lane icon key to a concrete glyph. */
 const OUTBOUND_LANE_ICON: Record<OutboundLaneIconKey, React.ComponentType<{ className?: string }>> = {
@@ -246,9 +250,10 @@ export function DashboardShippedTable({
             {onToggleSelectMode ? (
               <BoardSelectToggle active={selectMode} onToggle={onToggleSelectMode} />
             ) : null}
+            <TableOptionsMenu showDensity={false} savedViews={{ storageKey: 'shipped_saved_views', paramKeys: SHIPPED_VIEW_PARAMS }} />
           </div>
         }
-        renderLaneBody={({ rows, laneLabel, maxBodyHeightClass, maxBodyHeightPx, growToContent }) => (
+        renderLaneBody={({ rows, laneLabel, maxBodyHeightClass, maxBodyHeightPx, growToContent, scrollParentRef }) => (
           <ShippedLaneTable
             records={rows}
             loading={query.isLoading}
@@ -261,6 +266,7 @@ export function DashboardShippedTable({
             maxBodyHeightClass={maxBodyHeightClass}
             maxBodyHeightPx={maxBodyHeightPx}
             growToContent={growToContent}
+            scrollParentRef={scrollParentRef}
             emptyMessage={`No ${laneLabel.toLowerCase()} orders`}
           />
         )}
@@ -293,6 +299,7 @@ export function DashboardShippedTable({
             {onToggleSelectMode ? (
               <BoardSelectToggle active={selectMode} onToggle={onToggleSelectMode} />
             ) : null}
+            <TableOptionsMenu showDensity={false} savedViews={{ storageKey: 'shipped_saved_views', paramKeys: SHIPPED_VIEW_PARAMS }} />
           </div>
         </div>
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto no-scrollbar px-2 pb-8">

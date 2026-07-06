@@ -17,35 +17,25 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
 import { dispatchUnboxRailLineUpdated } from '@/components/sidebar/receiving/unbox-rail-events';
+import { receivingSiblingsQueryKey } from '@/lib/queries/receiving-queries';
+import {
+  appendOptimisticSerial,
+  clearSerialRemoving,
+  confirmOptimisticSerial,
+  markSerialRemoving,
+  mintOptimisticSerialId,
+  removeSerialById,
+  rollbackOptimisticSerial,
+  type LineSerial,
+} from '@/lib/receiving/optimistic-serials';
 import type { useSerialLookup } from '../../SerialMatchResult';
-
-/** Append a serial_units row to the line's `serials` snapshot (deduped by id + normalized sn). */
-function mergeSerialIntoLineSerials(
-  prev: ReceivingLineRow['serials'] | undefined,
-  serialUnit: { id?: number; serial_number?: string | null } | null | undefined,
-): NonNullable<ReceivingLineRow['serials']> {
-  if (!serialUnit?.id) return [...(prev ?? [])];
-  const sn = String(serialUnit.serial_number ?? '').trim();
-  if (!sn) return [...(prev ?? [])];
-  const norm = sn.toUpperCase();
-  const list = [...(prev ?? [])];
-  if (
-    list.some(
-      (s) =>
-        s.id === serialUnit.id ||
-        String(s.serial_number || '').trim().toUpperCase() === norm,
-    )
-  ) {
-    return list;
-  }
-  return [...list, { id: serialUnit.id, serial_number: sn }];
-}
 
 interface UseLineSerialsArgs {
   row: ReceivingLineRow;
@@ -66,12 +56,45 @@ export function useLineSerials({
   serialLookup,
   serialInputRef,
 }: UseLineSerialsArgs) {
+  const queryClient = useQueryClient();
   const [serialSubmitting, setSerialSubmitting] = useState(false);
-  // Synchronous in-flight guard. The queue drainer fires submitSerial calls
-  // back-to-back across React render boundaries, so a state-based guard can read
-  // a stale `true` and silently drop a queued scan. A ref is updated/read
-  // synchronously, so the guard is always accurate while still serializing.
   const submittingRef = useRef(false);
+
+  interface SiblingsCache {
+    success: boolean;
+    receiving_lines: ReceivingLineRow[];
+  }
+
+  const readLineSerials = useCallback(
+    (lineId: number): LineSerial[] => {
+      const receivingId = row.receiving_id;
+      if (!receivingId) return [];
+      const cached = queryClient.getQueryData<SiblingsCache>(
+        receivingSiblingsQueryKey(receivingId),
+      );
+      const hit = cached?.receiving_lines?.find((l) => l.id === lineId);
+      return (hit?.serials ?? []) as LineSerial[];
+    },
+    [queryClient, row.receiving_id],
+  );
+
+  const publishLineSerials = useCallback((lineId: number, serials: LineSerial[]) => {
+    const receivingId = row.receiving_id;
+    if (receivingId) {
+      const key = receivingSiblingsQueryKey(receivingId);
+      queryClient.setQueryData<SiblingsCache>(key, (prev) =>
+        prev?.receiving_lines
+          ? {
+              ...prev,
+              receiving_lines: prev.receiving_lines.map((r) =>
+                r.id === lineId ? ({ ...r, serials } as ReceivingLineRow) : r,
+              ),
+            }
+          : prev,
+      );
+    }
+    dispatchLineUpdated({ id: lineId, serials });
+  }, [queryClient, row.receiving_id]);
 
   const refreshLineWithSerials = useCallback(async (lineId: number = row.id) => {
     try {
@@ -98,6 +121,10 @@ export function useLineSerials({
   const submitSerial = useCallback(async (raw?: string, conditionGrade?: string | null) => {
     const serial = (raw ?? serialInput).trim();
     if (!serial || !row.receiving_id || submittingRef.current) return;
+    const tempId = mintOptimisticSerialId();
+    const optimisticSerials = appendOptimisticSerial(readLineSerials(row.id), serial, tempId);
+    publishLineSerials(row.id, optimisticSerials);
+
     submittingRef.current = true;
     setSerialSubmitting(true);
     try {
@@ -136,21 +163,25 @@ export function useLineSerials({
 
       if (!res.ok || !data?.success) {
         toast.error(data?.error || `Scan failed (${res.status})`);
+        publishLineSerials(row.id, rollbackOptimisticSerial(readLineSerials(row.id), tempId));
         return;
       }
 
       // Same serial already on this line — friendly no-op.
       if (data.already_attached) {
         toast.info(`Already added — ${serial}`);
+        publishLineSerials(row.id, rollbackOptimisticSerial(readLineSerials(row.id), tempId));
         return;
       }
 
       if (data.line_state && typeof data.line_state.id === 'number') {
         setSerialInput('');
-        dispatchLineUpdated({
-          id: data.line_state.id,
-          serials: mergeSerialIntoLineSerials(row.serials, data.serial_unit),
-        });
+        const confirmed = confirmOptimisticSerial(
+          readLineSerials(row.id),
+          tempId,
+          data.serial_unit,
+        );
+        publishLineSerials(data.line_state.id, confirmed);
         // Return scan: the server resolved + persisted the originating order and
         // returns the exact row patch (type→RETURN / listing / carton source /
         // order# / status). Apply it optimistically so the workspace flips to
@@ -204,6 +235,7 @@ export function useLineSerials({
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error scanning serial');
+      publishLineSerials(row.id, rollbackOptimisticSerial(readLineSerials(row.id), tempId));
     } finally {
       submittingRef.current = false;
       setSerialSubmitting(false);
@@ -213,11 +245,12 @@ export function useLineSerials({
     row.receiving_id,
     row.id,
     staffId,
-    row.serials,
     receivingType,
     serialLookup,
     setSerialInput,
     serialInputRef,
+    readLineSerials,
+    publishLineSerials,
   ]);
 
   // Keep a live ref to the latest submitSerial so the queue drainer always
@@ -230,7 +263,9 @@ export function useLineSerials({
   // network — the operator scans a whole lot in one fast pass. The drainer
   // processes the queue one at a time because /api/receiving/scan-serial takes
   // a row-level FOR UPDATE lock; concurrent writes used to over-receive (2/1).
-  const serialQueueRef = useRef<Array<{ raw: string; grade: string | null }>>([]);
+  const serialQueueRef = useRef<
+    Array<{ raw: string; grade: string | null; resolve: () => void }>
+  >([]);
   const drainingRef = useRef(false);
   const drainSerialQueue = useCallback(async () => {
     if (drainingRef.current) return;
@@ -240,17 +275,23 @@ export function useLineSerials({
         const next = serialQueueRef.current.shift();
         if (!next) break;
         await submitSerialRef.current(next.raw, next.grade);
+        next.resolve();
       }
     } finally {
       drainingRef.current = false;
+      if (serialQueueRef.current.length > 0) {
+        void drainSerialQueue();
+      }
     }
   }, []);
   const enqueueSerial = useCallback(
-    (raw?: string, grade?: string | null) => {
+    (raw?: string, grade?: string | null): Promise<void> => {
       const v = (raw ?? '').trim();
-      if (!v) return;
-      serialQueueRef.current.push({ raw: v, grade: grade ?? null });
-      void drainSerialQueue();
+      if (!v) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        serialQueueRef.current.push({ raw: v, grade: grade ?? null, resolve });
+        void drainSerialQueue();
+      });
     },
     [drainSerialQueue],
   );
@@ -260,27 +301,27 @@ export function useLineSerials({
   const deleteSerialUnit = useCallback(
     async (serialUnitId: number, lineId: number = row.id) => {
       if (serialUnitId == null) return;
+      const current = readLineSerials(lineId);
+      publishLineSerials(lineId, markSerialRemoving(current, serialUnitId));
+
       const res = await fetch('/api/receiving/scan-serial', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serial_unit_id: serialUnitId,
-          // Route to the chip's own line — the endpoint only removes a unit
-          // that still points at this line, so a sibling's serial would 404
-          // if we sent the active row's id.
           receiving_line_id: lineId,
         }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
         toast.error(data?.error || 'Could not remove serial');
+        publishLineSerials(lineId, clearSerialRemoving(readLineSerials(lineId), serialUnitId));
         return;
       }
       toast.success('Serial removed');
-      // Removing a serial is metadata-only — quantity_received is unchanged.
-      await refreshLineWithSerials(lineId);
+      publishLineSerials(lineId, removeSerialById(readLineSerials(lineId), serialUnitId));
     },
-    [row.id, refreshLineWithSerials],
+    [row.id, readLineSerials, publishLineSerials],
   );
 
   // Replace a serial in place (typo fix): delete then re-scan, preserving the

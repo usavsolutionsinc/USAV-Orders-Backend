@@ -29,6 +29,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import Link from 'next/link';
 import { Search, ChevronRight } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { formatRelativeTime } from '@/lib/search/search-recents';
 import type { AiSearchHit } from '@/lib/search/ai-search-client';
 import { cn } from '@/utils/_cn';
@@ -73,6 +74,8 @@ function OrderRow({ hit, active, optionId, onNavigate }: SearchResultRowProps) {
   const status = orderStatusTone(facets.status);
   const condition = facets.condition_grade;
   const platform = facets.source_platform;
+  const tracking = facets.tracking_number;
+  const carrier = facets.carrier;
   const when = facets.happened_at ? formatRelativeTime(facets.happened_at) : null;
 
   return (
@@ -100,6 +103,16 @@ function OrderRow({ hit, active, optionId, onNavigate }: SearchResultRowProps) {
       {facets.status && <Chip label={facets.status} tone={status.tone} />}
       {condition && <Chip label={condition} tone="amber" />}
       {platform && <Chip label={platform} tone="gray" />}
+      {tracking && (
+        <span className="hidden shrink-0 items-center gap-1 md:inline-flex">
+          {carrier && (
+            <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
+              {carrier}
+            </span>
+          )}
+          <TrackingChip value={tracking} display={getLast4(tracking)} dense />
+        </span>
+      )}
       {when && (
         <span className="shrink-0 text-eyebrow font-semibold uppercase tracking-widest tabular-nums text-text-faint">
           {when}

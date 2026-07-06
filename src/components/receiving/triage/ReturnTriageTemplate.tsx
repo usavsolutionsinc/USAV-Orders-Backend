@@ -10,7 +10,10 @@
  */
 
 import { motion, type Variants } from 'framer-motion';
+import { WorkspaceCard } from '@/design-system/components';
+import { shouldUseUnmatchedItemsSurface } from '@/lib/receiving/intake-items-routing';
 import { LineCartonContextSection } from '../workspace/line-edit/LineCartonContextSection';
+import { LinePoItemsSection } from '../workspace/line-edit/LinePoItemsSection';
 import { POUnboxingSection } from '../workspace/line-edit/POUnboxingSection';
 import { UnfoundTodoStrip } from './UnfoundTodoStrip';
 import { StagingSection } from './StagingSection';
@@ -37,24 +40,43 @@ export function ReturnTriageTemplate({
   onItemDescFeedback: (feedback: InlineActionFeedbackPayload | null) => void;
   onItemDescSaved: (lineId: number, zohoNotes: string | null) => void;
 }) {
+  const linkedPo = !c.isUnfound && !shouldUseUnmatchedItemsSurface(row);
+
   return (
     <>
       <motion.div id={TRIAGE_SECTION_ID.classify} variants={revealItem}>
         <LineCartonContextSection row={row} staffId={staffId} c={c} />
       </motion.div>
 
+      {linkedPo ? (
+        <motion.div variants={revealItem}>
+          <WorkspaceCard variant="glass" overflow="visible">
+            <LinePoItemsSection
+              row={row}
+              staffId={staffId}
+              serialScan={false}
+              openInUnbox
+              editLines={false}
+              c={c}
+              embedded
+              onItemDescFeedback={onItemDescFeedback}
+              onItemDescSaved={onItemDescSaved}
+            />
+          </WorkspaceCard>
+        </motion.div>
+      ) : null}
+
       <motion.div id={TRIAGE_SECTION_ID.stage} variants={revealItem}>
         <StagingSection staging={staging} />
       </motion.div>
 
-      {/* Zendesk-ticket + delivered-email corroboration — the same pairing hub,
-          re-scoped for a return's claim-matching job (not a PO match). */}
       <motion.div id={TRIAGE_SECTION_ID.pair} variants={revealItem}>
         <POUnboxingSection
           row={row}
           staffId={staffId}
           poItems={false}
           matching
+          includeLinkedPoItems={false}
           openInUnbox
           editLines={false}
           serialScan={false}

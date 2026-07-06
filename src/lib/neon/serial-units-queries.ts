@@ -163,6 +163,57 @@ export async function findByNormalizedSerial(
   return result.rows[0] ?? null;
 }
 
+/** One resolved (serial → canonical uid) row from the batch reprint resolver. */
+export interface SerialUidRow {
+  id: number;
+  normalized_serial: string;
+  serial_number: string;
+  unit_uid: string | null;
+  sku: string | null;
+}
+
+/**
+ * Batch reprint resolver: given many manufacturer serials, return each matched
+ * unit's canonical `unit_uid` in ONE indexed lookup (`normalized_serial = ANY`).
+ * Powers bulk / history label print so a reprint encodes the SAME minted uid the
+ * unit was born with (the reprint guarantee) instead of a bare serial.
+ *
+ * Read-only — never mints. A serial with no row, or a row not yet stamped with a
+ * uid, is simply absent / has `unit_uid: null`, letting the caller keep its bare
+ * -serial fallback. Org-scoped: `normalized_serial` is a string key that collides
+ * across tenants, so the explicit org predicate + GUC-wrapped connection keep a
+ * serial from resolving another tenant's unit. Inputs are de-duped after
+ * normalization; the result is one row per DISTINCT matched normalized serial.
+ */
+export async function findUnitUidsBySerials(
+  serials: string[],
+  orgId?: OrgId,
+): Promise<SerialUidRow[]> {
+  const normalized = Array.from(
+    new Set((serials || []).map((s) => normalizeSerial(s)).filter(Boolean)),
+  );
+  if (normalized.length === 0) return [];
+
+  if (orgId) {
+    const scoped = await tenantQuery<SerialUidRow>(
+      orgId,
+      `SELECT id, normalized_serial, serial_number, unit_uid, sku
+         FROM serial_units
+        WHERE normalized_serial = ANY($1::text[]) AND organization_id = $2`,
+      [normalized, orgId],
+    );
+    return scoped.rows;
+  }
+
+  const result = await pool.query<SerialUidRow>(
+    `SELECT id, normalized_serial, serial_number, unit_uid, sku
+       FROM serial_units
+      WHERE normalized_serial = ANY($1::text[])`,
+    [normalized],
+  );
+  return result.rows;
+}
+
 /**
  * Resolve a unit by its minted unit_uid ({SKU_SHORT}-{YYWW}-{SEQ6}). This is
  * the indexed lookup behind scanning a printed label's QR and behind reprint

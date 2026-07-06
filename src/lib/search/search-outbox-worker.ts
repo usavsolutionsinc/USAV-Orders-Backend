@@ -84,7 +84,8 @@ const LOADER_SQL: Record<SearchEntityType, string> = {
     SELECT o.id, o.order_id, o.product_title, o.sku, o.account_source,
            o.status, o.condition, o.notes, o.order_date, o.created_at,
            COALESCE(STRING_AGG(DISTINCT tsn.serial_number, ' '), '') AS serials,
-           MAX(stn.tracking_number_raw)                              AS tracking_number
+           MAX(stn.tracking_number_raw)                              AS tracking_number,
+           MAX(NULLIF(stn.carrier, 'UNKNOWN'))                       AS carrier
     FROM orders o
     LEFT JOIN tech_serial_numbers tsn       ON tsn.shipment_id = o.shipment_id
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
@@ -101,6 +102,11 @@ const LOADER_SQL: Record<SearchEntityType, string> = {
     LEFT JOIN sku_catalog sc ON sc.id = su.sku_catalog_id
     LEFT JOIN items i        ON i.zoho_item_id = su.zoho_item_id
     WHERE su.organization_id = $1 AND su.id = ANY($2::bigint[])`,
+  // `receiving` is a security_invoker compat view (receiving-spine rename), so
+  // Postgres can't prove PK functional dependency — a GROUP BY r.id would
+  // reject the bare r.* columns ("column r.carrier must appear in GROUP BY").
+  // Aggregate the only 1:many join (receiving_lines) in a LATERAL so the outer
+  // SELECT needs no GROUP BY at all; stn is 1:1 on shipment_id.
   RECEIVING: `
     SELECT r.id,
            stn.tracking_number_raw                                AS tracking_number,
@@ -111,13 +117,15 @@ const LOADER_SQL: Record<SearchEntityType, string> = {
            r.condition_grade::text AS condition_grade,
            r.qa_status::text       AS qa_status,
            r.received_at, r.created_at,
-           COALESCE(STRING_AGG(DISTINCT rl.item_name, ' '), '') AS line_item_names,
-           COALESCE(STRING_AGG(DISTINCT rl.sku, ' '), '')       AS line_skus
+           lines.line_item_names, lines.line_skus
     FROM receiving r
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-    LEFT JOIN receiving_lines rl            ON rl.receiving_id = r.id
-    WHERE r.organization_id = $1 AND r.id = ANY($2::bigint[])
-    GROUP BY r.id, stn.tracking_number_raw, stn.carrier`,
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(STRING_AGG(DISTINCT rl.item_name, ' '), '') AS line_item_names,
+             COALESCE(STRING_AGG(DISTINCT rl.sku, ' '), '')       AS line_skus
+      FROM receiving_lines rl WHERE rl.receiving_id = r.id
+    ) lines ON TRUE
+    WHERE r.organization_id = $1 AND r.id = ANY($2::bigint[])`,
   SKU: `
     SELECT id, sku, product_title, category, upc, ean, gtin, notes,
            lifecycle_status, is_active, created_at, updated_at
@@ -217,21 +225,23 @@ const defaultDeps: SearchOutboxDeps = {
       `INSERT INTO entity_search_docs
          (organization_id, entity_type, entity_id, title, subtitle,
           search_text, embedding, embedded_at, embedded_model, status,
-          condition_grade, source_platform, happened_at, updated_at)
+          condition_grade, source_platform, tracking_number, carrier,
+          happened_at, updated_at)
        SELECT $1,
               t.entity_type, t.entity_id, t.title, t.subtitle, t.search_text,
               t.embedding_text::vector(${EMBEDDING_DIMS}),
               CASE WHEN t.embedding_text IS NULL THEN NULL ELSE now() END,
               t.embedded_model,
-              t.status, t.condition_grade, t.source_platform, t.happened_at,
+              t.status, t.condition_grade, t.source_platform,
+              t.tracking_number, t.carrier, t.happened_at,
               now()
        FROM UNNEST(
          $2::text[], $3::bigint[], $4::text[], $5::text[], $6::text[],
          $7::text[], $8::text[], $9::text[], $10::text[], $11::timestamptz[],
-         $12::text[]
+         $12::text[], $13::text[], $14::text[]
        ) AS t(entity_type, entity_id, title, subtitle, search_text,
               embedding_text, status, condition_grade, source_platform, happened_at,
-              embedded_model)
+              embedded_model, tracking_number, carrier)
        ON CONFLICT (organization_id, entity_type, entity_id)
        DO UPDATE SET
          title           = EXCLUDED.title,
@@ -246,6 +256,8 @@ const defaultDeps: SearchOutboxDeps = {
          status          = EXCLUDED.status,
          condition_grade = EXCLUDED.condition_grade,
          source_platform = EXCLUDED.source_platform,
+         tracking_number = EXCLUDED.tracking_number,
+         carrier         = EXCLUDED.carrier,
          happened_at     = EXCLUDED.happened_at,
          updated_at      = now()`,
       [
@@ -261,6 +273,8 @@ const defaultDeps: SearchOutboxDeps = {
         docs.map((d) => d.facets.sourcePlatform),
         docs.map((d) => d.facets.happenedAt),
         docs.map((d) => d.embeddedModel),
+        docs.map((d) => d.facets.trackingNumber),
+        docs.map((d) => d.facets.carrier),
       ],
     );
   },

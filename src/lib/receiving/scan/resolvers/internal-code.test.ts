@@ -69,6 +69,29 @@ test('multi outcome → prefers the single OPEN line', async () => {
   assert.equal(res?.pick?.id, 2);
 });
 
+test('box outcome (H-#### license plate) degrades to multi-style row handling on receiving', async () => {
+  // The testing bench opens a box drawer for a `box` kind, but receiving has no
+  // drawer — it must treat `box` exactly like `multi`, opening the picked line
+  // from the box's rows (never falling through to null).
+  const full = row({ id: 1, receiving_id: 9, quantity_expected: 2, quantity_received: 2 });
+  const open = row({ id: 2, receiving_id: 9, quantity_expected: 2, quantity_received: 1 });
+  const { resolveCode } = fakeResolve({
+    kind: 'box',
+    handlingUnitId: 17,
+    rows: [full, open],
+    receivingId: 9,
+    via: 'lpn',
+  });
+  const res = await resolveInternalCode(
+    { value: 'H-17', mode: 'auto' },
+    { looksLikeCode: alwaysCode, resolveCode },
+  );
+  assert.equal(res?.kind, 'internal-code');
+  assert.equal(res?.rows.length, 2);
+  assert.equal(res?.pick?.id, 2); // the single OPEN line
+  assert.equal(res?.via, 'lpn');
+});
+
 test('not_found / null code → null (fall through)', async () => {
   const nf = fakeResolve({ kind: 'not_found', query: 'X' });
   assert.equal(

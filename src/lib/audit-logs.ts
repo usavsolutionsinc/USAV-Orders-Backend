@@ -81,6 +81,7 @@ export const AUDIT_ENTITY = {
   RECEIVING_LINE: 'receiving_line',
   SERIAL_UNIT: 'serial_unit',
   HANDLING_UNIT: 'handling_unit',
+  LABEL_MANIFEST: 'label_manifest',
   TECH_SERIAL: 'tech_serial_number',
   SKU: 'sku',
   SKU_RELATIONSHIP: 'sku_relationship',
@@ -196,6 +197,12 @@ export const AUDIT_ACTION = {
   HANDLING_UNIT_CREATE:   'handling_unit.create',
   HANDLING_UNIT_ASSIGN:   'handling_unit.assign',
   HANDLING_UNIT_UNASSIGN: 'handling_unit.unassign',
+  // Label manifests (preboxed kit — one label, many serials)
+  MANIFEST_CREATE:        'label_manifest.create',
+  MANIFEST_ADD_ITEM:      'label_manifest.add_item',
+  MANIFEST_REMOVE_ITEM:   'label_manifest.remove_item',
+  MANIFEST_SEAL:          'label_manifest.seal',
+  MANIFEST_DISSOLVE:      'label_manifest.dissolve',
   // Tech / QC verdicts (per-unit testing outcomes)
   TECH_QC_PASS:   'tech.qc.pass',
   TECH_QC_RETEST: 'tech.qc.retest',

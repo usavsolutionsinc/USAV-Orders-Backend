@@ -13,6 +13,8 @@
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Download, FileText, History, Loader2, X } from '@/components/Icons';
 import {
@@ -41,7 +43,11 @@ import { journeyKeyOf, type JourneyDimension } from '@/lib/timeline/journey';
 import { downloadJourneyCsv, printJourney } from '@/lib/serial/serial-journey';
 import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
 import { useOperationsJourney } from '@/hooks/useOperationsJourney';
+import { useOperationsJourneyBrowse } from '@/hooks/useOperationsJourneyBrowse';
 import { isUnifiedHeaderSearchEnabled } from '@/lib/search/unified-header-search';
+import { isOperationsHistoryBrowseEnabled } from '@/lib/operations/operations-history-flags';
+import { operationsSignalsBrowseHref } from '@/lib/operations/history-links';
+import type { SurfaceEntityType } from '@/lib/surfaces/registry';
 
 const DIM_LABEL: Record<JourneyDimension, string> = {
   order: 'Order',
@@ -68,6 +74,41 @@ function RecordChip({ dim, value }: { dim: JourneyDimension; value: string }) {
   return <OrderIdChip value={v} display={getLast4(v)} dense />;
 }
 
+/**
+ * "N signals →" strip in a Trace (plan §7.1). Fetches this record's related
+ * `entity_signals` count and deep-links into Signals Browse scoped to the same
+ * entity (via the shared `operationsSignalsBrowseHref` SoT). Degrades to nothing
+ * on empty/error — a sub-resource must never break the trace.
+ */
+function RelatedSignalsStrip({
+  entityType,
+  entityId,
+}: {
+  entityType: SurfaceEntityType;
+  entityId: number;
+}) {
+  const { data: count = 0 } = useQuery({
+    queryKey: ['related-signals', entityType, entityId],
+    staleTime: 30_000,
+    queryFn: async () => {
+      const sp = new URLSearchParams({ entityType, entityId: String(entityId), limit: '20' });
+      const res = await fetch(`/api/entity-signals?${sp.toString()}`, { cache: 'no-store' });
+      if (!res.ok) return 0;
+      const body = (await res.json().catch(() => null)) as { signals?: unknown[] } | null;
+      return Array.isArray(body?.signals) ? body!.signals.length : 0;
+    },
+  });
+  if (!count) return null;
+  return (
+    <Link
+      href={operationsSignalsBrowseHref({ entityType, entityId })}
+      className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest text-amber-700 ring-1 ring-inset ring-amber-200 transition hover:bg-amber-100"
+    >
+      {count === 20 ? '20+' : count} signal{count === 1 ? '' : 's'} →
+    </Link>
+  );
+}
+
 export function OperationsHistoryView() {
   const url = useOperationsTimelineUrlState();
   const journey = useOperationsJourney(url);
@@ -84,17 +125,26 @@ export function OperationsHistoryView() {
   // record's timeline on click. OFF ⇒ today's paste-a-number entity lookup.
   const unifiedOn = isUnifiedHeaderSearchEnabled();
   const browsing = unifiedOn && !focused && !!url.q;
+  // Operations History browse feed (flag): when on, the non-focused/non-results
+  // landing is the org-wide filterable event feed instead of the empty box.
+  const browseEnabled = isOperationsHistoryBrowseEnabled();
   const panePresence = useMotionPresence(framerPresence.workbenchPane);
   const paneTransition = useMotionTransition(
     framerTransition.workbenchPaneMount,
   );
-  // Crossfade the right pane on region change (results ⇄ a record's timeline);
-  // stays 'results' across query edits so the surface isn't remounted per key.
+  // Region precedence (plan §2.2): Trace (focused) → Search hits (?q= + unified)
+  // → Browse (flag on) → empty. Crossfade the right pane on region change;
+  // stays 'results'/'browse' across query edits so the surface isn't remounted.
   const region = focused
     ? `timeline:${url.entityValue}`
     : browsing
       ? 'results'
-      : 'empty';
+      : browseEnabled
+        ? 'browse'
+        : 'empty';
+
+  const browse = useOperationsJourneyBrowse(url, region === 'browse');
+  const browseCount = browse.eventCount;
 
   // Per-serial provenance (SKU · grade · status · PO) keyed by serial, feeding the
   // By-unit band header card. Absent on older payloads ⇒ headers degrade to the
@@ -108,6 +158,20 @@ export function OperationsHistoryView() {
     return m;
   }, [entity]);
 
+  // Which entity to scope the related-signals strip to (History→Signals cross-link).
+  // A serial trace → its serial unit; otherwise the record's order.
+  const relSignal = useMemo((): { entityType: SurfaceEntityType; entityId: number } | null => {
+    if (!focused || !entity) return null;
+    if (url.dim === 'serial' && entity.serialUnitIds[0]) {
+      return { entityType: 'SERIAL_UNIT', entityId: entity.serialUnitIds[0] };
+    }
+    if (entity.orderId) return { entityType: 'ORDER', entityId: entity.orderId };
+    if (entity.serialUnitIds[0]) {
+      return { entityType: 'SERIAL_UNIT', entityId: entity.serialUnitIds[0] };
+    }
+    return null;
+  }, [focused, entity, url.dim]);
+
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-surface-canvas text-text-default">
       <main className="flex-1 w-full max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-5">
@@ -118,7 +182,11 @@ export function OperationsHistoryView() {
             </span>
             <div>
               <h1 className="text-2xl font-black tracking-tight text-text-default leading-none">
-                {focused ? `${dimLabel} record` : 'Operations record'}
+                {focused
+                  ? `${dimLabel} record`
+                  : region === 'browse'
+                    ? 'Operations history'
+                    : 'Operations record'}
               </h1>
               <div className="mt-1 flex items-center gap-1.5">
                 {focused ? (
@@ -137,15 +205,23 @@ export function OperationsHistoryView() {
                   </>
                 ) : (
                   <p className="text-eyebrow font-bold uppercase tracking-widest text-text-soft">
-                    {unifiedOn
-                      ? 'Search shipped orders, serials, tracking'
-                      : 'Paste a record number to begin'}
+                    {region === 'browse'
+                      ? 'Recent operations — filter in the sidebar or open a record'
+                      : unifiedOn
+                        ? 'Search shipped orders, serials, tracking'
+                        : 'Paste a record number to begin'}
                   </p>
                 )}
               </div>
             </div>
           </div>
         </header>
+
+        {relSignal ? (
+          <div>
+            <RelatedSignalsStrip entityType={relSignal.entityType} entityId={relSignal.entityId} />
+          </div>
+        ) : null}
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -157,6 +233,74 @@ export function OperationsHistoryView() {
           >
             {browsing ? (
               <OperationsResultsView url={url} />
+            ) : region === 'browse' ? (
+              <section className="rounded-2xl border border-border-soft bg-surface-card p-5 sm:p-6">
+                {browse.isError ? (
+                  <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-10 text-center">
+                    <p className="text-caption font-semibold text-rose-600">
+                      Could not load the operations feed.
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Loader2 />}
+                      onClick={() => browse.refetch()}
+                      className="mt-2 border border-rose-200 text-rose-600 hover:bg-rose-50"
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <TimelineSection
+                      title="Recent activity"
+                      loading={browse.isLoading}
+                      items={browse.items}
+                      richTime
+                      onSelectItem={(item) => {
+                        // Monitor→Trace drill: open the row's identifier record.
+                        const ref = item.ref;
+                        if (!ref) return;
+                        if (ref.kind === 'serial') url.setEntity(ref.value, 'serial');
+                        else if (ref.kind === 'tracking') url.setEntity(ref.value, 'tracking');
+                        else if (ref.kind === 'id') url.setEntity(ref.value, 'order');
+                        // sku / fnsku have no Trace dimension → not drillable.
+                      }}
+                      emptyMessage={
+                        url.activeFilterCount > 0
+                          ? 'No operations match these filters.'
+                          : 'No recent operations recorded yet.'
+                      }
+                      className=""
+                      headerRight={
+                        !browse.isLoading && browseCount > 0 ? (
+                          <span className="tabular-nums">
+                            {browseCount.toLocaleString()} event
+                            {browseCount === 1 ? '' : 's'}
+                          </span>
+                        ) : undefined
+                      }
+                    />
+                    {browse.hasNextPage ? (
+                      <div className="mt-4 flex justify-center">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={
+                            browse.isFetchingNextPage ? (
+                              <Loader2 className="animate-spin" />
+                            ) : undefined
+                          }
+                          onClick={() => browse.fetchNextPage()}
+                          disabled={browse.isFetchingNextPage}
+                        >
+                          {browse.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </section>
             ) : (
               <section className="rounded-2xl border border-border-soft bg-surface-card p-5 sm:p-6">
                 {!focused ? (

@@ -98,6 +98,13 @@ export interface ReceivingLineTransitionInput {
   exceptionCode?: string | null;
   /** When true, a disallowed edge returns 409 instead of log-and-proceed. */
   strict?: boolean;
+  /**
+   * When true, do the guarded workflow_status UPDATE (+ coarse/timestamps) but do
+   * NOT emit an inventory_event — the caller owns event emission (e.g. a route that
+   * emits ONE combined line+serial event). Keeps the single-event timeline intact
+   * when folding a legacy raw-UPDATE writer onto this chokepoint. `eventId` is -1.
+   */
+  skipEvent?: boolean;
 }
 
 export type ReceivingLineTransitionResult =
@@ -232,29 +239,33 @@ async function runReceivingLineTransition(
         : [input.receivingLineId, to, coarse, input.receivedBy ?? null, input.exceptionCode ?? null],
     );
 
-    const event = await deps.recordEvent(
-      {
-        event_type: input.eventType ?? 'NOTE',
-        actor_staff_id: input.actorStaffId ?? null,
-        station: input.station ?? 'RECEIVING',
-        receiving_id: row.receiving_id,
-        receiving_line_id: input.receivingLineId,
-        serial_unit_id: null, // line lifecycle is pre-serialization
-        sku: row.sku,
-        prev_status: from,
-        next_status: to,
-        client_event_id: input.clientEventId ?? null,
-        notes: input.notes ?? null,
-        payload: {
-          action: 'receiving_line_transition',
-          coarse,
-          ...(input.exceptionCode ? { exception_code: input.exceptionCode } : {}),
-          ...(input.payload ?? {}),
-        },
-      },
-      client,
-      orgId ?? USAV_ORG_ID,
-    );
+    // skipEvent: the caller emits its own (single, combined) inventory_event —
+    // don't double-write the line-lifecycle event here.
+    const event = input.skipEvent
+      ? { id: -1 }
+      : await deps.recordEvent(
+          {
+            event_type: input.eventType ?? 'NOTE',
+            actor_staff_id: input.actorStaffId ?? null,
+            station: input.station ?? 'RECEIVING',
+            receiving_id: row.receiving_id,
+            receiving_line_id: input.receivingLineId,
+            serial_unit_id: null, // line lifecycle is pre-serialization
+            sku: row.sku,
+            prev_status: from,
+            next_status: to,
+            client_event_id: input.clientEventId ?? null,
+            notes: input.notes ?? null,
+            payload: {
+              action: 'receiving_line_transition',
+              coarse,
+              ...(input.exceptionCode ? { exception_code: input.exceptionCode } : {}),
+              ...(input.payload ?? {}),
+            },
+          },
+          client,
+          orgId ?? USAV_ORG_ID,
+        );
 
     if (useOwnTx) await client.query('COMMIT');
     return { ok: true, eventId: event.id, from, to, changed, coarse, receivingId: row.receiving_id };

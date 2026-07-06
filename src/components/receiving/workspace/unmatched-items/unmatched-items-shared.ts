@@ -80,6 +80,8 @@ export interface UnmatchedItemsSectionProps {
    * its single control on the same row as the item count.
    */
   headerRight?: React.ReactNode;
+  /** Hide the embedded "PO items · N" eyebrow — the tab slider owns the label. */
+  suppressHeader?: boolean;
   /**
    * Fired after an Ecwid/repair pairing flips the carton off the Unfound queue.
    * The host (which owns the selected `row`) uses it to update the open

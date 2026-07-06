@@ -20,6 +20,8 @@ export interface EntitySignalFilter {
   sinceDays?: number | null;
   signalKind?: string | null;
   entityType?: string | null;
+  /** Narrow to one entity's signals (pairs with `entityType`; the History→Signals strip). */
+  entityId?: number | null;
   /** Full-text over notes + reason_code (websearch syntax). */
   q?: string | null;
 }
@@ -53,6 +55,10 @@ export async function readEntitySignals(
     params.push(filter.entityType);
     where.push(`entity_type = $${params.length}`);
   }
+  if (filter.entityId != null && Number.isFinite(filter.entityId) && filter.entityId > 0) {
+    params.push(Math.round(filter.entityId));
+    where.push(`entity_id = $${params.length}`);
+  }
   const q = (filter.q ?? '').trim();
   if (q) {
     params.push(q);
@@ -83,6 +89,14 @@ export interface EntitySignalDetail extends EntitySignalTimelineRow {
   workflow_definition_id: number | null;
   node_id: string | null;
   created_at: string | null;
+  /**
+   * The History-trace coordinates for this signal's entity, resolved for the
+   * entity types that map to a journey dimension (SERIAL_UNIT → the unit's
+   * serial number, ORDER → the order number). Null for other entity types (no
+   * trace target). Feeds the Signals→History "Full event trace" cross-link.
+   */
+  entity_dim: 'serial' | 'order' | null;
+  entity_ref: string | null;
 }
 
 /** One signal by id, org-scoped. Returns null when absent (or not this org's). */
@@ -94,11 +108,25 @@ export async function getEntitySignal(
   if (!Number.isFinite(id) || id <= 0) return null;
   const r = await deps.query<EntitySignalDetail & { entity_id: string | number }>(
     orgId,
-    `SELECT id, occurred_at::text AS occurred_at, signal_kind, entity_type, entity_id,
-            reason_code, notes, severity, meta, source_ref, workflow_definition_id, node_id,
-            created_at::text AS created_at
-       FROM entity_signals
-      WHERE organization_id = $1 AND id = $2
+    `SELECT es.id, es.occurred_at::text AS occurred_at, es.signal_kind, es.entity_type, es.entity_id,
+            es.reason_code, es.notes, es.severity, es.meta, es.source_ref,
+            es.workflow_definition_id, es.node_id, es.created_at::text AS created_at,
+            CASE es.entity_type
+              WHEN 'SERIAL_UNIT' THEN 'serial'
+              WHEN 'ORDER' THEN 'order'
+            END AS entity_dim,
+            CASE es.entity_type
+              WHEN 'SERIAL_UNIT' THEN su.serial_number
+              WHEN 'ORDER' THEN o.order_id
+            END AS entity_ref
+       FROM entity_signals es
+       LEFT JOIN serial_units su
+         ON su.id = es.entity_id AND su.organization_id = es.organization_id
+        AND es.entity_type = 'SERIAL_UNIT'
+       LEFT JOIN orders o
+         ON o.id = es.entity_id AND o.organization_id = es.organization_id
+        AND es.entity_type = 'ORDER'
+      WHERE es.organization_id = $1 AND es.id = $2
       LIMIT 1`,
     [orgId, id],
   );

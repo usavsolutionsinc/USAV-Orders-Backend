@@ -19,13 +19,9 @@ import { SidebarShell } from '@/components/layout/SidebarShell';
 import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
 import { StatusLegend, type StatusLegendItem } from '@/components/ui/StatusLegend';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
 import { FilterDropdownSelect } from '@/design-system/components/FilterDropdownSelect';
 import { useStaffFilter } from '@/hooks/useStaffFilter';
 import { FULFILLMENT_STATE_META, countFulfillmentStates, deriveFulfillmentState, ZERO_FULFILLMENT_COUNTS, type FulfillmentState } from '@/lib/unshipped-state';
-
-/** Params that define an Unshipped saved view (filters only — not search text). */
-const UNSHIPPED_VIEW_PARAMS = ['stage', 'ustatus', 'staff'] as const;
 
 /** Fulfillment-queue status legend — PENDING / TESTED / BLOCKED only. */
 const FULFILLMENT_LEGEND_ITEMS: StatusLegendItem<FulfillmentState>[] = [
@@ -393,10 +389,9 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
       // pre-dock dots (mirrors the Shipped mode's OutboundStatusLegend).
       headerBelow={
         <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
-          <div className="flex items-center justify-between">
-            <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
-            <SavedViewsControl storageKey="unshipped_saved_views" paramKeys={UNSHIPPED_VIEW_PARAMS} />
-          </div>
+          {/* Saved views moved to the table ⋮ menu (station-table-unification §3.2);
+              the sidebar keeps only the filter legend. */}
+          <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
           <StatusLegend
             items={FULFILLMENT_LEGEND_ITEMS}
             meta={FULFILLMENT_STATE_META}

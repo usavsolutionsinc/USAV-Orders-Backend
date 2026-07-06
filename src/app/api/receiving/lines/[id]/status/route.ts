@@ -9,6 +9,7 @@ import {
   type InventoryEventStation,
 } from '@/lib/inventory/events';
 import { applyTransition } from '@/lib/workflow/applyTransition';
+import { transitionReceivingLine } from '@/lib/receiving/state-machine';
 import { isUnifiedEngineApplyTransition } from '@/lib/feature-flags';
 import type { SerialState } from '@/lib/inventory/state-machine';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
@@ -136,19 +137,34 @@ export async function POST(
     const nextWorkflow = WORKFLOW_FOR_EVENT[eventType] ?? null;
     const nextSerialStatus = SERIAL_STATUS_FOR_EVENT[eventType] ?? null;
 
-    // ─── Update line metadata + workflow_status (org-scoped) ────────────────
+    // ─── Advance workflow_status via the guarded chokepoint (was a raw-UPDATE
+    //     bypass with its own WORKFLOW_FOR_EVENT map — §7 Step D). skipEvent: this
+    //     route emits ONE combined line+serial inventory_event below, so the
+    //     chokepoint must not double-write a line event. The guard is permissive
+    //     (unmodeled edges log, never reject) so re-test bounce-backs still pass. ─
+    if (nextWorkflow) {
+      const tr = await transitionReceivingLine(
+        { receivingLineId: lineId, to: nextWorkflow, actorStaffId: staffId, station, skipEvent: true },
+        undefined,
+        orgId,
+      );
+      if (!tr.ok) {
+        return NextResponse.json({ success: false, error: tr.error }, { status: tr.status });
+      }
+    }
+    // Testing facts (qa/disposition/condition) + notes — the non-lifecycle half of
+    // the former combined UPDATE (same COALESCE-only semantics + guard condition).
     if (nextWorkflow || qaStatus || dispositionCode || conditionGrade) {
       await tenantQuery(
         orgId,
         `UPDATE receiving_lines
-         SET workflow_status  = COALESCE($2::inbound_workflow_status_enum, workflow_status),
-             qa_status        = COALESCE($3, qa_status),
-             disposition_code = COALESCE($4, disposition_code),
-             condition_grade  = COALESCE($5, condition_grade),
-             notes            = COALESCE($6, notes),
+         SET qa_status        = COALESCE($2, qa_status),
+             disposition_code = COALESCE($3, disposition_code),
+             condition_grade  = COALESCE($4, condition_grade),
+             notes            = COALESCE($5, notes),
              updated_at       = NOW()
-         WHERE id = $1 AND organization_id = $7`,
-        [lineId, nextWorkflow, qaStatus, dispositionCode, conditionGrade, notes, orgId],
+         WHERE id = $1 AND organization_id = $6`,
+        [lineId, qaStatus, dispositionCode, conditionGrade, notes, orgId],
       );
     }
 

@@ -8,7 +8,7 @@
  */
 
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
-import { isTriageClassified, isTriageStaged, isTriagePaired } from './triage-focus';
+import { isTriageClassified, isTriagePaired } from './triage-focus';
 
 export type RecommendationTone = 'info' | 'success' | 'tip';
 
@@ -43,30 +43,12 @@ export function triageRecommendations(facts: ReceivingWorkflowFacts): WorkflowRe
     });
   }
 
-  if (!isTriageStaged(row)) {
-    out.push({
-      id: 'triage-stage',
-      tone: 'tip',
-      title: 'Assign a shelf and lane',
-      detail: 'Staging location helps the team find urgent cartons without searching the dock.',
-    });
-  }
-
   if (!isTriagePaired(row) && row.receiving_source === 'unmatched') {
     out.push({
       id: 'triage-pair',
       tone: 'info',
       title: 'Pair to a PO or claim when you can',
       detail: 'Optional for small shops — saves time at unbox. You can still save for unbox without a match.',
-    });
-  }
-
-  if (!row.triage_complete) {
-    out.push({
-      id: 'triage-save',
-      tone: 'info',
-      title: 'Save for unbox when staged',
-      detail: 'Recommended handoff so the unbox queue knows this carton is ready — not required to open it in Unbox.',
     });
   }
 

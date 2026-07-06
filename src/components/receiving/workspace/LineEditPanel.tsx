@@ -121,10 +121,9 @@ export function LineEditPanel({
               <LineCartonContextSection row={row} staffId={staffId} c={c} />
             </motion.div>
 
-            {/* Unified Unboxing / Package-Pairing wrapper — PO Items on top,
-                Package Pairing below, pencil on the PO items eyebrow row (same
-                IconButton as the label card). Unbox shows BOTH (editable items +
-                pairing for unfound cartons). See POUnboxingSection. */}
+            {/* Unified Unboxing / Package-Pairing wrapper — PO Items and Units on
+                carton share one tabbed card; Package Pairing sits below. See
+                POUnboxingSection. */}
             <motion.div variants={revealItem}>
               <POUnboxingSection
                 row={row}

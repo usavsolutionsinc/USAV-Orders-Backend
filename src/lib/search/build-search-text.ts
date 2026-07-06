@@ -41,6 +41,10 @@ export interface SearchDocFacets {
   status: string | null;
   conditionGrade: string | null;
   sourcePlatform: string | null;
+  /** Carrier tracking number (order/receiving) — powers the row's tracking chip. */
+  trackingNumber: string | null;
+  /** Carrier name (order/receiving) — the tracking chip's leading label. */
+  carrier: string | null;
   happenedAt: Date | null;
 }
 
@@ -101,7 +105,8 @@ function subtitleOf(parts: unknown[]): string | null {
  * Loader row contract (worker SQL):
  *   id, order_id, product_title, sku, account_source, status, condition,
  *   notes, order_date, created_at, serials (STRING_AGG of
- *   tech_serial_numbers.serial_number), tracking_number (stn raw).
+ *   tech_serial_numbers.serial_number), tracking_number (stn raw), carrier
+ *   (stn.carrier, UNKNOWN→null).
  */
 function buildOrderDoc(row: SearchSourceRow): BuiltSearchDoc {
   const title = str(row.product_title) || `Order #${str(row.id)}`;
@@ -123,6 +128,8 @@ function buildOrderDoc(row: SearchSourceRow): BuiltSearchDoc {
       status: strOrNull(row.status),
       conditionGrade: strOrNull(row.condition),
       sourcePlatform: strOrNull(row.account_source),
+      trackingNumber: strOrNull(row.tracking_number),
+      carrier: strOrNull(row.carrier),
       happenedAt: dateOrNull(row.order_date, row.created_at),
     },
   };
@@ -155,6 +162,8 @@ function buildSerialUnitDoc(row: SearchSourceRow): BuiltSearchDoc {
       status: strOrNull(row.current_status),
       conditionGrade: strOrNull(row.condition_grade),
       sourcePlatform: null,
+      trackingNumber: strOrNull(row.shipping_tracking_number),
+      carrier: null,
       happenedAt: dateOrNull(row.received_at, row.created_at),
     },
   };
@@ -190,6 +199,8 @@ function buildReceivingDoc(row: SearchSourceRow): BuiltSearchDoc {
       status: strOrNull(row.qa_status),
       conditionGrade: strOrNull(row.condition_grade),
       sourcePlatform: strOrNull(row.source_platform),
+      trackingNumber: strOrNull(row.tracking_number),
+      carrier: strOrNull(row.carrier),
       happenedAt: dateOrNull(row.received_at, row.created_at),
     },
   };
@@ -219,6 +230,8 @@ function buildSkuDoc(row: SearchSourceRow): BuiltSearchDoc {
       status: strOrNull(row.lifecycle_status),
       conditionGrade: null,
       sourcePlatform: null,
+      trackingNumber: null,
+      carrier: null,
       happenedAt: dateOrNull(row.updated_at, row.created_at),
     },
   };
@@ -250,6 +263,8 @@ function buildRepairDoc(row: SearchSourceRow): BuiltSearchDoc {
       status: strOrNull(row.status),
       conditionGrade: null,
       sourcePlatform: strOrNull(row.source_system),
+      trackingNumber: null,
+      carrier: null,
       happenedAt: dateOrNull(row.received_at, row.created_at),
     },
   };
@@ -281,6 +296,8 @@ function buildFbaDoc(row: SearchSourceRow): BuiltSearchDoc {
       status: strOrNull(row.status),
       conditionGrade: null,
       sourcePlatform: 'fba',
+      trackingNumber: null,
+      carrier: null,
       happenedAt: dateOrNull(row.shipped_at, row.due_date, row.created_at),
     },
   };

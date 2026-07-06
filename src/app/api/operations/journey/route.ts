@@ -4,8 +4,13 @@ import { withTenantTransaction } from '@/lib/tenancy/db';
 import {
   resolveEntity,
   readJourneyEntity,
+  readJourneyBrowse,
   readSerialProvenance,
   clampLimit,
+  decodeCursor,
+  encodeCursor,
+  resolveBrowseSources,
+  redactAuditDiffs,
   JOURNEY_SOURCES,
   type JourneyDimension,
   type JourneyFilters,
@@ -13,12 +18,18 @@ import {
 } from '@/lib/operations/journey';
 
 /**
- * GET /api/operations/journey — the Master Operations Journey reader.
+ * GET /api/operations/journey — the Master Operations Journey reader. Two modes,
+ * dispatched by whether a specific record was named:
  *
- * A RECORD LOOKUP: pass `dim` + one of `order`/`serial`/`tracking` and it returns
- * THAT record's complete cross-station journey (SAL + inventory + audit + carrier
- * + warranty), org-gated. There is no browse/firehose mode — without a record
- * number the route 400s. 404 if the record isn't owned by the caller's org.
+ * ENTITY (Trace) — pass `dim` + one of `order`/`serial`/`tracking` → THAT record's
+ * complete cross-station journey (SAL + inventory + audit + carrier + warranty),
+ * org-gated. 404 if the record isn't owned by the caller's org.
+ *
+ * BROWSE — no record number → the org-wide, filterable, keyset-paginated event
+ * feed (`readJourneyBrowse`), newest-first. Filters: from/until, stations, types,
+ * staffId, status, sources, q; `cursor` (opaque, base64url) paginates and the
+ * response carries the next `cursor`. The `audit` spine is admin-only in browse
+ * (`admin.view_logs`, plan Decision §3.2 Option B) — see `resolveBrowseSources`.
  *
  * Read-only; org-scoped via `withTenantTransaction`. Rows are bucketed by `source`
  * with a `raw` payload matching each source's existing timeline adapter input.
@@ -77,17 +88,39 @@ export const GET = withAuth(
         limit: clampLimit(Number(searchParams.get('limit'))),
       };
 
-      // RECORD LOOKUP — a specific order/serial/tracking must be provided. There
-      // is no browse/firehose mode: the panel is record-gated.
+      // Field-level audit diffs (before/after values) are admin-only (plan
+      // Decision §3.2 Option B). Computed once; drives both the browse-spine
+      // gate and the entity/browse diff redaction below.
+      const canViewAudit = ctx.permissions.has('admin.view_logs');
+
+      // BROWSE mode — no record number → serve the org-wide, filterable,
+      // keyset-paginated event feed instead of the legacy 400 (plan §3.1).
       if (!entityValue || !entityValue.trim()) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'A record number (order, serial, or tracking) is required',
-            code: 'RECORD_REQUIRED',
-          },
-          { status: 400 },
+        // Audit-spine gate (plan Decision §3.2 Option B): admin-only in browse.
+        const gate = resolveBrowseSources(filters.sources, canViewAudit);
+        if (gate.forbidden) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'The audit spine requires the admin.view_logs permission',
+              code: 'AUDIT_SOURCE_FORBIDDEN',
+            },
+            { status: 403 },
+          );
+        }
+
+        const cursor = decodeCursor(searchParams.get('cursor'));
+        const { events, nextCursor } = await withTenantTransaction(orgId, (client) =>
+          readJourneyBrowse(client, orgId, { ...filters, sources: gate.sources }, cursor),
         );
+
+        return NextResponse.json({
+          success: true,
+          mode: 'browse',
+          events: redactAuditDiffs(events, canViewAudit),
+          nextCursor: nextCursor ? encodeCursor(nextCursor) : null,
+          limit: filters.limit,
+        });
       }
 
       const result = await withTenantTransaction(orgId, async (client) => {
@@ -108,7 +141,7 @@ export const GET = withAuth(
         success: true,
         mode: 'entity',
         entity: result.anchors,
-        events: result.events,
+        events: redactAuditDiffs(result.events, canViewAudit),
         nextCursor: null,
         limit: filters.limit,
       });

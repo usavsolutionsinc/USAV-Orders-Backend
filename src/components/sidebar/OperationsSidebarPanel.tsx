@@ -50,7 +50,10 @@ import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/u
 import { usePageHeaderSearch } from '@/hooks/usePageHeader';
 import { useSearchRecents } from '@/hooks/useSearchRecents';
 import { SearchRecentsDropdown } from '@/components/search/SearchRecentsDropdown';
+import { useOperationsSearchBusy } from '@/components/operations/operations-search-status';
 import { isUnifiedHeaderSearchEnabled } from '@/lib/search/unified-header-search';
+import { isOperationsHistoryBrowseEnabled } from '@/lib/operations/operations-history-flags';
+import { HistoryBrowseFilters } from '@/components/sidebar/operations/HistoryBrowseFilters';
 import { pushSearchRecent } from '@/lib/search/search-recents';
 import { looksLikeIdentifier } from '@/lib/search/search-hit';
 import type { JourneyDimension } from '@/lib/timeline/journey';
@@ -444,7 +447,13 @@ function SignalsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
 function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const url = useOperationsTimelineUrlState();
   const unifiedOn = isUnifiedHeaderSearchEnabled();
+  // Browse-feed filters show when the browse region is on-screen (flag on, not
+  // focused on a record). The URL setters they drive already exist.
+  const showFilters = isOperationsHistoryBrowseEnabled() && !url.focused;
   const { recents, remove, clear } = useSearchRecents({ scope: 'operations:history' });
+  // Reflect the browse fetch on the header pill's spinner (results pane owns
+  // the fetch; this is the cross-subtree bridge).
+  const searchBusy = useOperationsSearchBusy();
 
   const placeholder =
     url.dim === 'order'
@@ -480,9 +489,10 @@ function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
           },
           placeholder: 'Search shipped orders, serials, tracking…',
           debounceMs: 300,
+          isSearching: searchBusy,
         }
       : null,
-    [unifiedOn, url.q, url.dim],
+    [unifiedOn, url.q, url.dim, searchBusy],
   );
 
   // Flag OFF: pure record lookup — pick a dimension, paste a number. The right
@@ -506,6 +516,7 @@ function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
           onChange={(id) => url.setDim(id as JourneyDimension)}
           aria-label="Journey dimension"
         />
+        {showFilters ? <HistoryBrowseFilters url={url} /> : null}
       </SidebarShell>
     );
   }
@@ -528,6 +539,7 @@ function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
         onClearAll={() => clear('operations:history')}
         className="mt-2"
       />
+      {showFilters ? <HistoryBrowseFilters url={url} /> : null}
     </SidebarShell>
   );
 }

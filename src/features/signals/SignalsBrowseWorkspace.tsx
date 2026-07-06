@@ -13,9 +13,11 @@
  */
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { operationsHistoryTraceHref } from '@/lib/operations/history-links';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { useMotionPresence, useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import { SIGNAL_KINDS, SURFACE_ENTITY_TYPES } from '@/lib/surfaces/registry';
@@ -170,6 +172,19 @@ export function SignalsBrowseWorkspace() {
                     <pre className="overflow-x-auto rounded-md bg-surface-canvas p-2 text-mini text-text-muted ring-1 ring-inset ring-border-soft">
                       {JSON.stringify(detail.meta, null, 2)}
                     </pre>
+                  </div>
+                ) : null}
+                {detail.entity_dim && detail.entity_ref ? (
+                  <div className="border-t border-border-hairline pt-3">
+                    <Link
+                      href={operationsHistoryTraceHref({
+                        dim: detail.entity_dim,
+                        value: detail.entity_ref,
+                      })}
+                      className="inline-flex items-center gap-1 text-eyebrow font-black uppercase tracking-widest text-blue-600 transition hover:text-blue-700"
+                    >
+                      Full event trace →
+                    </Link>
                   </div>
                 ) : null}
                   </>

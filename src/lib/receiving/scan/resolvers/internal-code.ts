@@ -25,7 +25,12 @@ export async function resolveInternalCode(
   if (!runCodeResolve) return null;
 
   const code = await deps.resolveCode(input.value);
-  if (!code || (code.kind !== 'line' && code.kind !== 'multi')) return null;
+  // `box` (an H-#### license plate) carries the same `rows` as `multi`; receiving
+  // keeps opening the picked line for it (the box drawer is a testing-only
+  // affordance), so treat it exactly like `multi` here.
+  if (!code || (code.kind !== 'line' && code.kind !== 'multi' && code.kind !== 'box')) {
+    return null;
+  }
 
   const rows = code.kind === 'line' ? [code.row] : code.rows;
 

@@ -22,6 +22,7 @@ import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
 import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 interface UseReceivingLineBulkSelectionArgs {
@@ -76,8 +77,62 @@ export function useReceivingLineBulkSelection({
   // Print one product label per selected line — serial-level when serials are
   // loaded on the row, else a single SKU label. Same pipeline as the workspace's
   // Pass + Print.
-  const handlePrintLabels = useCallback((rows: ReceivingLineRow[]) => {
+  //
+  // Before printing, resolve every selected serial's canonical `unit_uid` in ONE
+  // batch call and thread it as the qrPayload, so a history reprint encodes the
+  // SAME minted id the unit was born with (matching the multi-sku print path) —
+  // not a bare `U-{serial}` fallback. A serial with no minted uid resolves to
+  // `undefined` and degrades to the prior bare-serial encoding; a failed resolve
+  // never blocks the print.
+  const handlePrintLabels = useCallback(async (rows: ReceivingLineRow[]) => {
+    const allSerials = Array.from(
+      new Set(
+        rows.flatMap((r) =>
+          (r.serials ?? []).map((s) => (s.serial_number || '').trim()).filter(Boolean),
+        ),
+      ),
+    );
+
+    const unitBySerial = new Map<string, { unitUid: string; serialUnitId: number | null }>();
+    if (allSerials.length > 0) {
+      try {
+        const res = await fetch('/api/serial-units/resolve-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serials: allSerials }),
+        });
+        if (res.ok) {
+          const json = (await res.json()) as {
+            units?: Array<{ serial: string; unit_uid: string | null; serial_unit_id: number | null }>;
+          };
+          for (const u of json.units ?? []) {
+            if (u.unit_uid) {
+              unitBySerial.set(u.serial.trim().toUpperCase(), {
+                unitUid: u.unit_uid,
+                serialUnitId: u.serial_unit_id ?? null,
+              });
+            }
+          }
+        }
+      } catch {
+        // Degrade: fall back to the bare-serial encoding on resolve failure.
+      }
+    }
+
     let printed = 0;
+    // Collect the reprint ledger rows for the resolved (known) units so the
+    // browser-ZPL print is still recorded in label_print_jobs (bridge path).
+    const jobs: Array<{
+      jobType: 'REPRINT';
+      serialUnitId: number | null;
+      unitUid: string;
+      qrPayload: string;
+      symbology: 'datamatrix';
+      templateId: 'product';
+      isReprint: true;
+      clientEventId: string;
+    }> = [];
+    const batchId = safeRandomUUID();
     for (const r of rows) {
       const sku = (r.sku || '').trim();
       if (!sku) continue;
@@ -85,8 +140,24 @@ export function useReceivingLineBulkSelection({
         .map((s) => (s.serial_number || '').trim())
         .filter(Boolean);
       if (serials.length > 0) {
-        printProductLabels({ sku, serialNumbers: serials });
+        const qrPayloads = serials.map((s) => unitBySerial.get(s.toUpperCase())?.unitUid ?? undefined);
+        printProductLabels({ sku, serialNumbers: serials, qrPayloads });
         printed += serials.length;
+        for (const s of serials) {
+          const unit = unitBySerial.get(s.toUpperCase());
+          if (unit) {
+            jobs.push({
+              jobType: 'REPRINT',
+              serialUnitId: unit.serialUnitId,
+              unitUid: unit.unitUid,
+              qrPayload: unit.unitUid,
+              symbology: 'datamatrix',
+              templateId: 'product',
+              isReprint: true,
+              clientEventId: `bulk-reprint-${batchId}:${s.toUpperCase()}`,
+            });
+          }
+        }
       } else {
         printProductLabel({ sku });
         printed += 1;
@@ -94,6 +165,18 @@ export function useReceivingLineBulkSelection({
     }
     if (printed > 0) toast.success(`Printing ${printed} label${printed === 1 ? '' : 's'}`);
     else toast.error('No SKU on the selected line(s)');
+
+    // Record the reprints into the ledger (best-effort; the label already
+    // printed). Idempotent per (org, clientEventId) so a retry is a no-op.
+    if (jobs.length > 0) {
+      void fetch('/api/label-print-jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobs }),
+      }).catch(() => {
+        /* ledger logging is best-effort; never block the print */
+      });
+    }
   }, []);
 
   const bulkActions = useMemo<SelectionAction<ReceivingLineRow>[]>(

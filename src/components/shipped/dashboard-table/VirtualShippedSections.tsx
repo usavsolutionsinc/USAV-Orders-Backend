@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, type RefObject } from 'react';
 import { useVirtualizer, defaultRangeExtractor, type Range } from '@tanstack/react-virtual';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
+import { useAncestorScrollMargin } from '@/hooks/useAncestorScrollMargin';
 import { ShippedRecordRow } from '@/components/shipped/ShippedRecordRow';
 import { getDetailId } from '@/components/shipped/shipped-record-mappers';
 import type { DerivedPackerRecord } from '@/lib/shipped-records';
@@ -42,6 +43,13 @@ export interface VirtualShippedSectionsProps {
   selectedDetailId: number | null;
   onRowClick: (record: DerivedPackerRecord) => void;
   onToggle: (id: number, shiftKey: boolean) => void;
+  /** When the `scrollParentRef` is an ANCESTOR shared with sibling lists (a
+   *  stacked SwimlaneBoard lane sharing the board's single scroll region) rather
+   *  than this list's own scroll body, offset the virtualizer window by how far
+   *  this list sits below the scroll region's content top (`scrollMargin`) and
+   *  position rows `translateY(start - scrollMargin)`. Off (0) for the
+   *  self-scrolling body case, keeping that path byte-identical. */
+  useAncestorScroll?: boolean;
 }
 
 /** Rough first-paint estimates; real heights are measured on mount. */
@@ -57,6 +65,7 @@ export function VirtualShippedSections({
   selectedDetailId,
   onRowClick,
   onToggle,
+  useAncestorScroll = false,
 }: VirtualShippedSectionsProps) {
   const items = useMemo<FlatItem[]>(() => {
     const flat: FlatItem[] = [];
@@ -81,11 +90,22 @@ export function VirtualShippedSections({
   // the scroll offset, so the visible day's label stays stuck while its rows scroll.
   const activeStickyIndexRef = useRef(0);
 
+  // Stacked-lane case: this list shares the board's scroll region with sibling
+  // lanes, so the virtualizer must offset its window by this list's position
+  // within that region. 0 (no listeners) for the self-scrolling body case.
+  const scrollMargin = useAncestorScrollMargin({
+    enabled: useAncestorScroll,
+    scrollParentRef,
+    innerRef,
+    deps: [daySections],
+  });
+
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollParentRef.current,
     estimateSize: (index) => (items[index].kind === 'header' ? HEADER_ESTIMATE : ROW_ESTIMATE),
     overscan: 10,
+    scrollMargin,
     // Stable identity so windowing survives re-sorts/dedupe without remounting
     // the wrong row into a measured slot.
     getItemKey: (index) => items[index].key,
@@ -127,7 +147,7 @@ export function VirtualShippedSections({
             style={
               pinned
                 ? { position: 'sticky', top: 0 }
-                : { position: 'absolute', transform: `translateY(${vRow.start}px)` }
+                : { position: 'absolute', transform: `translateY(${vRow.start - scrollMargin}px)` }
             }
           >
             {header ? (

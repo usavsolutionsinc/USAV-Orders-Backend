@@ -47,6 +47,8 @@ export interface DocHitRow {
   status: string | null;
   condition_grade: string | null;
   source_platform: string | null;
+  tracking_number: string | null;
+  carrier: string | null;
   happened_at: Date | string | null;
 }
 
@@ -135,7 +137,7 @@ async function keywordSearchImpl(
   const res = await tenantQuery(
     orgId,
     `SELECT entity_type, entity_id, title, subtitle, status, condition_grade,
-            source_platform, happened_at,
+            source_platform, tracking_number, carrier, happened_at,
             ${rankClause} AS rank
      FROM entity_search_docs
      WHERE organization_id = $1${entityFilter}
@@ -164,7 +166,7 @@ async function vectorSearchImpl(
   const res = await tenantQuery(
     orgId,
     `SELECT entity_type, entity_id, title, subtitle, status, condition_grade,
-            source_platform, happened_at
+            source_platform, tracking_number, carrier, happened_at
      FROM entity_search_docs
      WHERE organization_id = $1${entityFilter}
        AND embedding IS NOT NULL
@@ -184,6 +186,8 @@ function normalizeDocRow(row: any): DocHitRow {
     status: row.status == null ? null : String(row.status),
     condition_grade: row.condition_grade == null ? null : String(row.condition_grade),
     source_platform: row.source_platform == null ? null : String(row.source_platform),
+    tracking_number: row.tracking_number == null ? null : String(row.tracking_number),
+    carrier: row.carrier == null ? null : String(row.carrier),
     happened_at: row.happened_at ?? null,
   };
 }
@@ -243,6 +247,8 @@ function docRowToHit(row: DocHitRow, score: number, matchField: string): SearchH
       status: row.status,
       condition_grade: row.condition_grade,
       source_platform: row.source_platform,
+      tracking_number: row.tracking_number,
+      carrier: row.carrier,
       // ISO string so the row can render a relative date (formatRelativeTime).
       happened_at: row.happened_at ? new Date(row.happened_at).toISOString() : null,
     },

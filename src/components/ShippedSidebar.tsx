@@ -30,7 +30,6 @@ import { useShippedFilterRefinements, ShippedFilterDropdown } from '@/components
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { ShippedActionsButton } from '@/components/shipped/ShippedActionsButton';
 import { OutboundStatusLegend } from '@/components/shipped/OutboundStatusLegend';
-import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
 import { FirstScanOnboardingCard } from '@/components/dashboard/FirstScanOnboardingCard';
 import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
 import { useAiQuickJump } from '@/hooks/useAiQuickJump';
@@ -41,9 +40,6 @@ interface SearchHistory {
     timestamp: Date;
     resultCount?: number;
 }
-
-/** Params that define a Shipped saved view (type + status-dot filter, not search). */
-const SHIPPED_VIEW_PARAMS = ['shippedFilter', 'shippedSearchField', 'ostatus'] as const;
 
 type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
@@ -353,10 +349,8 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             // it explains the shipped table's outbound status dots.
             headerBelow={
                 <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
-                    <div className="flex items-center justify-between">
-                        <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
-                        <SavedViewsControl storageKey="shipped_saved_views" paramKeys={SHIPPED_VIEW_PARAMS} />
-                    </div>
+                    {/* Saved views moved to the table ⋮ menu (station-table-unification §3.2). */}
+                    <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
                     <OutboundStatusLegend />
                 </div>
             }

@@ -13,6 +13,18 @@ export interface TimelineItemBadge {
 }
 
 /**
+ * One field-level before→after change, rendered as a muted `key: before → after`
+ * line under the row (the audit-diff slot). Produced by `diffChanges`
+ * (`src/lib/timeline/audit-diff.ts`) from an audit row's before/after snapshots.
+ * `before`/`after` are pre-formatted display strings (or null = absent).
+ */
+export interface TimelineChange {
+  key: string;
+  before: string | null;
+  after: string | null;
+}
+
+/**
  * An identifier attached to an event (tracking #, serial, FNSKU, order/PO id,
  * SKU). The {@link EventTimeline} renders it through the shared `CopyChip`
  * family — last-4 preview, copy-on-click, tone+icon — so timeline ids look and
@@ -64,6 +76,14 @@ export interface TimelineItem {
   tone?: TimelineTone;
   /** Secondary line (location / detail), rendered muted under the title. */
   subtitle?: string;
+  /**
+   * Field-level before→after diff (audit rows), rendered as a small muted list
+   * under the subtitle. Populated only for edit-style audit events where BOTH
+   * snapshots are present and the caller is permitted to see them — see
+   * `diffChanges` and the route-level redaction in the operations journey. Omit
+   * ⇒ no diff block (every existing consumer is unaffected).
+   */
+  changes?: TimelineChange[];
   /** Identifier shown as a last-4 CopyChip under the title (tracking/serial/…). */
   ref?: TimelineRef;
   /** Actor name — rendered after the time as "· {actor}". */

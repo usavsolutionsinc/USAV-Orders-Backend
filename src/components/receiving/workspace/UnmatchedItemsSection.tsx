@@ -122,6 +122,7 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
     onOpenInUnbox,
     embedded = false,
     headerRight,
+    suppressHeader = false,
   } = props;
 
   const c = useUnmatchedItems(props);
@@ -326,15 +327,17 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
   if (embedded) {
     return (
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
-            PO items · {c.lines.length}
-          </h3>
-          <div className="flex items-center gap-1.5">
-            {headerActions}
-            {headerRight ?? null}
+        {suppressHeader ? null : (
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
+              PO items · {c.lines.length}
+            </h3>
+            <div className="flex items-center gap-1.5">
+              {headerActions}
+              {headerRight ?? null}
+            </div>
           </div>
-        </div>
+        )}
         {body}
       </div>
     );

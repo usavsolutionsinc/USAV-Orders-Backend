@@ -375,7 +375,7 @@ export async function readJourneyEntity(
   // 3) audit_logs — order-anchored edits.
   if (want('audit') && anchors.orderId != null) {
     const audit = await client.query<OrderAuditRow>(
-      `SELECT al.id, al.created_at, al.action, al.after_data, al.metadata, s.name AS actor_name
+      `SELECT al.id, al.created_at, al.action, al.before_data, al.after_data, al.metadata, s.name AS actor_name
          FROM audit_logs al
          LEFT JOIN staff s ON s.id = al.actor_staff_id
         WHERE lower(al.entity_type) = 'order' AND al.entity_id = $1 AND al.organization_id = $2

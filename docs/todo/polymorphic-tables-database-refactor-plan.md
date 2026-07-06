@@ -679,6 +679,16 @@ tenancy, idempotency) asserted unchanged.
 7. **PR:** `streets/incoming` lane (delivery-state from `precedence.ts`) + endpoint; remove `view=incoming` + the CASE.
 8. **PR:** `streets/triage` lane (priority rank from `precedence.ts`) + endpoint; remove `view=scanned`.
 9. **PR:** `streets/test` lane; fold `lines/[id]/status` → `transitionReceivingLine`; remove `view=testing/needs-test`.
+    - ✅ **Step D (partial, 2026-07-05) — the 2 plan-named bypass writers folded onto the chokepoint:**
+      `lines/[id]/status` (its `WORKFLOW_FOR_EVENT` raw UPDATE) and `mark-received-po` (its 3 inline UPDATEs:
+      zoho-pending→UNBOXED, local→DONE, confirm UNBOXED→DONE). Added `transitionReceivingLine({skipEvent})` so the
+      routes keep emitting their single combined event (no double-write); `expectedFrom:'UNBOXED'` reproduces the
+      confirm guard. Verified: `skipEvent` unit test + 103 receiving unit tests green, tsc clean.
+    - ⛔ **Step D tail — 6 more raw `SET workflow_status` writers** found by grep (not in the plan's original Step D
+      scope): `mark-received` (single DONE), `lookup-po` (adoption `EXPECTED→MATCHED` CASE, also sets receiving_id),
+      `receiving-entry` (×2 bulk MATCHED), `zoho-receiving-sync` (sync CASE), `zoho-received-reconcile` (DONE),
+      `tracking-match-reconcile` (MATCHED). These are bulk/linkage UPDATEs (write more than status) in less-tested
+      sync/cron paths — fold each carefully per-site to meet the §10 "zero inline workflow_status" criterion.
 10. **PR:** `streets/unbox` lane; converge `mark-received*` on `receiveLineUnits`; remove remaining `view=` arms.
 11. **PR:** `streets/door` lane (decompose `lookup-po`); classify via `kinds/registry.ts`.
 12. **PR:** delete the now-empty `/api/receiving-lines` multiplexer + `normalizeRow` DTO-for-all.

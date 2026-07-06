@@ -12,7 +12,7 @@
  * lane shares one fetch + one selection model.
  */
 
-import { useRef } from 'react';
+import { useRef, type RefObject } from 'react';
 import { SkeletonList } from '@/design-system';
 import { VirtualShippedSections } from '@/components/shipped/dashboard-table/VirtualShippedSections';
 import { useShippedTableGrouping } from '@/components/shipped/dashboard-table/useShippedTableGrouping';
@@ -35,6 +35,10 @@ interface ShippedLaneTableProps {
   /** Stacked (1-up) lanes: grow to content with NO internal scroll/cap so the
    *  board owns the single scroll region (matches OrdersQueueTable). */
   growToContent?: boolean;
+  /** Stacked (1-up) lanes only: the board's shared scroll region. When set, the
+   *  virtualizer windows against it (instead of this lane's absent scroll body),
+   *  so a stacked lane stays windowed rather than mounting every row (Phase V0). */
+  scrollParentRef?: RefObject<HTMLElement | null>;
   /** Shown (faint, italic) when this lane has no records. */
   emptyMessage: string;
 }
@@ -51,6 +55,7 @@ export function ShippedLaneTable({
   maxBodyHeightClass,
   maxBodyHeightPx,
   growToContent = false,
+  scrollParentRef,
   emptyMessage,
 }: ShippedLaneTableProps) {
   const { daySections } = useShippedTableGrouping(records);
@@ -88,7 +93,10 @@ export function ShippedLaneTable({
       <div className="w-full px-2 pb-6">
         <VirtualShippedSections
           daySections={daySections}
-          scrollParentRef={bodyRef}
+          // Stacked lane: window against the board's shared scroll region.
+          // Otherwise this lane's own capped body owns the scroll.
+          scrollParentRef={scrollParentRef ?? bodyRef}
+          useAncestorScroll={Boolean(scrollParentRef)}
           isMobile={isMobile}
           selectMode={selectMode}
           selectedIds={selectedIds}

@@ -194,6 +194,16 @@ export interface EventTimelineProps {
    * stays owned by {@link EventTimeline}.
    */
   renderGroupHeader?: (group: TimelineGroupView) => ReactNode;
+  /**
+   * Opt-in row activation (Monitor→detail drill). When provided, each row
+   * becomes clickable + keyboard-activatable (Enter/Space) and calls this with
+   * the row's item — EXCEPT when the click/keypress lands on an inner
+   * interactive element (a CopyChip `<button>` or a link), which keeps its own
+   * behavior (copy / navigate). Omit ⇒ rows are inert display, exactly as today
+   * (every existing consumer is unaffected). Used by the Operations History
+   * browse feed to drill a row into that record's Trace.
+   */
+  onSelectItem?: (item: TimelineItem) => void;
 }
 
 /** A serial-view band: an identifier header + that identifier's rows. */
@@ -298,6 +308,7 @@ export function EventTimeline({
   richTime = false,
   collapsibleGroups = false,
   renderGroupHeader,
+  onSelectItem,
 }: EventTimelineProps) {
   const reduce = useReducedMotion();
   const d = DENSITY[density];
@@ -450,7 +461,32 @@ export function EventTimeline({
               )}
 
               {/* Hover surface — bleeds slightly past the text, never under the dot. */}
-              <div className="-mx-2 rounded-lg px-2 py-0.5 transition-colors duration-150 hover:bg-surface-canvas/80">
+              <div
+                className={`-mx-2 rounded-lg px-2 py-0.5 transition-colors duration-150 hover:bg-surface-canvas/80${
+                  onSelectItem ? ' cursor-pointer' : ''
+                }`}
+                role={onSelectItem ? 'button' : undefined}
+                tabIndex={onSelectItem ? 0 : undefined}
+                onClick={
+                  onSelectItem
+                    ? (e) => {
+                        // Let inner chips/links keep their own click (copy / navigate).
+                        if ((e.target as HTMLElement).closest('button,a')) return;
+                        onSelectItem(item);
+                      }
+                    : undefined
+                }
+                onKeyDown={
+                  onSelectItem
+                    ? (e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        if ((e.target as HTMLElement).closest('button,a')) return;
+                        e.preventDefault();
+                        onSelectItem(item);
+                      }
+                    : undefined
+                }
+              >
                 <div className="flex items-baseline justify-between gap-3">
                   <span
                     className={`text-caption tracking-tight ${
@@ -480,6 +516,20 @@ export function EventTimeline({
                   <div className="mt-0.5 text-micro font-medium tabular-nums text-text-faint">
                     {item.subtitle}
                   </div>
+                ) : null}
+
+                {item.changes?.length ? (
+                  <ul className="mt-1 space-y-0.5">
+                    {item.changes.map((c, ci) => (
+                      <li key={ci} className="text-micro font-medium text-text-faint">
+                        <span className="font-semibold text-text-soft">{c.key}</span>
+                        {': '}
+                        <span className="text-text-faint">{c.before ?? '—'}</span>
+                        <span className="text-text-faint"> → </span>
+                        <span className="text-text-muted">{c.after ?? '—'}</span>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
 
                 {item.ref ? (

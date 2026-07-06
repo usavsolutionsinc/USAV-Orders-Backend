@@ -171,6 +171,10 @@ export interface ReceivingLineRow {
     serial_number: string;
     current_status?: string;
     condition_grade?: string | null;
+    /** Handling-unit (H-#### tote) this unit currently sits in, if any. */
+    handling_unit_id?: number | null;
+    /** Minted unit identity; presence = the unit has been labeled at least once. */
+    unit_uid?: string | null;
   }> | null;
   /** Count of photos attached to this line's carton (from photos table, entity_type='RECEIVING'). */
   photo_count?: number;

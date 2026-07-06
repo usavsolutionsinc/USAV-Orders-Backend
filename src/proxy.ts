@@ -250,6 +250,86 @@ function resolveTestSurfaceRedirect(url: NextRequest['nextUrl']): NextRequest['n
   return next;
 }
 
+// Per-section browse filters — mirrors SYSTEM_SAVED_VIEWS in
+// `src/lib/operations/saved-view-presets.ts`, INLINED here to keep the Edge
+// bundle self-contained (this file's convention; see SESSION_COOKIE_NAME). The
+// `view` marker highlights the matching preset chip on landing.
+const AUDIT_LOG_SECTION_PARAMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  receiving: { stations: 'RECEIVING', sources: 'sal,inventory', view: 'sys:receiving-audit' },
+  packing: { stations: 'PACK', view: 'sys:pack-audit' },
+  tech: { stations: 'TECH', view: 'sys:tech-audit' },
+};
+
+/**
+ * Redirect a legacy `/audit-log/*` URL to its Operations History equivalent
+ * (plan §4.1), preferring a system saved-view preset and carrying record params
+ * across. **Unconditional as of the Phase 7 cutover** — the `/audit-log` route
+ * files are removed, so these URLs (bookmarks / old links) must always land on
+ * History rather than 404. (`/settings/audit` is a distinct route, unaffected.)
+ */
+function resolveAuditLogRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  const p = url.pathname;
+  if (p !== '/audit-log' && !p.startsWith('/audit-log/')) return null;
+
+  const section =
+    p === '/audit-log' || p === '/audit-log/'
+      ? ''
+      : p.slice('/audit-log/'.length).replace(/\/+$/, '');
+  const src = url.searchParams;
+  const next = url.clone();
+  next.pathname = '/operations';
+  const sp = next.searchParams;
+  for (const k of [...sp.keys()]) sp.delete(k); // drop audit-log-specific params
+  sp.set('mode', 'history');
+
+  const preset = AUDIT_LOG_SECTION_PARAMS[section];
+  if (preset) for (const [k, v] of Object.entries(preset)) sp.set(k, v);
+
+  switch (section) {
+    case 'trace': {
+      const serial = src.get('serial');
+      const tracking = src.get('tracking');
+      const order = src.get('order');
+      if (serial) {
+        sp.set('dim', 'serial');
+        sp.set('serial', serial);
+      } else if (tracking) {
+        sp.set('dim', 'tracking');
+        sp.set('tracking', tracking);
+      } else if (order) {
+        sp.set('dim', 'order');
+        sp.set('order', order);
+      }
+      break;
+    }
+    case 'receiving': {
+      const po = src.get('po');
+      if (po) sp.set('q', po);
+      break;
+    }
+    case 'packing': {
+      const tracking = src.get('tracking');
+      if (tracking) {
+        sp.set('dim', 'tracking');
+        sp.set('tracking', tracking);
+      }
+      break;
+    }
+    case 'tech': {
+      const session = src.get('session') ?? src.get('staffId');
+      if (session && /^\d+$/.test(session)) sp.set('staffId', session);
+      break;
+    }
+    case 'sku': {
+      const sku = src.get('sku');
+      if (sku) sp.set('q', sku);
+      break;
+    }
+    // '' (bare /audit-log), 'staff', or any other section → plain History landing.
+  }
+  return next;
+}
+
 /**
  * Security response headers. Attached to every response we hand back from
  * the proxy (rewrite, next, redirect, 401). Conservative defaults that
@@ -330,6 +410,7 @@ export function proxy(req: NextRequest): NextResponse {
   // phones fall through to the `/m/*` rewrite computed above (rewriteTarget set).
   if (!rewriteTarget) {
     const surfaceRedirect =
+      resolveAuditLogRedirect(req.nextUrl) ??
       resolveReceivingSurfaceRedirect(req.nextUrl) ??
       resolvePackSurfaceRedirect(req.nextUrl) ??
       resolveTestSurfaceRedirect(req.nextUrl);

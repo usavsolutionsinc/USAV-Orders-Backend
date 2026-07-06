@@ -31,6 +31,8 @@ export function serialJourneyFilters(serial: string): JourneyUrlFilters {
     stations: [],
     types: [],
     status: null,
+    staffId: null,
+    sources: [],
     q: null,
   };
 }

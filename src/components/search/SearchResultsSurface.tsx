@@ -39,6 +39,12 @@ export interface SearchResultsSurfaceProps {
    * navigate to their deep-link normally.
    */
   onSelectHit?: (hit: AiSearchHit, event: ReactMouseEvent) => void;
+  /**
+   * Fires when the in-flight state changes, so a host (operations) can reflect
+   * it on the header pill's spinner. `/search` ignores it (its own field shows
+   * the state).
+   */
+  onLoadingChange?: (loading: boolean) => void;
   className?: string;
 }
 
@@ -57,6 +63,7 @@ export function SearchResultsSurface({
   activeTab,
   onTabChange,
   onSelectHit,
+  onLoadingChange,
   className,
 }: SearchResultsSurfaceProps) {
   const q = query.trim();
@@ -115,6 +122,13 @@ export function SearchResultsSurface({
         setState({ status: 'error', hits: [], usedSemantic: false, forKey: key });
       });
   }, [q, activeTab, pageContext]);
+
+  // Surface the in-flight state to the host (operations header spinner). Reset
+  // to idle on unmount so a drilled-away pane never leaves the pill spinning.
+  useEffect(() => {
+    onLoadingChange?.(state.status === 'loading');
+  }, [state.status, onLoadingChange]);
+  useEffect(() => () => onLoadingChange?.(false), [onLoadingChange]);
 
   // Overview: group by entityType in the fixed category order.
   const grouped = useMemo(() => {

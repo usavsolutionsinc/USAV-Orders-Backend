@@ -68,6 +68,23 @@ test('regression: rma.view/rma.manage gate the RMA routes (not orders.view)', ()
   assert.ok(!routesGatedBy('orders.view').some((r) => r.path.startsWith('/api/rma/')), 'no RMA route should still be on orders.view');
 });
 
+test('regression: label.manifest.manage gates the label-manifest mutation routes', () => {
+  // Serial↔label pairing Phase 3 — manifest create/seal/dissolve + item add/remove
+  // are gated by the new label.manifest.manage; the read (GET detail) stays on the
+  // shared print.label so anyone who can print can build/scan a kit.
+  const managePaths = routesGatedBy('label.manifest.manage').map((r) => r.path);
+  assert.ok(managePaths.includes('/api/label-manifests/route.ts'), 'create gated by label.manifest.manage');
+  assert.ok(managePaths.includes('/api/label-manifests/[id]/seal/route.ts'), 'seal gated by label.manifest.manage');
+  assert.ok(managePaths.includes('/api/label-manifests/[id]/dissolve/route.ts'), 'dissolve gated by label.manifest.manage');
+  assert.ok(managePaths.includes('/api/label-manifests/[id]/items/route.ts'), 'add items gated by label.manifest.manage');
+  assert.ok(
+    managePaths.includes('/api/label-manifests/[id]/items/[serialUnitId]/route.ts'),
+    'remove item gated by label.manifest.manage',
+  );
+  const printPaths = routesGatedBy('print.label').map((r) => r.path);
+  assert.ok(printPaths.includes('/api/label-manifests/[id]/route.ts'), 'GET detail gated by print.label');
+});
+
 test('regression: sourcing.view gates the Bose model + compatibility read routes', () => {
   const paths = routesGatedBy('sourcing.view').map((r) => r.path);
   // Bose Sourcing Engine Phase 1 — the manifest records the first-declared
