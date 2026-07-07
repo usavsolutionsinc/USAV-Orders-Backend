@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-06T07:40:12Z",
-  "totalRoutes": 769,
+  "generatedAt": "2026-07-07T04:06:01Z",
+  "totalRoutes": 771,
   "summary": {
-    "permissionGated": 659,
+    "permissionGated": 661,
     "authenticatedNoPermission": 36,
     "anonymousIntentional": 72,
     "serviceToService": 2,
@@ -4070,6 +4070,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving-lines/incoming/marketplace-refresh/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving-lines/incoming/refresh/route.ts",
       "methods": [
         "POST"
@@ -4278,6 +4287,15 @@
       ],
       "gate": "withAuth",
       "permission": "integrations.ebay",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/inbound/link/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
       "exemptReason": null
     },
     {

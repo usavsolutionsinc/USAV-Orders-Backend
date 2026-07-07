@@ -3,7 +3,7 @@ import { copyToClipboard } from '@/utils/_dom';
 import { toast } from '@/lib/toast';
 
 // ── Tab spec ────────────────────────────────────────────────────────────────
-export type TabId = 'po' | 'shipment' | 'activity' | 'email' | 'notes';
+export type TabId = 'po' | 'ebay' | 'shipment' | 'activity' | 'email' | 'notes';
 export const TABS: Array<{ value: TabId; label: string }> = [
   { value: 'po',       label: 'PO' },
   { value: 'shipment', label: 'Shipment' },
@@ -11,6 +11,25 @@ export const TABS: Array<{ value: TabId; label: string }> = [
   { value: 'email',    label: 'Email' },
   { value: 'notes',    label: 'Notes' },
 ];
+
+/**
+ * Tabs for the panel given the loaded data. Universal Incoming (plan §7.3): a
+ * non-Zoho (eBay) row swaps the "PO" tab for an "eBay" tab; a merged row (eBay
+ * primary + a Zoho link) shows both. Email/PO-only tabs drop for a pure inbound
+ * row that has no Zoho mirror to read.
+ */
+export function tabsForData(data: DetailsResponse | undefined): Array<{ value: TabId; label: string }> {
+  const inbound = data?.inbound ?? null;
+  if (!inbound) return TABS;
+  const hasZoho = inbound.links.some((l) => l.source_type === 'zoho') || Boolean(data?.po);
+  const label = inbound.source_type === 'ebay' ? 'eBay' : inbound.source_type.charAt(0).toUpperCase() + inbound.source_type.slice(1);
+  const tabs: Array<{ value: TabId; label: string }> = [{ value: 'ebay', label }];
+  if (hasZoho) tabs.push({ value: 'po', label: 'PO' });
+  tabs.push({ value: 'shipment', label: 'Shipment' });
+  tabs.push({ value: 'activity', label: 'Activity' });
+  tabs.push({ value: 'notes', label: 'Notes' });
+  return tabs;
+}
 
 // ── Response types (loose — only the fields the panel renders) ──────────────
 export interface DetailsResponse {
@@ -107,6 +126,24 @@ export interface DetailsResponse {
     label: string;
     description: string | null;
   }>;
+  /**
+   * Present for a non-Zoho (eBay / marketplace) Incoming row. Carries the
+   * polymorphic purchase identity, the reconcile-mirror snapshot, and the
+   * marketplace facts the eBay tab renders. `po` is null for a pure inbound row.
+   */
+  inbound?: {
+    source_type: string;
+    source_order_id: string;
+    order_number: string | null;
+    seller_name: string | null;
+    status: string | null;
+    payment_status: string | null;
+    listing_url: string | null;
+    account_label: string | null;
+    receiving_line_id: number;
+    zoho_purchaseorder_id: string | null;
+    links: Array<{ source_type: string; source_order_id: string; is_primary: boolean }>;
+  } | null;
   notes: string | null;
 }
 
@@ -122,6 +159,13 @@ export interface IncomingDetailsPanelProps {
   poNumberHint?: string | null;
   /** Shipment id (shipping_tracking_numbers.id) for the PO-less fallback. */
   shipmentId?: number | null;
+  /**
+   * Universal Incoming (plan §7.3): for a non-Zoho row with no zoho PO of its
+   * own, the panel keys on the polymorphic link identity instead — the primary
+   * source (e.g. 'ebay') + its external order id.
+   */
+  inboundSourceType?: string | null;
+  inboundSourceOrderId?: string | null;
   onClose: () => void;
 }
 

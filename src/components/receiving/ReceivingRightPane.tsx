@@ -245,6 +245,8 @@ export function ReceivingRightPane({
             zohoPurchaseOrderId={incomingDetails.poId}
             poNumberHint={incomingDetails.poNumber}
             shipmentId={incomingDetails.shipmentId}
+            inboundSourceType={incomingDetails.inboundSourceType}
+            inboundSourceOrderId={incomingDetails.inboundSourceOrderId}
             onClose={onCloseIncoming}
           />
         ) : null}

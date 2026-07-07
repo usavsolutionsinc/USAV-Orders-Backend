@@ -7,11 +7,14 @@ import { CarrierSyncDialog } from '@/components/sidebar/receiving/CarrierSyncDia
 import { IncomingSyncDialog } from '@/components/sidebar/receiving/IncomingSyncDialog';
 import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
 import { IncomingViewBand } from '@/components/receiving/IncomingViewBand';
+import { OrdersSyncPopover } from '@/components/unshipped/OrdersSyncPopover';
 import { useIncomingFilters } from './incoming/useIncomingFilters';
 import { useIncomingSummary } from './incoming/useIncomingSummary';
 import { useIncomingSyncActions } from './incoming/useIncomingSyncActions';
 import { IncomingFilterDropdown } from './incoming/IncomingFilterDropdown';
 import { IncomingSyncButtons } from './incoming/IncomingSyncButtons';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { useQueryClient } from '@tanstack/react-query';
 
 export type {
   IncomingDeliveryState,
@@ -28,6 +31,7 @@ export type {
  * Thin composition layer — state/logic live under `./incoming/`.
  */
 export function IncomingSidebarPanel() {
+  const queryClient = useQueryClient();
   const filters = useIncomingFilters();
   const summary = useIncomingSummary();
   const sync = useIncomingSyncActions();
@@ -50,6 +54,17 @@ export function IncomingSidebarPanel() {
               <IncomingViewBand />
             </div>
             <div className="shrink-0 space-y-2 border-b border-border-soft bg-surface-card pb-2 pt-2.5">
+              {/* Sales orders (Google Sheets + Ecwid + exceptions) — same pipeline as
+                  Unshipped → Sync Orders → Import Latest Orders; scoped to ctx org. */}
+              <div className="px-1.5">
+                <OrdersSyncPopover
+                  onRefresh={() => {
+                    invalidateReceivingFeeds(queryClient);
+                    window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+                    window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                  }}
+                />
+              </div>
               <IncomingSyncButtons sync={sync} />
               <div className="flex flex-col">
                 <IncomingAttachTrackingPopover />

@@ -8,7 +8,7 @@
  * block can immediately display and act on it with zero new UI code.
  */
 
-import type { DataSourceDefinition, DataSourceMeta, SourceRow } from './contract';
+import type { DataSourceDefinition, DataSourceMeta, SourceRow, FieldDef, FilterDef } from './contract';
 
 const registry = new Map<string, DataSourceDefinition>();
 
@@ -107,7 +107,11 @@ const receivingAwaitingTrackingPos: DataSourceDefinition = {
   endpoint: '/api/receiving-lines',
   buildUrl: (filters) => {
     const limit = typeof filters.limit === 'string' && /^\d+$/.test(filters.limit) ? filters.limit : '50';
-    return `/api/receiving-lines?view=incoming&state=AWAITING_TRACKING&limit=${limit}`;
+    const q = new URLSearchParams({ view: 'incoming', state: 'AWAITING_TRACKING', limit });
+    // Universal Incoming: default to all sources; a tenant can pin to zoho/ebay.
+    const inbound = typeof filters.inbound === 'string' ? filters.inbound : 'all';
+    if (inbound && inbound !== 'all') q.set('inbound', inbound);
+    return `/api/receiving-lines?${q.toString()}`;
   },
   parse: (json) => {
     const lines = (json as { receiving_lines?: Array<Record<string, unknown>> })?.receiving_lines ?? [];
@@ -117,9 +121,11 @@ const receivingAwaitingTrackingPos: DataSourceDefinition = {
       const po =
         (l.zoho_purchaseorder_number as string | null) ??
         (l.receiving_zoho_purchaseorder_number as string | null);
-      // One checklist row per PO, not per line — attaching tracking is a
-      // PO-level act.
-      const key = po ?? `line-${l.id}`;
+      // One checklist row per PO/order, not per line — attaching tracking is a
+      // PO-level act. Universal Incoming: an eBay-only line has no PO, so key on
+      // its external order id instead.
+      const sourceOrderId = (l.source_order_id as string | null) ?? null;
+      const key = po ?? sourceOrderId ?? `line-${l.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const zohoPoId =
@@ -128,8 +134,11 @@ const receivingAwaitingTrackingPos: DataSourceDefinition = {
         null;
       rows.push({
         id: String(l.id),
-        po_number: po,
-        po_id: zohoPoId,
+        po_number: po ?? sourceOrderId,
+        // attach-box resolves a Zoho PO id OR an eBay source_order_id (plan §7.4),
+        // so eBay-only rows without a Zoho id still get an attach target.
+        po_id: zohoPoId ?? sourceOrderId,
+        inbound_source: (l.inbound_source_type as string | null) ?? 'zoho',
         vendor_name: l.vendor_name ?? null,
         sku: l.sku ?? null,
         po_date: l.po_date ?? null,
@@ -139,11 +148,23 @@ const receivingAwaitingTrackingPos: DataSourceDefinition = {
   },
   shape: [
     { key: 'po_number', label: 'PO #', kind: 'po_ref' },
+    { key: 'inbound_source', label: 'Source', kind: 'source_platform' },
     { key: 'vendor_name', label: 'Vendor', kind: 'text' },
     { key: 'sku', label: 'SKU', kind: 'sku_ref' },
     { key: 'po_date', label: 'PO date', kind: 'timestamp' },
   ],
   filters: [
+    {
+      key: 'inbound',
+      label: 'Source',
+      kind: 'select',
+      options: [
+        { value: 'all', label: 'All sources' },
+        { value: 'zoho', label: 'Zoho' },
+        { value: 'ebay', label: 'eBay' },
+      ],
+      default: 'all',
+    },
     {
       key: 'limit',
       label: 'Max rows',
@@ -157,6 +178,175 @@ const receivingAwaitingTrackingPos: DataSourceDefinition = {
     },
   ],
   permission: 'receiving.view',
+};
+
+// ─── Universal Incoming sources (plan §9.3) ──────────────────
+//
+// The single Incoming spine, faceted by source. All wrap the same
+// GET /api/receiving-lines?view=incoming route (Phase 6 universal query) — one
+// checklist row per PO/order. `account_id` has no server param, so it filters
+// client-side on the resolved platform account.
+
+/** Shared row shape for the incoming spine (one row per PO/order). */
+function parseIncomingRows(json: unknown, filters: Record<string, unknown>): SourceRow[] {
+  const lines = (json as { receiving_lines?: Array<Record<string, unknown>> })?.receiving_lines ?? [];
+  const accountFilter = typeof filters.account_id === 'string' && filters.account_id.trim() ? filters.account_id.trim() : null;
+  const seen = new Set<string>();
+  const rows: SourceRow[] = [];
+  for (const l of lines) {
+    const po = (l.zoho_purchaseorder_number as string | null) ?? null;
+    const sourceOrderId = (l.source_order_id as string | null) ?? null;
+    const accountId = l.platform_account_id != null ? String(l.platform_account_id) : null;
+    if (accountFilter && accountId !== accountFilter) continue;
+    const key = po ?? sourceOrderId ?? `line-${l.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      id: String(l.id),
+      po_number: po ?? sourceOrderId,
+      po_id: (l.zoho_purchaseorder_id as string | null) ?? sourceOrderId,
+      inbound_source: (l.inbound_source_type as string | null) ?? 'zoho',
+      account_label: (l.platform_account_label as string | null) ?? null,
+      vendor_name: (l.vendor_name as string | null) ?? null,
+      seller_name: (l.vendor_name as string | null) ?? null,
+      sku: (l.sku as string | null) ?? null,
+      tracking_number: (l.tracking_number as string | null) ?? null,
+      po_date: (l.po_date as string | null) ?? null,
+    });
+  }
+  return rows;
+}
+
+const INCOMING_SHAPE: FieldDef[] = [
+  { key: 'po_number', label: 'PO / order #', kind: 'po_ref' },
+  { key: 'inbound_source', label: 'Source', kind: 'source_platform' },
+  { key: 'account_label', label: 'Account', kind: 'text' },
+  { key: 'vendor_name', label: 'Vendor / seller', kind: 'text' },
+  { key: 'sku', label: 'SKU', kind: 'sku_ref' },
+  { key: 'tracking_number', label: 'Tracking', kind: 'tracking_ref' },
+  { key: 'po_date', label: 'PO date', kind: 'timestamp' },
+];
+
+const LIMIT_FILTER: FilterDef = {
+  key: 'limit',
+  label: 'Max rows',
+  kind: 'select',
+  options: [
+    { value: '25', label: '25' },
+    { value: '50', label: '50' },
+    { value: '100', label: '100' },
+  ],
+  default: '50',
+};
+
+/** Incoming POs across all sources (Zoho + eBay + …). */
+const receivingIncomingAll: DataSourceDefinition = {
+  id: 'receiving.incoming_all',
+  label: 'Incoming POs (all sources)',
+  integration: 'receiving',
+  endpoint: '/api/receiving-lines',
+  buildUrl: (filters) => {
+    const limit = typeof filters.limit === 'string' && /^\d+$/.test(filters.limit) ? filters.limit : '50';
+    const q = new URLSearchParams({ view: 'incoming', limit });
+    const inbound = typeof filters.inbound === 'string' ? filters.inbound : 'all';
+    if (inbound && inbound !== 'all') q.set('inbound', inbound);
+    const state = typeof filters.state === 'string' ? filters.state.trim() : '';
+    if (state) q.set('state', state);
+    return `/api/receiving-lines?${q.toString()}`;
+  },
+  parse: parseIncomingRows,
+  shape: INCOMING_SHAPE,
+  filters: [
+    {
+      key: 'inbound',
+      label: 'Source',
+      kind: 'select',
+      options: [
+        { value: 'all', label: 'All sources' },
+        { value: 'zoho', label: 'Zoho' },
+        { value: 'ebay', label: 'eBay' },
+      ],
+      default: 'all',
+    },
+    { key: 'account_id', label: 'Buyer account id', kind: 'text' },
+    LIMIT_FILTER,
+  ],
+  permission: 'receiving.view',
+  realtime: { ablyChannel: 'receiving' },
+};
+
+/** Incoming POs from Zoho only (the legacy Incoming set). */
+const receivingIncomingZoho: DataSourceDefinition = {
+  id: 'receiving.incoming_zoho',
+  label: 'Incoming POs (Zoho)',
+  integration: 'receiving',
+  endpoint: '/api/receiving-lines',
+  buildUrl: (filters) => {
+    const limit = typeof filters.limit === 'string' && /^\d+$/.test(filters.limit) ? filters.limit : '50';
+    const q = new URLSearchParams({ view: 'incoming', inbound: 'zoho', limit });
+    const state = typeof filters.state === 'string' ? filters.state.trim() : '';
+    if (state) q.set('state', state);
+    return `/api/receiving-lines?${q.toString()}`;
+  },
+  parse: parseIncomingRows,
+  shape: INCOMING_SHAPE,
+  filters: [LIMIT_FILTER],
+  permission: 'receiving.view',
+  realtime: { ablyChannel: 'receiving' },
+};
+
+/** Incoming purchases from eBay buyer accounts. */
+const receivingIncomingEbay: DataSourceDefinition = {
+  id: 'receiving.incoming_ebay',
+  label: 'Incoming purchases (eBay)',
+  integration: 'receiving',
+  endpoint: '/api/receiving-lines',
+  buildUrl: (filters) => {
+    const limit = typeof filters.limit === 'string' && /^\d+$/.test(filters.limit) ? filters.limit : '50';
+    const q = new URLSearchParams({ view: 'incoming', inbound: 'ebay', limit });
+    if (filters.link === 'zoho_pending') q.set('link', 'zoho_pending');
+    const state = typeof filters.state === 'string' ? filters.state.trim() : '';
+    if (state) q.set('state', state);
+    return `/api/receiving-lines?${q.toString()}`;
+  },
+  parse: parseIncomingRows,
+  shape: INCOMING_SHAPE,
+  filters: [
+    {
+      key: 'link',
+      label: 'Zoho link',
+      kind: 'select',
+      options: [
+        { value: 'any', label: 'Any' },
+        { value: 'zoho_pending', label: 'Awaiting Zoho PO' },
+      ],
+      default: 'any',
+    },
+    { key: 'account_id', label: 'Buyer account id', kind: 'text' },
+    LIMIT_FILTER,
+  ],
+  permission: 'receiving.view',
+  realtime: { ablyChannel: 'receiving' },
+};
+
+/** eBay purchases still needing their Zoho PO — the merge to-do (§6.2). */
+const receivingAwaitingZohoLink: DataSourceDefinition = {
+  id: 'receiving.awaiting_zoho_link',
+  label: 'eBay purchases needing a Zoho PO',
+  integration: 'receiving',
+  endpoint: '/api/receiving-lines',
+  buildUrl: (filters) => {
+    const limit = typeof filters.limit === 'string' && /^\d+$/.test(filters.limit) ? filters.limit : '50';
+    return `/api/receiving-lines?view=incoming&inbound=ebay&link=zoho_pending&limit=${limit}`;
+  },
+  parse: parseIncomingRows,
+  shape: INCOMING_SHAPE,
+  filters: [
+    { key: 'account_id', label: 'Buyer account id', kind: 'text' },
+    LIMIT_FILTER,
+  ],
+  permission: 'receiving.view',
+  realtime: { ablyChannel: 'receiving' },
 };
 
 /**
@@ -344,6 +534,10 @@ export function registerBuiltinDataSources(): void {
   builtinsRegistered = true;
   registerDataSource(poGmailUnmatchedEmails);
   registerDataSource(receivingAwaitingTrackingPos);
+  registerDataSource(receivingIncomingAll);
+  registerDataSource(receivingIncomingZoho);
+  registerDataSource(receivingIncomingEbay);
+  registerDataSource(receivingAwaitingZohoLink);
   registerDataSource(sourcingOpenDemand);
   registerDataSource(receivingUnboxQueue);
   registerDataSource(testingTechQueue);

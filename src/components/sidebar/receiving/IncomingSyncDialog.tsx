@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Check, Loader2, Mail, RefreshCw, X } from '@/components/Icons';
+import { AlertTriangle, Check, Loader2, Mail, Package, RefreshCw, X } from '@/components/Icons';
 import { Button, IconButton } from '@/design-system/primitives';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
 
-export type IncomingSyncKind = 'zoho' | 'email';
+export type IncomingSyncKind = 'zoho' | 'email' | 'marketplace';
 
 export interface SyncDialogTile {
   label: string;
@@ -43,9 +43,10 @@ interface IncomingSyncDialogProps {
   onClose: () => void;
 }
 
-const KIND_META: Record<IncomingSyncKind, { eyebrow: string; icon: typeof RefreshCw; runningTitle: string }> = {
-  zoho: { eyebrow: 'Zoho Sync', icon: RefreshCw, runningTitle: 'Refreshing Zoho POs' },
-  email: { eyebrow: 'Email Sync', icon: Mail, runningTitle: 'Rescanning PO mailbox' },
+const KIND_META: Record<IncomingSyncKind, { eyebrow: string; icon: typeof RefreshCw; runningTitle: string; tone: string }> = {
+  zoho: { eyebrow: 'Zoho Sync', icon: RefreshCw, runningTitle: 'Refreshing Zoho POs', tone: 'text-emerald-600' },
+  email: { eyebrow: 'Email Sync', icon: Mail, runningTitle: 'Rescanning PO mailbox', tone: 'text-violet-600' },
+  marketplace: { eyebrow: 'Marketplace Sync', icon: Package, runningTitle: 'Importing marketplace purchases', tone: 'text-amber-600' },
 };
 
 const TONE_MAP = {
@@ -124,7 +125,7 @@ export function IncomingSyncDialog({
       >
         <header className="flex items-start gap-3 border-b border-border-soft px-5 py-3.5">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Icon className={`h-4 w-4 ${kind === 'zoho' ? 'text-emerald-600' : 'text-violet-600'} ${isRunning ? 'animate-pulse' : ''}`} />
+            <Icon className={`h-4 w-4 ${meta.tone} ${isRunning ? 'animate-pulse' : ''}`} />
             <div className="min-w-0">
               <p className={`${microBadge} text-text-soft`}>{meta.eyebrow}</p>
               <h2 className={`${sectionLabel} text-text-default mt-0.5`}>{title}</h2>
@@ -135,7 +136,7 @@ export function IncomingSyncDialog({
               key={Math.floor(elapsedMs / 100)}
               initial={{ opacity: 0.4 }}
               animate={{ opacity: 1 }}
-              className={`text-caption font-mono font-semibold tabular-nums ${kind === 'zoho' ? 'text-emerald-600' : 'text-violet-600'}`}
+              className={`text-caption font-mono font-semibold tabular-nums ${meta.tone}`}
             >
               {(elapsedMs / 1000).toFixed(1)}s
             </motion.span>

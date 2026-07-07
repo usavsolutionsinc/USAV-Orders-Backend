@@ -51,6 +51,7 @@ async function fetchResolution(sku: string, platform: string | null | undefined)
                 platformSku: p.platformSku ?? null,
                 platformItemId: p.platformItemId ?? null,
                 accountName: p.accountName ?? null,
+                listingUrl: p.listingUrl ?? null,
               }))
             : [],
         }

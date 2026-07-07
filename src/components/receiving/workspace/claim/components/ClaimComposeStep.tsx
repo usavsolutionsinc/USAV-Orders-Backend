@@ -9,7 +9,7 @@ import { ClaimTemplateEditor } from './ClaimTemplateEditor';
 export function ClaimComposeStep({ c }: { c: ReceivingClaimController }) {
   return (
     <>
-      <ClaimTemplateEditor template={c.template} filedTicket={c.filedTicket} />
+      <ClaimTemplateEditor template={c.template} filedTicket={c.filedTicket} row={c.row} />
 
       <p className="text-caption font-semibold leading-5 text-text-soft">
         Refine the subject and body. Continue to Review to confirm everything before the ticket is

@@ -43,6 +43,14 @@ export function PoLinkTab({
   const currentPoNumber = (row.zoho_purchaseorder_number || '').trim() || null;
   const currentPoId = (row.zoho_purchaseorder_id || '').trim() || null;
 
+  // Universal Incoming (plan §7.1): when this line is an eBay-originated spine row
+  // (a real spine row with a non-Zoho primary source), picking a Zoho PO MERGES —
+  // it augments this line with a secondary Zoho link + equivalence via
+  // /api/receiving/inbound/link, rather than re-pointing a carton (relink). The
+  // eBay identity stays the badge; the Zoho PO is added alongside for accounting.
+  const inboundSource = (row.inbound_source_type || '').trim().toLowerCase();
+  const isInboundMerge = row.id > 0 && inboundSource !== '' && inboundSource !== 'zoho';
+
   const trimmed = query.trim();
   const { data, isFetching, isError } = useQuery({
     queryKey: ['po-search', trimmed],
@@ -61,7 +69,39 @@ export function PoLinkTab({
   const link = async (po: PoCandidate) => {
     if (linkingId) return;
     setLinkingId(po.zoho_purchaseorder_id);
+    const poLabel = po.zoho_purchaseorder_number || po.zoho_purchaseorder_id;
     try {
+      if (isInboundMerge) {
+        // eBay (or other non-Zoho) Incoming line → add a Zoho PO identity (merge).
+        const res = await fetch('/api/receiving/inbound/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receiving_line_id: row.id,
+            target: {
+              system: 'zoho',
+              purchase_order_id: po.zoho_purchaseorder_id,
+              purchase_order_number: po.zoho_purchaseorder_number,
+            },
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; merged?: boolean };
+        if (!res.ok || !body.success) {
+          toast.error(body.error || `Link failed (${res.status})`);
+          return;
+        }
+        toast.success(body.merged ? `Merged into PO ${poLabel}` : `Linked PO ${poLabel}`);
+        // eBay stays the badge; the row now also carries the Zoho PO.
+        dispatchLineUpdated({
+          id: row.id,
+          zoho_purchaseorder_id: po.zoho_purchaseorder_id,
+          zoho_purchaseorder_number: po.zoho_purchaseorder_number,
+        });
+        invalidateReceivingFeeds(queryClient);
+        setQuery('');
+        return;
+      }
+
       const res = await fetch('/api/receiving/relink', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,7 +118,7 @@ export function PoLinkTab({
         toast.error(body.error || `Link failed (${res.status})`);
         return;
       }
-      toast.success(`Linked PO ${po.zoho_purchaseorder_number || po.zoho_purchaseorder_id}`);
+      toast.success(`Linked PO ${poLabel}`);
       // Update the open carton's displayed PO in place (carton context + feeds).
       dispatchLineUpdated({
         id: row.id,
@@ -99,6 +139,12 @@ export function PoLinkTab({
     <div className="space-y-3">
       {/* The currently-linked PO is shown in the global header — not repeated
           here. This tab is purely the search-and-(re)link surface. */}
+
+      {isInboundMerge ? (
+        <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-eyebrow font-semibold uppercase tracking-widest text-blue-700">
+          {`${(row.inbound_source_type || 'eBay')} order · pick its Zoho PO to merge`}
+        </p>
+      ) : null}
 
       {/* Search the local PO mirror (PO# / reference / vendor). */}
       <div className="relative">
@@ -156,7 +202,7 @@ export function PoLinkTab({
                     loading={isLinking}
                     disabled={linkingId !== null}
                     onClick={() => void link(po)}
-                    label={currentPoNumber ? 'Relink' : 'Link'}
+                    label={isInboundMerge ? 'Merge' : currentPoNumber ? 'Relink' : 'Link'}
                   />
                 )}
               </div>

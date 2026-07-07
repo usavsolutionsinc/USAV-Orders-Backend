@@ -10,9 +10,10 @@ import type { IncomingSyncKind, IncomingSyncResult } from '@/components/sidebar/
 import type { CarrierSyncResult, CarrierSyncStreamEvent } from '@/lib/carrier-sync/types';
 
 /**
- * The three Incoming refresh actions and the two result dialogs they drive:
+ * The four Incoming refresh actions and the two result dialogs they drive:
  *   • Zoho  — re-pull issued POs + mirror status (single POST → IncomingSyncDialog)
  *   • Email — rescan the PO mailbox (single POST → IncomingSyncDialog)
+ *   • Marketplace — import eBay buyer purchases (+ Amazon when available)
  *   • Tracking — re-poll UPS/USPS/FedEx (NDJSON stream → CarrierSyncDialog)
  * All three invalidate every receiving feed through the shared helper so this
  * view and the scan path never drift on what counts as "a receiving feed".
@@ -22,6 +23,7 @@ export function useIncomingSyncActions() {
   const [refreshing, setRefreshing] = useState(false);
   const [zohoRefreshing, setZohoRefreshing] = useState(false);
   const [rescanning, setRescanning] = useState(false);
+  const [marketplaceRefreshing, setMarketplaceRefreshing] = useState(false);
 
   // Live carrier stream — per-carrier tabs streamed from /refresh/stream.
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
@@ -186,6 +188,61 @@ export function useIncomingSyncActions() {
     }
   }, [rescanning, invalidateIncoming, beginIncSync, finishIncSync]);
 
+  const refreshMarketplace = useCallback(async () => {
+    if (marketplaceRefreshing) return;
+    setMarketplaceRefreshing(true);
+    beginIncSync('marketplace');
+    try {
+      const res = await fetch('/api/receiving-lines/incoming/marketplace-refresh', { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error(data?.error || `Marketplace refresh failed (${res.status})`);
+      await invalidateIncoming();
+      const ebay = data?.ebay ?? {};
+      const ingested = ebay.ingested ?? 0;
+      const created = ebay.created ?? 0;
+      const accounts = ebay.accounts ?? 0;
+      const linesFetched = ebay.linesFetched ?? 0;
+      const errors: string[] = Array.isArray(ebay.errors) ? ebay.errors : [];
+      const notes: string[] = Array.isArray(data?.notes) ? data.notes : [];
+      const nothingChanged = ingested === 0 && created === 0 && errors.length === 0;
+      finishIncSync({
+        ok: Boolean(data?.ok) || nothingChanged,
+        tiles: [
+          { label: 'Accounts', value: accounts, tone: 'gray' },
+          { label: 'Fetched', value: linesFetched, tone: 'blue' },
+          { label: 'Imported', value: ingested, tone: 'emerald' },
+          { label: 'Errors', value: errors.length, tone: 'red' },
+        ],
+        updated: [
+          created > 0 ? `${created} new purchase${created === 1 ? '' : 's'} added to Incoming` : null,
+          ingested > created ? `${ingested - created} existing row${ingested - created === 1 ? '' : 's'} refreshed` : null,
+        ].filter(Boolean) as string[],
+        sections: [
+          { label: 'eBay buyer accounts', rows: [
+            { k: 'Accounts', v: accounts },
+            { k: 'Lines fetched', v: linesFetched },
+            { k: 'Ingested', v: ingested },
+            { k: 'Created', v: created },
+            { k: 'Errors', v: errors.length },
+          ] },
+        ],
+        errors,
+        note: notes[0] ?? (nothingChanged ? 'Already up to date — no new marketplace purchases.' : null),
+      });
+    } catch (err) {
+      finishIncSync({
+        ok: false,
+        tiles: [],
+        updated: [],
+        sections: [],
+        errors: [],
+        note: err instanceof Error ? err.message : 'Could not reach marketplace accounts. Try again.',
+      });
+    } finally {
+      setMarketplaceRefreshing(false);
+    }
+  }, [marketplaceRefreshing, invalidateIncoming, beginIncSync, finishIncSync]);
+
   const handleCancelSync = useCallback(() => {
     syncAbortRef.current?.abort();
   }, []);
@@ -269,7 +326,8 @@ export function useIncomingSyncActions() {
 
   return {
     // single-shot buttons
-    zohoRefreshing, rescanning, refreshZoho, rescanEmail,
+    zohoRefreshing, rescanning, marketplaceRefreshing,
+    refreshZoho, rescanEmail, refreshMarketplace,
     // carrier stream
     refreshing, refreshTracking, handleCancelSync,
     // carrier dialog

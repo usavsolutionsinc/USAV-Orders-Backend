@@ -1,6 +1,10 @@
 # Universal Incoming Purchase Orders — Plan
 
-> **Status:** PLAN (2026-07-01). No implementation started.
+> **Status:** SHIPPED (Phases 1–6, 2026-07-01 → 2026-07-06). Phase 1 migrations
+> (`2026-07-01k/l/m`) applied to prod; the Phase-5 station-template seed
+> (`2026-07-06e`) is authored but NOT yet applied. Universal query + eBay sync stay
+> dormant per-org until `incoming_universal` is ON (ON for USAV org #1); Track A
+> eBay API sync is a no-op until `buy.order.readonly` approval (Track B bridge is live).
 >
 > **Goal:** Make `receiving_lines` the **universal Incoming spine** with **polymorphic
 > purchase identity** (`inbound_purchase_order_links`, mirror, equivalence graph) so
@@ -976,29 +980,29 @@ tenants opt in via Config Sheet source picker.
 - [ ] `mergeEbayLinesIntoZohoPo` hook in Zoho receiving sync
 - [ ] Universal Incoming query + summary counts (behind flag)
 
-### Phase 4 — Link UI + dedup polish (1 week)
+### Phase 4 — Link UI + dedup polish (1 week) — ✅ shipped 2026-07-06
 
-- [ ] `POST /api/receiving/inbound/link`
-- [ ] Extend `PoLinkTab` → **InboundLinkTab** (Zoho search + merge)
-- [ ] Incoming details: eBay tab + Link button
-- [ ] Attach-tracking for eBay-only rows
+- [x] `POST /api/receiving/inbound/link` → `linkInboundManually` (`src/lib/inbound/manual-link.ts`, Deps-injected, 9 DB-free tests). Audit `RECEIVING_INBOUND_LINKED`.
+- [x] Extend `PoLinkTab` — eBay-originated rows route to `/api/receiving/inbound/link` (merge) with a "Merge" affordance; Zoho rows keep the relink path.
+- [x] Incoming details: eBay tab (`EbayTab.tsx`) + inline "Link to Zoho PO" merge. Details route grew an `inbound_source`/`inbound_order_id` branch; overlay opens the panel for eBay rows.
+- [x] Attach-tracking for eBay rows — `resolvePo` follows the polymorphic links to a merged row's Zoho PO. (Pure eBay-only-no-Zoho carton path deferred: the physical `receiving` carton model is Zoho-PO-anchored with a `source IN ('zoho_po','unmatched')` CHECK; a native eBay carton needs a schema change. Operator links a Zoho PO first.)
 
-### Phase 5 — Studio registry + tenant templates (1 week)
+### Phase 5 — Studio registry + tenant templates (1 week) — ✅ shipped 2026-07-06
 
-- [ ] `src/lib/inbound/source-registry.ts` — inbound source SoT
-- [ ] Register data sources: `receiving.incoming_*`, update `awaiting_tracking_pos` parse
-- [ ] Register actions: `incoming.link_zoho_po`, `incoming.refresh_inbound`
-- [ ] `organizations.settings.inbound` schema + resolver
-- [ ] `organization_feature_flags('incoming_universal')`
-- [ ] Seed default `station_definitions` incoming template for new orgs
-- [ ] Publish validation: eBay sources require flag + connected buyer account
+- [x] `src/lib/inbound/source-registry.ts` — inbound source SoT (shipped Phase 1).
+- [x] Register data sources: `receiving.incoming_all` / `_zoho` / `_ebay` / `awaiting_zoho_link`; updated `awaiting_tracking_pos` parse (po_id = zoho id ?? source_order_id) + `inbound` filter.
+- [x] Register actions: `incoming.link_zoho_po`, `incoming.refresh_inbound`, `incoming.import_ebay_order`.
+- [x] `organizations.settings.inbound` schema (`tenancy/settings.ts`) + `resolveInboundSettings` resolver (`src/lib/inbound/org-settings.ts`, 5 tests).
+- [x] `organization_feature_flags('incoming_universal')` — `isIncomingUniversal` (shipped Phase 3).
+- [x] Seed default `station_definitions` incoming template — migration `2026-07-06e_seed_incoming_station_template.sql` (org #1, inactive draft; per-new-org via seedOrgCatalog is the long-term home). **AUTHORED, NOT APPLIED.**
+- [x] Publish validation: eBay sources require flag + connected buyer account + source ⊆ enabledSources (`src/lib/inbound/publish-validation.ts`, 10 tests; wired into `POST /api/stations/publish`).
 
-### Phase 6 — Hardening
+### Phase 6 — Hardening — ✅ 2026-07-06
 
-- [ ] Unit tests: merge algorithm, UPSERT idempotency (`Deps` injection)
-- [ ] `audit-route-auth:check` for new routes
-- [ ] Neon cost review on cron interval
-- [ ] E2E: eBay purchase → Incoming → Zoho PO created → single deduped row
+- [x] Unit tests: merge algorithm (existing) + manual-link (9) + org-settings (5) + publish-validation (10) — 95 inbound/stations tests pass, all `Deps`-injected/DB-free.
+- [x] `audit-route-auth:check` — manifest regenerated (761 routes); `:check` + `:enforce` pass. New link route gated `receiving.mark_received`.
+- [x] Neon cost review — reviewed (event-driven, no new polling loops; details eBay branch mirrors the existing 60s single-panel poll; refresh eBay sync is flag-gated + rate-limited + no-op on Track A).
+- [x] E2E: eBay purchase → Incoming → Zoho PO created → single deduped row — spec authored under `tests/e2e/`.
 
 ---
 

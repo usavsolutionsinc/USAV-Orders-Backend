@@ -3920,6 +3920,39 @@ export const entitySignals = pgTable('entity_signals', {
 }));
 
 /**
+ * ops_events — polymorphic append-only ops event log ("SAL-style"), the
+ * long-term event spine (born 2026-06-30). Two orthogonal discriminator axes:
+ *   • entity_type / entity_id — WHAT business object (deploy-time-fixed;
+ *     CHECK ops_events_entity_type_chk added 2026-07-06 — its 9 values are the
+ *     SoT `OPS_EVENT_ENTITY_TYPES` in src/lib/ops-events.ts, pinned by
+ *     ops-events.test.ts).
+ *   • workflow_node_id — WHERE in the tenant's own Studio flow (workflow_nodes.id).
+ *     FK-FREE by design (added 2026-07-06): workflow_nodes rows are replaced
+ *     wholesale on every graph save, so a real FK would null this on ordinary
+ *     edits — same rationale as entity_signals.node_id / station_definitions.
+ * Writers: recordOpsEvent (src/lib/ops-events.ts) + recordEntitySignal's
+ * emission. Idempotent on client_event_id.
+ */
+export const opsEvents = pgTable('ops_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  eventType: text('event_type').notNull(),
+  /** CHECK ops_events_entity_type_chk — see OPS_EVENT_ENTITY_TYPES (SoT). */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  actorStaffId: integer('actor_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  clientEventId: text('client_event_id').unique(),
+  /** Soft (FK-free) ref → workflow_nodes.id. WHERE in the tenant's flow. */
+  workflowNodeId: text('workflow_node_id'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+}, (table) => ({
+  entityTimeIdx: index('idx_ops_events_org_entity_time').on(table.organizationId, table.entityType, table.entityId, table.occurredAt.desc(), table.id.desc()),
+  typeTimeIdx: index('idx_ops_events_org_type_time').on(table.organizationId, table.eventType, table.occurredAt.desc(), table.id.desc()),
+  nodeTimeIdx: index('idx_ops_events_org_node_time').on(table.organizationId, table.workflowNodeId, table.occurredAt.desc()).where(sql`workflow_node_id IS NOT NULL`),
+}));
+
+/**
  * node_surfaces — Studio graph node ↔ feed/surface declaration (plan §2.4).
  * node_id integrity is definition-scoped by design (graph saves replace
  * workflow_nodes wholesale); orphaned surfaces are an app-level lint.
@@ -4018,6 +4051,8 @@ export type NewFeedMembership = typeof feedMemberships.$inferInsert;
 export type StaffRailExclusion = typeof staffRailExclusions.$inferSelect;
 export type EntitySignal = typeof entitySignals.$inferSelect;
 export type NewEntitySignal = typeof entitySignals.$inferInsert;
+export type OpsEvent = typeof opsEvents.$inferSelect;
+export type NewOpsEvent = typeof opsEvents.$inferInsert;
 export type NodeSurface = typeof nodeSurfaces.$inferSelect;
 export type InsightLink = typeof insightLinks.$inferSelect;
 export type AgentMutation = typeof agentMutations.$inferSelect;

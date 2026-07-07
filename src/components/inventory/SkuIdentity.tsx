@@ -32,6 +32,7 @@ export interface SkuPlatformMapping {
   platformSku: string | null;   // marketplace SKU/MSKU (or null when only an item id exists)
   platformItemId?: string | null; // e.g. Amazon ASIN, ebay item id — shown as fallback when SKU is null
   accountName?: string | null;  // e.g. "ebay-us-main" vs "ebay-us-warehouse2" — disambiguates duplicates
+  listingUrl?: string | null;   // stored marketplace listing URL from sku_platform_ids
 }
 
 interface SkuIdentityProps {

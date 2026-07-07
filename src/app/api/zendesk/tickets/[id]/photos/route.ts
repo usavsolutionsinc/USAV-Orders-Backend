@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isZendeskConfigured, ZendeskApiError, ZendeskNotConfiguredError } from '@/lib/zendesk';
+import { isZendeskConfiguredForOrg, ZendeskApiError, ZendeskNotConfiguredError } from '@/lib/zendesk';
 import { getEntityPhotos, getTicketEntity } from '@/lib/zendesk-links';
 
 export const dynamic = 'force-dynamic';
@@ -48,7 +48,7 @@ export const GET = withAuth(
   async (req: NextRequest, ctx) => {
     const context = 'GET /api/zendesk/tickets/[id]/photos';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
       const id = ticketIdFromUrl(req);
 
       const entity = await getTicketEntity(ctx.organizationId, id);

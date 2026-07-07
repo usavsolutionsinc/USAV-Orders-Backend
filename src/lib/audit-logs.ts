@@ -164,6 +164,12 @@ export const AUDIT_ACTION = {
   /** A marketplace purchase (eBay buyer account, …) was imported onto the Incoming
    *  spine via the bridge/sync (Universal Incoming Phase 2). */
   RECEIVING_INBOUND_IMPORT:  'receiving.inbound.import',
+  /** An operator manually linked one Incoming spine row to a second purchase
+   *  identity (e.g. an eBay line → its Zoho PO), writing the secondary link +
+   *  cross-source equivalence and optionally collapsing a duplicate spine row
+   *  (Universal Incoming Phase 4, §7.2). Distinct from RECEIVING_RELINK, which
+   *  re-points a carton at a different Zoho PO. */
+  RECEIVING_INBOUND_LINKED:  'receiving.inbound.linked',
   /** Manual n8n-style lifecycle advance through transitionReceivingLine(). */
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
   /** Real "Save for unbox" transition — stamps receiving.triage_complete. */

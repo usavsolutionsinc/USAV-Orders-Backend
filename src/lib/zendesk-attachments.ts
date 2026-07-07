@@ -38,7 +38,7 @@ export async function uploadLibraryPhotosToZendesk(
         failed++;
         continue;
       }
-      tokens.push(await uploadFileToZendesk(pb.filename, pb.bytes, pb.contentType));
+      tokens.push(await uploadFileToZendesk(pb.filename, pb.bytes, pb.contentType, organizationId));
     } catch (err) {
       console.warn('[zendesk-attachments] library photo upload failed', id, err);
       failed++;
@@ -56,6 +56,7 @@ export interface RawAttachment {
 /** Upload ad-hoc files (e.g. drag-dropped into the modal) to Zendesk's Uploads API. */
 export async function uploadRawFilesToZendesk(
   files: RawAttachment[],
+  organizationId?: string,
 ): Promise<ZendeskUploadResult> {
   if (files.length === 0) return EMPTY;
   const tokens: string[] = [];
@@ -67,6 +68,7 @@ export async function uploadRawFilesToZendesk(
           file.filename || 'attachment',
           file.bytes,
           file.contentType || 'application/octet-stream',
+          organizationId,
         ),
       );
     } catch (err) {

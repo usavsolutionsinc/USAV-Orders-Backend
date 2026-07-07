@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { readInventorySpine, type InventoryEventRecord } from '@/lib/audit-log/inventory-spine';
+import { isRegisteredInboundSource, INBOUND_SOURCE_FACT_KIND, type InboundSourceType } from '@/lib/inbound/source-registry';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,9 +115,189 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       });
     }
 
+    // ── Inbound-anchored branch (eBay / marketplace, plan §7.3) ─────────────
+    // A non-Zoho Incoming row (e.g. an eBay buyer purchase) has no zoho_po_mirror
+    // to key on. The panel passes `inbound_source` + `inbound_order_id` (the
+    // polymorphic link identity) instead; return the same response shape with
+    // `po: null` + an `inbound` block (links, marketplace facts, reconcile mirror,
+    // resolved spine line) so the eBay tab + Link button render.
+    const inboundSource = (url.searchParams.get('inbound_source') || '').trim().toLowerCase();
+    const inboundOrderId = (url.searchParams.get('inbound_order_id') || '').trim();
+    if (!poId && inboundSource && inboundOrderId) {
+      if (!isRegisteredInboundSource(inboundSource)) {
+        return NextResponse.json({ success: false, error: 'unknown inbound source' }, { status: 400 });
+      }
+
+      // Spine lines for this external order (one order can span multiple lines).
+      const linesRes = await tenantQuery<{
+        id: number;
+        sku: string | null;
+        item_name: string | null;
+        quantity_expected: number;
+        quantity_received: number;
+        workflow_status: string | null;
+        zoho_purchaseorder_id: string | null;
+        zoho_purchaseorder_number: string | null;
+        platform_account_id: number | null;
+        receiving_id: number | null;
+      }>(
+        orgId,
+        `SELECT rl.id, rl.sku, rl.item_name, rl.quantity_expected, rl.quantity_received,
+                rl.workflow_status::text AS workflow_status,
+                rl.zoho_purchaseorder_id, rl.zoho_purchaseorder_number,
+                rl.platform_account_id, rl.receiving_id
+           FROM inbound_purchase_order_links l
+           JOIN receiving_lines rl ON rl.id = l.receiving_line_id AND rl.organization_id = l.organization_id
+          WHERE l.organization_id = $1 AND l.source_type = $2 AND l.source_order_id = $3
+          ORDER BY l.is_primary DESC, rl.id
+          LIMIT 200`,
+        [orgId, inboundSource, inboundOrderId],
+      );
+      const spineLines = linesRes.rows;
+      if (spineLines.length === 0) {
+        return NextResponse.json({ success: false, error: 'inbound order not found' }, { status: 404 });
+      }
+      const primaryLine = spineLines[0];
+
+      // All purchase-identity links across this order's lines (shows the merged
+      // Zoho PO when one exists).
+      const lineIdList = spineLines.map((l) => l.id);
+      const allLinksRes = await tenantQuery<{
+        source_type: string; source_order_id: string; is_primary: boolean;
+      }>(
+        orgId,
+        `SELECT DISTINCT source_type, source_order_id, bool_or(is_primary) AS is_primary
+           FROM inbound_purchase_order_links
+          WHERE organization_id = $1 AND receiving_line_id = ANY($2::int[])
+          GROUP BY source_type, source_order_id
+          ORDER BY is_primary DESC`,
+        [orgId, lineIdList],
+      );
+
+      // Reconcile mirror snapshot (seller/status/tracking).
+      const mirrorRes = await tenantQuery<{
+        order_number: string | null; vendor_or_seller_name: string | null;
+        status: string | null; payment_status: string | null;
+        tracking_number: string | null; carrier_code: string | null;
+        po_date: string | null; expected_delivery_date: string | null;
+      }>(
+        orgId,
+        `SELECT order_number, vendor_or_seller_name, status, payment_status,
+                tracking_number, carrier_code, po_date::text, expected_delivery_date::text
+           FROM inbound_purchase_order_mirror
+          WHERE organization_id = $1 AND source_type = $2 AND source_order_id = $3
+          LIMIT 1`,
+        [orgId, inboundSource, inboundOrderId],
+      );
+      const mirror = mirrorRes.rows[0] ?? null;
+
+      // Marketplace payload facts (e.g. ebay_purchase: seller, listing url, status).
+      const factKind = INBOUND_SOURCE_FACT_KIND[inboundSource as InboundSourceType];
+      let facts: Record<string, unknown> | null = null;
+      if (factKind) {
+        const factsRes = await tenantQuery<{ payload: Record<string, unknown> }>(
+          orgId,
+          `SELECT payload FROM receiving_line_facts
+            WHERE organization_id = $1 AND receiving_line_id = $2 AND fact_kind = $3
+            LIMIT 1`,
+          [orgId, primaryLine.id, factKind],
+        );
+        facts = factsRes.rows[0]?.payload ?? null;
+      }
+
+      // Buyer/storefront account label.
+      let accountLabel: string | null = null;
+      if (primaryLine.platform_account_id != null) {
+        const acctRes = await tenantQuery<{ label: string | null; integration_scope: string | null }>(
+          orgId,
+          `SELECT label, integration_scope FROM platform_accounts
+            WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [primaryLine.platform_account_id, orgId],
+        );
+        accountLabel = acctRes.rows[0]?.label ?? acctRes.rows[0]?.integration_scope ?? null;
+      }
+
+      // Lifecycle history for the order's lines.
+      let inboundEvents: InventoryEventRecord[] = [];
+      try {
+        inboundEvents = await readInventorySpine({ lineIds: lineIdList, order: 'desc', limit: 50 }, orgId);
+      } catch (err) {
+        console.warn('details(inbound): readInventorySpine failed', err);
+      }
+
+      const zohoLink = allLinksRes.rows.find((l) => l.source_type === 'zoho') ?? null;
+
+      return NextResponse.json({
+        success: true,
+        po: null,
+        inbound: {
+          source_type: inboundSource,
+          source_order_id: inboundOrderId,
+          order_number: mirror?.order_number ?? inboundOrderId,
+          seller_name: mirror?.vendor_or_seller_name ?? (facts?.sellerUsername as string | null) ?? null,
+          status: mirror?.status ?? (facts?.purchaseOrderStatus as string | null) ?? null,
+          payment_status: mirror?.payment_status ?? (facts?.paymentStatus as string | null) ?? null,
+          listing_url: (facts?.listingUrl as string | null) ?? null,
+          account_label: accountLabel,
+          receiving_line_id: primaryLine.id,
+          zoho_purchaseorder_id: zohoLink?.source_order_id ?? primaryLine.zoho_purchaseorder_id ?? null,
+          links: allLinksRes.rows.map((l) => ({
+            source_type: l.source_type,
+            source_order_id: l.source_order_id,
+            is_primary: l.is_primary,
+          })),
+        },
+        receiving: primaryLine.receiving_id ? { id: primaryLine.receiving_id, shipment_id: null, received_at: null } : null,
+        line_items: spineLines.map((l) => ({
+          line_item_id: null,
+          item_id: null,
+          sku: l.sku,
+          name: l.item_name,
+          description: null,
+          quantity_expected: Number(l.quantity_expected ?? 0),
+          quantity_received: Number(l.quantity_received ?? 0),
+          workflow_status: l.workflow_status,
+          receiving_line_id: l.id,
+          rate: null,
+          item_total: null,
+        })),
+        shipment: mirror?.tracking_number
+          ? {
+              shipment_id: 0,
+              tracking_number: mirror.tracking_number,
+              carrier: mirror.carrier_code,
+              latest_status_category: null,
+              is_delivered: null,
+              delivered_at: null,
+              last_checked_at: null,
+              out_for_delivery_at: null,
+              events: [],
+            }
+          : null,
+        receive_events: inboundEvents.map((e) => ({
+          id: e.id,
+          occurred_at: e.occurred_at,
+          event_type: e.event_type,
+          actor_staff_id: e.actor_staff_id,
+          actor_name: e.actor_name,
+          station: e.station,
+          sku: e.sku,
+          serial_number: e.serial_number,
+          serial_unit_id: e.serial_unit_id,
+          prev_status: e.prev_status,
+          next_status: e.next_status,
+          notes: e.notes,
+        })),
+        gmail: [],
+        delivered_emails: [],
+        zoho_activity: [],
+        notes: null,
+      });
+    }
+
     if (!poId) {
       return NextResponse.json(
-        { success: false, error: 'po_id or shipment_id is required' },
+        { success: false, error: 'po_id, shipment_id, or inbound_source+inbound_order_id is required' },
         { status: 400 },
       );
     }

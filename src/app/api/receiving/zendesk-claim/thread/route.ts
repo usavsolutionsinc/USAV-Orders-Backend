@@ -58,9 +58,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       throw ApiError.notFound('Linked receiving ticket', ticketId);
     }
 
-    const ticket = await getTicket(ticketId);
+    const ticket = await getTicket(ticketId, ctx.organizationId);
     if (!ticket) throw ApiError.notFound('Zendesk ticket', ticketId);
-    const { comments } = await listTicketComments(ticketId, { perPage: 100 });
+    const { comments } = await listTicketComments(ticketId, { perPage: 100 }, ctx.organizationId);
 
     return NextResponse.json({
       success: true,
@@ -115,7 +115,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       body: parsed.body,
       html_body: claimBodyToHtml(parsed.body),
       public: parsed.public,
-    });
+    }, {}, ctx.organizationId);
     if (!ticket) throw ApiError.notFound('Zendesk ticket', parsed.ticketId);
 
     return NextResponse.json({

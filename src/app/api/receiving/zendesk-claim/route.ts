@@ -158,7 +158,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             ).toLowerCase();
             const fileName = `${fileLabel}_${String(seq).padStart(3, '0')}.${ext}`;
             try {
-              uploads.push(await uploadFileToZendesk(fileName, pb.bytes, pb.contentType));
+              uploads.push(await uploadFileToZendesk(fileName, pb.bytes, pb.contentType, ctx.organizationId));
             } catch (upErr) {
               console.warn('[zendesk-claim] photo upload failed', row.id, upErr);
             }
@@ -184,6 +184,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
               external_id: buildExternalId(entityType, entityId),
             },
             { idempotencyKey: idempotencyKey ?? undefined },
+            ctx.organizationId,
           );
         } catch (err: unknown) {
           if (err instanceof ZendeskNotConfiguredError) {
@@ -365,7 +366,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 body: `Photo share pack: ${sharePackUrl}`,
                 html_body: `<p>Photo share pack: <a href="${sharePackUrl}">${sharePackUrl}</a></p>`,
                 public: false,
-              });
+              }, {}, ctx.organizationId);
             } catch (commentErr) {
               console.warn('[zendesk-claim] share pack comment failed', commentErr);
             }

@@ -85,6 +85,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // Entity-derived key: the overlay zendesk_ticket_id check above already
       // blocks a second push, so a stable per-row key is safe defense-in-depth.
       { idempotencyKey: `unfound:${kind}:${sourceId}` },
+      ctx.organizationId,
     );
   } catch (err: unknown) {
     if (err instanceof ZendeskNotConfiguredError) {

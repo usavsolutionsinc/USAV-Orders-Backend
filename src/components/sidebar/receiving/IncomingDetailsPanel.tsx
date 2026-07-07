@@ -4,12 +4,13 @@ import { X, RefreshCw, Trash2 } from '@/components/Icons';
 import { PaneHeaderTabs } from '@/components/ui/pane-header';
 import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
 import DeleteButton from '@/components/ui/DeleteButton';
-import { PoChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { PoChip, TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Button, IconButton } from '@/design-system/primitives';
-import { TABS, type TabId, type IncomingDetailsPanelProps } from './incoming-details/incoming-details-shared';
+import { tabsForData, type IncomingDetailsPanelProps } from './incoming-details/incoming-details-shared';
 import { useIncomingDetails } from './incoming-details/useIncomingDetails';
 import { PoTab } from './incoming-details/PoTab';
+import { EbayTab } from './incoming-details/EbayTab';
 import { ShipmentTab } from './incoming-details/ShipmentTab';
 import { ActivityTab } from './incoming-details/ActivityTab';
 import { EmailTab } from './incoming-details/EmailTab';
@@ -29,7 +30,8 @@ export type { IncomingDetailsPanelProps } from './incoming-details/incoming-deta
 export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
   const { onClose } = props;
   const c = useIncomingDetails(props);
-  const { isShipmentOnly, tab, setTab, syncing, syncOne, handleDelete, data, isLoading, isError, headerPo, headerTracking } = c;
+  const { isShipmentOnly, isInboundOnly, tab, setTab, syncing, syncOne, handleDelete, data, isLoading, isError, headerPo, headerTracking, headerOrder } = c;
+  const visibleTabs = tabsForData(data);
 
   return (
     <DetailStackRailRegistrar
@@ -43,6 +45,8 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {headerPo ? (
               <PoChip value={headerPo} display={getLast4(headerPo)} />
+            ) : headerOrder ? (
+              <OrderIdChip value={headerOrder} display={headerOrder} />
             ) : headerTracking ? (
               <TrackingChip value={headerTracking} display={getLast4(headerTracking)} />
             ) : (
@@ -52,23 +56,34 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
               <span className="truncate text-caption font-semibold text-text-soft">
                 · {data.po.vendor_name}
               </span>
+            ) : data?.inbound?.seller_name ? (
+              <span className="truncate text-caption font-semibold text-text-soft">
+                · {data.inbound.seller_name}
+              </span>
             ) : null}
           </div>
           {/* Sync re-pulls the PO header from Zoho — only meaningful when there
-              IS a PO. A shipment-only box uses the Shipment tab's "Re-poll"
-              (carrier) instead. */}
+              IS a PO. Shipment-only rows use the Shipment tab's "Re-poll"
+              (carrier). Inbound-only rows re-pull from linked marketplace accounts. */}
           {isShipmentOnly ? null : (
-            <HoverTooltip label="Re-pull this PO from Zoho + re-poll its shipment" asChild>
+            <HoverTooltip
+              label={
+                isInboundOnly
+                  ? 'Re-pull this order from linked marketplace accounts (eBay) + re-poll its shipment'
+                  : 'Re-pull this PO from Zoho + re-poll its shipment'
+              }
+              asChild
+            >
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => void syncOne()}
                 disabled={syncing}
-                ariaLabel="Sync this PO"
+                ariaLabel={isInboundOnly ? 'Resync this marketplace order' : 'Sync this PO'}
                 icon={<RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />}
                 className="h-7 gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-eyebrow font-black uppercase tracking-wider text-emerald-700 hover:bg-emerald-100"
               >
-                {syncing ? 'Syncing' : 'Sync'}
+                {syncing ? 'Syncing' : isInboundOnly ? 'Resync' : 'Sync'}
               </Button>
             </HoverTooltip>
           )}
@@ -85,8 +100,8 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
       {/* Tab nav — reuses PaneHeaderTabs (active tab = gray-900 fill + white
           text) so this panel matches the shipped + work-order detail panes. */}
       <div className="shrink-0 border-b border-border-soft">
-        <PaneHeaderTabs<TabId>
-          tabs={TABS}
+        <PaneHeaderTabs
+          tabs={visibleTabs}
           value={tab}
           onChange={setTab}
         />
@@ -103,6 +118,7 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
           </div>
         ) : (
           <div className="p-4">
+            {tab === 'ebay' && <EbayTab data={data} />}
             {tab === 'po' && <PoTab data={data} />}
             {tab === 'shipment' && <ShipmentTab data={data} />}
             {tab === 'activity' && <ActivityTab data={data} />}
