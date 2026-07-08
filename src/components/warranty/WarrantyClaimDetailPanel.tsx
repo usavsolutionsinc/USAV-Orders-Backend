@@ -79,7 +79,7 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
                 onClick={deleteClaim}
                 disabled={remove.isPending}
                 ariaLabel="Delete claim"
-                className="rounded-md p-1.5 text-text-faint transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                className="rounded-md p-1.5 text-text-faint transition hover:bg-surface-danger hover:text-text-danger disabled:opacity-50"
                 icon={remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               />
             </HoverTooltip>
@@ -94,17 +94,17 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
       </header>
 
       {remove.isError && (
-        <p className="border-b border-rose-100 bg-rose-50 px-5 py-2 text-xs text-rose-600">
+        <p className="border-b border-border-danger bg-surface-danger px-5 py-2 text-xs text-text-danger">
           {remove.error instanceof Error ? remove.error.message : 'Delete failed.'}
         </p>
       )}
 
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-text-faint" />
         </div>
       ) : error ? (
-        <div className="p-5 text-sm text-rose-600">
+        <div className="p-5 text-sm text-text-danger">
           {error instanceof Error ? error.message : 'Failed to load claim.'}
         </div>
       ) : !claim ? (
@@ -159,7 +159,7 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
               value={
                 claim.zendeskTicketId != null && zendeskTicketUrl(claim.zendeskTicketId) ? (
                   <a
-                    className="text-blue-600 underline"
+                    className="text-text-accent underline"
                     href={zendeskTicketUrl(claim.zendeskTicketId) ?? undefined}
                     target="_blank"
                     rel="noreferrer"
@@ -191,7 +191,7 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
             label="Proof"
             value={
               claim.purchaseProofUrl ? (
-                <a className="text-blue-600 underline" href={claim.purchaseProofUrl} target="_blank" rel="noreferrer">
+                <a className="text-text-accent underline" href={claim.purchaseProofUrl} target="_blank" rel="noreferrer">
                   View
                 </a>
               ) : null

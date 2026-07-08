@@ -146,7 +146,9 @@ export function OrdersQueueTable({
   growToContent = false,
   inheritColumnConfig = false,
   virtualized = false,
-  scrollParentRef,
+  // `scrollParentRef` is still accepted (SwimlaneBoard lane-body contract) but no
+  // longer consumed: stacked lanes render all rows instead of windowing against the
+  // shared ancestor scroll (see the render branch below), so nothing to wire here.
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
@@ -309,7 +311,7 @@ export function OrdersQueueTable({
             onNextWeek={onNextWeek}
             rightSlot={
               !showWeekControls
-                ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
+                ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" /> : null}</div>
                 : undefined
             }
           />
@@ -329,8 +331,8 @@ export function OrdersQueueTable({
               ) : firstRunEmpty ? (
                 <div className="mx-auto animate-in fade-in zoom-in duration-300">{firstRunEmpty}</div>
               ) : (
-                <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                  <p className="text-text-soft font-semibold italic opacity-20">{emptyMessage}</p>
+                <div className="max-w-xs mx-auto">
+                  <div className="mx-auto max-w-xs rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-muted">{emptyMessage}</div>
                   {showWeekControls && weekOffset > 0 && onResetWeek ? (
                     <Button
                       type="button"
@@ -344,13 +346,19 @@ export function OrdersQueueTable({
                 </div>
               )}
             </div>
-          ) : virtualized ? (
+          ) : virtualized && !growToContent ? (
+            // Self-scrolling body (dense table + grid lanes): window against the
+            // internal `scrollRef`. Stacked (growToContent) lanes deliberately fall
+            // through to the all-rows path below — the ancestor-scroll virtualizer
+            // mis-measures on first mount (rows only appear after a column toggle),
+            // and the queue is already bounded (rowLimit 200, split across lanes),
+            // so rendering all rows keeps the wheel on the board's shared scroll
+            // region with no first-paint race. This is the "windowing degrades to
+            // all-rows in 1-up lanes" behavior the `virtualized` prop doc promises.
             <VirtualQueueSections
               orderGroupsByDate={orderGroupsByDate}
-              // Stacked lane: window against the board's shared scroll region.
-              // Otherwise the internal body `scrollRef` owns the scroll.
-              scrollParentRef={scrollParentRef ?? scrollRef}
-              useAncestorScroll={Boolean(scrollParentRef)}
+              scrollParentRef={scrollRef}
+              useAncestorScroll={false}
               isMobile={isMobile}
               renderRow={renderRow}
             />

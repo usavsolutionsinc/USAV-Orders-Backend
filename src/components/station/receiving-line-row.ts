@@ -21,6 +21,8 @@ export interface ReceivingLineRow {
    */
   client_event_id?: string;
   tracking_number: string | null;
+  /** Legacy Zoho PO reference#/tracking text on the line (pickup placeholder detection). */
+  zoho_reference_number?: string | null;
   tracking_source?: 'shipment' | 'receiving' | 'zoho_reference' | null;
   carrier: string | null;
   shipment_status?: string | null;
@@ -194,4 +196,12 @@ export interface ReceivingLineRow {
   unbox_only_intake?: boolean;
   /** Server stamp when operator explicitly picked condition_grade. */
   condition_set_at?: string | null;
+  /**
+   * Rail fetcher stamp — line + distinct-SKU counts for adaptive title mode
+   * (unbox Recent per-carton; door-scan per-PO). Set client-side only.
+   */
+  rail_title_context?: {
+    line_count: number;
+    distinct_sku_count: number;
+  };
 }

@@ -6,6 +6,7 @@
  */
 
 import { sourcePlatformLabel } from '@/lib/source-platform';
+import { parseListingLinksFromSyncNotes } from '@/lib/zoho-po-prefill';
 import {
   getExternalUrlByItemNumber,
   getExternalUrlByPlatform,
@@ -14,7 +15,7 @@ import {
 export interface CartonListingLink {
   href: string;
   label: string;
-  source: 'manual' | 'catalog' | 'derived';
+  source: 'manual' | 'sync_notes' | 'catalog' | 'derived';
 }
 
 export interface CatalogPlatformLinkInput {
@@ -72,6 +73,7 @@ function sortKey(
  */
 export function collectCartonListingLinks(args: {
   listingLink: string;
+  syncNotes?: string | null;
   sku: string | null | undefined;
   sourcePlatform: string | null | undefined;
   isUnmatched: boolean;
@@ -91,6 +93,14 @@ export function collectCartonListingLinks(args: {
 
   const manual = normalizeHref(args.listingLink);
   if (manual) push(manual, 'Listing', 'manual');
+
+  const syncNoteLinks = parseListingLinksFromSyncNotes(args.syncNotes);
+  if (syncNoteLinks.length > 0) {
+    for (const l of syncNoteLinks) {
+      push(l.href, l.title ?? 'Listing', 'sync_notes');
+    }
+    return candidates;
+  }
 
   for (const p of args.platforms ?? []) {
     const href = catalogRowHref(p);
@@ -114,4 +124,23 @@ export function collectCartonListingLinks(args: {
     if (da !== db) return da - db;
     return a.label.localeCompare(b.label);
   });
+}
+
+export interface ListingLinkMenuOption {
+  href: string;
+  label: string;
+  title: string;
+}
+
+/** 1-indexed menu rows for the listing chip hover menu (only when count > 1). */
+export function formatListingLinkMenuOptions(
+  links: CartonListingLink[],
+): ListingLinkMenuOption[] | undefined {
+  if (links.length <= 1) return undefined;
+  const total = links.length;
+  return links.map((l, i) => ({
+    href: l.href,
+    label: `Listing ${i + 1}/${total}`,
+    title: l.href,
+  }));
 }

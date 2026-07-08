@@ -1,4 +1,4 @@
-import { Archive, FileText, Image as ImageIcon, Loader2, Tag } from '@/components/Icons';
+import { Archive, FileText, Image as ImageIcon, Loader2, Mail, Tag } from '@/components/Icons';
 import { CLAIM_TYPE_OPTIONS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { claimThumb } from '../claim-helpers';
 import type { ReceivingClaimController } from '../hooks/useReceivingClaimController';
@@ -28,10 +28,7 @@ function ReviewBlock({
 }
 
 /**
- * Step 3 — Review. A single read-only summary of everything that is about to
- * happen: the claim type, the photos that will attach + back up, the exact
- * Zendesk subject/body, and the local-storage folder the evidence lands in. The Submit
- * action lives in the footer; on success the flow advances to Confirmation.
+ * Step 3 — Review. Read-only summary before filing. Submit lives in the footer.
  */
 export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
   const { template, photos, row } = c;
@@ -41,15 +38,13 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
 
   const claimLabel =
     CLAIM_TYPE_OPTIONS.find((o) => o.value === c.claimType)?.label ?? c.claimType;
-  // The auto-archive on file names the folder after the new case #; until then
-  // show the same fallback the controller uses (PO #, else receiving id).
   const folderFallback =
     String(row.zoho_purchaseorder_number || '').trim() || `RCV-${row.receiving_id ?? ''}`;
 
   return (
-    <div className="space-y-4">
+    <div className="divide-y divide-border-hairline space-y-0 [&>section]:py-3 [&>section:first-child]:pt-0 [&>div]:py-3">
       <ReviewBlock icon={<Tag className="h-3.5 w-3.5" />} label="Claim type">
-        <span className="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-caption font-bold uppercase tracking-wide text-rose-700 ring-1 ring-inset ring-rose-200">
+        <span className="text-caption font-bold uppercase tracking-wide text-rose-700">
           {claimLabel}
         </span>
       </ReviewBlock>
@@ -64,7 +59,7 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
         }
       >
         {selected.length ? (
-          <div className="grid grid-cols-10 gap-1">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto pb-1">
             {selected.map((p) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -73,7 +68,7 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
                 alt=""
                 loading="lazy"
                 decoding="async"
-                className="aspect-square w-full rounded bg-surface-sunken object-cover ring-1 ring-rose-200"
+                className="h-14 w-14 shrink-0 rounded bg-surface-sunken object-cover ring-1 ring-border-soft"
               />
             ))}
           </div>
@@ -87,7 +82,7 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
         label="Zendesk ticket"
         hint={template.previewLoading ? 'updating…' : undefined}
       >
-        <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-canvas">
+        <div className="overflow-hidden rounded-lg border border-border-soft">
           <p className="border-b border-border-soft px-3 py-2 text-label font-bold text-text-default">
             {subject || <span className="font-medium text-rose-500">No subject yet</span>}
           </p>
@@ -97,21 +92,46 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
         </div>
       </ReviewBlock>
 
+      <ReviewBlock
+        icon={<Mail className="h-3.5 w-3.5" />}
+        label="Recipients"
+        hint={c.notePublic ? 'public reply' : 'internal note'}
+      >
+        {c.notePublic ? (
+          c.ccEmails.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {c.ccEmails.map((email) => (
+                <span
+                  key={email}
+                  className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-caption font-semibold text-blue-700 ring-1 ring-inset ring-blue-200"
+                >
+                  {email}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-caption font-medium text-text-muted">
+              Public reply — emails the requester (no CC added).
+            </p>
+          )
+        ) : (
+          <p className="text-caption font-medium text-text-muted">
+            Internal note — not emailed to anyone.
+          </p>
+        )}
+      </ReviewBlock>
+
       <ReviewBlock icon={<Archive className="h-3.5 w-3.5" />} label="Local backup">
-        <p className="text-caption font-medium leading-5 text-text-muted">
-          On file, this carton&apos;s {photos.photos.length || 'carton'}
-          {photos.photos.length === 1 ? ' photo' : ' photos'} are saved to local storage in a folder
-          named after the new case # (fallback{' '}
-          <span className="font-bold text-text-default">{folderFallback}</span>), alongside a{' '}
-          <span className="font-bold text-text-default">case-info.txt</span> notepad with the ticket
-          details.
+        <p className="text-caption font-medium text-text-muted">
+          {photos.photos.length || 0} {photos.photos.length === 1 ? 'photo' : 'photos'} → folder
+          after case # <span className="font-bold text-text-default">{folderFallback}</span>
         </p>
       </ReviewBlock>
 
-      {c.submitting ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-4 py-3 text-caption font-bold uppercase tracking-[0.14em] text-rose-700">
+      {c.submitting || c.archiveSubmitting ? (
+        <div className="flex items-center gap-2 text-caption font-semibold text-text-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Filing ticket &amp; backing up photos…
+          {c.submitting ? 'Filing ticket…' : 'Saving photos…'}
         </div>
       ) : null}
     </div>

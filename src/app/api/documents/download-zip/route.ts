@@ -3,13 +3,14 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { readOutboundDocumentBytes } from '@/lib/documents/read-bytes';
 import { buildStoreZip, type StoreZipEntry } from '@/lib/zip/store-zip';
+import {
+  safeZipDownloadBasename,
+  safeZipEntryName,
+  uniquifyZipEntryNames,
+  zipAttachmentHeaders,
+} from '@/lib/zip/safe-entry-name';
 
 export const dynamic = 'force-dynamic';
-
-function safeEntryName(base: string, fallback: string): string {
-  const cleaned = base.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
-  return cleaned || fallback;
-}
 
 export async function GET(request: NextRequest) {
   const gate = await requireRoutePerm(request, 'orders.view');
@@ -32,27 +33,26 @@ export async function GET(request: NextRequest) {
   const orgId = gate.ctx.organizationId as OrgId;
   const title = request.nextUrl.searchParams.get('title')?.trim() || 'outbound-documents';
 
-  const entries: StoreZipEntry[] = [];
+  const rawEntries: StoreZipEntry[] = [];
   for (let i = 0; i < documentIds.length; i++) {
     const documentId = documentIds[i];
     const file = await readOutboundDocumentBytes(orgId, documentId);
     if (!file) continue;
 
-    const name = `${String(i + 1).padStart(2, '0')}_${safeEntryName(file.filename, `document-${documentId}.pdf`)}`;
-    entries.push({ name, data: file.bytes });
+    const name = `${String(i + 1).padStart(2, '0')}_${safeZipEntryName(file.filename, `document-${documentId}.pdf`)}`;
+    rawEntries.push({ name, data: file.bytes });
   }
 
-  if (entries.length === 0) {
+  if (rawEntries.length === 0) {
     return NextResponse.json({ error: 'No downloadable documents found' }, { status: 404 });
   }
 
+  const uniqueNames = uniquifyZipEntryNames(rawEntries.map((e) => e.name));
+  const entries = rawEntries.map((entry, i) => ({ ...entry, name: uniqueNames[i] }));
   const blob = buildStoreZip(entries);
-  const safeTitle = title.replace(/[^\w.-]+/g, '_').slice(0, 40) || 'outbound-documents';
+  const safeTitle = safeZipDownloadBasename(title, 'outbound-documents');
 
   return new NextResponse(blob, {
-    headers: {
-      'content-type': 'application/zip',
-      'content-disposition': `attachment; filename="${safeTitle}.zip"`,
-    },
+    headers: zipAttachmentHeaders(safeTitle, blob.length),
   });
 }

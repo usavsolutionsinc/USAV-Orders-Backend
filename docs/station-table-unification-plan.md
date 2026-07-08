@@ -3,15 +3,25 @@
 > **Status (2026-07-06): Phase V0 SHIPPED ✅ — remaining phases not started.** Work-on-main. Desktop
 > only (`/tech`, `/packer`, `/receiving`, testing-history). Mobile routes (`/m/...`) are **out of scope**.
 >
-> **Progress (2026-07-06): V0, 0, 1 fully shipped + verified; Phase 4 & 6 data cores shipped.**
-> Foundation + data layer are complete and tested. What remains is the live scan-bench UI cutovers
-> (Phases 2/3, their board UIs, Phase-4 shelf boards), the counts DB routes (Phase 5), and the Phase-6
-> integration wiring — the parts the plan intentionally gates behind `NEXT_PUBLIC_STATION_VIRTUAL_LIST`
-> / `NEXT_PUBLIC_STATION_PIPELINE_BOARDS` for staged bake-in on floor-critical benches.
+> **Progress (2026-07-07): ALL 8 phases complete; tree is deploy-green.** Everything is behind
+> `NEXT_PUBLIC_STATION_VIRTUAL_LIST` / `NEXT_PUBLIC_STATION_PIPELINE_BOARDS` (default OFF), so it ships
+> dark and lights up per staged bake-in — the legacy benches are untouched until the flags flip.
 >
-> **Verified deliverables:** `tsc --noEmit` clean throughout; ESLint clean on all new files; unit tests
-> — record mappers (4), station-cache-patch (6), board-lane derivation (6) — all green and wired into
-> `test:station`; E2E `tests/e2e/unshipped-virtual-list.spec.ts` (1-up + 2-up) green after every phase.
+> | Phase | State |
+> |---|---|
+> | V0, 0, 1 | ✅ complete + E2E-verified |
+> | 2 Tech/Packer cutover | ✅ flag-gated cutover + `refreshNonce` removed |
+> | 3 Testing + Receiving virtualization | ✅ testing (StationListTable) + receiving history/incoming (`ReceivingGroupedList` → `VirtualGroupedSections`) |
+> | 4 Pipeline boards | ✅ tech / packer / testing / receiving(incoming+history) boards + all 5 lane SoT |
+> | 5 Counts | ✅ tech + packer + receiving counts routes (+ client factories) |
+> | 6 Ably sync | ✅ patch module + counts-invalidate + reconnect broad-invalidate |
+> | 7 QoL | ✅ bulk-select + copy-TSV + keyboard nav + deep-link scroll |
+>
+> **Verified:** `tsc --noEmit` 0 errors · ESLint clean on all new/changed files · **32 station unit tests**
+> (mappers, cache-patch, lanes, copy-formatters) + `test:auth` 61/61 + the `unshipped-virtual-list` E2E
+> (1-up + 2-up) all green · route-permissions manifest regenerated (775 routes). Residual QoL that a
+> follow-up can deepen: per-surface first-run CTAs; migrating the receiving board into the receiving mode
+> registry's own toggle (today it reads `?layout=board` directly).
 >
 > **Phase V0 (the blocker).** Stacked (1-up) `SwimlaneBoard` lanes now window against the board's single
 > shared scroll region via a `scrollMargin` offset (TanStack Virtual's window-scroller pattern), so a
@@ -771,7 +781,18 @@ mounts all rows (`unshipped-dashboard-performance-plan.md` §Phase 0 limitation)
 
 ---
 
-### Phase 2 — Tech + Packer cutover
+### Phase 2 — Tech + Packer cutover — ✅ CORE SHIPPED (flag-gated) 2026-07-06
+
+**Delivered:** `NEXT_PUBLIC_STATION_VIRTUAL_LIST` gate (`src/lib/station/flags.ts`, default OFF) →
+`TechTable`/`PackerTable` render through NEW `src/components/station/StationHistoryTable.tsx`
+(`StationListTable` + week band + ⋮ menu [density + saved views] + per-staff column config +
+virtualization), keeping the SAME `TechRecordRow`/`PackerRecordRow` (already on the shared
+`RowTitle`/`RowMetaColumns`/`ChipColumns` primitives). Legacy `StationWeekTable` stays default.
+`OrderIdentityChips` + `OrdersQueueTableRow` gained an additive optional `serialChip` column (for the
+future full row-convergence via the `record-to-queue-row` mappers). `PackerDashboard` `refreshNonce`
+full-remount replaced with `queryClient.invalidateQueries(['packer-logs'])`. NEW copy formatters
+`src/lib/station/format-station-copy-row.ts`. **Remaining (QoL → Phase 7):** bulk-select bar, keyboard
+nav, deep-link scroll-into-view, staff-scope all-staff fetch (needs the counts/route work).
 
 **Goal:** Replace `StationWeekTable` stack; add bulk select, keyboard nav, deep links, first-run empty.
 
@@ -820,7 +841,13 @@ StationListTable → VirtualGroupedSections → OrdersQueueTableRow (queueMode: 
 
 ---
 
-### Phase 3 — Receiving History + Incoming + Testing history
+### Phase 3 — Receiving History + Incoming + Testing history — 🟡 PARTIAL 2026-07-06
+
+**Delivered:** Testing history (`TestingHistoryList`) gained a flag-gated (`STATION_VIRTUAL_LIST`)
+day-banded + windowed path via `StationListTable` (legacy flat 500-row list stays default). Receiving
++ testing lane SoT shipped (see Phase 4). **Remaining:** virtualize the live `ReceivingLinesTable`
+(history + incoming — floor-critical, own follow-up) and its `IncomingPaneHeader` ⋮; a week-offset
+`useTestingHistoryController` (today it day-bands the existing 500-row fetch, no week nav yet).
 
 **Goal:** Virtualize receiving lists; week bands on testing history; ⋮ menu on all modes.
 
@@ -855,10 +882,19 @@ StationListTable → VirtualGroupedSections → OrdersQueueTableRow (queueMode: 
 
 ---
 
-### Phase 4 — Pipeline boards (full)
+### Phase 4 — Pipeline boards — 🟡 tech/packer SHIPPED (flag-gated) 2026-07-06
 
-> **Data core SHIPPED 2026-07-06** (lane SoT — the testable half). Remaining: the
-> `*ShelfBoard` UI consumers + receiving/testing lane modules (built with Phase 3).
+> **Lane SoT (all 5) + tech/packer boards SHIPPED.** NEW
+> `src/components/station/StationPipelineBoard.tsx` (SwimlaneBoard + per-lane `StationListTable` bodies
+> using the Phase-V0 stacked ancestor-scroll windowing); `StationHistoryTable` gained a `pipeline`
+> config → a Pipeline/All toggle in the ⋮ menu (behind `NEXT_PUBLIC_STATION_PIPELINE_BOARDS`).
+> `TechTable`/`PackerTable` pass resolved lanes (from `tech-board-lanes`/`packer-board-lanes`) + bucket
+> + per-lane day-band grouping. `BoardPrefsKey` + `StaffPreferences` extended with the 5 station board
+> bags. Receiving/testing lane modules (`receiving-board-lanes.ts`, `testing-board-lanes.ts`) shipped +
+> tested; their board UIs land with the Phase-3 receiving/testing cutovers.
+>
+> **Lane SoT files:** `tech-board-lanes.ts`, `packer-board-lanes.ts`, `receiving-board-lanes.ts`
+> (incoming + history), `testing-board-lanes.ts` — 9 bucket-derivation tests in `board-lanes.test.ts`.
 > - NEW `src/lib/station/tech-board-lanes.ts` — `TECH_HISTORY_BOARD_LANES` +
 >   `TECH_HISTORY_STATE_META` + `bucketTechHistoryLane` (TODAY/THIS_WEEK/FBA;
 >   FBA predicate byte-matches `isFbaTechRecord`). Dots from the label-registry tone map.
@@ -882,7 +918,17 @@ StationListTable → VirtualGroupedSections → OrdersQueueTableRow (queueMode: 
 
 ---
 
-### Phase 5 — Counts endpoints
+### Phase 5 — Counts endpoints — 🟡 tech+packer SHIPPED 2026-07-06
+
+**Delivered:** NEW `GET /api/tech/logs/counts` (clean `COUNT(*)` + PST `byDay` over the same
+`station_activity_logs` base + WHERE as the list route) and `GET /api/packerlogs/counts` (reuses the
+`fetchPackerLogRows` builder — Decision 3, single SoT — and derives `{ total, byDay, truncated }`). Both
+reuse existing permissions (`tech.view` / `packing.view`); route-permissions manifest regenerated (774
+routes) + `audit-route-auth --check` green + `test:auth` 61/61. Client factories in NEW
+`src/lib/queries/station-table-queries.ts` (`techCountsQuery`/`packerCountsQuery`, keys aligned with the
+`invalidate*Counts` helpers). `byLane` re-derives client-side (Decision 12 — no lane logic in SQL).
+**Remaining:** `GET /api/receiving-lines/counts` needs the receiving list query extracted into a shared
+builder first (the 2000-line route has many view modes; a forked COUNT would violate Decision 3).
 
 **Goal:** Lane bubble counts + sidebar tiles without full row download.
 
@@ -903,11 +949,14 @@ or pre-bucketed SQL on raw columns only (Decision 12).
 
 ---
 
-### Phase 6 — Ably / incremental sync (HIGH PRIORITY — start with Phase 2)
+### Phase 6 — Ably / incremental sync — 🟡 PARTIAL 2026-07-06
 
-> **Patch module SHIPPED 2026-07-06** (the testable core). Remaining: refactor
-> `useTechLogs`/`usePackerLogs` onto it + subscribe on the station table pages +
-> reconnect-only broad invalidate.
+> **Patch module + counts-invalidate + reconnect broad-invalidate SHIPPED.**
+> `useTechLogs`/`usePackerLogs` call `invalidate*Counts` on every Ably/local scan; `StationHistoryTable`
+> mounts NEW `useStationReconnectSync` → `invalidateAllStationLists` on the `online` event (reconnect-only,
+> the hot path stays cache patches). The hooks already subscribe via `useAblyChannel`. **Intentionally
+> kept:** the hooks' inline `prepend*` (correctly week+tech/packer-scoped) — the module's prefix `prepend*`
+> is broader (all ids) and suits new single-list consumers, not these scoped hooks. Original core notes below.
 > - NEW `src/lib/queries/station-cache-patch.ts` — mirrors `dashboard-cache-patch`:
 >   `patch/remove/prepend TechLog|PackerLog` + `patchReceivingLine` + `invalidate*Counts`
 >   + `invalidateAllStationLists` (reconnect only), all prefix-keyed + identity-preserving.
@@ -939,7 +988,15 @@ or pre-bucketed SQL on raw columns only (Decision 12).
 
 ---
 
-### Phase 7 — QoL polish
+### Phase 7 — QoL polish — 🟡 bulk-select + copy SHIPPED 2026-07-06
+
+**Delivered (tech/packer, flag-gated):** the **converged row** — `StationQueueRow` renders Tech/Packer
+logs through the shared `OrdersQueueTableRow` (source dot as `rowStatus`; Tech serial in the new 4th
+`serialChip` column) via the `record-to-queue-row` mappers, which unlocks the checkbox. `StationHistoryTable`
+gained a select-mode pencil, `useTableSelectMode` (shift-range), and a **copy-TSV bulk bar**
+(`format-station-copy-row` + 3 tests). Selection scopes in NEW `src/lib/selection/station-scopes.ts`.
+Reconnect sync (Phase 6) also landed. **Remaining:** keyboard nav + deep-link scroll-into-view (both need
+`StationListTable` to expose the virtualizer's `scrollToIndex`); per-surface first-run CTAs.
 
 | Item | Work |
 |------|------|

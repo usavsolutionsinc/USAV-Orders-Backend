@@ -18,6 +18,17 @@ import {
   SidebarRailShell, railRelativeTime, type SidebarRailRowContext,
 } from '@/components/sidebar/SidebarRailShell';
 import { RailRowBody } from '@/components/sidebar/rail-shell/RailRowBody';
+import { usePlatformMeta } from '@/hooks/useCatalog';
+import { FulfillmentPickupPill } from '@/components/receiving/ReceivingIdentityChips';
+import {
+  fulfillmentModeLabel,
+  isLocalPickupFulfillment,
+  displayTrackingNumber,
+} from '@/lib/receiving/fulfillment-mode';
+import {
+  receivingRailRowTitle,
+  type ReceivingRailRowTitleMode,
+} from '@/lib/receiving/po-group-title';
 
 export interface ApiResponse {
   success: boolean;
@@ -85,6 +96,8 @@ export interface RecentActivityRailBaseProps {
    * Additive — unset = today's footer.
    */
   renderPopoverActions?: (row: ReceivingLineRow, ctx: { dismiss: () => void }) => ReactNode;
+  /** Row title axis — default `line`; unbox Recent uses `po-group`. */
+  rowTitleMode?: ReceivingRailRowTitleMode;
 }
 
 // Stable module-scope callbacks. The shell wires `getId` into its optimistic-
@@ -159,7 +172,13 @@ export function RecentActivityRailBase({
   getPreviewQty,
   renderPopoverContext,
   renderPopoverActions,
+  rowTitleMode = 'line',
 }: RecentActivityRailBaseProps) {
+  const resolvePlatformMeta = usePlatformMeta();
+  const resolvePlatformLabel = (raw: string) => resolvePlatformMeta(raw).label;
+  const rowTitle = (row: ReceivingLineRow) =>
+    receivingRailRowTitle(row, rowTitleMode, resolvePlatformLabel);
+
   return (
     <SidebarRailShell<ReceivingLineRow>
       queryKey={queryKey}
@@ -190,10 +209,18 @@ export function RecentActivityRailBase({
       onSelect={selectRow}
       getStatusDot={getStatusDot}
       getStatusDotLabel={getStatusDotLabel}
-      renderRowMain={(row, ctx) => <ReceivingRowMain row={row} ctx={ctx} renderQuantity={renderQuantity} />}
+      renderRowMain={(row, ctx) => (
+        <ReceivingRowMain
+          row={row}
+          ctx={ctx}
+          renderQuantity={renderQuantity}
+          title={rowTitle(row)}
+        />
+      )}
       renderPopover={(row, p) => (
         <ReceivingPopoverContent
           row={row}
+          title={rowTitle(row)}
           groupSize={p.groupSize}
           qtyLabel={previewQtyLabel}
           getQty={getPreviewQty}
@@ -210,13 +237,13 @@ export function RecentActivityRailBase({
 }
 
 function ReceivingRowMain({
-  row, ctx, renderQuantity,
+  row, ctx, renderQuantity, title,
 }: {
   row: ReceivingLineRow;
   ctx: SidebarRailRowContext;
   renderQuantity: (row: ReceivingLineRow) => ReactNode;
+  title: string;
 }) {
-  const title = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
   const techId = row.assigned_tech_id ?? null;
   const techColor = techId ? stationThemeColors[getStaffThemeById(techId)].text : 'text-text-faint';
 
@@ -243,9 +270,10 @@ function ReceivingRowMain({
 }
 
 function ReceivingPopoverContent({
-  row, groupSize, qtyLabel, getQty, activityAt, statusDot, statusLabel, onOpenWorkspace, contextSlot, actionsSlot,
+  row, title, groupSize, qtyLabel, getQty, activityAt, statusDot, statusLabel, onOpenWorkspace, contextSlot, actionsSlot,
 }: {
   row: ReceivingLineRow;
+  title: string;
   groupSize: number;
   qtyLabel: string;
   getQty: (row: ReceivingLineRow) => { current: number; total: number | null };
@@ -261,7 +289,6 @@ function ReceivingPopoverContent({
   /** Optional footer action (e.g. "File claim"), left of "Open →". */
   actionsSlot?: ReactNode;
 }) {
-  const title = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
   const { current: qtyCurrent, total: qtyTotal } = getQty(row);
   const isComplete = qtyTotal != null && qtyTotal > 0 && qtyCurrent >= qtyTotal;
   const progressPct =
@@ -283,10 +310,12 @@ function ReceivingPopoverContent({
     String(row.workflow_status || 'EXPECTED').toUpperCase(),
   );
 
-  const trackingValue = (row.tracking_number || '').trim();
   const skuValue = (row.sku || '').trim();
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const serialsCsv = (row.serials ?? []).map((s) => (s.serial_number || '').trim()).filter(Boolean).join(', ');
+  const isPickup = isLocalPickupFulfillment(row);
+  const pickupLabel = fulfillmentModeLabel(row);
+  const displayTrk = displayTrackingNumber(row);
 
   return (
     <div className="space-y-3 p-3.5">
@@ -321,6 +350,11 @@ function ReceivingPopoverContent({
           {row.needs_test ? (
             <span className="rounded bg-orange-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-700">Test</span>
           ) : null}
+          {pickupLabel ? (
+            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-emerald-700 ring-1 ring-inset ring-emerald-200">
+              {pickupLabel}
+            </span>
+          ) : null}
           <HoverTooltip
             label={`${row.photo_count ?? 0} ${(row.photo_count ?? 0) === 1 ? 'photo' : 'photos'}`}
             asChild
@@ -354,7 +388,11 @@ function ReceivingPopoverContent({
       <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto border-t border-border-hairline pt-3 [&>*]:shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
-        <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
+        {isPickup ? (
+          <FulfillmentPickupPill />
+        ) : (
+          <TrackingChip value={displayTrk ?? ''} display={getLast4(displayTrk ?? '')} />
+        )}
         {/* Always render the serial chip — even with no serial it shows the
             `----` placeholder (resolveSerialDisplay) so the column stays put and
             lines up across rows. Content-fit width (not the default w-[84px])

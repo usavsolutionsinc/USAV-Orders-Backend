@@ -11,7 +11,22 @@ import {
 } from './photo-gallery-api';
 import { usePhotoItems } from './usePhotoItems';
 import { useImageZoom } from './useImageZoom';
-import type { PhotoGalleryInput } from './photo-gallery-utils';
+import { uploadPhotoClient } from '@/lib/photos/upload-client';
+import type { PhotoEntityType } from '@/lib/photos/types';
+import type { PhotoGalleryInput, PhotoItem } from './photo-gallery-utils';
+
+/**
+ * Entity a viewer upload attaches to. Upload always targets the gallery's OWN
+ * entity — never an arbitrary one — so a dropped/picked file joins the photos
+ * already on screen. Receiving galleries derive this from `receivingId`; other
+ * surfaces pass it explicitly.
+ */
+export interface PhotoUploadTarget {
+  entityType: PhotoEntityType;
+  entityId: number;
+  photoType?: string;
+  poRef?: string;
+}
 
 export interface PhotoGalleryProps {
   photos: PhotoGalleryInput[];
@@ -38,6 +53,15 @@ export interface PhotoGalleryProps {
   allowReassign?: boolean;
   /** Called after a photo is moved to another PO (parents invalidate cache). */
   onPhotoReassigned?: (photoId: number) => void;
+  /**
+   * Enables the viewer's "Upload photos" action (⋮ menu item + drag-and-drop
+   * onto the lightbox). Uploaded files attach to THIS entity — the gallery's own
+   * entity. Omit and the affordance is hidden. Receiving galleries (those given
+   * a `receivingId`) derive this automatically, so no call-site change is needed.
+   */
+  uploadTarget?: PhotoUploadTarget;
+  /** Called after each successful upload (parents invalidate cache). */
+  onPhotoUploaded?: (photoId: number) => void;
 }
 
 /**
@@ -60,6 +84,8 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     libraryHref,
     allowReassign = false,
     onPhotoReassigned,
+    uploadTarget,
+    onPhotoUploaded,
   } = props;
 
   const { photoItems, setPhotoItems, resetFingerprint, loadedCount, errorCount } = usePhotoItems(photos);
@@ -76,6 +102,8 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
   const [reassignOpen, setReassignOpen] = useState(false);
   const [reassigning, setReassigning] = useState(false);
   const [reassignError, setReassignError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -89,6 +117,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     setDeleteArmed(false);
     setDeleteError(null);
     setReassignError(null);
+    setUploadError(null);
   }, [photoItems.length, zoom]);
 
   const handlePrevious = useCallback(() => {
@@ -97,6 +126,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     setDeleteArmed(false);
     setDeleteError(null);
     setReassignError(null);
+    setUploadError(null);
   }, [photoItems.length, zoom]);
 
   const closeViewer = useCallback(() => {
@@ -106,6 +136,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     setDeleteError(null);
     setReassignOpen(false);
     setReassignError(null);
+    setUploadError(null);
   }, [zoom]);
 
   const openViewer = useCallback((index: number) => {
@@ -116,6 +147,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     setDeleteError(null);
     setReassignOpen(false);
     setReassignError(null);
+    setUploadError(null);
   }, [zoom]);
 
   useEffect(() => {
@@ -285,6 +317,75 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     void performDelete();
   };
 
+  // Upload always attaches to the gallery's own entity. Prefer an explicit
+  // target; otherwise derive it from a receiving-scoped gallery so receiving
+  // surfaces get upload for free without a new call-site prop — never an
+  // arbitrary/unowned entity.
+  const effectiveUploadTarget: PhotoUploadTarget | null =
+    uploadTarget ??
+    (typeof receivingId === 'number' && Number.isFinite(receivingId) && receivingId > 0
+      ? { entityType: 'RECEIVING', entityId: receivingId, photoType: 'receiving_item', poRef: orderId }
+      : null);
+  const canUpload = effectiveUploadTarget !== null;
+
+  const handleUploadFiles = useCallback(
+    async (files: File[]) => {
+      if (!effectiveUploadTarget || uploading) return;
+      const images = files.filter((f) => f.type.startsWith('image/'));
+      if (images.length === 0) return;
+      // Inherit the sibling photos' source context so the new upload files under
+      // the same badge/PO in the info panel.
+      const inheritedMeta = photoItems[currentIndex]?.meta;
+      const firstNewIndex = photoItems.length;
+      setUploading(true);
+      setUploadError(null);
+      try {
+        const uploadedIds: number[] = [];
+        const newItems: PhotoItem[] = [];
+        for (const file of images) {
+          const res = await uploadPhotoClient({
+            file,
+            entityType: effectiveUploadTarget.entityType,
+            entityId: effectiveUploadTarget.entityId,
+            photoType: effectiveUploadTarget.photoType,
+            poRef: effectiveUploadTarget.poRef,
+          });
+          uploadedIds.push(res.id);
+          newItems.push({
+            id: res.id,
+            url: res.url,
+            thumbUrl: res.thumbUrl,
+            status: 'loading',
+            index: 0, // reindexed on append below
+            meta: inheritedMeta,
+          });
+        }
+        if (uploadedIds.length === 0) return;
+        // Append optimistically; resetFingerprint so a later parent refetch
+        // reconciles instead of duplicating (mirrors the delete path).
+        resetFingerprint();
+        setPhotoItems((prev) => [
+          ...prev,
+          ...newItems.map((item, i) => ({ ...item, index: prev.length + i })),
+        ]);
+        setCurrentIndex(firstNewIndex);
+        zoom.resetZoom();
+        dispatchReceivingPhotoChanged({
+          action: 'upload',
+          photoIds: uploadedIds,
+          receivingId: receivingId ?? null,
+        });
+        uploadedIds.forEach((id) => onPhotoUploaded?.(id));
+      } catch (err) {
+        console.error('Failed to upload photo(s):', err);
+        setUploadError(err instanceof Error ? err.message : 'Upload failed');
+      } finally {
+        setUploading(false);
+      }
+    },
+    [effectiveUploadTarget, uploading, photoItems, currentIndex, resetFingerprint, setPhotoItems, receivingId, onPhotoUploaded, zoom],
+  );
+
   const handleReassignToReceiving = async (targetReceivingId: number) => {
     const photo = photoItems[currentIndex];
     const photoId = photo?.id;
@@ -333,6 +434,8 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     deletePhotoDirect: performDelete,
     canReassignCurrent, reassignOpen, setReassignOpen, reassigning, reassignError,
     handleReassignToReceiving,
+    canUpload, uploading, uploadError, handleUploadFiles,
+    clearUploadError: () => setUploadError(null),
   };
 }
 

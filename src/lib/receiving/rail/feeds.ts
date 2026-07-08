@@ -21,6 +21,8 @@
  */
 
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import type { ReceivingRailRowTitleMode } from '@/lib/receiving/po-group-title';
+import { stampCartonRailTitleContext, stampPoRailTitleContext } from '@/lib/receiving/po-group-title';
 import type { ApiResponse } from '@/components/sidebar/receiving/RecentActivityRailBase';
 import { getReceivedActivityAt, getViewedAt, type RailStatusId } from './status';
 import type { RailQtyId } from './quantity';
@@ -78,6 +80,10 @@ export interface ReceivingRailFeed {
   view?: ReceivingLinesView;
   sort?: ReceivingLinesSort;
   postFilter?: (r: ReceivingLineRow) => boolean;
+  /** Row title axis — `adaptive-po` for single-SKU product vs multi-SKU PO summary. */
+  rowTitleMode?: ReceivingRailRowTitleMode;
+  /** Stamp `rail_title_context` after fetch (`po` = group by PO key). */
+  stampRailTitleContext?: 'po';
   // OR a custom multi-source fetch (combined / unfound-queue):
   buildFetcher?: (rt: RailFetchRuntime) => () => Promise<ApiResponse>;
 }
@@ -141,6 +147,18 @@ export async function fetchReceivingLines(
   const q = (rt.query ?? '').trim().toLowerCase();
   if (q) rows = rows.filter((r) => matchesReceivingLine(r, q));
   return { success: true, receiving_lines: rows, total: rows.length };
+}
+
+/** Apply PO-level adaptive title context after a standard lines fetch. */
+export function fetchReceivingLinesWithPoTitleContext(
+  spec: ReceivingLinesQuery,
+  rt: RailFetchRuntime,
+  opts?: { limit?: number; includeSerials?: boolean },
+): Promise<ApiResponse> {
+  return fetchReceivingLines(spec, rt, opts).then((data) => ({
+    ...data,
+    receiving_lines: stampPoRailTitleContext(data.receiving_lines ?? []),
+  }));
 }
 
 // Triage "Prioritize" — door-scanned matched cartons, priority-sorted.
@@ -289,9 +307,12 @@ export function buildUnboxReceivedFetcher(rt: RailFetchRuntime): () => Promise<A
       }
     }
 
-    const merged = Array.from(bestByCarton.values())
-      .sort((a, b) => scannedRecencyMs(b) - scannedRecencyMs(a))
-      .slice(0, UNBOX_SIDEBAR_LIMIT);
+    const merged = stampCartonRailTitleContext(
+      opened,
+      Array.from(bestByCarton.values())
+        .sort((a, b) => scannedRecencyMs(b) - scannedRecencyMs(a))
+        .slice(0, UNBOX_SIDEBAR_LIMIT),
+    );
 
     return { success: true, receiving_lines: merged, total: merged.length };
   };
@@ -347,6 +368,7 @@ const FEEDS = {
     autoSelectFirstWhenEmpty: true,
     limit: UNBOX_SIDEBAR_LIMIT,
     refreshEvents: UNBOX_REFRESH,
+    rowTitleMode: 'adaptive-po',
   },
   /**
    * Unbox "Queue" — triage door-scanned matched POs waiting to unbox. The only
@@ -364,6 +386,8 @@ const FEEDS = {
     autoSelectFirstWhenEmpty: true,
     limit: 50,
     refreshEvents: [...UNBOX_REFRESH, 'receiving-triage-refresh'],
+    rowTitleMode: 'adaptive-po',
+    stampRailTitleContext: 'po',
   },
   /** Triage "Prioritize" — door-scanned matched cartons, not yet unboxed. */
   scanned: {
@@ -378,6 +402,8 @@ const FEEDS = {
     autoSelectFirstWhenEmpty: true,
     limit: 50,
     refreshEvents: TRIAGE_REFRESH,
+    rowTitleMode: 'adaptive-po',
+    stampRailTitleContext: 'po',
   },
   /** Unbox "Viewed" — lines this operator recently opened (per-staff). */
   viewed: {

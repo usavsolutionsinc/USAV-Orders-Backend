@@ -134,6 +134,13 @@ export default function RedesignedMobileReceive({
           body: JSON.stringify({
             trackingNumber: tracking,
             intakeSurface: surface,
+            // SPEED-FIRST: resolve from LOCAL data only — no synchronous Zoho
+            // round-trip on the scan path (desktop parity). A local miss still
+            // creates + returns the unfound carton (receiving_id set), so the
+            // row resolves instantly and links to /m/r/[id]; live Zoho re-checks
+            // are operator-initiated there (UnfoundMatchStrip) with the
+            // reconcile cron as the passive backstop.
+            localOnly: true,
             ...(intakeForScan !== 'UNKNOWN' && surface === 'triage'
               ? { classification: intakeForScan }
               : {}),

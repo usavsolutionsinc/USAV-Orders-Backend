@@ -40,7 +40,14 @@ export interface BoardPrefs {
 }
 
 /** Top-level prefs keys that hold a {@link BoardPrefs} bag (one per board surface). */
-export type BoardPrefsKey = 'unshippedBoard' | 'shippedBoard';
+export type BoardPrefsKey =
+  | 'unshippedBoard'
+  | 'shippedBoard'
+  | 'techHistoryBoard'
+  | 'packerHistoryBoard'
+  | 'receivingHistoryBoard'
+  | 'receivingIncomingBoard'
+  | 'testingHistoryBoard';
 
 /** Known, typed preference keys. The column is open JSONB; this is the contract. */
 export interface StaffPreferences {
@@ -64,6 +71,16 @@ export interface StaffPreferences {
    * outbound states (`OUTBOUND_STATE_META`); same shape as {@link BoardPrefs}.
    */
   shippedBoard?: BoardPrefs | null;
+  /**
+   * Station history Pipeline-board layout prefs (cross-device), one bag per
+   * station surface — same {@link BoardPrefs} shape as the dashboard boards.
+   * Lanes come from the station lane SoT modules (`tech-board-lanes.ts`, …).
+   */
+  techHistoryBoard?: BoardPrefs | null;
+  packerHistoryBoard?: BoardPrefs | null;
+  receivingHistoryBoard?: BoardPrefs | null;
+  receivingIncomingBoard?: BoardPrefs | null;
+  testingHistoryBoard?: BoardPrefs | null;
   /**
    * Per-staff column visibility for the shared list tables, keyed by TableId
    * ('receiving' | 'orders' | 'shipped' | 'tech' | 'packer'). `hidden` lists the

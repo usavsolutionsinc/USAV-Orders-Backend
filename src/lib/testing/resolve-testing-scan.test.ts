@@ -10,9 +10,14 @@
  */
 
 import { test } from 'node:test';
-import { strictEqual } from 'node:assert';
+import { strictEqual, equal, deepEqual } from 'node:assert';
 
-import { looksLikeReceivingCode } from './resolve-testing-scan';
+import {
+  looksLikeReceivingCode,
+  resolveReceivingCodeToLine,
+  stubRowFromCartonHeader,
+} from './resolve-testing-scan';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 test('canonical handles are recognised as codes (resolve even in Order# mode)', () => {
   for (const v of [
@@ -61,5 +66,111 @@ test('bare product SKUs are NOT codes (fall through to the SKU pre-pack branch)'
     'WH1000XM4',       // model-style SKU
   ]) {
     strictEqual(looksLikeReceivingCode(v), false, `${v} should fall through to SKU resolve`);
+  }
+});
+
+// ── resolveReceivingCodeToLine — lineless unfound carton handles ─────────────
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function installFetchMock(
+  handlers: Record<string, (url: string) => Response | Promise<Response>>,
+): () => void {
+  const orig = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    for (const [prefix, handler] of Object.entries(handlers)) {
+      if (url.includes(prefix)) return handler(url);
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = orig;
+  };
+}
+
+test('stubRowFromCartonHeader maps unmatched carton fields onto the synthetic row', () => {
+  const row = stubRowFromCartonHeader(42, 'R-42', {
+    tracking: '1Z999AA10123456784',
+    source: 'unmatched',
+    carrier: 'UPS',
+    zoho_purchaseorder_number: null,
+  });
+  equal(row.receiving_id, 42);
+  equal(row.tracking_number, '1Z999AA10123456784');
+  equal(row.receiving_source, 'unmatched');
+  equal(row.carrier, 'UPS');
+  equal(row.item_name, 'Unfound PO');
+  equal(row.id, -42);
+});
+
+test('R-{id} with zero lines + existing carton → line stub (not not_found)', async () => {
+  const restore = installFetchMock({
+    '/api/receiving-lines?receiving_id=42': () =>
+      jsonResponse({ receiving_lines: [] }),
+    '/api/receiving/42': () =>
+      jsonResponse({
+        success: true,
+        receiving: {
+          id: 42,
+          tracking: 'TRK-ABC',
+          source: 'unmatched',
+          carrier: 'FEDEX',
+        },
+      }),
+  });
+  try {
+    const result = await resolveReceivingCodeToLine('R-42');
+    equal(result?.kind, 'line');
+    if (result?.kind !== 'line') return;
+    equal(result.via, 'handle');
+    equal(result.row.receiving_id, 42);
+    equal(result.row.receiving_source, 'unmatched');
+    equal(result.row.tracking_number, 'TRK-ABC');
+  } finally {
+    restore();
+  }
+});
+
+test('R-{id} with zero lines + carton 404 → not_found', async () => {
+  const restore = installFetchMock({
+    '/api/receiving-lines?receiving_id=999': () =>
+      jsonResponse({ receiving_lines: [] }),
+    '/api/receiving/999': () =>
+      jsonResponse({ success: false, error: 'Package not found' }, 404),
+  });
+  try {
+    const result = await resolveReceivingCodeToLine('R-999');
+    deepEqual(result, { kind: 'not_found', query: 'R-999' });
+  } finally {
+    restore();
+  }
+});
+
+test('R-{id} with one real line → opens that line unchanged', async () => {
+  const realLine = {
+    id: 7,
+    receiving_id: 42,
+    sku: '00001-BK',
+    quantity_received: 0,
+    quantity_expected: 1,
+  } as ReceivingLineRow;
+  const restore = installFetchMock({
+    '/api/receiving-lines?receiving_id=42': () =>
+      jsonResponse({ receiving_lines: [realLine] }),
+  });
+  try {
+    const result = await resolveReceivingCodeToLine('R-42');
+    equal(result?.kind, 'line');
+    if (result?.kind !== 'line') return;
+    equal(result.row.id, 7);
+    equal(result.row.sku, '00001-BK');
+  } finally {
+    restore();
   }
 });

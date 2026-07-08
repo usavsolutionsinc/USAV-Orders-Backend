@@ -39,7 +39,7 @@ interface ShippedLaneTableProps {
    *  virtualizer windows against it (instead of this lane's absent scroll body),
    *  so a stacked lane stays windowed rather than mounting every row (Phase V0). */
   scrollParentRef?: RefObject<HTMLElement | null>;
-  /** Shown (faint, italic) when this lane has no records. */
+  /** Shown in the canonical dashed teaching box when this lane has no records. */
   emptyMessage: string;
 }
 
@@ -83,7 +83,7 @@ export function ShippedLaneTable({
   if (daySections.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center">
-        <p className="text-text-soft font-semibold italic opacity-20">{emptyMessage}</p>
+        <div className="mx-auto max-w-xs rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-muted">{emptyMessage}</div>
       </div>
     );
   }

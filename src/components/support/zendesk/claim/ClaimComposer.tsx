@@ -1,7 +1,8 @@
 'use client';
 
-import { AtSign, Globe, Lock } from '@/components/Icons';
+import { AtSign } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { VisibilityToggle } from '@/components/ui/VisibilityToggle';
 import { ZendeskSelect } from '../ZendeskSelect';
 import { TagInput } from '../TagInput';
 import { ClaimAttachments } from './ClaimAttachments';
@@ -12,44 +13,6 @@ import type { ZendeskClaimController } from './useZendeskClaimController';
 const labelCls = 'text-micro font-black uppercase tracking-widest text-text-soft';
 const inputCls =
   'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2.5 text-[13px] text-text-default outline-none transition placeholder:text-text-faint focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
-
-/** Internal-note ↔ public-reply segmented toggle. */
-function VisibilityToggle({
-  value,
-  onChange,
-  internalLabel,
-  publicLabel,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  internalLabel: string;
-  publicLabel: string;
-}) {
-  return (
-    <div className="inline-flex rounded-lg bg-surface-sunken p-0.5">
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={cn(
-          'ds-raw-button inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-caption font-bold transition',
-          !value ? 'bg-surface-card text-amber-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
-        )}
-      >
-        <Lock className="h-3.5 w-3.5" /> {internalLabel}
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={cn(
-          'ds-raw-button inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-caption font-bold transition',
-          value ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
-        )}
-      >
-        <Globe className="h-3.5 w-3.5" /> {publicLabel}
-      </button>
-    </div>
-  );
-}
 
 /** The mode-specific form body + the shared attachments section. */
 export function ClaimComposer({ c }: { c: ZendeskClaimController }) {

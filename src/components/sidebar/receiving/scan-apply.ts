@@ -24,7 +24,6 @@ import {
   upsertUnboxQueueRows,
   receivingRailCartonKey,
 } from '@/lib/queries/receiving-queries';
-import { toast } from '@/lib/toast';
 import type { LookupPoData } from '@/lib/receiving/scan';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
@@ -241,9 +240,8 @@ export function applyMatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
 /**
  * Open an UNMATCHED (unfound) carton from a lookup-po response: echo the result,
  * announce the new entry, optimistically open the workspace from a synthetic
- * stub, reconcile to the real row in the background, then run the instant-unfound
- * Zoho self-promote (which upgrades this same carton to found in place via
- * {@link applyMatchedCarton}).
+ * stub, reconcile to the real row in the background (triage only). Live Zoho /
+ * Amazon lookups are operator-initiated via {@link UnfoundMatchStrip}.
  */
 export function applyUnmatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
   const exceptionId = typeof d.exception_id === 'number' ? d.exception_id : null;
@@ -330,43 +328,14 @@ export function applyUnmatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
       })();
     }
 
-    // Instant-unfound follow-up: the first call was localOnly (no Zoho), so this
-    // carton is unfound only against LOCAL data. Run the real Zoho search in the
-    // BACKGROUND — if it resolves a PO the route promotes THIS same carton in
-    // place, so swap the open unfound view to found with no re-scan. If Zoho also
-    // misses, the view stays unfound (the route logged the exception for the
-    // reconcile worker).
-    if (d.zoho_pending === true) {
-      void (async () => {
-        try {
-          const res2 = await fetch('/api/receiving/lookup-po', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              trackingNumber: ctx.trackingNumber,
-              staffId: Number(ctx.staffId),
-              mode: 'tracking',
-              ...(ctx.intakeSurface === 'unbox' ? { intakeSurface: 'unbox' } : {}),
-            }),
-          });
-          const d2 = await res2.json();
-          const upgraded =
-            d2?.success &&
-            Boolean(d2.matched) &&
-            Array.isArray(d2.lines) &&
-            d2.lines.length > 0;
-          // Only swap when Zoho promoted THIS carton in place (same receiving_id)
-          // — a conflict-fallback that lands a different row shouldn't yank the
-          // operator off the carton they have open; the feed refresh surfaces it.
-          if (upgraded && Number(d2.receiving_id) === unmatchedReceivingId) {
-            toast.success(`PO matched for “${ctx.trackingNumber}”`);
-            applyMatchedCarton(ctx, d2);
-          }
-        } catch {
-          /* background best-effort — reconcile worker is the net */
-        }
-      })();
-    }
+    // SPEED-FIRST: no mid-scan integration ping. The first lookup-po was
+    // localOnly (no Zoho), so this carton is unfound only against LOCAL data —
+    // but we deliberately do NOT run a synchronous/background Zoho search on the
+    // scan path. Live integration lookups are operator-initiated only (the
+    // UnfoundMatchStrip "Zoho" button promotes this carton in place via
+    // applyMatchedCarton), with the reconcile/incoming-PO-sync crons as the
+    // crons as the passive backstop. `d.zoho_pending` is intentionally ignored
+    // here on the tracking path.
   } else {
     window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
   }

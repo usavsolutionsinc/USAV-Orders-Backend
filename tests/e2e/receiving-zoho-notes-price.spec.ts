@@ -8,8 +8,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
  *      `receiving_zoho_notes` (overall PO note) + line `unit_price` (Zoho rate)
  *      + `zoho_notes` (per-line item description).
  *   2. UI: opening a matched carton in the unbox workspace shows the Zoho unit
- *      cost between Condition and the SKU chip, and the Zoho Notes tab renders
- *      the "Overall PO note" (NOT the "No notes imported" empty state).
+ *      cost as the last meta chip in the PO row, and the Sync notes field (under
+ *      "More notes") renders the overall PO note.
  *
  * Data-driven: picks a real carton that carries the fields (backfilled from
  * Zoho), so it doesn't depend on a hard-coded id.
@@ -77,25 +77,24 @@ test.describe('receiving — Zoho overall notes + unit price', () => {
 
     await page.goto(`/receiving?recvId=${receiving_id}&lineId=${id}`);
 
-    // The PO-items accordion (matched carton) renders the priced meta row.
-    const price = page.locator('[title="Zoho unit cost"]').first();
+    // The PO-items accordion renders unit price as the trailing meta chip.
+    const price = page.locator('[data-col="price"]').getByText(/\d+\.\d{2}/).first();
     await expect(price, 'Zoho unit price chip is visible in the line row').toBeVisible({ timeout: 25_000 });
-    await expect(price).toContainText('$');
 
-    // Open the Zoho notes tab and confirm the overall note shows (not empty).
-    // The HorizontalButtonSlider nav variant renders tabs as role="tab"; fall back
-    // to the visible label to stay robust to the slider's internal markup.
-    const zohoTab = page
-      .getByRole('tab', { name: /Zoho notes/i })
-      .or(page.getByText('Zoho notes', { exact: true }))
+    // Sync notes live behind "More notes" → Sync tab.
+    const moreNotes = page.getByRole('button', { name: /More notes/i }).first();
+    await expect(moreNotes).toBeVisible({ timeout: 15_000 });
+    await moreNotes.click();
+
+    const syncTab = page
+      .getByRole('tab', { name: /^Sync$/i })
+      .or(page.getByText('Sync', { exact: true }))
       .first();
-    await expect(zohoTab).toBeVisible({ timeout: 15_000 });
-    await zohoTab.click();
+    await expect(syncTab).toBeVisible({ timeout: 10_000 });
+    await syncTab.click();
 
     await expect(page.getByText(/No notes imported from Zoho/i)).toHaveCount(0);
-    // The overall note is an editable "Zoho notes" field, pre-filled with the
-    // carton's Zoho note + a "Save to Zoho" check action.
-    const overallField = page.getByRole('textbox', { name: /Zoho notes/i });
+    const overallField = page.getByRole('textbox', { name: /Sync notes/i });
     await expect(overallField).toBeVisible({ timeout: 10_000 });
     await expect(overallField).toHaveValue(/\S/); // non-empty (carton note loaded)
     await expect(page.getByRole('button', { name: /Save to Zoho/i })).toBeVisible();
@@ -112,7 +111,7 @@ test.describe('receiving — Zoho overall notes + unit price', () => {
     await page.goto(`/receiving?recvId=${hit!.receiving_id}&lineId=${hit!.id}`);
 
     // The far-right notes icon on the PO row opens the inline item-description editor.
-    const notesIcon = page.getByRole('button', { name: /Edit item description/i }).first();
+    const notesIcon = page.getByRole('button', { name: /Toggle item description/i }).first();
     await expect(notesIcon).toBeVisible({ timeout: 25_000 });
     await notesIcon.click();
 

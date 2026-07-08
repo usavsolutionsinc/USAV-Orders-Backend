@@ -56,8 +56,9 @@ import {
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
 import { EcwidProductSearchInline } from '@/components/receiving/unfound/EcwidProductSearchInline';
-import { ZohoPoPairTab } from '@/components/receiving/workspace/line-edit/ZohoPoPairTab';
+import { ZohoItemPairTab } from '@/components/receiving/workspace/line-edit/ZohoItemPairTab';
 import { EmailPoLinkTab } from '@/components/receiving/workspace/line-edit/EmailPoLinkTab';
+import { PoLinkTab } from '@/components/receiving/workspace/line-edit/PoLinkTab';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MatchCard } from '@/components/receiving/triage/MatchCard';
 import { relativeTime, toTriagePackage } from '@/components/receiving/triage/triage-types';
@@ -67,8 +68,9 @@ import { PoSuggestBanner } from '@/components/receiving/triage/PoSuggestBanner';
 import { useUnmatchedItems } from '@/components/receiving/workspace/unmatched-items/useUnmatchedItems';
 import { useReceivingCartonUnlink } from '@/components/receiving/workspace/unmatched-items/useReceivingCartonUnlink';
 import { isReturnIntake } from '@/lib/receiving/triage-intake-kind';
+import { WorkspaceSectionTitle } from '../WorkspaceSectionLabel';
 
-type MatchTab = 'ecwid' | 'po' | 'email' | 'zendesk';
+type MatchTab = 'zoho_item' | 'zoho_po' | 'ecwid' | 'email' | 'zendesk';
 
 export function LineMatchingSection({
   row,
@@ -169,7 +171,14 @@ function TriageMatchingCard({
   // 'ecwid' (Ecwid Search) is the default — the recent-orders search (by order #,
   // title, or SKU) is the primary add/pair surface; Link-a-Zoho-PO / Zendesk /
   // Email-PO sit alongside it.
-  const [tab, setTab] = useState<MatchTab>('ecwid');
+  //
+  // Unfound cartons default to the Zoho Item tab (leftmost pill), where the next
+  // correct action is to record the product by Zoho SKU even before the PO is
+  // known. This is only the initial default (a lazy initializer that runs once)
+  // — the operator can still switch to Ecwid / Tickets / Email PO.
+  const [tab, setTab] = useState<MatchTab>(() =>
+    pkg.isUnmatched ? 'zoho_item' : 'ecwid',
+  );
 
   // A carton can carry TWO independent linkages, set from ANY of the pairing
   // tabs and each individually reversible:
@@ -341,12 +350,13 @@ function TriageMatchingCard({
   };
 
   const tabs: HorizontalSliderItem[] = [
-    // Ecwid Search (default) — search ALL recent orders by order #, title, or SKU
-    // (relaxed to include normal orders + returns/trade-ins, not just -RS). The
-    // primary add/pair surface for matched AND unmatched cartons.
+    // Zoho Item (left pill) — search & add by Zoho SKU (no PO link required).
+    { id: 'zoho_item', label: 'Zoho Item', icon: Search },
+    // Zoho PO pairing (second pill) — link/relink the carton to a PO.
+    { id: 'zoho_po', label: 'Zoho PO', icon: Link2 },
+    // Ecwid Search — search ALL recent orders by order #, title, or SKU
+    // (relaxed to include normal orders + returns/trade-ins, not just -RS).
     { id: 'ecwid', label: 'Ecwid', icon: ShoppingCart },
-    // Link a Zoho PO — search the local mirror + relink the carton/line (website-as-SoT).
-    { id: 'po', label: 'Zoho PO', icon: Link2 },
     { id: 'zendesk', label: 'Tickets', icon: ZendeskMark },
     // Email PO — search the Gmail-ingested PO worklist (purchase-order emails with
     // no Zoho match) and link the carton to its order. Works for any carton.
@@ -432,16 +442,16 @@ function TriageMatchingCard({
           initialOrderScope="all"
           autoFocusSearch={!showOpenInUnbox}
           onSelect={u.handleAddLine}
-          onClose={() => setTab('po')}
+          onClose={() => setTab('zoho_po')}
         />
-      ) : tab === 'po' ? (
-        // Zoho SKU acknowledge (no PO link) + optional PO relink below.
-        <ZohoPoPairTab
-          row={row}
+      ) : tab === 'zoho_item' ? (
+        <ZohoItemPairTab
           receivingId={receivingId}
           allowOffPo={orderLinked}
           onAddSku={(sel) => u.handleAddLine(sel, { allowOffPo: orderLinked })}
         />
+      ) : tab === 'zoho_po' ? (
+        <PoLinkTab row={row} receivingId={receivingId} />
       ) : tab === 'email' ? (
         // Email PO — search the Gmail-ingested PO worklist + link the carton's
         // tracking to a purchase order that was never imported into the system.
@@ -615,9 +625,9 @@ function ZendeskMatchTab({ t }: { t: ReturnType<typeof useTriagePanel> }) {
       {/* eBay delivered-email corroboration (real signal; order # via copy chip · last 4) */}
       {t.deliveredEmails.length > 0 ? (
         <div className="mt-3 border-t border-border-hairline pt-3">
-          <p className="mb-1.5 text-eyebrow font-black uppercase tracking-widest text-text-faint">
+          <WorkspaceSectionTitle as="p" className="mb-1.5">
             Marketplace delivery signals
-          </p>
+          </WorkspaceSectionTitle>
           <div className="space-y-1">
             {t.deliveredEmails.map((sig, i) => (
               <div

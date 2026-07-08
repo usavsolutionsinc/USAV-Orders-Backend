@@ -28,7 +28,7 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 border-b border-border-hairline bg-surface-card px-4 py-3 text-sm text-text-faint">
-        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+        <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
         Checking warranty coverage for “{q}”…
       </div>
     );
@@ -59,10 +59,10 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 
   const tone =
     status === 'covered'
-      ? { ring: 'ring-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-700', icon: ShieldCheck }
+      ? { ring: 'ring-border-success', bg: 'bg-surface-success', text: 'text-text-success', icon: ShieldCheck }
       : status === 'expired'
-        ? { ring: 'ring-rose-200', bg: 'bg-rose-50', text: 'text-rose-700', icon: AlertCircle }
-        : { ring: 'ring-amber-200', bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock };
+        ? { ring: 'ring-border-danger', bg: 'bg-surface-danger', text: 'text-text-danger', icon: AlertCircle }
+        : { ring: 'ring-border-warning', bg: 'bg-surface-warning', text: 'text-text-warning', icon: Clock };
   const Icon = tone.icon;
 
   const headline =
@@ -97,7 +97,7 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
                   label="Provisional — based on packed date + delivery estimate; confirms when the carrier delivered date lands."
                   asChild
                 >
-                  <span className="rounded border border-dashed border-amber-300 px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-amber-700">
+                  <span className="rounded border border-dashed border-border-warning px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-text-warning">
                     Est.
                   </span>
                 </HoverTooltip>

@@ -5,22 +5,26 @@ import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { Button, IconButton } from '@/design-system/primitives';
 import { X, Send } from '@/components/Icons';
 import { toast } from '@/lib/toast';
+import { cn } from '@/utils/_cn';
+import { VisibilityToggle } from '@/components/ui/VisibilityToggle';
 import { useClaimTicketSearch } from './claim/hooks/useClaimTicketSearch';
 import { ClaimTicketPicker } from './claim/components/ClaimTicketPicker';
 import { useClaimPhotos } from './claim/hooks/useClaimPhotos';
 import { ClaimPhotoPicker } from './claim/components/ClaimPhotoPicker';
+import { CcEmailField } from './claim/components/CcEmailField';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 /**
- * Send-photos-as-internal-note modal. Lets the operator forward photos already
- * captured on THIS purchase order to a DIFFERENT Zendesk ticket as a private
- * internal note (never emailed to the customer) — e.g. attaching condition
- * photos to a related support thread.
+ * Send-photos-to-ticket modal. Forwards photos already captured on THIS purchase
+ * order to a DIFFERENT Zendesk ticket — either as a private internal note (never
+ * emailed) or as a public reply that emails the customer plus any CC'd
+ * collaborators (e.g. looping a vendor in on condition photos).
  *
  * Reuses the claim flow's ticket picker (`useClaimTicketSearch` / `ClaimTicketPicker`)
  * and PO photo grid (`useClaimPhotos` / `ClaimPhotoPicker`), and posts to the
- * shared `/api/zendesk/photo-ticket` route in `update` mode (`isPublic: false`)
- * — the same chokepoint the Support console uses to attach library photos.
+ * shared `/api/zendesk/photo-ticket` route in `update` mode — the same chokepoint
+ * the Support console uses to attach library photos (which already threads
+ * `isPublic` + `emailCcs` to Zendesk).
  *
  * Presented as a centered overlay, identical chrome to {@link ReceivingClaimModal}.
  */
@@ -38,12 +42,18 @@ export function SendPhotoNoteModal({
   const search = useClaimTicketSearch({ open, enabled: open, receivingId, lineId });
   const photos = useClaimPhotos(open, receivingId);
   const [note, setNote] = useState('');
+  // Internal-first: a public reply (which emails the customer) is the deliberate
+  // opt-in, matching the Support chat composer.
+  const [isPublic, setIsPublic] = useState(false);
+  const [ccs, setCcs] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
 
-  // Reset the composed note + ticket selection each time the modal opens.
+  // Reset the composed note, mode, CCs, and ticket selection each time it opens.
   useEffect(() => {
     if (open) {
       setNote('');
+      setIsPublic(false);
+      setCcs([]);
       search.reset();
     }
     // search.reset is stable enough; only re-run on open toggle.
@@ -64,11 +74,13 @@ export function SendPhotoNoteModal({
       return;
     }
     if (!note.trim()) {
-      toast.error('Add an internal note');
+      toast.error(isPublic ? 'Add a reply' : 'Add an internal note');
       return;
     }
     setSending(true);
     try {
+      // CCs only make sense on a public reply — the route ignores them on a note.
+      const emailCcs = isPublic && ccs.length ? ccs : undefined;
       const fd = new FormData();
       fd.append(
         'meta',
@@ -76,22 +88,26 @@ export function SendPhotoNoteModal({
           mode: 'update',
           ticketId: selectedTicket.id,
           comment: note.trim(),
-          isPublic: false,
+          isPublic,
+          ...(emailCcs ? { emailCcs } : {}),
           photoIds: [...photos.selectedPhotoIds],
         }),
       );
       const res = await fetch('/api/zendesk/photo-ticket', { method: 'POST', body: fd });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        toast.error(data?.error || `Could not send note (HTTP ${res.status})`);
+        toast.error(data?.error || `Could not send (HTTP ${res.status})`);
         return;
       }
+      const photoSuffix = photoCount ? ` + ${photoCount} photo${photoCount === 1 ? '' : 's'}` : '';
       toast.success(
-        `Internal note${photoCount ? ` + ${photoCount} photo${photoCount === 1 ? '' : 's'}` : ''} sent to #${selectedTicket.id}`,
+        isPublic
+          ? `Public reply${photoSuffix} sent to #${selectedTicket.id}${emailCcs ? ` · ${emailCcs.length} cc'd` : ''}`
+          : `Internal note${photoSuffix} sent to #${selectedTicket.id}`,
       );
       onClose();
     } catch {
-      toast.error('Could not send note');
+      toast.error('Could not send');
     } finally {
       setSending(false);
     }
@@ -107,7 +123,7 @@ export function SendPhotoNoteModal({
       minWidth={460}
       minHeight={420}
       className="-mt-8 h-[min(86vh,44rem)] w-[min(94vw,52rem)]"
-      aria-label="Send photos as an internal note"
+      aria-label="Send photos to a ticket"
     >
       <div className="flex items-center justify-between border-b border-border-soft px-4 py-3">
         <div className="min-w-0">
@@ -129,28 +145,55 @@ export function SendPhotoNoteModal({
 
         <ClaimPhotoPicker photos={photos} receivingId={receivingId} />
 
-        <div>
-          <label
-            htmlFor="photo-note-body"
-            className="mb-1.5 block text-micro font-black uppercase tracking-[0.14em] text-text-soft"
-          >
-            Internal note
-          </label>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor="photo-note-body"
+              className="text-micro font-black uppercase tracking-[0.14em] text-text-soft"
+            >
+              {isPublic ? 'Public reply' : 'Internal note'}
+            </label>
+            <VisibilityToggle
+              value={isPublic}
+              onChange={setIsPublic}
+              internalLabel="Internal"
+              publicLabel="Public + CC"
+            />
+          </div>
+
+          {isPublic ? (
+            <CcEmailField
+              emails={ccs}
+              onChange={setCcs}
+              placeholder="Add vendor / teammate email to CC…"
+            />
+          ) : null}
+
           <textarea
             id="photo-note-body"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={4}
-            placeholder="Add an internal note for the team (private — not emailed to the customer)…"
-            className="block w-full resize-y rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-label font-medium text-text-default outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            placeholder={
+              isPublic
+                ? 'Reply the customer will receive by email…'
+                : 'Add an internal note for the team (private — not emailed to the customer)…'
+            }
+            className={cn(
+              'block w-full resize-y rounded-lg border bg-surface-card px-3 py-2 text-label font-medium text-text-default outline-none focus:ring-2',
+              isPublic
+                ? 'border-blue-200 focus:border-blue-500 focus:ring-blue-500/20'
+                : 'border-border-soft focus:border-border-emphasis focus:ring-text-soft/20',
+            )}
           />
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-border-soft px-4 py-3">
         <p className="min-w-0 text-micro font-medium text-text-faint">
-          Posts as an internal note (private).
+          {isPublic ? 'Emails the customer' : 'Posts as an internal note (private)'}.
           {selectedTicket ? ` → #${selectedTicket.id}` : ' Pick a ticket.'}
+          {isPublic && ccs.length ? ` · ${ccs.length} cc` : ''}
           {photoCount ? ` · ${photoCount} photo${photoCount === 1 ? '' : 's'}` : ''}
         </p>
         <Button
@@ -162,7 +205,7 @@ export function SendPhotoNoteModal({
           disabled={!canSend}
           className="shrink-0"
         >
-          Send internal note
+          {isPublic ? 'Send reply' : 'Send internal note'}
         </Button>
       </div>
     </RightPaneOverlay>

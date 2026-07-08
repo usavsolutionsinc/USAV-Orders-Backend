@@ -176,7 +176,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
               icon={<RefreshCw />}
               loading={isRefreshing}
               onClick={() => refreshTokenMutation.mutate(account.account_name)}
-              className="shrink-0 bg-amber-600 hover:bg-amber-700"
+              className="shrink-0 bg-fill-warning hover:bg-fill-warning/90"
             >
               Refresh
             </Button>
@@ -193,7 +193,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
           loading={ebayBackfillMutation.isPending}
           disabled={ebayDisabled}
           onClick={() => ebayBackfillMutation.mutate()}
-          className="shrink-0 bg-amber-600 hover:bg-amber-700"
+          className="shrink-0 bg-fill-warning hover:bg-fill-warning/90"
         >
           Run
         </Button>
@@ -207,7 +207,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
           icon={<RefreshCw />}
           loading={ecwidBackfillMutation.isPending}
           onClick={() => ecwidBackfillMutation.mutate()}
-          className="shrink-0 bg-indigo-600 hover:bg-indigo-700"
+          className="shrink-0 bg-accent-bg hover:bg-accent-bg/90"
         >
           Run
         </Button>
@@ -239,7 +239,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
               <p
                 key={log.id}
                 className={`text-micro font-medium leading-tight ${
-                  log.type === 'success' ? 'text-emerald-700' : 'text-red-600'
+                  log.type === 'success' ? 'text-text-success' : 'text-text-danger'
                 }`}
               >
                 {log.text}

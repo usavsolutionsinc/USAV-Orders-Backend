@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Barcode, DollarSign, Download, FileText, Pencil, Tag, User, X } from '@/components/Icons';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Barcode, DollarSign, Download, FileText, Pencil, Tag, User } from '@/components/Icons';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/design-system/primitives';
@@ -10,10 +10,12 @@ import { NoteComposerInsertRail, type NoteComposerInsertAction } from '../../Not
 import {
   appendNoteLine,
   buildStaffStampText,
-  CLAIM_BODY_INSERT_HINT_KEY,
   focusTextEnd,
+  formatSerialsForNotes,
   formatUnitPriceForNotes,
   NOTE_CLEAR_BTN,
+  NOTE_COMPOSER_OVERLAY_PAD,
+  NOTE_COMPOSER_OVERLAY_PAD_BOTTOM_ACTIONS,
   NOTE_DOWNLOAD_INSERT_BTN,
   NOTE_OVERLAY_ICON,
   NOTE_OVERLAY_ICON_BTN,
@@ -52,19 +54,6 @@ export function ClaimTemplateEditor({ template, filedTicket, row }: Props) {
   const { user } = useAuth();
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [fetchingTicketSubject, setFetchingTicketSubject] = useState(false);
-  const [showInsertHint, setShowInsertHint] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setShowInsertHint(!window.localStorage.getItem(CLAIM_BODY_INSERT_HINT_KEY));
-  }, []);
-
-  const dismissInsertHint = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(CLAIM_BODY_INSERT_HINT_KEY, '1');
-    }
-    setShowInsertHint(false);
-  }, []);
 
   const appendToBody = useCallback(
     (text: string) => {
@@ -81,7 +70,7 @@ export function ClaimTemplateEditor({ template, filedTicket, row }: Props) {
   const serialNumbers = (row.serials ?? [])
     .map((s) => s.serial_number?.trim())
     .filter((s): s is string => Boolean(s));
-  const serialInsertText = serialNumbers.length > 0 ? serialNumbers.join('\n') : null;
+  const serialInsertText = formatSerialsForNotes(serialNumbers);
 
   const trimmedInternalNotes = (row.notes || '').trim();
   const trimmedSkuTitle = (
@@ -139,8 +128,8 @@ export function ClaimTemplateEditor({ template, filedTicket, row }: Props) {
         id: 'serial',
         label:
           serialNumbers.length === 1
-            ? `Insert serial: ${serialNumbers[0]}`
-            : `Insert ${serialNumbers.length} serials`,
+            ? `Insert serial: SN: ${serialNumbers[0]}`
+            : `Insert serials: SNs: ${serialNumbers.join(', ')}`,
         ariaLabel: 'Insert serial number',
         icon: <Barcode className={NOTE_OVERLAY_ICON} />,
         buttonClassName: NOTE_SERIAL_INSERT_BTN,
@@ -227,8 +216,8 @@ export function ClaimTemplateEditor({ template, filedTicket, row }: Props) {
   }, [description, onDescriptionChange]);
 
   return (
-    <div className="rounded-2xl border border-border-default bg-surface-sunken p-3.5 shadow-sm">
-      <div className="mb-2.5 flex items-center justify-between gap-4">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-micro font-black uppercase tracking-[0.14em] text-text-soft">
             Zendesk ticket {previewLoading ? '(updating…)' : '(editable)'}
@@ -261,7 +250,7 @@ export function ClaimTemplateEditor({ template, filedTicket, row }: Props) {
         value={subject}
         onChange={(e) => onSubjectChange(e.target.value)}
         placeholder={previewLoading ? 'Generating…' : 'Subject'}
-        className="mb-3 block h-10 w-full rounded-xl border border-border-default bg-surface-card px-3 text-label font-medium text-text-default shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+        className="mb-3 block h-10 w-full rounded-lg border border-border-default bg-surface-card px-3 text-label font-medium text-text-default outline-none focus:border-border-emphasis focus:ring-2 focus:ring-text-soft/20"
       />
 
       <div>
@@ -272,22 +261,6 @@ export function ClaimTemplateEditor({ template, filedTicket, row }: Props) {
           Body
         </label>
 
-        {showInsertHint && insertActions.length > 0 ? (
-          <div className="mb-2 flex items-start justify-between gap-2 rounded-lg bg-violet-50/80 px-2.5 py-2 ring-1 ring-inset ring-violet-200/70">
-            <p className="text-caption leading-snug text-violet-900">
-              Use the icons above the body to stamp your name, insert serials, or pull in line context.
-            </p>
-            <button
-              type="button"
-              onClick={dismissInsertHint}
-              aria-label="Dismiss insert hint"
-              className="ds-raw-button shrink-0 rounded p-0.5 text-violet-500 transition hover:bg-violet-100/80 hover:text-violet-700"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : null}
-
         <div className="group relative">
           <textarea
             ref={bodyTextareaRef}
@@ -296,7 +269,7 @@ export function ClaimTemplateEditor({ template, filedTicket, row }: Props) {
             onChange={(e) => onDescriptionChange(e.target.value)}
             rows={8}
             placeholder={previewLoading ? 'Generating…' : 'Ticket body'}
-            className="block min-h-[14rem] w-full resize-y rounded-2xl border border-border-default bg-surface-card px-4 pb-9 pt-12 text-label font-medium leading-5 tracking-[0.01em] text-text-default shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+            className={`block min-h-[14rem] w-full resize-y rounded-lg border border-border-default bg-surface-card px-4 text-label font-medium leading-5 tracking-[0.01em] text-text-default outline-none focus:border-border-emphasis focus:ring-2 focus:ring-text-soft/20 ${NOTE_COMPOSER_OVERLAY_PAD} ${NOTE_COMPOSER_OVERLAY_PAD_BOTTOM_ACTIONS}`}
           />
 
           <NoteComposerInsertRail actions={insertActions} />

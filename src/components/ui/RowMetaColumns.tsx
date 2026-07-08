@@ -52,6 +52,31 @@ export const META_COL = {
   qtyColWide: '2.15rem',
   /** Fixed condition-column track — NEW / USED / N/A. */
   condCol: '2.5rem',
+  /**
+   * PO line accordion — fixed condition-column track sized to the LONGEST
+   * `ConditionGradeChip` table label ("PARTS" / "L-NEW", both ~57.7px measured
+   * dense). Fixed (not `max-content`) so the chip starts at the same x on every
+   * row and the columns don't drift; 3.75rem (60px) fits the widest label with a
+   * sub-pixel safety margin. Wider than the shared 2.5rem `condCol` (which clips
+   * "PARTS" → "PAR"), so it stays a separate PoLineMetaGrid-only token. */
+  poCondCol: '3.75rem',
+  /**
+   * PO line accordion — SKU last-4 chip column. Content-width, NOT a fixed
+   * 2.75rem: `SkuScanRefChip` truncates itself inside a fixed track, so the
+   * 4-char last-4 was clipping to "0…". `max-content` sizes the track to the
+   * full last-4 (mono → consistent across rows). Only PoLineMetaGrid uses this.
+   */
+  skuCol: 'max-content',
+  /** PO line accordion — serial chip column (the flex track that absorbs slack). */
+  serialCol: 'minmax(2.5rem, 1fr)',
+  /**
+   * PO line accordion — unit price (tabular, right-aligned). Content-width, NOT a
+   * fixed 2.75rem: the price chip is intentionally non-shrinking (fitDisplayWidth),
+   * so a fixed track clipped any amount wider than "$8.88" off the card's right
+   * edge. `max-content` sizes the track to the full amount ($1,299.00) and the
+   * serial column (1fr) gives up the slack.
+   */
+  priceCol: 'max-content',
 } as const;
 
 export function RowTitle({

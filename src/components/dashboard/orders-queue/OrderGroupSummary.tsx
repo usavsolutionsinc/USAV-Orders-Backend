@@ -93,9 +93,9 @@ export function OrderGroupSummary({ rows, isMobile }: { rows: ShippedOrder[]; is
           title={platformLabel ? `${platformLabel} · Order ${orderId}` : `Order ${orderId}`}
         />
         <RowMetaColumns
-          qty={<span className={qtySum > 1 ? 'text-yellow-600' : 'text-text-soft'}>{qtySum}</span>}
+          qty={<span className={qtySum > 1 ? 'text-text-warning' : 'text-text-soft'}>{qtySum}</span>}
           condition={<span className="text-text-faint">{conditionText}</span>}
-          rest={groupPrice ? <span className="normal-case tracking-normal text-emerald-600">{groupPrice}</span> : null}
+          rest={groupPrice ? <span className="normal-case tracking-normal text-text-success">{groupPrice}</span> : null}
         />
       </div>
       {isMobile ? (

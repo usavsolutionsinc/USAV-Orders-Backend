@@ -118,7 +118,7 @@ export function MobileReceivingRow({
         />
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden">
           <div className="min-w-0 overflow-hidden">
-            <ReceivingIdentityChips po={poValue} sku={skuValue} tracking={trackingValue} serialsCsv={serialsCsv} asColumns dense />
+            <ReceivingIdentityChips row={row} po={poValue} sku={skuValue} tracking={trackingValue} serialsCsv={serialsCsv} asColumns dense />
           </div>
           {!isExpanded ? (
             <MobileRowPhotoActions

@@ -2,8 +2,6 @@
 
 import { formatPSTTimestamp } from '@/utils/date';
 
-export const CLAIM_BODY_INSERT_HINT_KEY = 'receiving.claim.body-insert-hint-dismissed';
-
 export function focusTextEnd(el: HTMLTextAreaElement | HTMLInputElement | null) {
   if (!el) return;
   const len = el.value.length;
@@ -40,6 +38,14 @@ export function formatUnitPriceForNotes(unitPrice: string | number | null | unde
   return `$${n.toFixed(2)}`;
 }
 
+/** Serial line for note/claim inserts — matches receive + Zoho (`SN:` / `SNs:`). */
+export function formatSerialsForNotes(serialNumbers: string[]): string | null {
+  const cleaned = serialNumbers.map((s) => s.trim()).filter(Boolean);
+  if (cleaned.length === 0) return null;
+  if (cleaned.length === 1) return `SN: ${cleaned[0]}`;
+  return `SNs: ${cleaned.join(', ')}`;
+}
+
 /** Numeric Zendesk id from "#9395", a bare id, or a ticket URL. */
 export function parseZendeskTicketId(raw: string | number | null | undefined): string | null {
   if (raw == null || raw === '') return null;
@@ -57,7 +63,14 @@ export const NOTE_OVERLAY_ICON_BTN =
 
 export const NOTE_OVERLAY_ICON = 'h-3.5 w-3.5';
 
-export const NOTE_RAIL_SPACER_CLASS = 'inline-flex h-[22px] w-[22px] shrink-0';
+/**
+ * Textarea insets when {@link NoteComposerInsertRail} floats over line 1.
+ * Right padding keeps wrapped text out from under the "+ Insert" control.
+ */
+export const NOTE_COMPOSER_OVERLAY_PAD = 'py-2 pr-20';
+
+/** Extra bottom inset when bottom-right icon actions share the same field. */
+export const NOTE_COMPOSER_OVERLAY_PAD_BOTTOM_ACTIONS = 'pb-8';
 
 export const NOTE_TAG_BTN = `${NOTE_OVERLAY_ICON_BTN} text-orange-500 transition hover:bg-orange-100/60 hover:text-orange-600 hover:shadow-sm hover:ring-1 hover:ring-orange-200/80`;
 

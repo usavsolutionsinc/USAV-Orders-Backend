@@ -8,7 +8,6 @@
  */
 
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
-import { isTriageClassified, isTriagePaired } from './triage-focus';
 
 export type RecommendationTone = 'info' | 'success' | 'tip';
 
@@ -30,29 +29,8 @@ export interface ReceivingWorkflowFacts {
 }
 
 /** Triage-surface recommendations (door → stage → hand off). */
-export function triageRecommendations(facts: ReceivingWorkflowFacts): WorkflowRecommendation[] {
-  const { row } = facts;
-  const out: WorkflowRecommendation[] = [];
-
-  if (!isTriageClassified(row) && row.receiving_source === 'unmatched') {
-    out.push({
-      id: 'triage-classify',
-      tone: 'tip',
-      title: 'Classify the package type',
-      detail: 'Industry best practice: tag PO vs return at the door so the unbox bench knows what to expect.',
-    });
-  }
-
-  if (!isTriagePaired(row) && row.receiving_source === 'unmatched') {
-    out.push({
-      id: 'triage-pair',
-      tone: 'info',
-      title: 'Pair to a PO or claim when you can',
-      detail: 'Optional for small shops — saves time at unbox. You can still save for unbox without a match.',
-    });
-  }
-
-  return out;
+export function triageRecommendations(_facts: ReceivingWorkflowFacts): WorkflowRecommendation[] {
+  return [];
 }
 
 /** Unbox surface — no soft nudges; the progress stepper carries workflow state. */

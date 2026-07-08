@@ -28,9 +28,11 @@ export type HeaderActionKey =
   | 'details'; // right-slot Info → receiving-details overlay
 
 /**
- * Custom-event name a mode's prev/next chevrons dispatch. Receiving navigates
- * the table/rail; testing navigates the tech rail (different feed, different
- * event) — so the shared header reads this instead of hard-coding the channel.
+ * Custom-event name a mode's prev/next chevrons dispatch.
+ *   - `receiving-navigate-table` → Unbox/Triage sidebar rail (and History/
+ *     Incoming table when those modes are active)
+ *   - `testing-navigate-rail` → Testing sidebar rail
+ * Shared header reads this instead of hard-coding the channel.
  */
 export type NavChannel = 'receiving-navigate-table' | 'testing-navigate-rail';
 

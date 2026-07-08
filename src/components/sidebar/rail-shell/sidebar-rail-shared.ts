@@ -50,7 +50,7 @@ export interface SidebarRailShellProps<TRow> {
    * When set, a CustomEvent<'prev' | 'next'> on this name steps the selection to
    * the adjacent rendered row and fires `onSelect` — the wiring behind a detail
    * pane's up/down header chevrons when there's no separate table to drive
-   * navigation (the Testing workspace has only this rail, not a history table).
+   * navigation (Unbox/Triage/Testing workspace header → this rail).
    */
   navigateEvent?: string;
 

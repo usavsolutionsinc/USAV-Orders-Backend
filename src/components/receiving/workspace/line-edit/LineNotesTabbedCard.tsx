@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { FileText, Download, ClipboardList, Check, Loader2, Pencil, Tag, History, DollarSign, User } from '@/components/Icons';
+import { ChevronDown, FileText, Download, ClipboardList, Check, Loader2, Pencil, Tag, History, DollarSign, User } from '@/components/Icons';
+import type { ReceivingStepKey } from '../ReceivingProgressStepper';
 import { Button } from '@/design-system/primitives';
 import { WorkspaceCard } from '@/design-system/components';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/toast';
 import { NoteComposerInsertRail, type NoteComposerInsertAction } from '../NoteComposerInsertRail';
+import { WorkspaceSectionTitle } from '../WorkspaceSectionLabel';
 import { LineChecklistTab } from './LineChecklistTab';
 import {
   appendNoteLine,
@@ -17,6 +19,8 @@ import {
   formatUnitPriceForNotes,
   NOTE_DOWNLOAD_INSERT_BTN,
   NOTE_DOWNLOAD_SYNC_BTN,
+  NOTE_COMPOSER_OVERLAY_PAD,
+  NOTE_COMPOSER_OVERLAY_PAD_BOTTOM_ACTIONS,
   NOTE_OVERLAY_ICON,
   NOTE_OVERLAY_ICON_BTN,
   NOTE_SAVE_BTN,
@@ -72,6 +76,7 @@ export function LineNotesTabbedCard({
   onOverallDraftChange,
   onLoadZohoNotes,
   showZohoTab = true,
+  activeStep = null,
 }: {
   /** `receiving_lines.notes` — Internal tab only. */
   internalNotes: string;
@@ -115,8 +120,11 @@ export function LineNotesTabbedCard({
    * Zoho PO, so there is nothing to display or sync.
    */
   showZohoTab?: boolean;
+  /** Active workflow step — auto-focuses label composer on print step. */
+  activeStep?: ReceivingStepKey | null;
 }) {
   const [tab, setTab] = useState<NotesTab>('label');
+  const [moreNotesOpen, setMoreNotesOpen] = useState(false);
   const labelTextareaRef = useRef<HTMLTextAreaElement>(null);
   const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
   const poTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -127,6 +135,14 @@ export function LineNotesTabbedCard({
     requestAnimationFrame(() => {
       focusTextEnd(ref.current);
     });
+  }, []);
+
+  // Collapse the secondary tabs back to the label-only composer, refocusing the
+  // label field so the operator keeps composing without hunting for the cursor.
+  const collapseMoreNotes = useCallback(() => {
+    setMoreNotesOpen(false);
+    setTab('label');
+    requestAnimationFrame(() => focusTextEnd(labelTextareaRef.current));
   }, []);
 
   // Overall Zoho note is editable; the green check pushes the update to Zoho.
@@ -177,6 +193,27 @@ export function LineNotesTabbedCard({
   useEffect(() => {
     if (!showZohoTab && tab === 'po') setTab('label');
   }, [showZohoTab, tab]);
+
+  useEffect(() => {
+    if (activeStep === 'print') {
+      setTab('label');
+      requestAnimationFrame(() => focusTextEnd(labelTextareaRef.current));
+    }
+  }, [activeStep, lineId, focusTabField]);
+
+  // Each line starts label-first. The card is NOT remounted per line (the panel
+  // switches siblings in place), so a stale "more notes" tab would otherwise
+  // bleed across the station's line switches — reset it on line change.
+  useEffect(() => {
+    setMoreNotesOpen(false);
+    setTab('label');
+  }, [lineId]);
+
+  const secondaryItems: HorizontalSliderItem[] = [
+    ...(showZohoTab ? [{ id: 'po', label: 'Sync', icon: FileText } as HorizontalSliderItem] : []),
+    { id: 'notes', label: 'Internal', icon: FileText },
+    { id: 'checklist', label: 'Checklist', icon: ClipboardList },
+  ];
 
   // Label composer: append a source line into the ephemeral label buffer.
   const appendToLabelNotes = useCallback(
@@ -238,15 +275,8 @@ export function LineNotesTabbedCard({
     }
   }, [syncingToInventory, showZohoTab, labelNotes, overallZohoNotes, onSaveOverallNote]);
 
-  const items: HorizontalSliderItem[] = [
-    { id: 'label', label: 'Label', icon: FileText },
-    ...(showZohoTab ? [{ id: 'po', label: 'Sync', icon: FileText } as HorizontalSliderItem] : []),
-    { id: 'notes', label: 'Internal', icon: FileText },
-    { id: 'checklist', label: 'Checklist', icon: ClipboardList },
-  ];
-
-  const trimmedSkuTitle = (skuTitle || '').trim();
   const formattedUnitPrice = formatUnitPriceForNotes(unitPrice);
+  const trimmedSkuTitle = (skuTitle || '').trim();
   const trimmedPreviousNotes = (previousLineNotes || '').trim();
   const trimmedInternalNotes = internalNotes.trim();
   const trimmedSyncNotes = (overallZohoNotes ?? '').trim();
@@ -343,19 +373,45 @@ export function LineNotesTabbedCard({
     // Glass workspace surface — matches the carton context / PO items cards so
     // the whole unbox column reads as one frosted worksheet.
     <WorkspaceCard variant="glass" overflow="visible" bodyClassName="space-y-3 p-4">
-      {/* `overlay` skips the horizontal scroller so the active pill's blue glow
-          isn't clipped at the bottom (overflow-x-auto forces overflow-y:auto). */}
-      <HorizontalButtonSlider
-        variant="nav"
-        dense
-        overlay
-        items={items}
-        value={tab}
-        onChange={handleTabChange}
-        aria-label="Notes tabs"
-      />
+      <div className="flex min-w-0 items-center gap-2">
+        <WorkspaceSectionTitle>Label</WorkspaceSectionTitle>
+        {!moreNotesOpen ? (
+          <button
+            type="button"
+            onClick={() => setMoreNotesOpen(true)}
+            className="ml-auto flex items-center gap-0.5 text-eyebrow font-semibold uppercase tracking-widest text-text-faint transition-colors hover:text-text-muted"
+          >
+            More notes
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        ) : (
+          <div className="ml-auto flex min-w-0 flex-1 items-center gap-1">
+            <HorizontalButtonSlider
+              variant="nav"
+              dense
+              overlay
+              className="min-w-0 flex-1"
+              items={secondaryItems}
+              value={tab === 'label' ? 'notes' : tab}
+              onChange={handleTabChange}
+              aria-label="Additional notes tabs"
+            />
+            <HoverTooltip label="Collapse — back to label only" asChild>
+              {/* ds-raw-button: compact chevron toggle, not a standalone DS Button */}
+              <button
+                type="button"
+                onClick={collapseMoreNotes}
+                aria-label="Collapse notes — back to label only"
+                className="ds-raw-button -my-1 flex shrink-0 items-center justify-center rounded-md p-1 text-text-faint transition-colors hover:bg-surface-hover hover:text-text-muted"
+              >
+                <ChevronDown className="h-3.5 w-3.5 rotate-180" aria-hidden />
+              </button>
+            </HoverTooltip>
+          </div>
+        )}
+      </div>
 
-      {tab === 'label' ? (
+      {tab === 'label' || !moreNotesOpen ? (
         <div className="group relative">
           <textarea
             ref={labelTextareaRef}
@@ -364,7 +420,7 @@ export function LineNotesTabbedCard({
             value={labelNotes}
             onChange={(e) => onLabelNotesChange(e.target.value)}
             placeholder="Compose label notes"
-            className={`w-full resize-none rounded-lg border border-border-soft px-3 pb-11 pt-12 text-caption text-text-default placeholder:text-text-faint ${NOTES_TEXTAREA_FOCUS}`}
+            className={`w-full resize-none rounded-lg border border-border-soft px-3 text-caption text-text-default placeholder:text-text-faint ${NOTE_COMPOSER_OVERLAY_PAD} ${NOTE_COMPOSER_OVERLAY_PAD_BOTTOM_ACTIONS} ${NOTES_TEXTAREA_FOCUS}`}
           />
 
           {/* Top-left repeat-previous; top-right insert rail; bottom-right save actions. */}
@@ -424,7 +480,9 @@ export function LineNotesTabbedCard({
             </div>
           </div>
         </div>
-      ) : tab === 'notes' ? (
+      ) : null}
+
+      {moreNotesOpen && tab === 'notes' ? (
         // Operator notes — `receiving_lines.notes`; saves on blur.
         <textarea
           ref={notesTextareaRef}
@@ -436,7 +494,7 @@ export function LineNotesTabbedCard({
           placeholder="Internal notes for this line"
           className={`w-full resize-none rounded-lg border border-border-soft px-3 py-2 text-caption text-text-default placeholder:text-text-faint ${NOTES_TEXTAREA_FOCUS}`}
         />
-      ) : tab === 'po' ? (
+      ) : moreNotesOpen && tab === 'po' ? (
         <div className="space-y-1">
           <textarea
             ref={poTextareaRef}
@@ -488,9 +546,9 @@ export function LineNotesTabbedCard({
             </HoverTooltip>
           </div>
         </div>
-      ) : (
+      ) : moreNotesOpen && tab === 'checklist' ? (
         <LineChecklistTab lineId={lineId} sku={sku} />
-      )}
+      ) : null}
     </WorkspaceCard>
   );
 }

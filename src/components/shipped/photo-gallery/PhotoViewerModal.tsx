@@ -7,11 +7,13 @@ import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
   AlertCircle, Trash2, Info, RotateCcw, RefreshCw, ExternalLink, Package, MoreVertical,
+  Upload, Loader2,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
 import { MovePhotoToPoPanel } from './MovePhotoToPoPanel';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
+import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
 import { photoHeroLayoutId } from './photo-gallery-utils';
 import type { PhotoGalleryController } from './usePhotoGallery';
 
@@ -35,6 +37,10 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
   const downloadRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+
+  // Drag-and-drop / click-to-browse uploader — armed only when the gallery has an
+  // upload target. Files attach to the gallery's own entity (see usePhotoGallery).
+  const dz = usePhotoDropzone(g.handleUploadFiles);
 
   const multiPhoto = photoItems.length > 1;
   const currentPhotoError = photoItems[currentIndex]?.status === 'error';
@@ -102,7 +108,28 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
       style={{ zIndex: zLayer.modal }}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
+      {...(g.canUpload ? dz.rootProps : {})}
     >
+      {/* Hidden file input backing the ⋮ "Upload photos" item + drag-and-drop. */}
+      {g.canUpload ? <input ref={dz.inputRef} {...dz.inputProps} /> : null}
+
+      {/* Drop overlay — covers the whole lightbox while files are dragged over it. */}
+      <AnimatePresence>
+        {g.canUpload && dz.isDragging ? (
+          <motion.div
+            key="drop-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            className="pointer-events-none absolute inset-3 z-40 flex flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-white/70 bg-scrim/70 backdrop-blur-md"
+          >
+            <Upload className="h-10 w-10 text-white" />
+            <p className="text-sm font-black uppercase tracking-widest text-white">Drop to upload</p>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
       {/* Stage — image lane. flex-1 yields width to the details panel; toolbar
           is scoped here so it never bleeds over the panel border. */}
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -168,22 +195,9 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             </HoverTooltip>
           </div>
 
-          {!panelVisible ? (
-            <HoverTooltip label="Show details (i)" asChild>
-              <IconButton
-                onClick={(e) => {
-                  e.stopPropagation();
-                  g.togglePanel();
-                }}
-                aria-pressed={false}
-                className={TOOLBAR_ICON_BTN}
-                ariaLabel="Show photo details"
-                icon={<Info className="h-5 w-5 text-white" />}
-              />
-            </HoverTooltip>
-          ) : null}
-
-          {/* More actions → Download → Delete → Close (fixed order). */}
+          {/* More actions → Download → Delete → Close (fixed order). Details,
+              upload, and other secondary actions live inside the ⋮ menu so the
+              inline toolbar is an identical, minimal row on every page. */}
           <div ref={moreRef} className="relative">
             <HoverTooltip label="More actions" asChild>
               <IconButton
@@ -213,21 +227,25 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  {g.libraryHref ? (
-                    <a
-                      href={g.libraryHref}
-                      target="_blank"
-                      rel="noreferrer"
+                  {g.canUpload ? (
+                    <button
+                      type="button"
                       role="menuitem"
+                      disabled={g.uploading}
                       onClick={(e) => {
                         e.stopPropagation();
                         setMoreOpen(false);
+                        dz.openPicker();
                       }}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-glass/15"
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-glass/15 disabled:opacity-50"
                     >
-                      <ExternalLink className="h-4 w-4 shrink-0" />
-                      Open in library
-                    </a>
+                      {g.uploading ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4 shrink-0" />
+                      )}
+                      {g.uploading ? 'Uploading…' : 'Upload photos'}
+                    </button>
                   ) : null}
 
                   <button
@@ -246,6 +264,23 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                     <Info className="h-4 w-4 shrink-0" />
                     {g.panelOpen ? 'Hide details' : 'Show details'}
                   </button>
+
+                  {g.libraryHref ? (
+                    <a
+                      href={g.libraryHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      role="menuitem"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMoreOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-glass/15"
+                    >
+                      <ExternalLink className="h-4 w-4 shrink-0" />
+                      Open in library
+                    </a>
+                  ) : null}
 
                   {g.canReassignCurrent ? (
                     <button
@@ -395,6 +430,25 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           role="alert"
         >
           {g.reassignError}
+        </div>
+      )}
+
+      {g.uploading && (
+        <div
+          className="absolute top-24 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-glass/20 bg-scrim/80 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-md"
+          role="status"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Uploading…
+        </div>
+      )}
+
+      {g.uploadError && !g.uploading && (
+        <div
+          className="absolute top-24 left-1/2 z-20 -translate-x-1/2 rounded-full border border-red-300 bg-red-600/90 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-md"
+          role="alert"
+        >
+          {g.uploadError}
         </div>
       )}
 

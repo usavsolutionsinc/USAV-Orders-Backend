@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe, Image as ImageIcon, Lock, Mail, Paperclip, Send, X } from '@/components/Icons';
+import { Image as ImageIcon, Mail, Paperclip, Send, X } from '@/components/Icons';
 import { Button, IconButton } from '@/design-system/primitives';
+import { VisibilityToggle } from '@/components/ui/VisibilityToggle';
 import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
 import { useSupportReply } from '@/hooks/useSupportReply';
 import { useZendeskAgents, zendeskKeys } from '@/hooks/useZendeskQueries';
@@ -122,30 +123,12 @@ export function SupportChatComposer({
   return (
     <div className="shrink-0 border-t border-border-hairline bg-surface-card px-4 py-3">
       <div className="mb-2.5 flex items-center justify-between">
-        <div className="inline-flex rounded-lg bg-surface-sunken p-0.5">
-          {/* ds-raw-button: segmented toggle (conditional active fill), not a single-variant Button */}
-          <button
-            type="button"
-            onClick={() => setIsPublic(false)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-caption font-bold transition',
-              !isPublic ? 'bg-surface-card text-amber-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
-            )}
-          >
-            <Lock className="h-3.5 w-3.5" /> Internal note
-          </button>
-          {/* ds-raw-button: segmented toggle (conditional active fill), not a single-variant Button */}
-          <button
-            type="button"
-            onClick={() => setIsPublic(true)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-caption font-bold transition',
-              isPublic ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted',
-            )}
-          >
-            <Globe className="h-3.5 w-3.5" /> Public reply
-          </button>
-        </div>
+        <VisibilityToggle
+          value={isPublic}
+          onChange={setIsPublic}
+          internalLabel="Internal note"
+          publicLabel="Public reply"
+        />
         <div className="flex items-center gap-1">
           {canBrowseLibrary ? (
             <Button

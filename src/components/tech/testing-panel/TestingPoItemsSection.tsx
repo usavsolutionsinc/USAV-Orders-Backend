@@ -2,6 +2,7 @@
 
 import { PoLinesAccordion } from '@/components/receiving/workspace/PoLinesAccordion';
 import { UnmatchedItemsSection } from '@/components/receiving/workspace/UnmatchedItemsSection';
+import { InlineNotice } from '@/design-system/components';
 import { type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { TestingController } from './testing-panel-types';
@@ -36,26 +37,38 @@ export function TestingPoItemsSection({
   if (row.receiving_id == null) return null;
 
   if (shouldUseUnmatchedItemsSurface(row)) {
+    // Freshly-scanned unfound carton with no line yet — the synthetic stub row
+    // carries a negative id (buildUnmatchedStubRow). Teach the next action so the
+    // empty carton isn't a dead end. UI-only; no extra fetch.
+    const linelessUnfound = row.receiving_source === 'unmatched' && row.id < 0;
     return (
-      <UnmatchedItemsSection
-        receivingId={row.receiving_id}
-        staffId={staffId}
-        embedded={embedded}
-        headerRight={headerRight}
-        sourcePlatformHint={c.sourcePlatform || undefined}
-        receivingTypeHint={isReturnIntake(row) ? 'RETURN' : c.receivingType}
-        listingUrlHint={c.listingLink || undefined}
-        renderLineActions={(line) => (
-          <TestingLineSlot
-            c={c}
-            lineId={line.id}
-            serials={(line.serials ?? []) as UnitSlotSerial[]}
-            expected={line.quantity_expected ?? null}
-            disabled={c.saving}
-            selectedIndex={c.activeSlotByLine[line.id] ?? 0}
-          />
-        )}
-      />
+      <div className="space-y-2">
+        {linelessUnfound ? (
+          <InlineNotice tone="info" size="sm" title="No items yet">
+            Add the product via Package Pairing → Zoho PO (Acknowledge by Zoho SKU),
+            or scan a unit serial below.
+          </InlineNotice>
+        ) : null}
+        <UnmatchedItemsSection
+          receivingId={row.receiving_id}
+          staffId={staffId}
+          embedded={embedded}
+          headerRight={headerRight}
+          sourcePlatformHint={c.sourcePlatform || undefined}
+          receivingTypeHint={isReturnIntake(row) ? 'RETURN' : c.receivingType}
+          listingUrlHint={c.listingLink || undefined}
+          renderLineActions={(line) => (
+            <TestingLineSlot
+              c={c}
+              lineId={line.id}
+              serials={(line.serials ?? []) as UnitSlotSerial[]}
+              expected={line.quantity_expected ?? null}
+              disabled={c.saving}
+              selectedIndex={c.activeSlotByLine[line.id] ?? 0}
+            />
+          )}
+        />
+      </div>
     );
   }
 

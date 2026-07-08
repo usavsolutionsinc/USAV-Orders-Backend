@@ -10,7 +10,7 @@ import { ClaimNasBackupCard } from './ClaimNasBackupCard';
  */
 export function ClaimLinkedStep({ c }: { c: ReceivingClaimController }) {
   return (
-    <div className="space-y-3">
+    <div className="divide-y divide-border-hairline [&>section]:py-3 [&>section:first-child]:pt-0">
       {c.filedTicket ? (
         <ClaimFiledBanner
           filedTicket={c.filedTicket}
@@ -22,10 +22,6 @@ export function ClaimLinkedStep({ c }: { c: ReceivingClaimController }) {
       ) : null}
 
       <ClaimNasBackupCard c={c} canArchive />
-
-      <p className="text-caption font-semibold leading-5 text-text-soft">
-        Continue to draft the seller-facing message — it references this case # for full context.
-      </p>
     </div>
   );
 }

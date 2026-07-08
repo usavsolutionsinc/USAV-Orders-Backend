@@ -177,6 +177,7 @@ export function ReceivingLineOrderRow({
       </div>
 
       <ReceivingIdentityChips
+        row={row}
         po={poValue}
         sku={skuValue}
         tracking={trackingValue}

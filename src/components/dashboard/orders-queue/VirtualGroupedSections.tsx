@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
 import { useVirtualizer, defaultRangeExtractor, type Range } from '@tanstack/react-virtual';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { useAncestorScrollMargin } from '@/hooks/useAncestorScrollMargin';
@@ -54,6 +54,10 @@ export interface VirtualGroupedSectionsProps<T> {
   /** First-paint size estimates; real heights measured on mount. */
   headerEstimate?: number;
   rowEstimate?: number;
+  /** Row `getRowKey` value to scroll into view (deep-link / keyboard focus). The
+   *  virtualizer scrolls to that item whenever this changes — works even when the
+   *  target isn't currently windowed (unlike a DOM `scrollIntoView`). */
+  scrollToKey?: string | null;
 }
 
 const HEADER_ESTIMATE = 36;
@@ -69,6 +73,7 @@ export function VirtualGroupedSections<T>({
   useAncestorScroll = false,
   headerEstimate = HEADER_ESTIMATE,
   rowEstimate = ROW_ESTIMATE,
+  scrollToKey,
 }: VirtualGroupedSectionsProps<T>) {
   const items = useMemo<FlatItem<T>[]>(() => {
     const flat: FlatItem<T>[] = [];
@@ -132,6 +137,16 @@ export function VirtualGroupedSections<T>({
     ),
     scrollMargin,
   });
+
+  // Deep-link / keyboard focus: scroll the target row into view even when it is
+  // outside the current window (DOM scrollIntoView can't reach an unmounted row).
+  useEffect(() => {
+    if (!scrollToKey) return;
+    const idx = items.findIndex((it) => it.key === `r:${scrollToKey}`);
+    if (idx >= 0) virtualizer.scrollToIndex(idx, { align: 'center' });
+    // Intentionally keyed on `scrollToKey` only — scroll on focus/deep-link change,
+    // not on every data re-render (which would fight the user's scroll position).
+  }, [scrollToKey]);
 
   const virtualRows = virtualizer.getVirtualItems();
 

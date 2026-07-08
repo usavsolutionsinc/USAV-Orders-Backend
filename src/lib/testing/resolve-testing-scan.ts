@@ -1,6 +1,19 @@
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { buildUnmatchedStubRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { classifyInput, parseScannedUrl } from '@/lib/scan-resolver';
 import { routeScan } from '@/lib/barcode-routing';
+
+/** Minimal carton header from GET /api/receiving/:id — used when lines are empty. */
+type ReceivingCartonHeader = {
+  tracking?: string | null;
+  tracking_number?: string | null;
+  source?: string | null;
+  zoho_purchaseorder_id?: string | null;
+  zoho_purchaseorder_number?: string | null;
+  carrier?: string | null;
+  source_platform?: string | null;
+  intake_type?: string | null;
+};
 
 /**
  * Unit-id format printed by MultiSkuSnBarcode / unit-id.ts:
@@ -118,6 +131,57 @@ async function fetchLinesByReceivingId(receivingId: number) {
   if (!res.ok) throw new Error(`receiving-lines fetch failed (${res.status})`);
   const data = await res.json();
   return (data?.receiving_lines ?? []) as ReceivingLineRow[];
+}
+
+async function fetchReceivingCartonHeader(
+  receivingId: number,
+): Promise<ReceivingCartonHeader | null> {
+  const res = await fetch(`/api/receiving/${receivingId}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`receiving fetch failed (${res.status})`);
+  const data = await res.json();
+  if (!data?.success || !data.receiving) return null;
+  return data.receiving as ReceivingCartonHeader;
+}
+
+/**
+ * Synthetic line for a carton that exists but has zero receiving_lines yet —
+ * unfound door scans before the operator adds a SKU via Package Pairing.
+ */
+export function stubRowFromCartonHeader(
+  receivingId: number,
+  scanValue: string,
+  carton: ReceivingCartonHeader,
+): ReceivingLineRow {
+  const tracking =
+    String(carton.tracking ?? carton.tracking_number ?? scanValue).trim() || scanValue;
+  const stub = buildUnmatchedStubRow(receivingId, tracking);
+  const source = String(carton.source ?? '').trim();
+  return {
+    ...stub,
+    carrier: carton.carrier ?? stub.carrier,
+    receiving_source: source === 'unmatched' ? 'unmatched' : source || stub.receiving_source,
+    zoho_purchaseorder_id: carton.zoho_purchaseorder_id ?? stub.zoho_purchaseorder_id,
+    zoho_purchaseorder_number:
+      carton.zoho_purchaseorder_number ?? stub.zoho_purchaseorder_number,
+    source_platform: carton.source_platform ?? stub.source_platform,
+    receiving_type:
+      (carton.intake_type as ReceivingLineRow['receiving_type']) ?? stub.receiving_type,
+    item_name: source === 'unmatched' ? 'Unfound PO' : stub.item_name,
+  };
+}
+
+async function resolveLinelessCartonHandle(
+  receivingId: number,
+  scanValue: string,
+): Promise<ResolvedTestingScan> {
+  const carton = await fetchReceivingCartonHeader(receivingId);
+  if (!carton) return { kind: 'not_found', query: scanValue };
+  return {
+    kind: 'line',
+    row: stubRowFromCartonHeader(receivingId, scanValue, carton),
+    via: 'handle',
+  };
 }
 
 async function fetchLinesByPoNumber(poNumber: string) {
@@ -489,7 +553,7 @@ export async function resolveReceivingCodeToLine(
         const id = Number(routed.redirect?.match(/\/m\/r\/(\d+)$/)?.[1]);
         if (Number.isFinite(id)) {
           const rows = await fetchLinesByReceivingId(id);
-          if (rows.length === 0) return { kind: 'not_found', query: value };
+          if (rows.length === 0) return resolveLinelessCartonHandle(id, value);
           if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'handle' };
           return { kind: 'multi', rows, receivingId: id, via: 'handle' };
         }

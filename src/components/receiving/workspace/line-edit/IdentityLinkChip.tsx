@@ -15,6 +15,12 @@ import { RECEIVING_CHIP_EDIT_BTN_CLASS } from '@/components/sidebar/receiving/re
 import { normalizeCopyText } from '@/lib/copy-chip-format';
 import { recordCopy } from '@/lib/clipboard-history';
 
+function buildOpenLinksHubHref(links: Array<{ href: string }>): string {
+  // Keep this URL short + robust: JSON array of hrefs in a query param.
+  const qs = new URLSearchParams({ links: JSON.stringify(links.map((l) => l.href)) });
+  return `/open-links?${qs.toString()}`;
+}
+
 export function IdentityLinkChip({
   openHref,
   openTitle,
@@ -64,7 +70,7 @@ export function IdentityLinkChip({
   /** First menu row. Listing uses Copy; PO/tracking use Open. */
   menuFirstAction?: 'open' | 'copy';
   /** Additional open targets — when length > 1, the hover menu lists every link. */
-  linkOptions?: Array<{ href: string; label: string }>;
+  linkOptions?: Array<{ href: string; label: string; title?: string }>;
 }) {
   const [menuHover, setMenuHover] = useState(false);
   const normalizedValue = normalizeCopyText(value);
@@ -78,6 +84,12 @@ export function IdentityLinkChip({
     recordCopy(normalizedValue, { kind: tone, display });
   };
   const multiLinks = (linkOptions?.length ?? 0) > 1 ? linkOptions! : null;
+  const openAllLinks = () => {
+    if (!multiLinks) return;
+    // Reliable path: open a single hub tab; the user can open all from there
+    // without the hover-menu popup blocker interference.
+    window.open(buildOpenLinksHubHref(multiLinks), '_blank', 'noopener,noreferrer');
+  };
   const hasMenuActions =
     actionsInMenu &&
     (!!onEdit || menuFirstAction === 'copy' || !!openHref || multiLinks != null);
@@ -164,8 +176,20 @@ export function IdentityLinkChip({
           >
             {multiLinks ? (
               <>
+                {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={openAllLinks}
+                  aria-label={`Open all ${display} links`}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                  Open all
+                </button>
+                <div className="border-t border-border-hairline" role="separator" />
                 {multiLinks.map((opt) => (
-                  <HoverTooltip key={opt.href} label={opt.label} asChild>
+                  <HoverTooltip key={opt.href} label={opt.title ?? opt.label} asChild>
                     {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}
                     <button
                       type="button"

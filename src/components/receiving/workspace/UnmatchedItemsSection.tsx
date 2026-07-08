@@ -149,7 +149,7 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
             onClick={onOpenInUnbox}
             ariaLabel="Open this carton in unbox mode (serial scan, photos, receive)"
             icon={<PackageOpen />}
-            className="h-6 gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-blue-700 hover:bg-blue-100"
+            className="h-7 gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-blue-700 hover:bg-blue-100"
           >
             Open in unbox
           </Button>

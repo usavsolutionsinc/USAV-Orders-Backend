@@ -5,6 +5,7 @@ import { Camera } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { MobileReceivingPhotoStrip } from '@/components/mobile/receiving/MobileReceivingPhotoStrip';
+import { UnfoundMatchStrip } from '@/components/receiving/workspace/line-edit/UnfoundMatchStrip';
 import {
   OrderIdChip,
   TrackingChip,
@@ -128,6 +129,14 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             </div>
           </div>
         </div>
+
+        {receivingId != null && row.receiving_source === 'unmatched' ? (
+          <UnfoundMatchStrip
+            receivingId={receivingId}
+            trackingNumber={trackingValue || null}
+            showTopRule={false}
+          />
+        ) : null}
 
         {/* Existing photos */}
         {receivingId && galleryHref !== '#' ? (

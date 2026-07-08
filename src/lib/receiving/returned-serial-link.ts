@@ -34,6 +34,7 @@ import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 import { recordInventoryEvent } from '@/lib/inventory/events';
 import { upsertReceivingLineReturn } from '@/lib/receiving/facts/narrow';
 import { resolveReceivingExceptionsByReceivingId } from '@/lib/tracking-exceptions';
+import { recordReceivingException } from '@/lib/receiving/exceptions';
 import { getExternalUrlByItemNumber, getPlatformKeyByItemNumber } from '@/utils/external-item-url';
 import { columnsToClassification, classificationToColumns } from '@/lib/receiving/intake-classification';
 import { tapWorkflow } from '@/lib/workflow/tap';
@@ -304,6 +305,10 @@ export interface ReturnedSerialLinkDeps extends PersistLinkageDeps {
   /** Optional "why" signal emitter (plan §2.3 emitter #1) — fire-and-forget
    *  by its own contract, never throws; defaults to the real impl. */
   emitSignal?: typeof emitEntitySignalSafe;
+  /** Optional line-level exception recorder — used to log a RETURN_NO_ORDER
+   *  investigate item when a physical return matches no sales order. Injected
+   *  for testability; best-effort at the call site. Defaults to the real impl. */
+  recordException?: typeof recordReceivingException;
 }
 
 const defaultDeps: ReturnedSerialLinkDeps = {
@@ -315,6 +320,7 @@ const defaultDeps: ReturnedSerialLinkDeps = {
   listingUrlForItemNumber: getExternalUrlByItemNumber,
   tap: tapWorkflow,
   emitSignal: emitEntitySignalSafe,
+  recordException: recordReceivingException,
 };
 
 /**
@@ -470,6 +476,25 @@ export async function linkReturnedSerial(
       matchedVia: result.matchedOrder?.via ?? null,
     },
   });
+
+  // A physical return with NO matching sales order — record a line-level
+  // "investigate" exception so it surfaces in the Unfound/triage queue (this is
+  // the "log & investigate, not a hard wall" path: the serial already attached,
+  // the carton is already flagged is_return). Post-commit + best-effort: a
+  // failure here must never fail the scan.
+  if (!result.linked) {
+    try {
+      await (deps.recordException ?? recordReceivingException)(orgId, {
+        receivingLineId: input.receivingLineId,
+        receivingId: input.receivingId ?? null,
+        exceptionCode: 'RETURN_NO_ORDER',
+        reason: `Returned serial ${input.normalizedSerial} has no matching sales order`,
+        createdBy: input.staffId ?? null,
+      });
+    } catch (err) {
+      console.warn('linkReturnedSerial: RETURN_NO_ORDER exception record failed (non-fatal)', err);
+    }
+  }
 
   return result;
 }

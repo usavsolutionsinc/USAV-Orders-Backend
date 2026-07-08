@@ -42,7 +42,7 @@ import { useOperationsRoi } from '@/features/operations/workspace/useOperationsR
 /** The seeded electronics-refurb lifecycle, in flow order — what each scanned unit runs through. */
 const SEEDED_STAGES = ['Receive', 'Test', 'Wipe', 'Grade', 'List', 'Ship'] as const;
 
-const EYEBROW = 'text-eyebrow font-black uppercase tracking-widest text-blue-700';
+const EYEBROW = 'text-eyebrow font-black uppercase tracking-widest text-text-accent';
 const STAGE_CHIP =
   'rounded bg-surface-card text-text-muted ring-1 ring-inset ring-border-soft px-1.5 py-0.5 text-micro font-black uppercase tracking-widest';
 
@@ -75,13 +75,13 @@ function FirstScanOnboardingCardInner({ variant }: { variant: 'band' | 'sidebar'
       aria-label="Get started — scan your first unit"
     >
       <div
-        className={`rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white ${
+        className={`rounded-xl border border-border-accent bg-gradient-to-br from-surface-accent to-surface-card ${
           variant === 'sidebar' ? 'px-3 py-3' : 'px-5 py-4'
         }`}
       >
         {/* Eyebrow — welcoming, not an error tone. */}
         <span className="inline-flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+          <Sparkles className="h-3.5 w-3.5 text-text-accent" />
           <span className={EYEBROW}>Get started</span>
         </span>
 

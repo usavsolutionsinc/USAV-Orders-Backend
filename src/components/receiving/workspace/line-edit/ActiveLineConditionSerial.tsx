@@ -48,6 +48,7 @@ export function ActiveLineConditionSerial({
   serialAbsentReason,
   onSerialAbsentChange,
   requireSerialConfirmation,
+  serialStepActive = false,
 }: {
   serials: ActiveRowSerial[];
   lineId: number;
@@ -66,6 +67,8 @@ export function ActiveLineConditionSerial({
   requireSerialConfirmation: boolean;
   /** RETURN match CTA — pair the order + open the prefilled claim. */
   onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null) => void;
+  /** Stepper active step = serial — focus the scan input. */
+  serialStepActive?: boolean;
   onSubmitSerial: (raw?: string, conditionGrade?: string | null) => void | Promise<void>;
   onDeleteSerialUnit: (serialUnitId: number, lineId?: number) => void;
   onReplaceSerialUnit: (
@@ -145,18 +148,21 @@ export function ActiveLineConditionSerial({
         // no-serial waiver sits directly under the input when no serial exists.
         <>
         <SerialCard
-          key={`serial-card-${lineId}`}
           saved={serials}
           expected={quantityExpected ?? null}
           isSubmitting={serialSubmitting}
           disabled={!receivingId}
           embedded
+          autoFocusInput={serialStepActive}
           showSavedChips={false}
           editingSerial={editingSerial}
           onEditingSerialChange={onEditingSerialChange}
           resultSlot={matchResult}
           condition={cond}
           onConditionChange={onConditionChange}
+          // The PO-line meta row already shows the condition chip, so the
+          // collapsed picker here is edit-pencil-only (no redundant grade pill).
+          collapsedConditionLabel={false}
           onAdd={(sn) => onSubmitSerial(sn, cond)}
           noSerialActive={serialAbsent}
           onMarkNoSerial={() =>

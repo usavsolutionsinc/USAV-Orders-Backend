@@ -13,11 +13,10 @@
  * own controller, so the carton/identity logic lives in exactly one place.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import {
   staggerRevealContainer,
-  staggerRevealRiseItem,
   STAGGER_REVEAL_STEP,
 } from '@/design-system/primitives/StaggerReveal';
 import { ReceiveFeedbackRegion } from './ReceiveFeedbackRegion';
@@ -33,7 +32,24 @@ import { POUnboxingSection } from './line-edit/POUnboxingSection';
 import { LineEditModals } from './line-edit/LineEditModals';
 import { useUnboxLineController } from './line-edit/hooks/useUnboxLineController';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import { LinkedTicketsPanel } from '@/components/linkage/LinkedTicketsPanel';
+import { useReturnOrderLinkage } from './line-edit/hooks/useReturnOrderLinkage';
+import {
+  activeReceivingStepKey,
+  hasConditionBeenSet,
+} from './ReceivingProgressStepper';
+
+const LABEL_PRINTED_KEY = (lineId: number) => `receiving-label-printed:${lineId}`;
+
+import { RECEIVING_WORKSPACE_COLUMN } from './receiving-workspace-layout';
+
+function readLabelPrinted(lineId: number): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return !!window.localStorage.getItem(LABEL_PRINTED_KEY(lineId));
+  } catch {
+    return false;
+  }
+}
 
 export function LineEditPanel({
   row,
@@ -49,6 +65,54 @@ export function LineEditPanel({
   // composition. See useUnboxLineController / useReceivingLineCore.
   const c = useUnboxLineController(row, staffId, { itemTotal });
   const [actionFeedback, setActionFeedback] = useState<InlineActionFeedbackPayload | null>(null);
+  const [labelPrinted, setLabelPrinted] = useState(() => readLabelPrinted(row.id));
+  const [conditionSet, setConditionSet] = useState(
+    () => !!row.condition_set_at || hasConditionBeenSet(row.id),
+  );
+
+  useEffect(() => {
+    setLabelPrinted(readLabelPrinted(row.id));
+    setConditionSet(!!row.condition_set_at || hasConditionBeenSet(row.id));
+  }, [row.id, row.condition_set_at]);
+
+  useEffect(() => {
+    const onLabel = (e: Event) => {
+      const detail = (e as CustomEvent<{ line_id?: number }>).detail;
+      if (detail?.line_id === row.id) setLabelPrinted(true);
+    };
+    const onCond = (e: Event) => {
+      const detail = (e as CustomEvent<{ line_id: number }>).detail;
+      if (detail?.line_id === row.id) setConditionSet(true);
+    };
+    window.addEventListener('receiving-label-printed', onLabel);
+    window.addEventListener('receiving-condition-set', onCond);
+    return () => {
+      window.removeEventListener('receiving-label-printed', onLabel);
+      window.removeEventListener('receiving-condition-set', onCond);
+    };
+  }, [row.id]);
+
+  const photoCount = Math.max(0, Number(row.photo_count ?? 0));
+  const rowSerials = Array.isArray(row.serials) ? row.serials : [];
+  const serialCount = rowSerials.length;
+  // Resolve the returned unit's OUTBOUND order (closed-loop linkage) from the
+  // live scan input, falling back to the newest serial already on the line so
+  // the identity persists after the scan bar clears. The resolved order# lands
+  // in the top-row PO#/order chip (last-4) instead of a separate LINKAGE panel.
+  const latestRowSerial = String(rowSerials[rowSerials.length - 1]?.serial_number ?? '').trim();
+  const linkedOrder = useReturnOrderLinkage(c.serialInput.trim() || latestRowSerial);
+  const activeStep = useMemo(
+    () =>
+      activeReceivingStepKey({
+        scanDriven: true,
+        photoCount,
+        serialCount,
+        quantityExpected: row.quantity_expected ?? 0,
+        conditionSet,
+        labelPrinted,
+      }),
+    [photoCount, serialCount, row.quantity_expected, conditionSet, labelPrinted],
+  );
 
   useEffect(() => {
     setActionFeedback(null);
@@ -78,7 +142,7 @@ export function LineEditPanel({
   const revealContainer = staggerRevealContainer(reduceMotion ? 0 : STAGGER_REVEAL_STEP);
   const revealItem: Variants = reduceMotion
     ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.001 } } }
-    : staggerRevealRiseItem;
+    : { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.2 } } };
 
   return (
     <>
@@ -108,22 +172,28 @@ export function LineEditPanel({
           }}
         />
 
-        {/* Scroll surface — owns the centered hero column. Padding-bottom clears
-            the bottom sticky save bar so the last card never hides under it. */}
+        {/* Scroll surface — owns the centered hero column. The receive-feedback,
+            label-preview, and action bars now DOCK in flow below this region
+            (shrink-0 bands), so the scroll body no longer reserves clearance for
+            a floating pill — just a little breathing room above the first band. */}
         <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
           <motion.div
             initial="hidden"
             animate="show"
             variants={revealContainer}
-            className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6"
+            className={`${RECEIVING_WORKSPACE_COLUMN} space-y-4 px-4 py-5 pb-6 sm:px-6`}
           >
             <motion.div variants={revealItem}>
-              <LineCartonContextSection row={row} staffId={staffId} c={c} />
+              <LineCartonContextSection
+                row={row}
+                staffId={staffId}
+                c={c}
+                linkedOrderNumber={linkedOrder?.orderId ?? null}
+              />
             </motion.div>
 
-            {/* Unified Unboxing / Package-Pairing wrapper — PO Items and Units on
-                carton share one tabbed card; Package Pairing sits below. See
-                POUnboxingSection. */}
+            {/* Unified Unboxing / Package-Pairing wrapper — PO Items, auto-match
+                strip (unfound only), and Package Pairing share one card. */}
             <motion.div variants={revealItem}>
               <POUnboxingSection
                 row={row}
@@ -136,6 +206,7 @@ export function LineEditPanel({
                 c={c}
                 onItemDescFeedback={handleItemDescFeedback}
                 onItemDescSaved={handleItemDescSaved}
+                activeStep={activeStep}
               />
             </motion.div>
 
@@ -143,18 +214,19 @@ export function LineEditPanel({
                 (future). The Zoho-import and operator notes are separate columns
                 now, so they no longer collide. Saves on blur. */}
             <motion.div variants={revealItem}>
-              <WorkspaceNotesCard row={row} c={c} onActionFeedback={setActionFeedback} />
+              <WorkspaceNotesCard
+                row={row}
+                c={c}
+                onActionFeedback={setActionFeedback}
+                activeStep={activeStep}
+              />
             </motion.div>
 
-            {/* Returned-serial closed loop: when the scanned serial was
-                previously shipped, surface its outbound order ↔ tracking ↔ any
-                linked Zendesk tickets. hideWhenEmpty keeps it silent for normal
-                (non-return) lines. */}
-            {c.serialInput.trim() ? (
-              <motion.div variants={revealItem}>
-                <LinkedTicketsPanel serial={c.serialInput.trim()} hideWhenEmpty dense />
-              </motion.div>
-            ) : null}
+            {/* Returned-serial closed loop: the resolved outbound order now
+                populates the top identity row's PO#/order chip (see
+                useReturnOrderLinkage + linkedOrderNumber) instead of a separate
+                LINKAGE section — one identity display for SKU- and serial-linked
+                returns alike. */}
 
             {/* Label preview — you print at unbox. */}
             <motion.div variants={revealItem}>
@@ -170,11 +242,22 @@ export function LineEditPanel({
               />
             </motion.div>
 
-            {/* Below label — receive feedback OR item-desc / Zoho-notes saves.
-                Left OUTSIDE the stagger: these regions own their own
-                AnimatePresence (workbenchPane preset), so wrapping them would
-                compound two entrances. */}
-            {showReceiveFeedback ? (
+            {/* Below label — item-desc / Zoho-notes saves (receive feedback docks above the bar). */}
+            {!showReceiveFeedback ? (
+              <WorkspaceActionFeedbackSlot
+                feedback={actionFeedback}
+                onDismiss={() => setActionFeedback(null)}
+              />
+            ) : null}
+          </motion.div>
+        </div>
+
+        {showReceiveFeedback ? (
+          // Transparent dock — no white backing strip. The feedback card is
+          // self-contained (its own rounded green surface); it floats on the
+          // canvas like the action bar below, not inside a full-bleed band.
+          <div className="shrink-0 px-4 py-2 sm:px-6">
+            <div className={RECEIVING_WORKSPACE_COLUMN}>
               <ReceiveFeedbackRegion
                 receiving={c.receiving}
                 receiveResult={c.receiveResult}
@@ -185,18 +268,10 @@ export function LineEditPanel({
                   c.setResponseExpanded(false);
                 }}
               />
-            ) : (
-              <WorkspaceActionFeedbackSlot
-                feedback={actionFeedback}
-                onDismiss={() => setActionFeedback(null)}
-              />
-            )}
-          </motion.div>
-        </div>
+            </div>
+          </div>
+        ) : null}
 
-        {/* Receive action bar. A direct child of the (relative, full-height)
-            panel so the FloatingButton docks to the bottom of the right pane
-            regardless of how short the content is. */}
         <LineReceiveActionBar
           assignedTechId={row.assigned_tech_id}
           primaryLabel={c.printReceivePrimaryLabel}
@@ -210,6 +285,7 @@ export function LineEditPanel({
           isLocalReceive={c.isUnfound}
           receiveMenuLabel={c.receiveMenuLabel}
           receiveMenuTitle={c.receiveMenuTitle}
+          maxWidthClass="max-w-[720px]"
           onPrintAndReceive={() => void c.handlePrintAndReceive()}
           onPrintOnly={() => c.runPrintLabel()}
           onMarkScanned={() => void c.handleReceive('scan_only')}
@@ -225,7 +301,10 @@ export function LineEditPanel({
             receivingId={row.receiving_id}
             staffId={Number(staffId) || 0}
             poRef={c.poNumber || null}
-            photoIntent="item"
+            // Show every capture on the carton (matches the header photo-count
+            // button). Scoping to `item` hid the peek for cartons whose only
+            // shots are package/door photos (no unbox interior shots yet).
+            photoIntent="all"
           />
         ) : null}
       </div>

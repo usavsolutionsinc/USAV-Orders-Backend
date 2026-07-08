@@ -37,8 +37,12 @@ export default async function RootLayout({
     // by each route as they adopt it — see docs/cycle-forge-branding-spec.md §3).
     const documentTitle = initialUser ? initialUser.organizationName : PRODUCT_NAME;
 
+    // suppressHydrationWarning on <html>: THEME_BOOT_SCRIPT (in <head> below)
+    // stamps data-theme / data-color-scheme on <html> before hydration to avoid a
+    // theme flash, so the SSR markup (no attrs) intentionally differs from the
+    // booted DOM. The flag is scoped to this one element's attributes.
     return (
-        <html lang="en" className="h-full overflow-hidden">
+        <html lang="en" className="h-full overflow-hidden" suppressHydrationWarning>
             <head>
                 <title>{documentTitle}</title>
                 <meta name="description" content={`${PRODUCT_NAME} — Reseller Operations`} />

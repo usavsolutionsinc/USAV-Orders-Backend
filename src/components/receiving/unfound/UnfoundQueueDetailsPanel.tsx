@@ -3,7 +3,7 @@
 /**
  * Right-side slide-in details panel for an unfound-queue row.
  *
- * Tabs mirror the receiving-side ReceivingDetailsStack 3-tab pattern:
+ * Tabs mirror the receiving-side details stack tab pattern:
  *   • Overview — identity, Zendesk handoff, team notes, timing
  *   • Extract  — LLM-extracted fields editor + Zoho compare + Zoho PO# I
  *                uploaded + free-form notes (email_po only)

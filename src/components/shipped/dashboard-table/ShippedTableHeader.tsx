@@ -24,7 +24,7 @@ export interface ShippedTableHeaderProps {
 
 const BusySpinner = ({ isBusy }: { isBusy: boolean }) => (
   <div className="min-w-[18px] flex items-center justify-end">
-    {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
+    {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" /> : null}
   </div>
 );
 
@@ -49,7 +49,7 @@ export function ShippedTableHeader({
       <div className={mainStickyHeaderClass}>
         <div className={mainStickyHeaderRowClass}>
           <div>
-            <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
+            <p className={`${sectionLabel} text-text-accent`}>{bannerTitle}</p>
             {bannerSubtitle ? <p className={`mt-0.5 ${fieldLabel}`}>{bannerSubtitle}</p> : null}
           </div>
           <BusySpinner isBusy={isBusy} />

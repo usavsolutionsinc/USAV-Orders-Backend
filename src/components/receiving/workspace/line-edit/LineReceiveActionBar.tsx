@@ -5,11 +5,12 @@ import { FloatingButton } from '@/design-system/primitives';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 
 /**
- * Floating action button for the line editor. Primary action is
+ * Docked action bar for the line editor. Primary action is
  * "Receive" (printer icon implies print); the split menu exposes print-only, mark-as-scanned, and
- * receive-without-print. The pill floats fixed at the bottom of the page (via
- * the `FloatingButton` primitive) and is tinted with the assigned tech's
- * station theme when one is set.
+ * receive-without-print. The pill DOCKS as an in-flow band at the bottom of the
+ * panel (via the `FloatingButton` primitive in `docked` mode) so it stacks
+ * cleanly ABOVE the receive-feedback / label-preview bands instead of painting
+ * over them. It is tinted with the assigned tech's station theme when one is set.
  */
 export function LineReceiveActionBar({
   assignedTechId,
@@ -24,6 +25,7 @@ export function LineReceiveActionBar({
   isLocalReceive = false,
   receiveMenuLabel,
   receiveMenuTitle,
+  maxWidthClass = 'max-w-[720px]',
   onPrintAndReceive,
   onPrintOnly,
   onMarkScanned,
@@ -48,6 +50,9 @@ export function LineReceiveActionBar({
   isLocalReceive?: boolean;
   receiveMenuLabel: string;
   receiveMenuTitle?: string;
+  /** Max-width track for the pill — pass the host workspace column width so the
+   *  Receive bar lines up with the cards + feedback bands above it. */
+  maxWidthClass?: string;
   onPrintAndReceive: () => void;
   onPrintOnly: () => void;
   onMarkScanned: () => void;
@@ -65,8 +70,11 @@ export function LineReceiveActionBar({
       onClick={onPrintAndReceive}
       icon={<Printer className="h-4 w-4 shrink-0" />}
       // Match the workspace track used by the cards above it.
-      maxWidth="max-w-3xl"
+      maxWidth={maxWidthClass}
       fullWidth
+      // Dock in flow so the label-preview / receive-feedback bands stack above
+      // the pill instead of being hidden behind an absolute float.
+      docked
       tone="emerald"
       toneClasses={
         techTheme ? { bg: techTheme.bg, hover: techTheme.hover } : undefined

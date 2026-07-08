@@ -48,11 +48,25 @@ interface ClaimRequest {
   /** Photo row ids (from /api/receiving-photos) to upload to Zendesk as files. */
   attachPhotoIds?: number[];
   /**
+   * CC collaborator emails. Zendesk only emails CCs on a PUBLIC comment, so
+   * these are applied only when `notePublic` is true (matches the UI, which
+   * hides the CC field on an internal note).
+   */
+  ccEmails?: string[];
+  /**
+   * File the opening comment as a PUBLIC reply (emails the requester + CCs)
+   * instead of the default internal note (`public: false`).
+   */
+  notePublic?: boolean;
+  /**
    * Operator "Test create": assemble the ticket exactly as it would be filed,
    * but create nothing — no Zendesk ticket, no NAS archive, no DB writes.
    */
   dryRun?: boolean;
 }
+
+/** Loose email shape — Zendesk validates for real; this just drops obvious junk. */
+const CLAIM_CC_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Create a Zendesk ticket for a receiving claim (damage / missing / wrong
@@ -82,6 +96,20 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     const editedSubject = typeof body.subject === 'string' ? body.subject.trim() : '';
     const editedDescription = typeof body.description === 'string' ? body.description.trim() : '';
+
+    // Recipients: default is an internal note. When the operator opts into a
+    // public reply, the opening comment is public and any CC'd emails are added
+    // as collaborators (Zendesk only emails CCs on a public comment).
+    const notePublic = body.notePublic === true;
+    const ccEmails = notePublic && Array.isArray(body.ccEmails)
+      ? Array.from(
+          new Set(
+            body.ccEmails
+              .map((e) => String(e).trim())
+              .filter((e) => CLAIM_CC_EMAIL_RE.test(e)),
+          ),
+        )
+      : [];
 
     // Always build the template — even when the operator edited the subject/body
     // — so we have the PO#/tracking to name the photo attachments after the PO.
@@ -121,6 +149,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         subject,
         description,
         attachCount,
+        notePublic,
+        ccCount: ccEmails.length,
       });
     }
 
@@ -176,12 +206,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
               comment: {
                 body: description,
                 html_body: claimBodyToHtml(description),
-                public: false,
+                public: notePublic,
                 uploads: uploads.length ? uploads : undefined,
               },
               type: 'task',
               tags: ['receiving_claim', `claim_${claimType}`],
               external_id: buildExternalId(entityType, entityId),
+              ...(ccEmails.length
+                ? { email_ccs: ccEmails.map((user_email) => ({ user_email, action: 'put' as const })) }
+                : {}),
             },
             { idempotencyKey: idempotencyKey ?? undefined },
             ctx.organizationId,

@@ -101,7 +101,7 @@ export function WarrantyLogClaimDialog({ open, onClose, onCreated, initial }: Wa
 
         <div className="space-y-3 px-5 py-4">
           {create.error && (
-            <p className="text-xs text-rose-600">
+            <p className="text-xs text-text-danger">
               {create.error instanceof Error ? create.error.message : 'Failed to log claim.'}
             </p>
           )}

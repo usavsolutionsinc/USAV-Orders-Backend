@@ -1,9 +1,7 @@
 'use client';
 
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { unshippedOrdersQuery, unshippedQueueCountsQuery } from '@/lib/queries/dashboard-queries';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
 import { Plus } from '@/components/Icons';
@@ -16,27 +14,7 @@ import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SidebarShell } from '@/components/layout/SidebarShell';
-import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
-import { StatusLegend, type StatusLegendItem } from '@/components/ui/StatusLegend';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { FilterDropdownSelect } from '@/design-system/components/FilterDropdownSelect';
-import { useStaffFilter } from '@/hooks/useStaffFilter';
-import { FULFILLMENT_STATE_META, countFulfillmentStates, deriveFulfillmentState, ZERO_FULFILLMENT_COUNTS, type FulfillmentState } from '@/lib/unshipped-state';
-
-/** Fulfillment-queue status legend — PENDING / TESTED / BLOCKED only. */
-const FULFILLMENT_LEGEND_ITEMS: StatusLegendItem<FulfillmentState>[] = [
-  { state: 'PENDING', short: 'Pending' },
-  { state: 'TESTED', short: 'Tested' },
-  { state: 'BLOCKED', short: 'Blocked' },
-];
-
-/** Stage facets for the fulfillment queue (awaiting labels live on Outbound). */
-type FulfillmentStage = 'all' | 'pending' | 'tested';
-const STAGE_OPTIONS: { id: FulfillmentStage; label: string }[] = [
-  { id: 'all', label: 'All fulfillment' },
-  { id: 'pending', label: 'Pending packing' },
-  { id: 'tested', label: 'Tested, packing' },
-];
 
 interface UnshippedSidebarProps {
   showIntakeForm?: boolean;
@@ -152,113 +130,10 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     router.replace(qs ? `/outbound?${qs}` : '/outbound', { scroll: false });
   }, [stageParam, searchValue, searchParams, router]);
 
-  const stage: FulfillmentStage =
-    stageParam === 'pending' ? 'pending'
-      : stageParam === 'tested' ? 'tested'
-        : 'all';
-
-  const setStage = useCallback(
-    (next: FulfillmentStage) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === 'all') params.delete('stage');
-      else params.set('stage', next);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
-    },
-    [router, pathname, searchParams],
-  );
-
-  // Status legend click-to-filter (`?ustatus`). Clicking the lit chip clears it.
-  const activeStatus = (searchParams.get('ustatus') || '') as FulfillmentState | '';
-  const toggleStatus = useCallback(
-    (state: FulfillmentState) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (params.get('ustatus') === state) params.delete('ustatus');
-      else params.set('ustatus', state);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard', { scroll: false });
-    },
-    [router, pathname, searchParams],
-  );
-
-  // Universal all-staff ↔ single-staff filter (P1-WORK-02), shared across modes.
-  const staffFilter = useStaffFilter();
-
-  // Single-pass clear — chaining setStage + setStaff would each rebuild from the
-  // same stale searchParams and clobber the other.
-  const clearAllFilters = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('stage');
-    params.delete('staff');
-    const qs = params.toString();
-    router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
-  }, [router, pathname, searchParams]);
-
-  // Per-stage counts for the filter dropdown. Reuses the SAME query key the
-  // table mounts (React Query dedupes → one fetch, no extra request).
-  // Legend + stage counts (Phase 2). DEFAULT (no active search): the lightweight
-  // counts endpoint — total + per-stage + raw lane combos, NO row download. During
-  // a search: results are bounded to the matches, so count off those rows directly.
-  const searching = searchValue.trim().length > 0;
-  const { data: counts, isFetching: countsFetching } = useQuery({
-    ...unshippedQueueCountsQuery({ staffId: staffFilter.staffId ?? undefined }),
-    enabled: !searching,
-  });
-  const { data: searchRows, isFetching: searchFetching } = useQuery({
-    ...unshippedOrdersQuery({
-      searchQuery: searchValue,
-      staffId: staffFilter.staffId ?? undefined,
-      strictSearchScope: true,
-    }),
-    enabled: searching,
-    placeholderData: (previous, previousQuery) => {
-      const prev = previousQuery?.queryKey?.[2] as { staffId?: number } | undefined;
-      if (prev?.staffId !== (staffFilter.staffId ?? undefined)) return undefined;
-      return previous;
-    },
-  });
-  const stageFetching = searching ? searchFetching : countsFetching;
-  // Pre-dock status-dot counts for the legend. Map the raw counts-endpoint combos
-  // to PENDING/TESTED/BLOCKED via the TS SoT (`deriveFulfillmentState`, Decision 8);
-  // the lane rule is NEVER re-encoded in SQL.
-  const statusCounts = useMemo<Record<FulfillmentState, number>>(() => {
-    if (searching) return countFulfillmentStates(searchRows ?? []);
-    const out: Record<FulfillmentState, number> = { ...ZERO_FULFILLMENT_COUNTS };
-    for (const c of counts?.combos ?? []) {
-      const state = deriveFulfillmentState({ shipmentId: 1, hasTechScan: c.hasTechScan, outOfStock: c.blocked ? 'x' : '' });
-      out[state] += c.count;
-    }
-    return out;
-  }, [searching, searchRows, counts]);
-  const stageCounts = useMemo(() => {
-    if (searching) {
-      const rows = searchRows ?? [];
-      const tested = rows.filter((r) => Boolean((r as { has_tech_scan?: boolean }).has_tech_scan)).length;
-      return { all: rows.length, pending: rows.length - tested, tested } as Record<FulfillmentStage, number>;
-    }
-    return (counts?.byStage ?? { all: 0, pending: 0, tested: 0 }) as Record<FulfillmentStage, number>;
-  }, [searching, searchRows, counts]);
-
-  const filterRefinements = useMemo((): FilterRefinement[] => {
-    const out: FilterRefinement[] = [];
-    if (stage !== 'all') {
-      const label = stage === 'tested' ? 'Tested' : 'Pending';
-      const pillClassName =
-        stage === 'tested'
-          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-          : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200';
-      out.push({ id: 'stage', label, onRemove: () => setStage('all'), pillClassName });
-    }
-    if (staffFilter.staffId != null) {
-      out.push({
-        id: 'staff',
-        label: staffFilter.selectedName || `Staff #${staffFilter.staffId}`,
-        onRemove: () => staffFilter.setStaff(null),
-        pillClassName: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-      });
-    }
-    return out;
-  }, [stage, setStage, staffFilter]);
+  // Stage + staff filtering moved OFF the sidebar: the swim-lane board sorts orders
+  // into PENDING / TESTED / BLOCKED lanes (replacing the stage filter), and the
+  // board header hosts its own staff filter (BoardStaffFilter). The `?stage=awaiting`
+  // legacy redirect above is kept. So no sidebar Filters button here anymore.
 
   if (showIntakeForm) {
     return (
@@ -308,62 +183,13 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
               <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-text-default">
                 Unshipped
               </h2>
-              <p className="text-eyebrow font-bold text-blue-600 uppercase tracking-widest mt-1">
+              <p className="text-eyebrow font-bold text-text-accent uppercase tracking-widest mt-1">
                 Fulfillment Queue
               </p>
             </motion.header>
           ) : null}
         </>
       }
-      filter={{
-        label: 'Filters',
-        refinements: filterRefinements,
-        activeCount: filterRefinements.length,
-        onClearAll: filterRefinements.length > 0 ? clearAllFilters : undefined,
-        renderDropdown: (onClose: () => void) => (
-          <div className="space-y-3">
-            <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
-                Stage
-              </span>
-              <div className="space-y-1.5">
-                {STAGE_OPTIONS.map((opt) => {
-                  const active = stage === opt.id;
-                  const count = stageCounts[opt.id];
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => { setStage(opt.id); onClose(); }}
-                      className={`ds-raw-button flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
-                        active ? 'border-blue-300 bg-blue-50' : 'border-border-soft bg-surface-card hover:bg-surface-hover'
-                      }`}
-                    >
-                      {/* Count first, fixed width → every row's number lines up in one column. */}
-                      <span className="shrink-0 w-9 rounded-full bg-surface-sunken px-1.5 py-0.5 text-center text-eyebrow font-bold tabular-nums text-text-muted">
-                        {count}
-                      </span>
-                      <span className="min-w-0 flex-1 text-sm font-semibold text-text-default">{opt.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <FilterDropdownSelect
-                label="Staff"
-                value={staffFilter.staffId}
-                onChange={(next) => {
-                  staffFilter.setStaff(next ? Number(next) : null);
-                }}
-                emptyOption={{ value: '', label: 'All staff' }}
-                options={staffFilter.options.map((s) => ({ value: s.id, label: s.name }))}
-              />
-            </div>
-          </div>
-        ),
-      }}
       search={{
         value: searchQuery,
         onChange: handleInputChange,
@@ -385,23 +211,9 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           </HoverTooltip>
         ),
       }}
-      // Status-dot color key + live counts — pinned so it explains the table's
-      // pre-dock dots (mirrors the Shipped mode's OutboundStatusLegend).
-      headerBelow={
-        <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
-          {/* Saved views moved to the table ⋮ menu (station-table-unification §3.2);
-              the sidebar keeps only the filter legend. */}
-          <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
-          <StatusLegend
-            items={FULFILLMENT_LEGEND_ITEMS}
-            meta={FULFILLMENT_STATE_META}
-            counts={statusCounts}
-            isFetching={stageFetching}
-            activeState={activeStatus || null}
-            onSelectState={toggleStatus}
-          />
-        </div>
-      }
+      // The PENDING / TESTED / BLOCKED status legend was removed: the Unshipped
+      // swim-lane board now sorts orders into those exact lanes, so a sidebar
+      // click-to-filter legend on the same three states was redundant.
       bodyClassName="flex flex-col no-scrollbar pb-6"
     >
       <OrdersSyncPopover

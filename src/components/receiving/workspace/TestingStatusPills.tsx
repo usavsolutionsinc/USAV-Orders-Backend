@@ -162,3 +162,20 @@ export function unitStatusToVerdict(
   if (s === 'ON_HOLD') return 'TESTING_FAILED';
   return null;
 }
+
+/**
+ * Inverse of {@link unitStatusToVerdict}: the `serial_units.current_status` the
+ * /api/serial-units/[id]/test endpoint writes for a verdict. Used to reflect a
+ * verdict optimistically before the server round-trip resolves.
+ *   PASS → 'TESTED' · TEST_AGAIN → 'IN_TEST' · TESTING_FAILED → 'ON_HOLD'
+ */
+export function verdictToUnitStatus(verdict: TestingVerdict): string {
+  switch (verdict) {
+    case 'PASS':
+      return 'TESTED';
+    case 'TEST_AGAIN':
+      return 'IN_TEST';
+    case 'TESTING_FAILED':
+      return 'ON_HOLD';
+  }
+}

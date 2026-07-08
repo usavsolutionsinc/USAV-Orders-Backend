@@ -1,7 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { Copy, History, Info, Link2, RefreshCw, ZendeskMark } from '@/components/Icons';
+import { useState, type ReactNode } from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { Copy, History, Info, Link2, MoreVertical, RefreshCw, ZendeskMark } from '@/components/Icons';
 import { IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
@@ -14,6 +15,17 @@ import {
   type HeaderActionKey,
   type WorkspaceMode,
 } from './mode-registry';
+
+/** Unbox: primary toolbar actions; the rest live in the overflow menu. */
+const UNBOX_INLINE_ACTIONS: ReadonlyArray<Exclude<HeaderActionKey, 'details'>> = [
+  'refresh',
+  'share',
+];
+const UNBOX_OVERFLOW_ACTIONS: ReadonlyArray<Exclude<HeaderActionKey, 'details'>> = [
+  'audit',
+  'copy',
+  'photoNote',
+];
 
 /**
  * Frozen utility toolbar — the third header row beneath the global header +
@@ -49,9 +61,8 @@ export function LineEditToolbar({
 }) {
   const def = workspaceMode(mode);
   const disabled = receivingId == null;
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
-  // Per-action presentation. Disabled/spinner state is derived from the busy
-  // flags so the icons animate consistently across modes.
   const META: Record<
     Exclude<HeaderActionKey, 'details'>,
     { label: string; icon: ReactNode; disabled?: boolean; title: string; ariaLabel: string }
@@ -88,7 +99,7 @@ export function LineEditToolbar({
       label: 'Zendesk',
       icon: <ZendeskMark className="h-4 w-4" />,
       disabled,
-      title: "Send this PO's photos to a Zendesk ticket — link a new ticket or update an existing one",
+      title: "Send this PO's photos to a Zendesk ticket",
       ariaLabel: 'Send photos to a Zendesk ticket',
     },
     pair: {
@@ -100,48 +111,109 @@ export function LineEditToolbar({
     },
   };
 
-  const actions = def.headerActions
-    .filter((key): key is Exclude<HeaderActionKey, 'details'> => key !== 'details')
-    .map((key) => {
-      const m = META[key];
-      const onClick = handlers[key];
-      return {
-        key,
-        label: m.label,
-        icon: m.icon,
-        onClick: onClick ?? (() => {}),
-        disabled: m.disabled || !onClick,
-        title: m.title,
-        ariaLabel: m.ariaLabel,
-      } satisfies PaneHeaderActionBarAction;
-    });
+  const toAction = (key: Exclude<HeaderActionKey, 'details'>): PaneHeaderActionBarAction => {
+    const m = META[key];
+    const onClick = handlers[key];
+    return {
+      key,
+      label: m.label,
+      icon: m.icon,
+      onClick: onClick ?? (() => {}),
+      disabled: m.disabled || !onClick,
+      title: m.title,
+      ariaLabel: m.ariaLabel,
+    };
+  };
+
+  const isUnbox = mode === 'unbox';
+  const enabledKeys = def.headerActions.filter(
+    (key): key is Exclude<HeaderActionKey, 'details'> => key !== 'details',
+  );
+
+  const inlineKeys = isUnbox
+    ? enabledKeys.filter((k) => UNBOX_INLINE_ACTIONS.includes(k))
+    : enabledKeys;
+  const overflowKeys = isUnbox
+    ? enabledKeys.filter((k) => UNBOX_OVERFLOW_ACTIONS.includes(k))
+    : [];
+
+  const inlineActions = inlineKeys.map(toAction);
+
+  const overflowMenu =
+    overflowKeys.length > 0 ? (
+      <Popover.Root open={overflowOpen} onOpenChange={setOverflowOpen}>
+        <HoverTooltip label="More actions">
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              aria-label="More actions"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-soft transition-colors hover:bg-surface-hover hover:text-text-default"
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </button>
+          </Popover.Trigger>
+        </HoverTooltip>
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            sideOffset={4}
+            className="z-50 min-w-[10rem] rounded-lg border border-border-soft bg-surface-card p-1 shadow-lg"
+          >
+            {overflowKeys.map((key) => {
+              const m = META[key];
+              const onClick = handlers[key];
+              const itemDisabled = m.disabled || !onClick;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={itemDisabled}
+                  onClick={() => {
+                    onClick?.();
+                    setOverflowOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-micro font-bold uppercase tracking-widest text-text-soft transition-colors hover:bg-surface-hover hover:text-text-default disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {m.icon}
+                  {m.label}
+                </button>
+              );
+            })}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    ) : null;
 
   return (
     <PaneHeaderActionBar
       variant="header"
       iconOnly
       rightSlot={
-        def.showDetails && receivingId != null ? (
-          <HoverTooltip label="Receiving details" asChild>
-            <IconButton
-              onClick={() => dispatchReceivingDetailsOverlay(receivingId)}
-              ariaLabel="Open receiving details"
-              icon={<Info className="h-4 w-4 text-text-soft hover:text-text-default" />}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-hover"
-            />
-          </HoverTooltip>
-        ) : null
+        <>
+          {overflowMenu}
+          {def.showDetails && receivingId != null ? (
+            <HoverTooltip label="Receiving details" asChild>
+              <IconButton
+                onClick={() => dispatchReceivingDetailsOverlay(receivingId)}
+                ariaLabel="Open receiving details"
+                icon={<Info className="h-4 w-4 text-text-soft hover:text-text-default" />}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-hover"
+              />
+            </HoverTooltip>
+          ) : null}
+        </>
       }
-      actions={actions}
-      status={zohoSyncing ? 'Syncing' : busy ? 'Saving' : undefined}
+      actions={inlineActions}
+      status={zohoSyncing ? 'Syncing' : undefined}
       onPrev={() =>
         window.dispatchEvent(new CustomEvent(def.navChannel, { detail: 'prev' }))
       }
       onNext={() =>
         window.dispatchEvent(new CustomEvent(def.navChannel, { detail: 'next' }))
       }
-      prevTitle="Previous recent line"
-      nextTitle="Next recent line"
+      prevTitle="Previous PO (↑)"
+      nextTitle="Next PO (↓)"
+      navClassName="hidden sm:inline-flex"
     />
   );
 }

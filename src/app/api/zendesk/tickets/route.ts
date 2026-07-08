@@ -66,7 +66,7 @@ export const GET = withAuth(
         sortOrder: sp.get('sortOrder') ?? sp.get('sort_order') ?? undefined,
       });
 
-      const creds = await getIntegrationCredentials(ctx.organizationId, 'zendesk');
+      const creds = await getIntegrationCredentials<{ subdomain?: string | null }>(ctx.organizationId, 'zendesk');
       const subdomain = creds?.subdomain ?? process.env.ZENDESK_SUBDOMAIN ?? 'usav';
 
       if (parsed.query) {

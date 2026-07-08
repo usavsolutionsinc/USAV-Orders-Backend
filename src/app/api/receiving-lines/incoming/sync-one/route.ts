@@ -49,7 +49,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         accountLabel: body?.account_label ?? null,
       });
       if (!inbound.ok && inbound.error) {
-        return NextResponse.json({ success: false, error: inbound.error, ...inbound }, { status: 400 });
+        // `...inbound` already carries `error` (and `ok`); spread it rather than
+        // repeating the key (TS2783 — the explicit `error:` would be overwritten).
+        return NextResponse.json({ success: false, ...inbound }, { status: 400 });
       }
       try {
         await invalidateCacheTags(['receiving-lines', 'receiving-logs']);

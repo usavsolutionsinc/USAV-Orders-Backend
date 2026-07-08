@@ -24,6 +24,12 @@ import {
  * sub-views (Unshipped · Shipped · Warranty Logger · Management) selected by
  * the dashboard search controller's `orderView`, and supplies the legacy
  * in-panel switcher when the master-nav rail is disabled.
+ *
+ * Archetype note: the dashboard main region is an intentional pipeline-workbench
+ * hybrid (see `UnshippedTable` / `.claude/rules/display/workbench.md`); this panel
+ * is the stable sidebar picker/scope for that Workbench. The switcher exposes only
+ * Unshipped/Shipped/Warranty by design — FBA (`?fba`) is owned by the top-level
+ * `/fba` page and intentionally has no rail entry here.
  */
 export function DashboardOrdersContextPanel() {
   const searchParams = useSearchParams();

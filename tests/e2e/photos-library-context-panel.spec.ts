@@ -29,15 +29,20 @@ test.describe('Photo library · viewer context panel', () => {
       const lightbox = page.getByTestId('photo-lightbox');
       await expect(lightbox).toBeVisible();
 
-      // Library photos carry meta, so the info panel renders by default.
+      // Details, upload, and other secondary actions now live in the ⋮ overflow
+      // menu so the inline toolbar is identical on every page.
+      const openMenu = () =>
+        page.getByRole('button', { name: /more photo actions/i }).click();
+
+      // Show the info panel from the ⋮ menu, then hide it from the same menu.
+      await openMenu();
+      await page.getByRole('menuitem', { name: /show details/i }).click();
       const panel = page.getByTestId('photo-context-panel');
       await expect(panel).toBeVisible();
 
-      // The Info toggle hides and re-shows the panel.
-      await page.getByRole('button', { name: /hide photo details/i }).click();
+      await openMenu();
+      await page.getByRole('menuitem', { name: /hide details/i }).click();
       await expect(panel).toHaveCount(0);
-      await page.getByRole('button', { name: /show photo details/i }).click();
-      await expect(page.getByTestId('photo-context-panel')).toBeVisible();
 
       // Rotate must not crash the viewer.
       await page.getByRole('button', { name: /rotate/i }).click();
@@ -58,6 +63,11 @@ test.describe('Photo library · viewer context panel', () => {
     if (!(await firstTile.count())) test.skip(true, 'no photos seeded in this environment');
 
     await firstTile.click();
+    await expect(page.getByTestId('photo-lightbox')).toBeVisible();
+
+    // Open the info panel from the ⋮ overflow menu.
+    await page.getByRole('button', { name: /more photo actions/i }).click();
+    await page.getByRole('menuitem', { name: /show details/i }).click();
     await expect(page.getByTestId('photo-context-panel')).toBeVisible();
 
     // The "view all from this source" link is present only when the photo has a

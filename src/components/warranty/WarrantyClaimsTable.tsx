@@ -23,14 +23,14 @@ export function WarrantyClaimsTable() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center bg-surface-canvas">
-        <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
+        <Loader2 className="h-7 w-7 animate-spin text-text-faint" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-surface-canvas p-8 text-sm text-rose-600">
+      <div className="flex flex-1 items-center justify-center bg-surface-canvas p-8 text-sm text-text-danger">
         {error instanceof Error ? error.message : 'Failed to load warranty claims.'}
       </div>
     );
@@ -68,7 +68,7 @@ export function WarrantyClaimsTable() {
                     onClick={() => openClaim(selected ? null : claim.id)}
                     className={cn(
                       'cursor-pointer transition',
-                      selected ? 'bg-blue-50' : 'bg-surface-card hover:bg-surface-hover',
+                      selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'bg-surface-card hover:bg-surface-hover',
                     )}
                   >
                     <td className="border-b border-border-hairline px-3 py-2 align-top">

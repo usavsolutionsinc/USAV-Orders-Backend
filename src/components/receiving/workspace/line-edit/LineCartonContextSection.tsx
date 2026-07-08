@@ -8,19 +8,31 @@
  */
 
 import { CartonContextCard } from './CartonContextCard';
-import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { isLocalPickupFulfillment } from '@/lib/receiving/fulfillment-mode';
 import type { UnboxLineController } from './unbox-line-controller';
 
 interface LineCartonContextSectionProps {
   row: ReceivingLineRow;
   staffId: string;
   c: UnboxLineController;
+  /**
+   * Serial-resolved outbound (return) order#. When the carton has no PO# of its
+   * own, this fills the top-row PO#/order chip (last-4) — the lifted linkage
+   * identity that replaces the standalone LINKAGE panel.
+   */
+  linkedOrderNumber?: string | null;
 }
 
 // The carton-context card (photos + claim) is identical in unbox and triage —
 // both always show the staff photo row and the Claim action — so this section
 // needs no mode/variant input.
-export function LineCartonContextSection({ row, staffId, c }: LineCartonContextSectionProps) {
+export function LineCartonContextSection({
+  row,
+  staffId,
+  c,
+  linkedOrderNumber = null,
+}: LineCartonContextSectionProps) {
   return (
     <CartonContextCard
       receivingId={row.receiving_id ?? null}
@@ -37,6 +49,7 @@ export function LineCartonContextSection({ row, staffId, c }: LineCartonContextS
       poOpenHref={c.poOpenHref}
       trackingOpenHref={c.trackingOpenHref}
       poDisplay={c.poNumber}
+      linkedOrderNumber={linkedOrderNumber}
       poEditorOpen={c.poEditorOpen}
       setPoEditorOpen={c.setPoEditorOpen}
       poNumberEdit={c.poNumberEdit}
@@ -55,6 +68,7 @@ export function LineCartonContextSection({ row, staffId, c }: LineCartonContextS
       }}
       primaryTrackingTrimmed={c.primaryTrackingTrimmed}
       filledExtraTrackingsCount={c.filledExtraTrackingsCount}
+      isLocalPickup={isLocalPickupFulfillment(row)}
       trackingEditorsOpen={c.trackingEditorsOpen}
       onToggleTrackingEditors={c.toggleTrackingEditors}
       trackingEdit={c.trackingEdit}

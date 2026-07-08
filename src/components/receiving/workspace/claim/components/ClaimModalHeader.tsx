@@ -12,7 +12,7 @@ interface Props {
 /** Modal header — claim eyebrow + carton/PO title + cancel affordance. */
 export function ClaimModalHeader({ row, submitting, archiveSubmitting, onClose }: Props) {
   return (
-    <div className="flex shrink-0 items-center justify-between border-b border-border-hairline bg-gradient-to-r from-rose-50 to-amber-50 px-4 py-3">
+    <div className="flex shrink-0 items-center justify-between border-b border-border-hairline bg-surface-canvas px-4 py-3">
       <div>
         <p className="text-micro font-black uppercase tracking-[0.14em] text-rose-700">File a claim</p>
         <p className="mt-0.5 text-sm font-extrabold tracking-tight text-text-default">

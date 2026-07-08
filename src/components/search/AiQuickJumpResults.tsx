@@ -15,11 +15,14 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { Search, Loader2 } from '@/components/Icons';
 import type { AiSearchHit } from '@/lib/search/ai-search-client';
-import { SearchResultRow } from './SearchResultRow';
+import { SearchResultRow, type SearchRowDensity } from './SearchResultRow';
 
 export interface AiQuickJumpResultsProps {
   hits: AiSearchHit[];
   searching?: boolean;
+  /** Row scale — 'comfortable' on the full results surface, 'compact' (default)
+   *  for the tight quick-jump band. */
+  density?: SearchRowDensity;
   /**
    * Row click. Receives the event so a host can intercept the `<Link>` (e.g.
    * operations drills in-page via event.preventDefault()); hosts that only
@@ -32,6 +35,7 @@ export interface AiQuickJumpResultsProps {
 export function AiQuickJumpResults({
   hits,
   searching = false,
+  density = 'compact',
   onNavigate,
   className,
 }: AiQuickJumpResultsProps) {
@@ -50,7 +54,7 @@ export function AiQuickJumpResults({
       <ul className="divide-y divide-border-hairline">
         {hits.map((hit) => (
           <li key={`${hit.entityType}:${hit.id}`}>
-            <SearchResultRow hit={hit} onNavigate={onNavigate} />
+            <SearchResultRow hit={hit} density={density} onNavigate={onNavigate} />
           </li>
         ))}
       </ul>

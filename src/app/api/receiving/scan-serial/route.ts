@@ -11,7 +11,6 @@ import {
   type ReturnLinkageLinePatch,
 } from '@/lib/receiving/returned-serial-link';
 import { isReceivingReturnAutolink } from '@/lib/feature-flags';
-import { syncSerialToZohoPo } from '@/lib/receiving/zoho-serial-sync';
 import { tapWorkflow } from '@/lib/workflow/tap';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
@@ -268,19 +267,6 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           console.warn('scan-serial: enrichSerialUnitCatalog failed', err);
         });
       }
-
-      // Push the serial up to Zoho — append to the matching PO line item's
-      // description AND the PO header notes. Fire-and-forget; the helper is
-      // idempotent so re-scans / supplemental scans won't double-append. No
-      // toast on failure: per-scan Zoho sync is best-effort; the canonical
-      // truth lives in serial_units + tech_serial_numbers locally.
-      void syncSerialToZohoPo({
-        receivingLineId,
-        serial: serialResult.serial_unit.serial_number,
-        staffId,
-      }).catch((err) => {
-        console.warn('scan-serial: syncSerialToZohoPo threw', err);
-      });
 
       // Mirror the scan into the operations graph: enrolls the unit at the
       // receiving node and advances it (fire-and-forget — tapWorkflow never

@@ -3,15 +3,6 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Button } from '@/design-system/primitives';
 import type { ReceivingClaimController } from '../hooks/useReceivingClaimController';
 
-function ProgressChip({ label, dotClass = 'bg-rose-400' }: { label: string; dotClass?: string }) {
-  return (
-    <div className="inline-flex h-8 min-w-0 items-center gap-2 rounded-xl border border-border-soft bg-surface-canvas px-3 text-caption font-semibold text-text-muted">
-      <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
-      <span className="truncate">{label}</span>
-    </div>
-  );
-}
-
 /** The Copy + Finish pair shared by the create- and link-mode seller steps. */
 function SellerActions({ c }: { c: ReceivingClaimController }) {
   const { seller } = c;
@@ -23,7 +14,6 @@ function SellerActions({ c }: { c: ReceivingClaimController }) {
         size="md"
         disabled={!seller.sellerMessage.trim()}
         onClick={() => void seller.handleCopySellerMessage()}
-        className="border-blue-200 text-blue-700 hover:bg-blue-50"
         icon={<Copy className="h-4 w-4" />}
       >
         Copy
@@ -47,40 +37,8 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
   const busy = c.submitting || c.archiveSubmitting || c.linking || c.unlinking;
   const isCreate = c.mode === 'create';
   const step = c.createStep;
-
-  const archiveLabel = c.archiveState
-    ? c.archiveState.ok
-      ? `Backed up ${c.archiveState.copied}/${c.archiveState.total}`
-      : 'Local backup incomplete'
-    : null;
   const linkStep = c.linkStep;
-  const progressDot = !busy && c.archiveState?.ok ? 'bg-emerald-500' : 'bg-rose-400';
-  const progressLabel = c.submitting
-    ? 'Filing ticket'
-    : c.archiveSubmitting
-      ? 'Saving photos'
-      : c.linking
-        ? 'Linking ticket'
-        : c.unlinking
-          ? 'Unlinking ticket'
-          : !isCreate
-            ? linkStep === 'find'
-              ? search.selectedTicket
-                ? `Ticket #${search.selectedTicket.id} selected`
-                : 'Choose a ticket'
-              : linkStep === 'linked'
-                ? (archiveLabel ?? 'Ticket linked')
-                : 'Seller message'
-            : step === 'confirm'
-              ? (archiveLabel ?? 'Ticket filed')
-              : step === 'seller'
-                ? 'Seller message'
-                : step === 'review'
-                  ? 'Ready to file'
-                  : 'Draft claim';
 
-  // The "Back" affordance: editable pre-file create steps, or the post-link
-  // link steps (back to the picker / confirmation).
   const showBack = isCreate
     ? step === 'compose' || step === 'review'
     : linkStep === 'linked' || linkStep === 'seller';
@@ -107,23 +65,21 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
       </div>
 
       <div className="flex min-w-0 items-center justify-end gap-2">
-        <ProgressChip label={progressLabel} dotClass={progressDot} />
-
         {/* ── Create flow ─────────────────────────────────────────────── */}
         {isCreate && step === 'photos' ? (
-          <Button type="button" variant="danger" size="md" onClick={c.goNext}>
+          <Button type="button" variant="primary" size="md" onClick={c.goNext}>
             Next: Ticket →
           </Button>
         ) : null}
 
         {isCreate && step === 'compose' ? (
           c.composeComplete ? (
-            <Button type="button" variant="danger" size="md" onClick={c.goNext} disabled={!c.composeComplete}>
+            <Button type="button" variant="primary" size="md" onClick={c.goNext} disabled={!c.composeComplete}>
               Next: Review →
             </Button>
           ) : (
             <HoverTooltip label="Add a subject and body first" asChild>
-              <Button type="button" variant="danger" size="md" onClick={c.goNext} disabled={!c.composeComplete}>
+              <Button type="button" variant="primary" size="md" onClick={c.goNext} disabled={!c.composeComplete}>
                 Next: Review →
               </Button>
             </HoverTooltip>
@@ -137,9 +93,13 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
             size="md"
             onClick={c.submitInternal}
             disabled={c.submitting || c.archiveSubmitting || !c.row.receiving_id || !c.composeComplete}
-            icon={c.submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+            icon={c.submitting || c.archiveSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
           >
-            {c.submitting ? 'Filing…' : 'File ticket & back up →'}
+            {c.submitting
+              ? 'Filing…'
+              : c.archiveSubmitting
+                ? 'Saving photos…'
+                : 'File ticket & back up →'}
           </Button>
         ) : null}
 
@@ -155,7 +115,7 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
         {!isCreate && linkStep === 'find' ? (
           <Button
             type="button"
-            variant="danger"
+            variant={search.selectedTicket ? 'danger' : 'primary'}
             size="md"
             onClick={c.submitLink}
             disabled={c.linking || !c.row.receiving_id || !search.selectedTicket}

@@ -224,6 +224,7 @@ export function SearchResultsSurface({
               <AiQuickJumpResults
                 hits={group.hits.slice(0, 5)}
                 onNavigate={onSelectHit}
+                density="comfortable"
                 className="[&>p]:hidden"
               />
             </section>
@@ -233,8 +234,13 @@ export function SearchResultsSurface({
 
       {/* Single category: the full scoped list */}
       {showResults && activeTab !== 'all' && (
-        <div className="rounded-xl border border-border-hairline bg-surface-card pb-2">
-          <AiQuickJumpResults hits={state.hits} onNavigate={onSelectHit} className="[&>p]:hidden" />
+        <div className="overflow-hidden rounded-xl border border-border-hairline bg-surface-card">
+          <AiQuickJumpResults
+            hits={state.hits}
+            onNavigate={onSelectHit}
+            density="comfortable"
+            className="[&>p]:hidden"
+          />
         </div>
       )}
     </div>

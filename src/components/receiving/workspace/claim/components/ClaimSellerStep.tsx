@@ -10,7 +10,7 @@ import { ClaimTicketReply } from './ClaimTicketReply';
  */
 export function ClaimSellerStep({ c }: { c: ReceivingClaimController }) {
   return (
-    <>
+    <div className="divide-y divide-border-hairline [&>section]:py-3 [&>section:first-child]:pt-0">
       {c.filedTicket ? (
         <ClaimFiledBanner
           filedTicket={c.filedTicket}
@@ -24,6 +24,6 @@ export function ClaimSellerStep({ c }: { c: ReceivingClaimController }) {
       <ClaimSellerMessagePanel seller={c.seller} filedTicket={c.filedTicket} />
 
       <ClaimTicketReply reply={c.reply} filedTicket={c.filedTicket} prefill={c.seller.sellerMessage} />
-    </>
+    </div>
   );
 }

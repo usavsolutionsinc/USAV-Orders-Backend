@@ -12,11 +12,11 @@ import type { WarrantyClockBasis } from '@/lib/warranty/clock';
 /** Tone token → slim chip classes (mirrors the receiving display-primitive tone maps). */
 const TONE_CLASSES: Record<string, string> = {
   slate: 'bg-surface-sunken text-text-muted ring-border-soft',
-  blue: 'bg-blue-100 text-blue-700 ring-blue-200',
-  emerald: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
-  rose: 'bg-rose-100 text-rose-700 ring-rose-200',
-  amber: 'bg-amber-100 text-amber-800 ring-amber-200',
-  teal: 'bg-teal-100 text-teal-700 ring-teal-200',
+  blue: 'bg-surface-accent text-text-accent ring-border-accent',
+  emerald: 'bg-surface-success text-text-success ring-border-success',
+  rose: 'bg-surface-danger text-text-danger ring-border-danger',
+  amber: 'bg-surface-warning text-text-warning ring-border-warning',
+  teal: 'bg-fill-info/10 text-text-info ring-fill-info/40',
   gray: 'bg-surface-sunken text-text-muted ring-border-soft',
   zinc: 'bg-surface-strong text-text-muted ring-border-default',
 };
@@ -90,8 +90,8 @@ export function WarrantyClockChip({
             className={cn(
               'inline-flex items-center rounded px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide',
               provisional
-                ? 'border border-dashed border-amber-300 text-amber-700'
-                : 'bg-emerald-50 text-emerald-700',
+                ? 'border border-dashed border-border-warning text-text-warning'
+                : 'bg-surface-success text-text-success',
             )}
           >
             {provisional ? 'Est.' : 'Delivered'}

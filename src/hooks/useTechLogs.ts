@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { invalidateTechCounts } from '@/lib/queries/station-cache-patch';
 import { toPSTDateKey } from '@/utils/date';
 import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
@@ -148,6 +149,9 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
         // and deletions (e.g. undo-last) from any client or device.
         queryClient.invalidateQueries({ queryKey: ['tech-logs', techId] });
       }
+      // Keep the lightweight lane/legend counts in step without a row download
+      // (no-op until a counts query is mounted). station-table-unification §7.4.
+      invalidateTechCounts(queryClient);
     },
     !!stationChannel,
   );
@@ -164,6 +168,7 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
       if (rid == null || (typeof rid === 'number' && !Number.isFinite(rid))) return;
 
       prependTechRecordToMatchingWeekCaches(queryClient, techId, record);
+      invalidateTechCounts(queryClient);
     };
     window.addEventListener('tech-log-added', handleNewLog);
     return () => window.removeEventListener('tech-log-added', handleNewLog);

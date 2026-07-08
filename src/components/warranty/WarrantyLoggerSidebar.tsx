@@ -25,7 +25,7 @@ const EXPIRY_SORT_ITEMS: HorizontalSliderItem[] = [
 ];
 
 const statusChip = 'rounded-full px-2.5 py-1 text-caption font-medium ring-1 ring-inset transition';
-const statusChipActive = 'bg-blue-600 text-white ring-blue-600';
+const statusChipActive = 'bg-accent-bg text-accent-text ring-accent-bg';
 const statusChipIdle = 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover';
 
 export function WarrantyLoggerSidebar({
@@ -150,7 +150,7 @@ export function WarrantyLoggerSidebar({
       footer={actionButtons}
     >
       {error ? (
-        <div className="px-1 py-6 text-sm text-rose-600">
+        <div className="px-1 py-6 text-sm text-text-danger">
           {error instanceof Error ? error.message : 'Failed to load warranty claims.'}
         </div>
       ) : isLoading ? (
@@ -174,7 +174,7 @@ export function WarrantyLoggerSidebar({
                   className={cn(
                     'w-full rounded-lg border px-3 py-2 text-left transition',
                     selected
-                      ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-200'
+                      ? 'bg-blue-50 ring-1 ring-inset ring-blue-400'
                       : 'border-border-hairline bg-surface-card hover:border-border-soft hover:bg-surface-hover',
                   )}
                 >

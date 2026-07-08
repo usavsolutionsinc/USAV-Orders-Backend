@@ -478,6 +478,12 @@ export interface CreateTicketInput {
     assignee_id?: number;
     group_id?: number;
     external_id?: string;
+    /**
+     * CC collaborators to add at ticket creation (see {@link ZendeskEmailCc}).
+     * Zendesk only emails CCs on a PUBLIC comment, so pair this with
+     * `comment.public: true` when you want the recipients notified.
+     */
+    email_ccs?: ZendeskEmailCc[];
 }
 
 /**

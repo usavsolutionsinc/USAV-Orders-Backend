@@ -25,7 +25,7 @@ function ReadinessBar({ ready, total }: { ready: number; total: number }) {
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-surface-sunken rounded-full overflow-hidden w-16">
         <div
-          className="h-full bg-emerald-500 rounded-full transition-all"
+          className="h-full bg-fill-success rounded-full transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -69,8 +69,8 @@ function QtyCellWithRemove({ row }: { row: FBAShipmentLifecycleRow }) {
         <span
           className={
             Number(row.total_actual_qty) < Number(row.total_expected_qty)
-              ? 'text-amber-600'
-              : 'text-emerald-600'
+              ? 'text-text-warning'
+              : 'text-text-success'
           }
         >
           {row.total_actual_qty}
@@ -86,12 +86,12 @@ function QtyCellWithRemove({ row }: { row: FBAShipmentLifecycleRow }) {
             ariaLabel="Remove item from plan"
             icon={
               busy ? (
-                <Loader2 className="h-3 w-3 animate-spin text-red-600" />
+                <Loader2 className="h-3 w-3 animate-spin text-text-faint" />
               ) : (
-                <Minus className="h-3 w-3 text-red-600" />
+                <Minus className="h-3 w-3 text-text-danger" />
               )
             }
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-40"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border-danger bg-surface-danger hover:bg-surface-danger/80 disabled:opacity-40"
           />
         </HoverTooltip>
       ) : null}
@@ -116,7 +116,7 @@ export default function FBAShipmentsTable() {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center bg-surface-canvas">
-        <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-text-faint" />
       </div>
     );
   }
@@ -124,23 +124,23 @@ export default function FBAShipmentsTable() {
   if (isError) {
     return (
       <div className="flex h-full items-center justify-center bg-surface-canvas">
-        <p className="text-sm font-black uppercase tracking-widest text-red-600">Failed to load FBA shipments</p>
+        <p className="text-sm font-black uppercase tracking-widest text-text-danger">Failed to load FBA shipments</p>
       </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col bg-surface-card">
-      <div className="border-b border-border-soft bg-purple-50 px-6 py-4">
+      <div className="border-b border-border-soft bg-fill-fulfillment/10 px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-black uppercase tracking-tight text-purple-900">FBA Shipments</h2>
-            <p className={`mt-1 ${sectionLabel} text-purple-500`}>
+            <h2 className="text-lg font-black uppercase tracking-tight text-text-fulfillment">FBA Shipments</h2>
+            <p className={`mt-1 ${sectionLabel} text-text-fulfillment`}>
               {isLegacy ? 'Receiving Queue (legacy)' : 'Shipment Lifecycle Board'} — {rows.length} shipments
             </p>
           </div>
           {isLegacy && (
-            <span className="text-eyebrow font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded-lg">
+            <span className="text-eyebrow font-black uppercase tracking-widest bg-surface-warning text-text-warning border border-border-warning px-2 py-1 rounded-lg">
               Run migration to enable lifecycle view
             </span>
           )}
@@ -172,7 +172,7 @@ export default function FBAShipmentsTable() {
               {(rows as FBAShipmentLegacyRow[]).map((row) => (
                 <tr key={row.id} className="border-b border-border-hairline text-caption font-bold text-text-muted hover:bg-surface-hover">
                   <td className="px-3 py-2 font-mono">{row.id}</td>
-                  <td className="px-3 py-2 font-mono text-purple-700">{row.shipment_ref || '-'}</td>
+                  <td className="px-3 py-2 font-mono text-text-fulfillment">{row.shipment_ref || '-'}</td>
                   <td className="px-3 py-2">{row.carrier || '-'}</td>
                   <td className="px-3 py-2">{enumLabel(row.condition_grade)}</td>
                   <td className="px-3 py-2">{enumLabel(row.qa_status)}</td>
@@ -205,9 +205,9 @@ export default function FBAShipmentsTable() {
                 const totalItems = Number(row.total_items) || 0;
                 const readyItems = Number(row.ready_items) + Number(row.labeled_items) + Number(row.shipped_items);
                 return (
-                  <tr key={row.id} className="border-b border-border-hairline text-caption font-bold text-text-muted hover:bg-purple-50 transition-colors">
+                  <tr key={row.id} className="border-b border-border-hairline text-caption font-bold text-text-muted hover:bg-fill-fulfillment/10 transition-colors">
                     <td className="px-3 py-2">
-                      <span className="font-mono text-purple-700 font-black">{row.shipment_ref}</span>
+                      <span className="font-mono text-text-fulfillment font-black">{row.shipment_ref}</span>
                       {row.notes && (
                         <p className="text-eyebrow text-text-soft font-normal truncate max-w-[140px]">{row.notes}</p>
                       )}

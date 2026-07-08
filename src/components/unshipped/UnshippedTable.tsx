@@ -15,6 +15,20 @@ import { useAuth } from '@/contexts/AuthContext';
 import { deriveFulfillmentState, type FulfillmentState } from '@/lib/unshipped-state';
 import { patchUnshippedOrderCache, invalidateUnshippedCounts } from '@/lib/queries/dashboard-cache-patch';
 
+/**
+ * Unshipped fulfillment queue — the dashboard's default view.
+ *
+ * Archetype note (intentional hybrid — do not "normalize" away): this is a
+ * **pipeline-workbench**. Visually it's a Monitor-ish `SwimlaneBoard` whose
+ * PENDING/TESTED/BLOCKED lanes are *derived* from order state (not an assigned
+ * status), but it obeys the Workbench contract: URL-addressable selection
+ * (`?openOrderId`), a stable sidebar picker, and a crossfading right-pane detail.
+ * It deliberately does NOT compose `SidebarRailShell` — that shell is the
+ * recent-activity *rail* engine (fetch + optimistic patch + keyboard-nav over a
+ * single vertical list), whereas this surface is a horizontal multi-lane board
+ * with its own virtualization and per-lane sort. See
+ * `.claude/rules/display/workbench.md`.
+ */
 export interface UnshippedTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
   testedBy?: number;

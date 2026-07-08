@@ -43,6 +43,7 @@ function viaFoundLabel(via: string | undefined): string | null {
   if (via === 'po') return 'PO number';
   if (via === 'tracking') return 'tracking number';
   if (via === 'sku') return 'product SKU';
+  if (via === 'handle') return 'carton handle';
   return null;
 }
 

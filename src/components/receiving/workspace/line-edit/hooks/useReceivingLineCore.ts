@@ -93,12 +93,13 @@ export function useReceivingLineCore(
     () =>
       collectCartonListingLinks({
         listingLink,
+        syncNotes: row.receiving_zoho_notes ?? null,
         sku: row.sku,
         sourcePlatform,
         isUnmatched,
         platforms: skuIdentity.platforms,
       }),
-    [listingLink, row.sku, sourcePlatform, isUnmatched, skuIdentity.platforms],
+    [listingLink, row.receiving_zoho_notes, row.sku, sourcePlatform, isUnmatched, skuIdentity.platforms],
   );
   const { intakeType: receivingType, setIntakeType: setReceivingType, saveType } =
     useReceivingType(row);

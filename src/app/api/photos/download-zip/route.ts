@@ -6,13 +6,14 @@ import { tenantQuery } from '@/lib/tenancy/db';
 import { readPhotoBytesById } from '@/lib/photos/read-bytes';
 import { photoExportBaseName } from '@/lib/photos/display-names';
 import { buildStoreZip, type StoreZipEntry } from '@/lib/zip/store-zip';
+import {
+  safeZipDownloadBasename,
+  safeZipEntryName,
+  uniquifyZipEntryNames,
+  zipAttachmentHeaders,
+} from '@/lib/zip/safe-entry-name';
 
 export const dynamic = 'force-dynamic';
-
-function safeEntryName(base: string, fallback: string): string {
-  const cleaned = base.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
-  return cleaned || fallback;
-}
 
 export async function GET(request: NextRequest) {
   const sid = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
     ]),
   );
 
-  const entries: StoreZipEntry[] = [];
+  const rawEntries: StoreZipEntry[] = [];
   const title = request.nextUrl.searchParams.get('title')?.trim() || 'photos';
 
   for (let i = 0; i < orderedIds.length; i++) {
@@ -92,23 +93,22 @@ export async function GET(request: NextRequest) {
     const meta = metaById.get(photoId);
     const exportBase = meta
       ? photoExportBaseName(meta)
-      : safeEntryName(bytes.filename, `photo_${photoId}`);
+      : safeZipEntryName(bytes.filename, `photo_${photoId}`);
     const fallback = `${exportBase}.jpg`;
-    const name = `${String(i + 1).padStart(2, '0')}_${safeEntryName(fallback, fallback)}`;
-    entries.push({ name, data: Buffer.from(bytes.bytes) });
+    const name = `${String(i + 1).padStart(2, '0')}_${safeZipEntryName(fallback, fallback)}`;
+    rawEntries.push({ name, data: Buffer.from(bytes.bytes) });
   }
 
-  if (entries.length === 0) {
+  if (rawEntries.length === 0) {
     return NextResponse.json({ error: 'No downloadable photos found' }, { status: 404 });
   }
 
+  const uniqueNames = uniquifyZipEntryNames(rawEntries.map((e) => e.name));
+  const entries = rawEntries.map((entry, i) => ({ ...entry, name: uniqueNames[i] }));
   const blob = buildStoreZip(entries);
-  const safeTitle = title.replace(/[^\w.-]+/g, '_').slice(0, 40) || 'photos';
+  const safeTitle = safeZipDownloadBasename(title, 'photos');
 
   return new NextResponse(blob, {
-    headers: {
-      'content-type': 'application/zip',
-      'content-disposition': `attachment; filename="${safeTitle}.zip"`,
-    },
+    headers: zipAttachmentHeaders(safeTitle, blob.length),
   });
 }

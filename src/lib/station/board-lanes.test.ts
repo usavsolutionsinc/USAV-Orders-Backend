@@ -10,6 +10,13 @@ import {
   isFbaPackerLaneRow,
   PACKER_HISTORY_BOARD_LANES,
 } from './packer-board-lanes';
+import { bucketTestingHistoryLane, TESTING_HISTORY_BOARD_LANES } from './testing-board-lanes';
+import {
+  bucketReceivingIncomingLane,
+  bucketReceivingHistoryLane,
+  RECEIVING_INCOMING_BOARD_LANES,
+  RECEIVING_HISTORY_BOARD_LANES,
+} from '@/lib/receiving/receiving-board-lanes';
 
 const TODAY = '2026-07-06';
 const EARLIER = '2026-07-01T18:00:00Z'; // an earlier day (PST)
@@ -52,4 +59,30 @@ test('packer FBA predicate matches isFbaPackerRecord (FBA order OR FNSKU trackin
 
 test('packer lane descriptors are the canonical 4 in order', () => {
   assert.deepEqual(PACKER_HISTORY_BOARD_LANES.map((l) => l.id), ['TODAY', 'THIS_WEEK', 'FBA', 'EXCEPTION']);
+});
+
+test('receiving incoming lanes bucket by delivery_state', () => {
+  assert.equal(bucketReceivingIncomingLane({ delivery_state: 'DELIVERED_UNOPENED' }), 'DELIVERED_UNSCANNED');
+  assert.equal(bucketReceivingIncomingLane({ delivery_state: 'TRACKING_UNAVAILABLE' }), 'TRACKING_UNAVAILABLE');
+  assert.equal(bucketReceivingIncomingLane({ delivery_state: 'IN_TRANSIT' }), 'IN_TRANSIT');
+  assert.equal(bucketReceivingIncomingLane({ delivery_state: 'ARRIVING_TODAY' }), 'IN_TRANSIT');
+  assert.equal(bucketReceivingIncomingLane({ delivery_state: null, workflow_status: 'EXPECTED' }), 'EXPECTED');
+  assert.deepEqual(RECEIVING_INCOMING_BOARD_LANES.map((l) => l.id), ['DELIVERED_UNSCANNED', 'IN_TRANSIT', 'EXPECTED', 'TRACKING_UNAVAILABLE']);
+});
+
+test('receiving history lanes: unfound > pending-unbox > recently-scanned > received', () => {
+  const now = Date.UTC(2026, 6, 6, 18, 0, 0);
+  assert.equal(bucketReceivingHistoryLane({ zoho_purchaseorder_id: null }, now), 'UNFOUND');
+  assert.equal(bucketReceivingHistoryLane({ zoho_purchaseorder_id: 'PO-1', workflow_status: 'EXPECTED' }, now), 'PENDING_UNBOX');
+  assert.equal(bucketReceivingHistoryLane({ zoho_purchaseorder_id: 'PO-1', workflow_status: 'RECEIVED', updated_at: new Date(now - 3_600_000).toISOString() }, now), 'RECENTLY_SCANNED');
+  assert.equal(bucketReceivingHistoryLane({ zoho_purchaseorder_id: 'PO-1', workflow_status: 'RECEIVED', updated_at: new Date(now - 5 * 86_400_000).toISOString() }, now), 'RECEIVED');
+  assert.deepEqual(RECEIVING_HISTORY_BOARD_LANES.map((l) => l.id), ['PENDING_UNBOX', 'RECENTLY_SCANNED', 'RECEIVED', 'UNFOUND']);
+});
+
+test('testing lanes bucket by qa_status verdict', () => {
+  assert.equal(bucketTestingHistoryLane({ qa_status: 'PASSED' }), 'PASS');
+  assert.equal(bucketTestingHistoryLane({ qa_status: 'FAILED' }), 'FAIL');
+  assert.equal(bucketTestingHistoryLane({ qa_status: 'PENDING' }), 'RETEST');
+  assert.equal(bucketTestingHistoryLane({ qa_status: null, needs_test: true }), 'RETEST');
+  assert.deepEqual(TESTING_HISTORY_BOARD_LANES.map((l) => l.id), ['PASS', 'FAIL', 'RETEST']);
 });

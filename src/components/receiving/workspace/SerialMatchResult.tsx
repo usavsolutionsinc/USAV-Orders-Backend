@@ -125,17 +125,17 @@ export function SerialMatchResult({
         tone="warning"
         size="sm"
         className={className}
-        title="Returned serial not found"
+        title="Returned serial — no order match"
         icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
       >
         {serial ? (
           <>
-            Returned serial number{' '}
-            <span className="font-mono font-semibold">{serial}</span> is not found in
-            the system — confirm the serial or that the item is ours.
+            Serial <span className="font-mono font-semibold">{serial}</span> has no
+            sales-order match. It&apos;s recorded for review — keep going; just double-check
+            the serial, or that the item is ours.
           </>
         ) : (
-          'Returned serial number is not found in the system — confirm the serial or that the item is ours.'
+          'This returned serial has no sales-order match. It’s recorded for review — keep going; just double-check the serial, or that the item is ours.'
         )}
       </InlineNotice>
     );

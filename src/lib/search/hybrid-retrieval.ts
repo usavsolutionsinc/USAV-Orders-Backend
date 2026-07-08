@@ -319,25 +319,42 @@ export async function hybridSearch(
   const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
   if (!q) return { hits: [], usedSemantic: false };
 
-  // 1) Exact/ID/serial bypass — deterministic, parent-table truth, and a
-  //    short-circuit: identifier queries never pay an embed call. SKIPPED
-  //    when a hard entityTypes scope is set: the bypass fans out to the five
-  //    global-search parent searchers, which can't honor the scope (and have
-  //    no serial-unit searcher at all) — a scoped tool like searchUnits must
-  //    hit the docs arms, never return cross-type parent hits.
-  if (!opts.entityTypes && looksLikeIdentifier(q)) {
-    const exact = await deps.exactSearch(orgId, q, limit);
-    if (exact.length > 0) {
-      return { hits: exact.map(exactResultToHit), usedSemantic: false };
-    }
-  }
+  // 1) Exact/ID/serial bypass — deterministic parent-table truth. It runs in
+  //    PARALLEL with the keyword arm and, on a hit, ranks first — but it no
+  //    longer SHORT-CIRCUITS. The bypass fans out to the five global-search
+  //    parent searchers (order/receiving/sku/repair/fba) and has NO serial-unit
+  //    searcher, so short-circuiting hid every serial: a query like "3476" or
+  //    "83BP" (a unit serial shown in the receiving carton view) matched an
+  //    unrelated tracking/order substring and the actual unit never surfaced.
+  //    We keep the exact hits (ranked first) and MERGE the keyword doc hits —
+  //    serial units included — that the parent searchers can't produce.
+  //    Identifier queries still skip the EMBED (the keystroke-latency win);
+  //    only natural-language queries pay for the vector arm. The bypass is
+  //    SKIPPED under a hard entityTypes scope (a scoped tool must hit the docs
+  //    arms, never return cross-type parent hits).
+  const isIdentifier = !opts.entityTypes && looksLikeIdentifier(q);
 
-  // 2+3) Keyword and vector arms in parallel; the vector arm quietly drops
-  //      out when the query embedding isn't available inside the budget.
-  const [keywordRows, queryVec] = await Promise.all([
+  // 2+3) Keyword (always) + exact (identifier only) + vector (NL only). The
+  //      vector arm quietly drops out when the embedding isn't available.
+  const [exact, keywordRows, queryVec] = await Promise.all([
+    isIdentifier
+      ? deps.exactSearch(orgId, q, limit).catch(() => [] as GlobalSearchResult[])
+      : Promise.resolve([] as GlobalSearchResult[]),
     deps.keywordSearch(orgId, q, opts.entityTypes, ARM_LIMIT).catch(() => [] as DocHitRow[]),
-    deps.embedQuery(orgId, q),
+    isIdentifier ? Promise.resolve(null) : deps.embedQuery(orgId, q),
   ]);
+
+  if (exact.length > 0) {
+    const exactHits = exact.map(exactResultToHit);
+    const seen = new Set(exactHits.map((h) => `${h.entityType}:${h.id}`));
+    // Keyword rows the exact arm already covered are dropped; the remainder
+    // (serial units + any doc the parent searchers miss) fills in below the
+    // exact hits, ranked under them but above nothing.
+    const extra = keywordRows
+      .filter((row) => !seen.has(`${toUiEntityType(row.entity_type)}:${row.entity_id}`))
+      .map((row, i) => docRowToHit(row, 500 - i, 'keyword'));
+    return { hits: [...exactHits, ...extra].slice(0, limit), usedSemantic: false };
+  }
   const vectorRows = queryVec
     ? await deps
         .vectorSearch(orgId, queryVec, opts.entityTypes, ARM_LIMIT)

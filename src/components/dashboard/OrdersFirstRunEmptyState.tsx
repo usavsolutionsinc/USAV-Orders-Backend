@@ -26,7 +26,7 @@ export function OrdersFirstRunEmptyState({
       action={
         <Link
           href="/settings/integrations"
-          className="inline-flex h-9 items-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-semibold text-white shadow-sm shadow-blue-600/25 transition-colors hover:bg-blue-500 active:bg-blue-700"
+          className="inline-flex h-9 items-center gap-2 rounded-xl bg-accent-bg px-4 text-[13px] font-semibold text-text-inverse shadow-sm transition-colors hover:bg-accent-bg/90 active:bg-accent-bg/90"
         >
           <Link2 className="h-4 w-4" />
           Connect a sales channel

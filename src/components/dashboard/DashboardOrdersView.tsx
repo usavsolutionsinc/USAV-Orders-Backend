@@ -25,7 +25,7 @@ import type { DashSelectableRow } from '@/hooks/useDashboardBulkSelection';
 function TableFallback() {
   return (
     <div className="flex-1 flex items-center justify-center bg-surface-canvas">
-      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <Loader2 className="w-8 h-8 animate-spin text-text-faint" />
     </div>
   );
 }
@@ -66,7 +66,7 @@ export function DashboardOrdersView({
         <Suspense
           fallback={
             <div className="flex-1 flex items-center justify-center bg-surface-canvas">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-text-faint" />
             </div>
           }
         >

@@ -4,6 +4,13 @@ import { Fragment, useEffect, useState } from 'react';
 import { Check } from '@/components/Icons';
 import { receivingScanBandClass } from '@/components/layout/header-shell';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import {
+  RECEIVING_WORKFLOW_STEPS,
+  deriveReceivingStepStates,
+  type LinearStepState,
+  type ReceivingStepKey,
+} from './derive-receiving-step-states';
+import { RECEIVING_WORKSPACE_HEADER_COLUMN } from './receiving-workspace-layout';
 
 /**
  * Per-line localStorage key set by ConditionPills callers when the operator
@@ -41,24 +48,18 @@ interface Props {
   row: ReceivingLineRow;
   photoCount: number;
   serialCount: number;
-  /** Workflow status considered "fully done" (e.g. 'DONE', 'PASSED'). */
-  isComplete: boolean;
   /** Receiving label has been printed for this line (client-tracked). */
   labelPrinted?: boolean;
+  /** Carton opened via scanner rather than sidebar rail click. */
+  scanDriven?: boolean;
+  /** PO sibling count — shows scope hint when 2+. */
+  siblingLineCount?: number;
 }
 
-type StepKey = 'scan' | 'photos' | 'condition' | 'serial' | 'print';
-export type LinearStepState = 'done' | 'active' | 'pending';
-
+export type { LinearStepState, ReceivingStepKey };
 export type LinearStep = { key: string; label: string };
 
-const STEPS: ReadonlyArray<{ key: StepKey; label: string }> = [
-  { key: 'scan',      label: 'Scan' },
-  { key: 'photos',    label: 'Photos' },
-  { key: 'condition', label: 'Condition' },
-  { key: 'serial',    label: 'Serial' },
-  { key: 'print',     label: 'Print' },
-];
+export { deriveReceivingStepStates, activeReceivingStepKey } from './derive-receiving-step-states';
 
 /**
  * Shared dot + connector stepper used by the receiving workspace header and
@@ -68,6 +69,7 @@ export function LinearWorkflowStepper({
   steps,
   states,
   ariaLabel,
+  ariaDescription,
   className = '',
   size = 'default',
   onStepClick,
@@ -76,30 +78,31 @@ export function LinearWorkflowStepper({
   steps: ReadonlyArray<LinearStep>;
   states: Record<string, LinearStepState>;
   ariaLabel: string;
+  ariaDescription?: string;
   className?: string;
   size?: 'default' | 'compact';
   onStepClick?: (key: string) => void;
   isStepDisabled?: (key: string) => boolean;
 }) {
   const compact = size === 'compact';
-  const connectorPt = compact ? 'pt-2' : 'pt-2.5';
-  const stepGap = compact ? 'gap-1' : 'gap-1.5';
+  const connectorPt = compact ? 'pt-1.5' : 'pt-2';
+  const stepGap = compact ? 'gap-0.5' : 'gap-1';
   const labelClass = compact
     ? 'text-eyebrow font-bold uppercase leading-none tracking-[0.1em]'
     : 'text-micro font-black uppercase leading-none tracking-[0.12em]';
 
   return (
-    <nav aria-label={ariaLabel} className={className}>
+    <nav aria-label={ariaLabel} aria-description={ariaDescription} className={className}>
       <ol className="flex w-full items-start">
         {steps.map((step, idx) => {
           const s = states[step.key] ?? 'pending';
           const prevState = idx > 0 ? (states[steps[idx - 1].key] ?? 'pending') : null;
           const labelTone =
-            s === 'done'
-              ? 'text-blue-600'
-              : s === 'active'
-                ? 'text-text-default'
-                : 'text-text-faint';
+            s === 'active'
+              ? 'text-text-default font-black'
+              : s === 'done'
+                ? 'text-text-faint'
+                : 'text-text-faint/70';
           const disabled = isStepDisabled?.(step.key) ?? false;
           const clickable = !!onStepClick && !disabled;
 
@@ -158,7 +161,14 @@ export function LinearWorkflowStepper({
  * current source of truth. The "active" dot is the next pending step; earlier
  * steps render as done, later steps render as pending.
  */
-export function ReceivingProgressStepper({ row, photoCount, serialCount, isComplete, labelPrinted = false }: Props) {
+export function ReceivingProgressStepper({
+  row,
+  photoCount,
+  serialCount,
+  labelPrinted = false,
+  scanDriven = true,
+  siblingLineCount = 1,
+}: Props) {
   const [conditionSet, setConditionSet] = useState(
     () => !!row.condition_set_at || hasConditionBeenSet(row.id),
   );
@@ -172,42 +182,28 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
     window.addEventListener('receiving-condition-set', handler);
     return () => window.removeEventListener('receiving-condition-set', handler);
   }, [row.id, row.condition_set_at]);
-  const isCondDone = conditionSet || isComplete;
-  const expected = row.quantity_expected ?? 0;
-  const isSerialDone = expected > 0 ? serialCount >= expected : serialCount > 0;
-  const isPhotosDone = photoCount > 0;
 
-  const flags: Record<StepKey, boolean> = {
-    scan: true,                   // we wouldn't be here without a scan/select
-    photos: isPhotosDone,
-    condition: isCondDone,
-    serial: isSerialDone,
-    print: labelPrinted || isComplete,
-  };
+  const states = deriveReceivingStepStates({
+    scanDriven,
+    photoCount,
+    serialCount,
+    quantityExpected: row.quantity_expected ?? 0,
+    conditionSet,
+    labelPrinted,
+  });
 
-  // Compute states: walk left-to-right, first non-done step is "active".
-  const states: Record<StepKey, LinearStepState> = {
-    scan: 'done', photos: 'pending', condition: 'pending', serial: 'pending', print: 'pending',
-  };
-  let activeAssigned = false;
-  for (const { key } of STEPS) {
-    if (flags[key]) {
-      states[key] = 'done';
-    } else if (!activeAssigned) {
-      states[key] = 'active';
-      activeAssigned = true;
-    } else {
-      states[key] = 'pending';
-    }
-  }
+  const scopeHint =
+    siblingLineCount > 1 ? `Progress for active line (${siblingLineCount} items on PO)` : undefined;
 
   return (
     <div className={`${receivingScanBandClass} bg-surface-card`}>
       <LinearWorkflowStepper
-        steps={STEPS}
+        steps={RECEIVING_WORKFLOW_STEPS}
         states={states}
         ariaLabel="Receiving progress"
-        className="mx-auto w-full max-w-3xl px-6 sm:px-8"
+        ariaDescription={scopeHint}
+        size="compact"
+        className={RECEIVING_WORKSPACE_HEADER_COLUMN}
       />
     </div>
   );
@@ -222,14 +218,12 @@ function StepDot({
   index: number;
   compact?: boolean;
 }) {
-  const sizeClass = compact ? 'h-4 w-4 text-eyebrow' : 'h-5 w-5 text-micro';
-  const checkClass = compact ? 'h-2.5 w-2.5' : 'h-3 w-3';
+  const sizeClass = compact ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const checkClass = compact ? 'h-2 w-2' : 'h-2.5 w-2.5';
   if (state === 'done') {
     return (
       <span
-        className={`flex shrink-0 items-center justify-center rounded-full bg-blue-600 text-white ${sizeClass} ${
-          compact ? '' : 'shadow-sm shadow-blue-200'
-        }`}
+        className={`flex shrink-0 items-center justify-center rounded-full bg-blue-600 text-white ${sizeClass}`}
       >
         <Check className={checkClass} aria-hidden />
       </span>
@@ -238,7 +232,9 @@ function StepDot({
   if (state === 'active') {
     return (
       <span
-        className={`flex shrink-0 items-center justify-center rounded-full bg-surface-card font-black text-blue-700 ring-2 ring-blue-500 ${sizeClass}`}
+        className={`flex shrink-0 items-center justify-center rounded-full bg-surface-card font-black text-blue-700 ring-2 ring-blue-500 ${sizeClass} ${
+          compact ? 'text-[8px]' : 'text-eyebrow'
+        }`}
       >
         {index}
       </span>
@@ -246,9 +242,8 @@ function StepDot({
   }
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full bg-surface-card font-black text-text-faint ring-2 ring-border-soft ${sizeClass}`}
-    >
-      {index}
-    </span>
+      className={`flex shrink-0 items-center justify-center rounded-full bg-surface-strong ring-1 ring-inset ring-border-soft ${sizeClass}`}
+      aria-hidden
+    />
   );
 }

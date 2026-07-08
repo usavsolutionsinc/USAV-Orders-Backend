@@ -124,11 +124,9 @@ export function ReceivingLineWorkspace({
           row={row}
           photoCount={Math.max(0, Number(row.photo_count ?? 0))}
           serialCount={Array.isArray(row.serials) ? row.serials.length : 0}
-          isComplete={
-            String(row.workflow_status || '').toUpperCase() === 'DONE' ||
-            String(row.workflow_status || '').toUpperCase() === 'PASSED'
-          }
           labelPrinted={labelPrinted}
+          scanDriven={scanDriven}
+          siblingLineCount={nav?.total ?? 1}
         />
       )}
 

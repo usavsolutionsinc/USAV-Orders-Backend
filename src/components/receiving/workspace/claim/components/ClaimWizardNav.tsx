@@ -12,7 +12,7 @@ import type { ReceivingClaimController } from '../hooks/useReceivingClaimControl
 export function ClaimWizardNav({ c }: { c: ReceivingClaimController }) {
   return (
     <div className="space-y-2.5 border-b border-border-hairline pb-2.5">
-      <div className="flex justify-center">
+      <div className="flex justify-start">
         <PaneHeaderTabs<ClaimModalMode>
           tabs={[
             { value: 'create', label: 'New ticket' },

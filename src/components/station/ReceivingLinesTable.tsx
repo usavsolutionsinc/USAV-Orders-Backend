@@ -25,7 +25,7 @@ import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import DateRangeHeader from '@/components/ui/DateRangeHeader';
 import { IncomingPaneHeader } from '@/components/sidebar/receiving/IncomingPaneHeader';
-import { computeWeekRange } from '@/utils/date';
+import { computeWeekRange, toPSTDateKey } from '@/utils/date';
 
 import { useReceivingModeContext } from '@/components/station/useReceivingModeContext';
 import { useReceivingLinesData } from '@/components/station/useReceivingLinesData';
@@ -35,6 +35,52 @@ import { useReceivingTableNavigation } from '@/components/station/useReceivingTa
 import { useReceivingDeepLink } from '@/components/station/useReceivingDeepLink';
 import { useReceivingAutoWeek } from '@/components/station/useReceivingAutoWeek';
 import { ReceivingGroupedList } from '@/components/station/ReceivingGroupedList';
+import { ReceivingLineOrderRow } from '@/components/station/ReceivingLineOrderRow';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { StationPipelineBoard } from '@/components/station/StationPipelineBoard';
+import { STATION_PIPELINE_BOARDS, STATION_VIRTUAL_LIST } from '@/lib/station/flags';
+import { LAYOUT_PARAM, parseLayout } from '@/lib/station/table-url-params';
+import { useSearchParams } from 'next/navigation';
+import { AlertTriangle, Check, Clock, Inbox, Search, Truck } from '@/components/Icons';
+import type { SwimlaneLaneDef } from '@/components/board/SwimlaneBoard';
+import {
+  RECEIVING_INCOMING_BOARD_LANES,
+  RECEIVING_INCOMING_STATE_META,
+  RECEIVING_HISTORY_BOARD_LANES,
+  RECEIVING_HISTORY_STATE_META,
+  bucketReceivingIncomingLane,
+  bucketReceivingHistoryLane,
+  type ReceivingIncomingLane,
+  type ReceivingHistoryLane,
+  type ReceivingLaneIconKey,
+} from '@/lib/receiving/receiving-board-lanes';
+
+const RECEIVING_LANE_ICON: Record<ReceivingLaneIconKey, React.ComponentType<{ className?: string }>> = {
+  inbox: Inbox,
+  truck: Truck,
+  clock: Clock,
+  alert: AlertTriangle,
+  check: Check,
+  search: Search,
+};
+
+const RECEIVING_INCOMING_LANES: SwimlaneLaneDef<ReceivingIncomingLane>[] = RECEIVING_INCOMING_BOARD_LANES.map((l) => ({
+  id: l.id,
+  label: RECEIVING_INCOMING_STATE_META[l.id].label,
+  dot: RECEIVING_INCOMING_STATE_META[l.id].dot,
+  description: RECEIVING_INCOMING_STATE_META[l.id].description,
+  icon: RECEIVING_LANE_ICON[l.iconKey],
+  iconClass: l.iconClass,
+}));
+
+const RECEIVING_HISTORY_LANES: SwimlaneLaneDef<ReceivingHistoryLane>[] = RECEIVING_HISTORY_BOARD_LANES.map((l) => ({
+  id: l.id,
+  label: RECEIVING_HISTORY_STATE_META[l.id].label,
+  dot: RECEIVING_HISTORY_STATE_META[l.id].dot,
+  description: RECEIVING_HISTORY_STATE_META[l.id].description,
+  icon: RECEIVING_LANE_ICON[l.iconKey],
+  iconClass: l.iconClass,
+}));
 import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
 import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
 
@@ -60,6 +106,7 @@ export { ReceivingLineOrderRow } from '@/components/station/ReceivingLineOrderRo
 
 export default function ReceivingLinesTable({ selectMode = false }: { selectMode?: boolean } = {}) {
   const { isMobile } = useUIModeOptional();
+  const searchParams = useSearchParams();
   const [weekOffset, setWeekOffset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const weekRange = computeWeekRange(weekOffset);
@@ -98,6 +145,8 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     selectModeRef,
     scrollRef,
     selectedId,
+    // History/Incoming own the chevron channel; Unbox/Triage route it to the rail.
+    tableNavEnabled: isHistoryMode || isIncomingMode,
   });
 
   useReceivingDeepLink({ isLoading, localRows, setSelectedId });
@@ -113,6 +162,73 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   });
 
   const emptyMessage = mode.emptyMessage(modeContext);
+
+  // Pipeline (board) layout for Incoming / History (behind the boards flag). The
+  // board buckets the flat rows by the receiving lane SoT and day-bands per lane;
+  // it replaces the header + dense list (SwimlaneBoard supplies its own toolbar).
+  const layout = parseLayout(searchParams.get(LAYOUT_PARAM));
+  const showReceivingBoard = STATION_PIPELINE_BOARDS && layout === 'board' && (isIncomingMode || isHistoryMode);
+
+  if (showReceivingBoard) {
+    const nowMs = Date.now();
+    const toReceivingDaySections = (recs: ReceivingLineRow[]): [string, ReceivingLineRow[]][] => {
+      const byDay: Record<string, ReceivingLineRow[]> = {};
+      for (const r of recs) {
+        let key = 'Unknown';
+        try {
+          key = toPSTDateKey(r.created_at ?? undefined) || 'Unknown';
+        } catch {
+          key = 'Unknown';
+        }
+        (byDay[key] ??= []).push(r);
+      }
+      return Object.entries(byDay).sort((a, b) => b[0].localeCompare(a[0]));
+    };
+    const renderReceivingRow = (row: ReceivingLineRow, index: number) => (
+      <ReceivingLineOrderRow
+        key={row.id}
+        row={row}
+        index={index}
+        isMobile={isMobile}
+        isIncoming={isIncomingMode}
+        isHistory={isHistoryMode}
+        selectMode={selectMode}
+        isSelected={selectMode ? selectedIds.has(row.id) : selectedId === row.id}
+        onSelect={() => handleSelectRow(row)}
+      />
+    );
+    return (
+      <TableColumnConfigProvider tableId="receiving">
+        <div className="flex h-full min-w-0 overflow-hidden bg-surface-card">
+          {isIncomingMode ? (
+            <StationPipelineBoard<ReceivingLineRow, ReceivingIncomingLane>
+              prefsKey="receivingIncomingBoard"
+              lanes={RECEIVING_INCOMING_LANES}
+              bucket={(r) => bucketReceivingIncomingLane(r)}
+              records={orderedVisibleRows}
+              loading={isLoading && localRows.length === 0}
+              renderRow={renderReceivingRow}
+              getRowKey={(row) => String(row.id)}
+              toDaySections={toReceivingDaySections}
+              getRowDate={(r) => r.created_at}
+            />
+          ) : (
+            <StationPipelineBoard<ReceivingLineRow, ReceivingHistoryLane>
+              prefsKey="receivingHistoryBoard"
+              lanes={RECEIVING_HISTORY_LANES}
+              bucket={(r) => bucketReceivingHistoryLane(r, nowMs)}
+              records={orderedVisibleRows}
+              loading={isLoading && localRows.length === 0}
+              renderRow={renderReceivingRow}
+              getRowKey={(row) => String(row.id)}
+              toDaySections={toReceivingDaySections}
+              getRowDate={(r) => r.created_at}
+            />
+          )}
+        </div>
+      </TableColumnConfigProvider>
+    );
+  }
 
   return (
     <TableColumnConfigProvider tableId="receiving">
@@ -157,6 +273,8 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
               selectedId={selectedId}
               selectedIds={selectedIds}
               handleSelectRow={handleSelectRow}
+              virtualized={STATION_VIRTUAL_LIST}
+              scrollParentRef={scrollRef}
             />
           )}
         </div>

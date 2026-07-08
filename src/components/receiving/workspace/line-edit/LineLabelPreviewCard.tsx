@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { WorkspaceCard } from '@/design-system/components';
 import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Pencil } from '@/components/Icons';
 import { ReceivingPoLabelPreview } from '../ReceivingPoLabelPreview';
 import { ReceivingProductLabelPreview } from '../ReceivingProductLabelPreview';
@@ -52,13 +53,14 @@ export function LineLabelPreviewCard({
         label="Label"
         actions={
           scanValue ? (
-            <IconButton
-              icon={<Pencil className="h-4 w-4" />}
-              ariaLabel="Edit label"
-              title="Edit label — custom print"
-              tone="accent"
-              onClick={() => setEditorOpen(true)}
-            />
+            <HoverTooltip label="Edit label — custom print" asChild>
+              <IconButton
+                icon={<Pencil className="h-4 w-4" />}
+                ariaLabel="Edit label"
+                tone="accent"
+                onClick={() => setEditorOpen(true)}
+              />
+            </HoverTooltip>
           ) : undefined
         }
       >

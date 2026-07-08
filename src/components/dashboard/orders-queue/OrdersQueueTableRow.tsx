@@ -33,6 +33,8 @@ export interface OrdersQueueTableRowProps {
   rowStatus: RowStatusMeta;
   /** Optional trailing chip action (Outbound · Labels add-tracking popover). */
   trackingAction?: React.ReactNode;
+  /** Optional serial chip column — station (Tech) rows; omitted on dashboard rows. */
+  serialChip?: React.ReactNode;
   hasOutOfStock: boolean;
   outOfStockValue: string;
   notesValue: string;
@@ -55,6 +57,7 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   useAlternateStripe,
   rowStatus,
   trackingAction,
+  serialChip,
   hasOutOfStock,
   outOfStockValue,
   notesValue,
@@ -122,8 +125,8 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       aria-pressed={selectMode ? undefined : isSelected}
       aria-label={selectMode ? `Select order ${record.order_id || record.id}` : `Open order ${record.order_id || record.id}`}
       data-order-row-id={String(record.id)}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-border-hairline px-3 py-1.5 transition-all cursor-pointer hover:bg-blue-50/50 ${
-        isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-surface-card' : 'bg-surface-canvas/40'
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-border-hairline px-3 py-1.5 transition-all cursor-pointer hover:bg-surface-hover ${
+        isSelected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : useAlternateStripe ? 'bg-surface-card' : 'bg-surface-canvas/40'
       }`}
     >
       <div className="flex flex-col min-w-0">
@@ -132,7 +135,7 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
             selectMode ? (
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                  isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-border-default bg-surface-card'
+                  isChecked ? 'border-accent-bg bg-accent-bg text-text-inverse' : 'border-border-default bg-surface-card'
                 }`}
               >
                 {isChecked && <Check className="h-3 w-3" />}
@@ -147,16 +150,16 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
           // Select mode adds a leading checkbox (w-4 + mr-2 = 1.5rem); shift the
           // meta indent by that same offset so qty stays under the title.
           indent={selectMode ? `calc(${META_COL.indent} + 1.5rem)` : undefined}
-          qty={<span className={qty > 1 ? 'text-yellow-600' : 'text-text-soft'}>{qty}</span>}
+          qty={<span className={qty > 1 ? 'text-text-warning' : 'text-text-soft'}>{qty}</span>}
           condition={
-            <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-text-faint'}>
+            <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-text-warning' : 'text-text-faint'}>
               {record.condition || 'N/A'}
             </span>
           }
           rest={
             <>
               {salePrice ? (
-                <span className="normal-case tracking-normal text-emerald-600">{salePrice}</span>
+                <span className="normal-case tracking-normal text-text-success">{salePrice}</span>
               ) : null}
               {daysLate !== null ? (
                 <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
@@ -185,6 +188,9 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
                 ) : null}
                 {hasOutOfStock ? (
                   <HoverTooltip label={outOfStockValue.trim()} focusable={false}>
+                    {/* Raw red-600 (not text-danger): matches the pipeline's BLOCKED
+                        status red (label registry uses raw red-500/700, theme-independent);
+                        text-danger renders a muted maroon under mono/slate. */}
                     <span className="inline-flex items-center text-red-600" aria-label="Out of stock">
                       <AlertTriangle className="h-3.5 w-3.5" />
                     </span>
@@ -193,8 +199,8 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
               </span>
               {labelPrintedAt ? (
                 <HoverTooltip label="Label printed" focusable={false}>
-                  <span className="flex items-center gap-1 text-emerald-600">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="flex items-center gap-1 text-text-success">
+                    <span className="h-2 w-2 rounded-full bg-fill-success" />
                     LBL
                   </span>
                 </HoverTooltip>
@@ -214,6 +220,7 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
         hideOrderId={hideOrderIdChip}
         tracking={trackingRaw}
         trackingAction={trackingAction}
+        serialChip={serialChip}
         isMobile={isMobile}
       />
     </motion.div>
@@ -239,6 +246,9 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.record.condition !== next.record.condition) return false;
   if (prev.record.order_id !== next.record.order_id) return false;
   if (prev.record.quantity !== next.record.quantity) return false;
+  // Station (Tech) rows carry a serial chip built from this value — compare the
+  // value, not the freshly-created `serialChip` node (which would defeat memo).
+  if (prev.record.serial_number !== next.record.serial_number) return false;
   if (prev.record.sale_amount !== next.record.sale_amount) return false;
   if (prev.record.currency !== next.record.currency) return false;
   if (prev.record.label_printed_at !== next.record.label_printed_at) return false;

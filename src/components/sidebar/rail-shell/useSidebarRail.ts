@@ -308,13 +308,22 @@ export function useSidebarRail<TRow>({
   // Walks the SAME visible order keyboard nav uses (skips collapsed group
   // members) so a chevron press never lands selection on a hidden row. With
   // nothing selected yet, prev/next both open the first rendered row.
+  // When the selected line is a sibling not listed in a carton-deduped rail
+  // (unbox Unboxed keeps one row per receiving_id), fall back to matching the
+  // selected row's group id so PO-level chevrons still step.
   useEffect(() => {
     if (!navigateEvent) return;
     const handler = (event: Event) => {
       const direction = (event as CustomEvent<'prev' | 'next'>).detail;
       if (direction !== 'prev' && direction !== 'next') return;
       if (visibleIndices.length === 0) return;
-      const curPos = visibleIndices.findIndex((i) => getId(rows[i]) === selectedId);
+      let curPos = visibleIndices.findIndex((i) => getId(rows[i]) === selectedId);
+      if (curPos < 0 && getGroupId && selectedRow != null) {
+        const selectedGroup = getGroupId(selectedRow);
+        if (selectedGroup != null) {
+          curPos = visibleIndices.findIndex((i) => getGroupId(rows[i]) === selectedGroup);
+        }
+      }
       if (curPos < 0) { onSelect(rows[visibleIndices[0]]); return; }
       const nextRowIdx = visibleIndices[curPos + (direction === 'prev' ? -1 : 1)];
       if (nextRowIdx == null) return; // already at an edge — no wrap
@@ -322,7 +331,7 @@ export function useSidebarRail<TRow>({
     };
     window.addEventListener(navigateEvent, handler);
     return () => window.removeEventListener(navigateEvent, handler);
-  }, [navigateEvent, rows, visibleIndices, selectedId, getId, onSelect]);
+  }, [navigateEvent, rows, visibleIndices, selectedId, selectedRow, getId, getGroupId, onSelect]);
 
   const autoSelectedRef = useRef(false);
   useEffect(() => {

@@ -284,6 +284,8 @@ export const AUDIT_ACTION = {
   RECEIVING_MATCH:  'receiving.match',
   /** Manual "Retry pair" from the Unfound strip — re-runs the same tracking search reconcileUnmatchedReceiving does on its cron sweep. */
   RECEIVING_RETRY_PAIR: 'receiving.retry_pair',
+  /** Operator-initiated "Look up Amazon return" on an unfound carton — SP-API External Fulfillment Returns lookup by reverse tracking. */
+  RECEIVING_AMAZON_RETURN_LOOKUP: 'receiving.amazon_return_lookup',
   // GS1 Digital Link resolver (single QR → contextual internal page)
   GS1_RESOLVE:      'gs1.resolve',
   // SKU stock

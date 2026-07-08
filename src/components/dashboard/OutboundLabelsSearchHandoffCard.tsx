@@ -24,7 +24,7 @@ export function OutboundLabelsSearchHandoffCard({
   const buttonDisabled = !onOpenLabelsMatches || isBusy || labelsCount === 0;
 
   return (
-    <div className="rounded-2xl border border-violet-100 bg-violet-50/70 px-4 py-3">
+    <div className="rounded-2xl border border-fill-fulfillment/30 bg-fill-fulfillment/10 px-4 py-3">
       <div className="space-y-2">
         <Button
           type="button"
@@ -34,17 +34,17 @@ export function OutboundLabelsSearchHandoffCard({
           loading={isBusy}
           disabled={buttonDisabled}
           onClick={() => onOpenLabelsMatches?.(normalizedQuery)}
-          className="w-full border border-violet-200 bg-surface-card text-violet-700 hover:bg-violet-100 hover:text-violet-700 disabled:border-violet-100 disabled:bg-violet-50 disabled:text-violet-300"
+          className="w-full border border-fill-fulfillment/30 bg-surface-card text-text-fulfillment hover:bg-fill-fulfillment/10 hover:text-text-fulfillment disabled:border-fill-fulfillment/30 disabled:bg-fill-fulfillment/10 disabled:text-text-fulfillment"
         >
           Open Outbound Labels
         </Button>
 
         <div className="min-w-0">
-          <p className={`${sectionLabel} text-violet-700`}>Awaiting label matches</p>
-          <p className="mt-1 text-caption font-semibold text-violet-900">
+          <p className={`${sectionLabel} text-text-fulfillment`}>Awaiting label matches</p>
+          <p className="mt-1 text-caption font-semibold text-text-fulfillment">
             {isBusy ? 'Checking labels queue…' : `${labelsCount} need a carrier label`}
           </p>
-          <p className="mt-1 text-micro font-semibold leading-relaxed text-violet-700/80">
+          <p className="mt-1 text-micro font-semibold leading-relaxed text-text-fulfillment/80">
             Orders without tracking live on Outbound · Labels, not Unshipped.
           </p>
         </div>

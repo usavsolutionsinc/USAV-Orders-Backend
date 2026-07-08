@@ -46,7 +46,13 @@ export interface FloatingButtonProps {
   /** Stretch the pill to fill `maxWidth`. Default `false` — a compact,
    *  auto-width pill centered within the container. */
   fullWidth?: boolean;
-  /** Extra class on the sticky outer wrapper (override z-index, padding, etc.). */
+  /** Render as an in-flow docked band (`shrink-0`, transparent — no backing)
+   *  instead of the default click-through `absolute` float. Use when the host is
+   *  always full-height and OTHER bands (receive feedback, label preview) dock
+   *  above it — the `absolute` float would otherwise paint on top of them. The
+   *  pill keeps its own shadow so it still reads as floating. Default `false`. */
+  docked?: boolean;
+  /** Extra class on the outer wrapper (override z-index, padding, etc.). */
   className?: string;
 }
 
@@ -71,7 +77,9 @@ const spring = { type: 'spring', stiffness: 520, damping: 36 } as const;
  * (where `sticky` would fall back to mid-flow).
  *
  * - Click-through wrapper (`pointer-events-none`) so it never blocks content;
- *   the pill itself re-enables clicks.
+ *   the pill itself re-enables clicks. (In `docked` mode the wrapper is instead
+ *   an in-flow `shrink-0` band — no backing — so it stacks below other docked
+ *   bands rather than floating over them, while the pill still reads as floating.)
  * - Centered within `maxWidth` so it lines up with the host content column
  *   (pass the same `max-w-*` token the column uses). Set `fullWidth` to stretch
  *   the pill across that width, or leave it for a compact centered pill.
@@ -95,8 +103,9 @@ export function FloatingButton({
   menu,
   menuLabel,
   menuTitle,
-  maxWidth = 'max-w-3xl',
+  maxWidth = 'max-w-[720px]',
   fullWidth = false,
+  docked = false,
   className,
 }: FloatingButtonProps) {
   const isDisabled = disabled || loading;
@@ -112,13 +121,20 @@ export function FloatingButton({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6',
+        docked
+          ? // In-flow docked band — stacks below any receive-feedback / label
+            // bands instead of floating over them. No backing/border/backdrop:
+            // the pill's own shadow reads as a floating action; the band is pure
+            // spacing so the content behind it shows through.
+            'shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6'
+          : 'pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6',
         className,
       )}
     >
       <div
         className={cn(
-          'pointer-events-auto mx-auto flex w-full',
+          'mx-auto flex w-full',
+          docked ? '' : 'pointer-events-auto',
           maxWidth,
           fullWidth ? '' : 'justify-center',
         )}

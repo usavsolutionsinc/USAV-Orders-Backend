@@ -24,6 +24,15 @@ interface Props {
    */
   expanded?: boolean;
   onExpandedChange?: (next: boolean) => void;
+  /**
+   * Collapsible mode only. When false, the collapsed state renders JUST the edit
+   * pencil (no selected-grade pill) — used where another surface already shows
+   * the chosen grade (e.g. the PO-line meta row's condition chip), so the pill
+   * would be a redundant second label directly beneath it. Defaults to true (the
+   * copy-chip-style "selected pill + pencil") for surfaces where the collapsed
+   * pill is the only grade readout (the unmatched / add-item flows).
+   */
+  collapsedLabel?: boolean;
 }
 
 // Single flat row of grades, in display order. Used grades (A / B / C) are
@@ -46,6 +55,7 @@ export function ConditionPills({
   collapsible = false,
   expanded: expandedProp,
   onExpandedChange,
+  collapsedLabel = true,
 }: Props) {
   const selected = String(value || '').trim().toUpperCase();
   const selectedGrade = GRADES.find((g) => g.value === selected) ?? null;
@@ -69,28 +79,38 @@ export function ConditionPills({
   useHorizontalWheelScroll(scrollerRef, expanded);
 
   // Collapsed: only the selected pill + an edit pencil (mirrors the copy-chip).
+  // When `collapsedLabel` is off, the grade is already shown elsewhere (the meta
+  // row chip), so collapse to just the edit pencil — no redundant second label.
   if (collapsible && !expanded && selectedGrade) {
     return (
       <div role="radiogroup" aria-label="Condition grade" className="flex w-fit items-center gap-1.5">
-        <HoverTooltip label={conditionDescription(selectedGrade.value)} asChild focusable={false}>
-          {/* ds-raw-button: segmented condition-grade toggle — leave hand-rolled */}
+        {collapsedLabel ? (
+          <HoverTooltip label={conditionDescription(selectedGrade.value)} asChild focusable={false}>
+            {/* ds-raw-button: segmented condition-grade toggle — leave hand-rolled */}
+            <button
+              type="button"
+              aria-label={`Condition ${selectedGrade.label} — change`}
+              onClick={() => setExpanded(true)}
+              className={`${conditionPillClass(selectedGrade.value, true)} ds-raw-button`}
+            >
+              {selectedGrade.label}
+            </button>
+          </HoverTooltip>
+        ) : null}
+        <HoverTooltip
+          label={collapsedLabel ? 'Edit condition' : `Condition ${selectedGrade.label} — change`}
+          asChild
+          focusable={false}
+        >
           <button
             type="button"
-            aria-label={`Condition ${selectedGrade.label} — change`}
             onClick={() => setExpanded(true)}
-            className={`${conditionPillClass(selectedGrade.value, true)} ds-raw-button`}
+            aria-label={collapsedLabel ? 'Edit condition' : `Condition ${selectedGrade.label} — change`}
+            className="ds-raw-button rounded p-0.5 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
           >
-            {selectedGrade.label}
+            <Pencil className="h-3 w-3" />
           </button>
         </HoverTooltip>
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          aria-label="Edit condition"
-          className="ds-raw-button rounded p-0.5 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
       </div>
     );
   }

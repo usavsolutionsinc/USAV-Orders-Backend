@@ -1,9 +1,11 @@
 'use client';
 
-import { Loader2 } from '@/components/Icons';
+import { Camera } from '@/components/Icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { unboxingPhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
+import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ReceivingPhoto {
   id: number;
@@ -30,6 +32,8 @@ export function ReceivingPhotosSection({
   launcherTitle = 'View Receiving Photos',
 }: ReceivingPhotosSectionProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const queryKey = ['receiving-photos', receivingId] as const;
   const { data: photos, isFetching } = useQuery<ReceivingPhoto[]>({
     queryKey,
@@ -52,6 +56,13 @@ export function ReceivingPhotosSection({
     staleTime: 20_000,
   });
 
+  useReceivingPhotosRealtimeRefresh(
+    Number(receivingId),
+    staffId,
+    () => queryClient.invalidateQueries({ queryKey }),
+    staffId > 0,
+  );
+
   // Defensive — `photos` should always be an array per the queryFn, but a
   // stale React Query cache entry from an older shape could be non-array
   // here. Guard against the crash; the queryFn will replace the cache on
@@ -70,26 +81,19 @@ export function ReceivingPhotosSection({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-caption font-black uppercase tracking-[0.2em] text-text-default">{sectionTitle}</h3>
-            {isFetching ? <Loader2 className="h-3 w-3 animate-spin text-text-faint" aria-hidden /> : null}
-          </div>
+          <Camera className="h-4 w-4 text-text-muted" aria-hidden />
+          <h3 className="text-caption font-black uppercase tracking-widest text-text-default">
+            {sectionTitle}
+          </h3>
         </div>
       </div>
 
       {loadingEmpty ? (
-        <div className="flex h-24 items-center justify-center rounded-xl border border-border-hairline bg-surface-canvas">
-          <Loader2 className="h-6 w-6 animate-spin text-text-faint" aria-label="Loading photos" />
+        <div className="grid grid-cols-3 gap-2 rounded-xl border border-border-hairline bg-surface-canvas p-2">
+          <div className="h-16 rounded-lg bg-surface-sunken" aria-hidden />
+          <div className="h-16 rounded-lg bg-surface-sunken" aria-hidden />
+          <div className="h-16 rounded-lg bg-surface-sunken" aria-hidden />
+          <span className="sr-only">Loading photos</span>
         </div>
       ) : galleryPhotos.length === 0 ? (
         <div className="flex min-h-[5.5rem] items-center justify-center rounded-xl border-2 border-dashed border-border-hairline bg-surface-canvas px-4">
@@ -109,6 +113,7 @@ export function ReceivingPhotosSection({
           allowReassign
           onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
           onPhotoReassigned={() => queryClient.invalidateQueries({ queryKey })}
+          onPhotoUploaded={() => queryClient.invalidateQueries({ queryKey })}
         />
       )}
     </div>

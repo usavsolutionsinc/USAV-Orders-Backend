@@ -208,6 +208,7 @@ export function TriagePanel({
                 copy, and the unfound-todo framing differ. No serial scan and no
                 editable lines here — that's the unbox pass. */}
             <WorkflowRecommendationsStrip row={row} surface="triage" />
+
             <Template
               row={row}
               staffId={staffId}
@@ -259,7 +260,10 @@ export function TriagePanel({
             receivingId={row.receiving_id}
             staffId={Number(staffId) || 0}
             poRef={row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || null}
-            photoIntent="package"
+            // Show every capture on the carton regardless of intent (matches the
+            // header photo-count button and the unbox peek) so the fan appears
+            // whenever the carton has any photos, not only package/door shots.
+            photoIntent="all"
           />
         ) : null}
       </div>

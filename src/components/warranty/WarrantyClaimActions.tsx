@@ -60,7 +60,7 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
   return (
     <div className="border-t border-border-hairline bg-surface-canvas/60 px-5 py-4">
       {error && (
-        <p className="mb-2 text-xs text-rose-600">
+        <p className="mb-2 text-xs text-text-danger">
           {error instanceof Error ? error.message : 'Action failed.'}
         </p>
       )}
@@ -210,7 +210,7 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
             <p className="text-sm text-text-faint">Generating…</p>
           ) : draft ? (
             <div className="space-y-1">
-              {draft.warning && <p className="text-caption text-amber-600">{draft.warning}</p>}
+              {draft.warning && <p className="text-caption text-text-warning">{draft.warning}</p>}
               <p className="text-sm font-medium text-text-default">{draft.title}</p>
               <p className="text-caption text-text-soft">Condition {draft.conditionId} · {draft.photoAttachmentIds.length} photo(s)</p>
               <textarea
@@ -221,7 +221,7 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
               />
             </div>
           ) : (
-            <p className="text-sm text-rose-600">No draft.</p>
+            <p className="text-sm text-text-danger">No draft.</p>
           )}
         </div>
       ) : (

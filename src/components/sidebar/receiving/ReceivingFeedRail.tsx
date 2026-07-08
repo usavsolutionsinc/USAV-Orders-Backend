@@ -27,6 +27,7 @@ import {
   type RailFetchRuntime,
   type ReceivingRailFeedId,
 } from '@/lib/receiving/rail/feeds';
+import { stampPoRailTitleContext } from '@/lib/receiving/po-group-title';
 import { RAIL_QTY } from '@/lib/receiving/rail/quantity';
 import { RAIL_STATUS } from '@/lib/receiving/rail/status';
 
@@ -96,17 +97,23 @@ export function ReceivingFeedRail({
 
   // Strictly additive — an empty exclusion set returns the fetched rows untouched.
   const fetchFn = useMemo<() => Promise<ApiResponse>>(() => {
-    if (excluded.size === 0) return baseFetchFn;
+    const applyTitleContext = (data: ApiResponse): ApiResponse => {
+      if (feed.stampRailTitleContext !== 'po') return data;
+      const rows = stampPoRailTitleContext(data.receiving_lines ?? []);
+      return { ...data, receiving_lines: rows, total: rows.length };
+    };
+    if (excluded.size === 0) {
+      return async () => applyTitleContext(await baseFetchFn());
+    }
     return async () => {
       const data = await baseFetchFn();
-      const rows = data.receiving_lines ?? [];
-      const kept = rows.filter((r) => !excluded.has(r.id));
-      return { ...data, receiving_lines: kept, total: kept.length };
+      const rows = (data.receiving_lines ?? []).filter((r) => !excluded.has(r.id));
+      return applyTitleContext({ ...data, receiving_lines: rows, total: rows.length });
     };
     // baseFetchFn is rebuilt each render from rt (staffId/query); the stable
     // inputs (+ excludedSig) below track a real fetch-shape change (baseFetchFn
     // itself is intentionally omitted — it has a new identity every render).
-  }, [excluded, excludedSig, feed.segment, scope, q, staffId]);
+  }, [excluded, excludedSig, feed.segment, feed.stampRailTitleContext, scope, q, staffId]);
 
   const qty = RAIL_QTY[feed.qty];
   const dot = RAIL_STATUS[feed.status];
@@ -124,6 +131,11 @@ export function ReceivingFeedRail({
       deleteEvent="receiving-line-deleted"
       deleteGroupEvent="receiving-entry-deleted"
       refreshEvents={feed.refreshEvents}
+      // Workspace header chevrons (`LineEditToolbar`) dispatch this channel —
+      // same contract as TestingRecentRail ↔ testing-navigate-rail. Without it
+      // unbox/triage prev/next are a no-op (the history table listens on the
+      // same name but its rows aren't the rail's PO list).
+      navigateEvent="receiving-navigate-table"
       eyebrowTitle={feed.eyebrowTitle}
       autoSelectFirstWhenEmpty={feed.autoSelectFirstWhenEmpty}
       pinSelectedLead={feed.pinSelectedLead}
@@ -135,6 +147,7 @@ export function ReceivingFeedRail({
       getPreviewQty={qty.getPreviewQty}
       renderPopoverContext={renderPopoverContext}
       renderPopoverActions={renderPopoverActions}
+      rowTitleMode={feed.rowTitleMode}
     />
   );
 }

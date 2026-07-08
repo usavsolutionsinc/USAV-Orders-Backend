@@ -29,6 +29,7 @@ import {
   shouldUseUnmatchedItemsSurface,
 } from '@/lib/receiving/intake-items-routing';
 import { isReturnIntake } from '@/lib/receiving/triage-intake-kind';
+import type { ReceivingStepKey } from '../derive-receiving-step-states';
 
 interface LinePoItemsSectionProps {
   row: ReceivingLineRow;
@@ -46,6 +47,7 @@ interface LinePoItemsSectionProps {
   headerRight?: React.ReactNode;
   /** Hide the embedded "PO items · N" eyebrow — the tab slider owns the label. */
   suppressHeader?: boolean;
+  activeStep?: ReceivingStepKey | null;
 }
 
 interface SiblingsResponse {
@@ -65,6 +67,7 @@ export function LinePoItemsSection({
   embedded = false,
   headerRight,
   suppressHeader = false,
+  activeStep = null,
 }: LinePoItemsSectionProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -224,6 +227,7 @@ export function LinePoItemsSection({
             c.setSerialAbsent(absent);
             c.setSerialAbsentReason(reason);
           }}
+          serialStepActive={activeStep === 'serial'}
         />
       )}
     />

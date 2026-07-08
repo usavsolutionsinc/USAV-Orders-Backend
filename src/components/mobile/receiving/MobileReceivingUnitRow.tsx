@@ -165,6 +165,7 @@ export function MobileReceivingUnitRow({
               package items (shown once on the package header) so nothing dupes. */}
           <div className={`flex flex-wrap items-center gap-2 px-0.5 pb-1 ${CHIP_SCALE}`}>
             <ReceivingIdentityChips
+              row={row}
               includeSku
               includePo={!headerSharesPoTracking}
               includeTracking={!headerSharesPoTracking}

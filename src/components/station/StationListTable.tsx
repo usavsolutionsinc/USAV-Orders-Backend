@@ -72,6 +72,8 @@ export interface StationListTableProps<TRecord> {
   maxBodyHeightPx?: number;
   growToContent?: boolean;
   noHorizontalScroll?: boolean;
+  /** Scroll a row (by its `getRowKey` value) into view — deep-link / keyboard focus. */
+  scrollToKey?: string | null;
 
   // Empty / search.
   searchValue?: string;
@@ -114,6 +116,7 @@ export function StationListTable<TRecord>({
   maxBodyHeightPx,
   growToContent = false,
   noHorizontalScroll = false,
+  scrollToKey,
   searchValue = '',
   onClearSearch,
   emptyMessage,
@@ -224,6 +227,7 @@ export function StationListTable<TRecord>({
               renderRow={renderRow}
               renderGroup={renderGroup}
               getRowKey={getRowKey}
+              scrollToKey={scrollToKey}
             />
           ) : (
             <div className="flex flex-col w-full">

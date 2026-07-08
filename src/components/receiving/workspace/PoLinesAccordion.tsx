@@ -23,7 +23,9 @@ import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { qtyProgress } from '@/design-system/tokens/typography/presets';
+import { WORKSPACE_SECTION_TITLE_CLASS } from './WorkspaceSectionLabel';
 import { META_COL } from '@/components/ui/RowMetaColumns';
+import { PoLineMetaGrid } from '@/components/receiving/workspace/PoLineMetaGrid';
 import { cn } from '@/utils/_cn';
 import {
   CartonAddPopover,
@@ -31,6 +33,10 @@ import {
   type CartonAddSelection,
 } from '@/components/receiving/workspace/CartonAddPopover';
 import { setSerialEditHandoff } from '@/components/receiving/workspace/serialEditHandoff';
+import {
+  setItemDescHandoff,
+  takeItemDescHandoff,
+} from '@/components/receiving/workspace/itemDescHandoff';
 import {
   dispatchSelectLine,
   type ReceivingLineRow,
@@ -304,6 +310,39 @@ export function PoLinesAccordion({
   const [descEdit, setDescEdit] = useState<{ id: number; draft: string } | null>(null);
   const [descSavingLineId, setDescSavingLineId] = useState<number | null>(null);
   const descInputRef = useRef<HTMLInputElement>(null);
+
+  // Consume a title-click handoff queued before `dispatchSelectLine` remounted
+  // this accordion. Mirrors `serialEditHandoff` so the item-description editor
+  // opens on the newly active line instead of being wiped with React state.
+  useEffect(() => {
+    const line =
+      allRows.find((r) => r.id === activeLineId) ??
+      (placeholderActiveRow?.id === activeLineId ? placeholderActiveRow : undefined);
+    if (!line) return;
+    if (!takeItemDescHandoff(activeLineId)) return;
+    setDescShown(line.id);
+    setDescEdit({ id: line.id, draft: line.zoho_notes ?? '' });
+    setActiveCollapsed(false);
+  }, [activeLineId, allRows, placeholderActiveRow]);
+
+  /** Open (or refresh) the Zoho item-description editor for a line. If that
+   *  line isn't active yet, stash a handoff and switch first so the expand
+   *  motion lands on the selected row after remount. */
+  const openItemDescription = useCallback(
+    (line: ReceivingLineRow) => {
+      onItemDescFeedback?.(null);
+      if (line.id !== activeLineId) {
+        setItemDescHandoff(line.id);
+        dispatchSelectLine(line);
+        return;
+      }
+      setDescShown(line.id);
+      setDescEdit({ id: line.id, draft: line.zoho_notes ?? '' });
+      setActiveCollapsed(false);
+    },
+    [activeLineId, onItemDescFeedback],
+  );
+
   const rowBodyCollapse = useMotionPresence(framerPresence.collapseHeight);
   const rowBodyTransition = useMotionTransition(PO_LINE_BODY_COLLAPSE);
   const rowLayoutTransition = useMotionTransition(PO_LINE_LAYOUT_SPRING);
@@ -409,7 +448,7 @@ export function PoLinesAccordion({
     >
       {suppressHeader ? null : (
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-text-soft">
+          <h3 className={WORKSPACE_SECTION_TITLE_CLASS}>
             PO items · {rows.length}
           </h3>
           {embedded ? (
@@ -495,12 +534,23 @@ export function PoLinesAccordion({
                       )}
                     </span>
                   ) : null}
-                  {/* Title is sourced from the listing/PO line — read-only. No
-                      inline edit: the operator shouldn't retype the listing title.
-                      ds-allow-title: native tooltip shows full value when truncated */}
+                  {/* Title is sourced from the listing/PO line — not editable as
+                      text. Click focuses the line (with expand motion) and opens
+                      the Zoho item-description editor. ds-allow-title: native
+                      tooltip shows full value when truncated. */}
                   <p
-                    className="min-w-0 flex-1 truncate text-label font-bold text-text-default"
+                    className={`min-w-0 flex-1 truncate text-label font-bold text-text-default ${
+                      !readOnly ? 'cursor-pointer hover:text-blue-700' : ''
+                    }`}
                     title={line.item_name ?? undefined}
+                    onClick={
+                      !readOnly
+                        ? (e) => {
+                            e.stopPropagation();
+                            openItemDescription(line);
+                          }
+                        : undefined
+                    }
                   >
                     {line.item_name || line.sku || `Line #${line.id}`}
                   </p>
@@ -511,14 +561,14 @@ export function PoLinesAccordion({
                         aria-pressed={descShown === line.id}
                         onClick={(e) => {
                           e.stopPropagation();
-                          const opening = descShown !== line.id;
-                          const next = opening ? line.id : null;
-                          setDescShown(next);
-                          setDescEdit(
-                            next == null ? null : { id: line.id, draft: line.zoho_notes ?? '' },
-                          );
-                          onItemDescFeedback?.(null);
-                          if (opening && isActive) setActiveCollapsed(false);
+                          if (descShown === line.id) {
+                            setDescShown(null);
+                            setDescEdit(null);
+                            onItemDescFeedback?.(null);
+                            return;
+                          }
+
+                          openItemDescription(line);
                         }}
                         className={`group -m-1 flex shrink-0 items-center justify-center rounded-md p-1 transition-colors hover:bg-blue-100 ${
                           descShown === line.id ? 'bg-blue-100' : ''
@@ -537,49 +587,41 @@ export function PoLinesAccordion({
                     </HoverTooltip>
                   ) : null}
                 </div>
-                {/* Meta row — indented to title column. No `truncate` on chips:
-                    `flex flex-wrap` wraps badges; `overflow: hidden` would clip the
-                    SerialChipWithMenu dropdown (not portaled). */}
-                <div
-                  className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
-                  style={{ paddingLeft: readOnly ? undefined : META_COL.indentWide }}
-                >
-                    {readOnly ? (
-                      // Triage read-only: scanned qty (1/1, matching the sidebar)
-                      // in blue. The SKU/condition copy chips still render below.
+                {/* Meta row — fixed columns for vertical scan alignment. */}
+                <PoLineMetaGrid
+                  indent={readOnly ? undefined : META_COL.indentWide}
+                  qty={
+                    readOnly ? (
                       <ScannedBadge expected={line.quantity_expected} />
                     ) : (
                       <ProgressBadge
                         received={line.quantity_received}
                         expected={line.quantity_expected}
                       />
-                    )}
-                    {(line.sku || '').trim() ? (
-                      <>
-                        <span aria-hidden className="text-micro text-text-faint">·</span>
-                        <SkuScanRefChip
-                          value={line.sku as string}
-                          display={getLast4(line.sku)}
-                        />
-                      </>
-                    ) : null}
-                    {line.unit_price != null && Number(line.unit_price) > 0 ? (
-                      <>
-                        <span aria-hidden className="text-micro text-text-faint">·</span>
-                        <UnitPriceChip amount={line.unit_price} />
-                      </>
-                    ) : null}
-                    <span aria-hidden className="text-micro text-text-faint">·</span>
+                    )
+                  }
+                  sku={
+                    (line.sku || '').trim() ? (
+                      <SkuScanRefChip
+                        value={line.sku as string}
+                        display={getLast4(line.sku)}
+                        dense
+                      />
+                    ) : undefined
+                  }
+                  condition={
                     <ConditionGradeChip
                       grade={
                         isActive && activeConditionOverride
                           ? activeConditionOverride
                           : line.condition_grade
                       }
+                      dense
                     />
-                    {Array.isArray(line.serials) && line.serials.length > 0 ? (
-                      <>
-                        <span aria-hidden className="text-micro text-text-faint">·</span>
+                  }
+                  serial={
+                    Array.isArray(line.serials) && line.serials.length > 0 ? (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
                         {line.serials.map((s, i) => {
                           const sn = (s.serial_number || '').trim();
                           if (!sn) return null;
@@ -590,17 +632,13 @@ export function PoLinesAccordion({
                               (s as { condition_grade?: string | null }).condition_grade ?? null,
                             _optimistic: readOptimisticFlag(s as { _optimistic?: 'adding' | 'removing' }),
                           };
-                          // Offer the Edit/Delete menu on EVERY row, not just
-                          // the active one. Editing a chip on a collapsed row
-                          // activates that line first (dispatchSelectLine) so
-                          // its scan input mounts; delete is routed to the
-                          // chip's own line id by the parent.
                           if (!readOnly && (activeSerialActions?.onEdit || activeSerialActions?.onDelete)) {
                             const { onEdit, onDelete } = activeSerialActions;
                             return (
                               <SerialChipWithMenu
                                 key={`${sn}-${i}`}
                                 serial={serialRecord}
+                                dense
                                 isEditing={isActive && activeSerialActions.editingSerialId === s.id}
                                 onEdit={
                                   onEdit
@@ -608,10 +646,6 @@ export function PoLinesAccordion({
                                         if (isActive) {
                                           onEdit(target, line.id);
                                         } else {
-                                          // Non-active row: the workspace may
-                                          // remount on the line switch, so stash
-                                          // the target in a module store the new
-                                          // workspace consumes for this line.
                                           setSerialEditHandoff(line.id, target);
                                           dispatchSelectLine(line);
                                         }
@@ -629,13 +663,20 @@ export function PoLinesAccordion({
                               key={`${sn}-${i}`}
                               value={sn}
                               width="w-fit max-w-full"
+                              dense
                               pending={readOptimisticFlag(s as { _optimistic?: 'adding' | 'removing' })}
                             />
                           );
                         })}
-                      </>
-                    ) : null}
-                </div>
+                      </span>
+                    ) : undefined
+                  }
+                  price={
+                    line.unit_price != null && Number(line.unit_price) > 0 ? (
+                      <UnitPriceChip amount={line.unit_price} dense />
+                    ) : undefined
+                  }
+                />
               </div>
               {/* Active row only — the 2nd row. By default it holds the
                   condition pills + serial adder (activeRowSlot). The notes icon

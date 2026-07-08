@@ -22,10 +22,17 @@ const zIndexScale = Object.fromEntries(
  * modifier (`bg-surface-card/90`) it passes the number — we wrap in
  * `color-mix()` so alpha works over hex/rgba CSS variables (which `<alpha-value>`
  * substitution cannot do). Chrome 111+/Safari 16.2+ — fine for this app.
+ *
+ * NOTE: the gradient color-stop plugin (`from-*`/`via-*`/`to-*`, via
+ * `transparentTo`) calls this with a NUMERIC `opacityValue` (e.g. `0` for the
+ * implicit transparent stop), not a string — so we must String()-coerce before
+ * `.startsWith`, else any themed gradient (e.g. `from-surface-accent`) throws
+ * "opacityValue.startsWith is not a function" and breaks the whole CSS build.
+ * Coercing also yields the right stop: `0` → `calc(0 * 100%)` = transparent.
  */
 const themed = (cssVar: string) =>
-    (({ opacityValue }: { opacityValue?: string }) =>
-        opacityValue === undefined || opacityValue.startsWith('var(')
+    (({ opacityValue }: { opacityValue?: string | number }) =>
+        opacityValue === undefined || String(opacityValue).startsWith('var(')
             ? `var(${cssVar})`
             : `color-mix(in srgb, var(${cssVar}) calc(${opacityValue} * 100%), transparent)`) as unknown as string;
 

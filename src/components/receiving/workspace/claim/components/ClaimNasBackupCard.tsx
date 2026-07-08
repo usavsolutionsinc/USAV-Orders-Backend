@@ -11,14 +11,8 @@ import { Button } from '@/design-system/primitives';
 import type { ReceivingClaimController } from '../hooks/useReceivingClaimController';
 
 /**
- * The local-storage backup result/action card, shared by the create "Filed"
- * step and the link "Linked" step. Three states:
- *   - no backup yet → idle prompt + "Back up locally" (when `canArchive`)
- *   - backed up OK  → blue card: counts + folder + case-info.txt note
- *   - partial/failed → amber card: warning + "Retry backup"
- *
- * `canArchive` gates the live action button (suppressed during a dry run, where
- * the result is simulated).
+ * Local-storage backup row, shared by the create "Filed" step and link "Linked"
+ * step. Three states: idle prompt, backed-up OK, partial/failed.
  */
 export function ClaimNasBackupCard({
   c,
@@ -34,119 +28,104 @@ export function ClaimNasBackupCard({
   // ── Idle: nothing backed up yet (link flow before backing up) ─────────────
   if (!a) {
     return (
-      <section className="rounded-2xl border border-blue-200 bg-blue-50/70 p-3.5">
-        <div className="flex items-start gap-2.5">
-          <Folder className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
-          <div className="min-w-0 flex-1">
-            <p className="text-micro font-black uppercase tracking-[0.14em] text-blue-800">
-              Back up photos to local storage
+      <section className="space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <Folder className="h-3.5 w-3.5 text-text-faint" />
+          <p className="text-micro font-black uppercase tracking-[0.14em] text-text-soft">
+            Local backup
+          </p>
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-300" aria-hidden />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {canArchive ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Archive />}
+              loading={c.archiveSubmitting}
+              disabled={c.archiveSubmitting || !c.row.receiving_id}
+              onClick={c.archiveToNas}
+            >
+              {c.archiveSubmitting ? 'Saving…' : 'Back up locally'}
+            </Button>
+          ) : (
+            <p className="flex items-center gap-1.5 text-caption font-medium text-text-muted">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Backing up…
             </p>
-            <p className="mt-0.5 text-caption font-medium leading-5 text-blue-800/80">
-              Save this carton&apos;s photos to local storage in a folder
-              {folder ? (
-                <>
-                  {' '}named <span className="font-bold">/{folder}</span>
-                </>
-              ) : (
-                ' named after the case #'
-              )}{' '}
-              with a <span className="font-bold">case-info.txt</span> notepad.
-            </p>
-            {canArchive ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Archive />}
-                loading={c.archiveSubmitting}
-                disabled={c.archiveSubmitting || !c.row.receiving_id}
-                onClick={c.archiveToNas}
-                className="mt-2 border-blue-200 bg-surface-card text-blue-700 hover:bg-blue-100"
-              >
-                {c.archiveSubmitting ? 'Saving…' : 'Back up locally'}
-              </Button>
-            ) : (
-              <p className="mt-1 flex items-center gap-1.5 text-caption font-medium text-blue-800/80">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Backing up…
-              </p>
-            )}
-          </div>
+          )}
+          {folder ? (
+            <span className="text-caption font-medium text-text-muted">→ /{folder}</span>
+          ) : null}
         </div>
       </section>
     );
   }
 
-  // ── Backed up (OK or partial/failed) ──────────────────────────────────────
-  return (
-    <section
-      className={`rounded-2xl border p-3.5 ${
-        backupOk ? 'border-blue-200 bg-blue-50/70' : 'border-amber-300 bg-amber-50/70'
-      }`}
-    >
-      <div className="flex items-start gap-2.5">
-        {backupOk ? (
-          <Folder className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
-        ) : (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p
-            className={`text-micro font-black uppercase tracking-[0.14em] ${
-              backupOk ? 'text-blue-800' : 'text-amber-800'
-            }`}
-          >
-            {backupOk ? 'Photos backed up to local storage' : 'Local backup incomplete'}
-          </p>
-          <p
-            className={`mt-0.5 text-label font-bold ${
-              backupOk ? 'text-blue-900' : 'text-amber-900'
-            }`}
-          >
-            {a.copied}/{a.total} {a.total === 1 ? 'photo' : 'photos'}
-            {folder ? <span className="font-semibold"> → /{folder}</span> : null}
-          </p>
-          {backupOk ? (
-            <p className="mt-1 flex items-center gap-1.5 text-caption font-medium text-blue-800/80">
-              <FileText className="h-3 w-3 shrink-0" />
-              case-info.txt written with the ticket details
-            </p>
-          ) : (
-            <p className="mt-1 text-caption font-medium text-amber-800/90">
-              {a.warning || 'Some photos did not copy. Retry the backup.'}
-            </p>
-          )}
+  // ── Backed up (OK or partial/failed) ────────────────────────────────────
+  const dotClass = backupOk ? 'bg-emerald-500' : 'bg-amber-500';
 
-          {canArchive ? (
-            backupOk ? (
-              <HoverTooltip label="Save the carton photos to local storage again" asChild>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<Archive />}
-                  loading={c.archiveSubmitting}
-                  disabled={c.archiveSubmitting || !c.row.receiving_id}
-                  onClick={c.archiveToNas}
-                  className="mt-2 border-blue-200 bg-surface-card text-blue-700 hover:bg-blue-100"
-                >
-                  {c.archiveSubmitting ? 'Saving…' : 'Back up again'}
-                </Button>
-              </HoverTooltip>
-            ) : (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<RotateCcw />}
-                loading={c.archiveSubmitting}
-                disabled={c.archiveSubmitting || !c.row.receiving_id}
-                onClick={c.archiveToNas}
-                className="mt-2 border-amber-300 bg-surface-card text-amber-800 hover:bg-amber-100"
-              >
-                {c.archiveSubmitting ? 'Saving…' : 'Retry backup'}
-              </Button>
-            )
-          ) : null}
-        </div>
+  return (
+    <section className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        {backupOk ? (
+          <Folder className="h-3.5 w-3.5 text-text-faint" />
+        ) : (
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+        )}
+        <p className="text-micro font-black uppercase tracking-[0.14em] text-text-soft">
+          {backupOk ? 'Local backup' : 'Backup incomplete'}
+        </p>
+        <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
       </div>
+      <p className="text-caption font-medium text-text-default">
+        {a.copied}/{a.total} {a.total === 1 ? 'photo' : 'photos'}
+        {folder ? (
+          <>
+            {' '}
+            → <span className="font-bold">/{folder}</span>
+          </>
+        ) : null}
+        {backupOk ? (
+          <span className="text-text-muted">
+            {' '}
+            · <FileText className="mb-px inline h-3 w-3" /> case-info.txt
+          </span>
+        ) : null}
+      </p>
+      {!backupOk ? (
+        <p className="text-caption font-medium text-amber-800">
+          {a.warning || 'Some photos did not copy.'}
+        </p>
+      ) : null}
+
+      {canArchive ? (
+        backupOk ? (
+          <HoverTooltip label="Save the carton photos to local storage again" asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Archive />}
+              loading={c.archiveSubmitting}
+              disabled={c.archiveSubmitting || !c.row.receiving_id}
+              onClick={c.archiveToNas}
+            >
+              {c.archiveSubmitting ? 'Saving…' : 'Back up again'}
+            </Button>
+          </HoverTooltip>
+        ) : (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RotateCcw />}
+            loading={c.archiveSubmitting}
+            disabled={c.archiveSubmitting || !c.row.receiving_id}
+            onClick={c.archiveToNas}
+          >
+            {c.archiveSubmitting ? 'Saving…' : 'Retry backup'}
+          </Button>
+        )
+      ) : null}
     </section>
   );
 }

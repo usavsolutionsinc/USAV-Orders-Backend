@@ -60,6 +60,7 @@ export function useReceivingClaimController({
   onTicketCreated,
   onTicketUnlinked,
 }: ClaimModalProps) {
+  const LAST_CC_EMAIL_STORAGE_KEY = 'receiving-claim:last-cc-email';
   const receivingId = row.receiving_id;
   // `undefined` override = default to the row's own line; an explicit value
   // (incl. `null` for a carton-level claim) wins.
@@ -87,6 +88,14 @@ export function useReceivingClaimController({
   const [linkStep, setLinkStep] = useState<LinkClaimStep>('find');
   const [filedTicket, setFiledTicket] = useState<FiledTicket | null>(null);
   const [reason, setReason] = useState('');
+
+  // ── Recipients (opening comment) ─────────────────────────────────────────
+  // Default is a public reply + CC. `notePublic` files the opening comment as a
+  // public reply and enables CC'ing collaborator emails (a vendor, a teammate).
+  // CCs are only meaningful on a public comment, so the UI hides them when
+  // internal-note is selected and the server ignores them there too.
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+  const [notePublic, setNotePublic] = useState(true);
 
   // ── Create-flow submit state ─────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -164,6 +173,14 @@ export function useReceivingClaimController({
     setReason(prefillReason ?? '');
     setDraftBody(null);
     setClaimType(initialClaimType);
+    setNotePublic(true);
+    try {
+      const stored = window.localStorage.getItem(LAST_CC_EMAIL_STORAGE_KEY);
+      const email = stored ? stored.trim() : '';
+      setCcEmails(email ? [email] : []);
+    } catch {
+      setCcEmails([]);
+    }
     // `crypto.randomUUID` only exists in a secure context (HTTPS / localhost);
     // over a plain-HTTP LAN IP it's undefined. `randomId` falls back safely.
     idempotencyKey.current = randomId();
@@ -177,6 +194,17 @@ export function useReceivingClaimController({
     setArchiveState(null);
     setIsDryRun(false);
   }, [open, receivingId, lineId, initialClaimType, prefillReason]);
+
+  // Persist the last-used CC email for the next claim.
+  useEffect(() => {
+    if (!open) return;
+    const last = ccEmails.at(-1)?.trim() ?? '';
+    try {
+      if (last) window.localStorage.setItem(LAST_CC_EMAIL_STORAGE_KEY, last);
+    } catch {
+      // Best-effort only.
+    }
+  }, [ccEmails, open]);
 
   // ── Derived view-model ───────────────────────────────────────────────────
   // Hide 'unfound' once a real PO# is present — an order with a PO can't be
@@ -333,6 +361,8 @@ export function useReceivingClaimController({
           subject: template.readSubject().trim(),
           description: template.readDescription().trim(),
           attachPhotoIds: [...photos.selectedPhotoIds],
+          notePublic,
+          ccEmails,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -465,6 +495,8 @@ export function useReceivingClaimController({
           subject: template.readSubject().trim(),
           description: template.readDescription().trim(),
           attachPhotoIds: [...photos.selectedPhotoIds],
+          notePublic,
+          ccEmails,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -557,6 +589,8 @@ export function useReceivingClaimController({
           subject,
           description,
           attachPhotoIds: [...photos.selectedPhotoIds],
+          notePublic,
+          ccEmails,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -694,6 +728,11 @@ export function useReceivingClaimController({
     claimType,
     setClaimType,
     reason,
+    // recipients (opening comment)
+    ccEmails,
+    setCcEmails,
+    notePublic,
+    setNotePublic,
     archiveSubmitting,
     claimTypeItems,
     claimStepStates,

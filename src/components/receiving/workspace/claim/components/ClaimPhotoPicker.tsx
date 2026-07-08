@@ -210,8 +210,8 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
         </HoverTooltip>
       </div>
       <p className="mt-2 text-micro font-medium text-text-faint">
-        Selected photos upload to Zendesk as files. All PO photos are also saved to local storage in
-        a folder named after the ticket #.
+        Checked photos attach to the Zendesk ticket. All carton photos also save to local storage in
+        a folder named after the case #.
       </p>
 
       {g.mounted && typeof document !== 'undefined'

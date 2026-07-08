@@ -48,7 +48,7 @@ export function WarrantyQuotesSection({ claimId, quotes }: { claimId: number; qu
             {q.status === 'SENT' && (
               <>
                 <Button variant="primary" size="sm" type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'ACCEPTED')}
-                  className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-700 shadow-emerald-600/25">
+                  className="bg-fill-success hover:bg-fill-success/90 active:bg-fill-success/90">
                   Accepted
                 </Button>
                 <Button variant="secondary" size="sm" type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'DECLINED')}>
@@ -60,7 +60,7 @@ export function WarrantyQuotesSection({ claimId, quotes }: { claimId: number; qu
         </li>
       ))}
       {quoteStatus.error && (
-        <li className="text-caption text-rose-600">
+        <li className="text-caption text-text-danger">
           {quoteStatus.error instanceof Error ? quoteStatus.error.message : 'Quote update failed.'}
         </li>
       )}

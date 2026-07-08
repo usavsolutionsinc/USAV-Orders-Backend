@@ -25,6 +25,7 @@ import { formatApiOffsetTimestamp, formatPSTTimestamp } from '@/utils/date';
 import type { PoolClient } from 'pg';
 import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { isLocalPickupPo } from '@/lib/receiving/fulfillment-mode';
 
 type AnyRow = Record<string, unknown>;
 type WorkflowStatus = 'EXPECTED' | 'MATCHED';
@@ -77,18 +78,6 @@ function getZohoLastModifiedTime(row: AnyRow): string | null {
     row.modified_time,
     row.created_time
   );
-}
-
-// A Zoho PO with "LCPU" or "LOCALPICKUP" in its reference#, PO number, or PO id
-// is intake-marked as a local pickup, not a carrier-shipped package. Detection
-// is case-insensitive and checks any of the three identifiers so a single
-// convention (whichever Zoho field operations populates) is enough.
-function isLocalPickupPo(...candidates: Array<string | null | undefined>): boolean {
-  const re = /(LCPU|LOCALPICKUP)/i;
-  for (const value of candidates) {
-    if (typeof value === 'string' && re.test(value)) return true;
-  }
-  return false;
 }
 
 type LocalPickupSyncInput = {

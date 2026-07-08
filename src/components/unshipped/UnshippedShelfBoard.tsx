@@ -16,6 +16,14 @@
  * shared {@link ColumnConfigButton} plus (when the page arms it) {@link
  * BoardSelectToggle} beside the column-layout toggles.
  *
+ * Archetype (intentional hybrid — don't "normalize" away): a pipeline-workbench.
+ * The lanes are a Monitor-style read of *derived* state, but the surface obeys
+ * Workbench rules — URL-addressable selection (`?openOrderId`) and a crossfading
+ * right-pane detail. It is NOT a recent-activity rail: do not refactor it onto
+ * `SidebarRailShell` (that shell is a single vertical-list engine; this is a
+ * horizontal multi-lane board with its own virtualization). See
+ * `.claude/rules/display/workbench.md`.
+ *
  * Add a fulfillment lane → extend FULFILLMENT_BOARD_LANES (order-lifecycle.ts)
  * + FULFILLMENT_STATE_META; the bubble appears with no change here.
  */
@@ -46,13 +54,16 @@ import { FULFILLMENT_BOARD_LANES, type FulfillmentLaneIconKey } from '@/lib/orde
 import type { ShippedOrder } from '@/types/orders';
 
 /**
- * Phase-0 virtualization canary (kill-switch). The lane bodies window their rows
- * via `@tanstack/react-virtual` (mirroring the Shipped board, which virtualizes
- * unconditionally), so a lane's DOM stays ∝ viewport regardless of queue depth.
- * ON by default; set `NEXT_PUBLIC_UNSHIPPED_VIRTUAL_LIST=0` to fall back to the
- * all-rows-mounted body. Remove the gate after bake-in.
+ * Phase-0 virtualization canary — now OFF by default. The windowed lane bodies
+ * (`@tanstack/react-virtual`) mis-measure on first mount, so a freshly-loaded
+ * board renders BLANK lanes (rows only appear after a column toggle / resize
+ * forces a re-measure). The unshipped queue is bounded (rowLimit 200, split
+ * across the 3 lanes), so mounting all rows is cheap and always paints — the
+ * board's shared scroll region owns the wheel. Opt back in with
+ * `NEXT_PUBLIC_UNSHIPPED_VIRTUAL_LIST=1` once the first-mount measurement race
+ * is fixed.
  */
-const VIRTUAL_LANES = process.env.NEXT_PUBLIC_UNSHIPPED_VIRTUAL_LIST !== '0';
+const VIRTUAL_LANES = process.env.NEXT_PUBLIC_UNSHIPPED_VIRTUAL_LIST === '1';
 
 /** Icon binding — maps the lib's lane icon key to a concrete glyph (React stays here). */
 const LANE_ICON: Record<FulfillmentLaneIconKey, React.ComponentType<{ className?: string }>> = {
@@ -122,7 +133,7 @@ function BoardStaffFilter() {
           setOpen(false);
         }}
         className={`ds-raw-button flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
-          isActive ? 'bg-blue-50 text-blue-700' : 'text-text-muted hover:bg-surface-hover'
+          isActive ? 'bg-surface-accent text-text-accent' : 'text-text-muted hover:bg-surface-hover'
         }`}
       >
         <span className="truncate">{name}</span>

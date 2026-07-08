@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSharePackByToken } from '@/lib/photos/share-packs';
 import { readPhotoBytesById } from '@/lib/photos/read-bytes';
 import { buildStoreZip, type StoreZipEntry } from '@/lib/zip/store-zip';
+import {
+  safeZipDownloadBasename,
+  safeZipEntryName,
+  uniquifyZipEntryNames,
+  zipAttachmentHeaders,
+} from '@/lib/zip/safe-entry-name';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,20 +29,25 @@ export async function GET(
     return NextResponse.json({ error: 'Share pack not found' }, { status: 404 });
   }
 
-  const entries: StoreZipEntry[] = [];
+  const rawEntries: StoreZipEntry[] = [];
   for (const photo of pack.photos) {
     const bytes = await readPhotoBytesById(photo.id, orgId);
     if (!bytes) continue;
-    entries.push({ name: photo.exportFilename || bytes.filename, data: Buffer.from(bytes.bytes) });
+    const fallback = `photo_${photo.id}.jpg`;
+    const name = safeZipEntryName(photo.exportFilename || bytes.filename, fallback);
+    rawEntries.push({ name, data: Buffer.from(bytes.bytes) });
   }
 
+  if (rawEntries.length === 0) {
+    return NextResponse.json({ error: 'No downloadable photos found' }, { status: 404 });
+  }
+
+  const uniqueNames = uniquifyZipEntryNames(rawEntries.map((e) => e.name));
+  const entries = rawEntries.map((entry, i) => ({ ...entry, name: uniqueNames[i] }));
   const blob = buildStoreZip(entries);
-  const safeTitle = (pack.pack?.title || 'photos').replace(/[^\w.-]+/g, '_').slice(0, 40);
+  const safeTitle = safeZipDownloadBasename(pack.pack?.title || 'photos', 'photos');
 
   return new NextResponse(blob, {
-    headers: {
-      'content-type': 'application/zip',
-      'content-disposition': `attachment; filename="${safeTitle}.zip"`,
-    },
+    headers: zipAttachmentHeaders(safeTitle, blob.length),
   });
 }

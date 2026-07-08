@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { UNBOX_SURFACE_ROUTE } from '@/lib/receiving/surface-path';
 import { Copy, Edit, Package, RefreshCw, Trash2, X } from '@/components/Icons';
@@ -8,16 +8,12 @@ import { Button } from '@/design-system/primitives/Button';
 import { IconButton } from '@/design-system/primitives/IconButton';
 import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
-import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
-import { TrackingNumberRow } from '@/components/ui/TrackingNumberRow';
-import { listingUrlForOpen } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { toast } from '@/lib/toast';
 import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { type ReceivingDetailsLog } from './receiving-details-log';
 import { dispatchReceivingWorkspaceOpen } from '@/utils/events';
-import { PoLinesSection } from './receiving/PoLinesSection';
-import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
-import { ReceivingSerialJourneys } from './receiving/ReceivingSerialJourneys';
+import { ReceivingProgressTab } from './receiving/ReceivingProgressTab';
+import { ReceivingItemsTab } from './receiving/ReceivingItemsTab';
 import { useReceivingDetailForm } from '@/hooks/useReceivingDetailForm';
 import {
   PaneHeader,
@@ -28,8 +24,21 @@ import {
   type PaneHeaderActionBarAction,
 } from '@/components/ui/pane-header';
 import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
+import { useQuery } from '@tanstack/react-query';
+import {
+  deriveCartonReadiness,
+  type ReceivingMatchLine,
+} from '@/lib/receiving/carton-readiness';
 
-type ReceivingTab = 'overview' | 'lines' | 'timeline' | 'details';
+type ReceivingTab = 'progress' | 'items';
+
+async function fetchReceivingMatchLines(receivingId: string): Promise<ReceivingMatchLine[]> {
+  const res = await fetch(`/api/receiving/match?receiving_id=${encodeURIComponent(receivingId)}`);
+  if (!res.ok) return [];
+  const json = await res.json().catch(() => null);
+  const lines = Array.isArray(json?.matched_lines) ? (json.matched_lines as ReceivingMatchLine[]) : [];
+  return lines;
+}
 
 // `ReceivingDetailsLog` lives in a leaf module (`./receiving-details-log`) so it
 // can be referenced without importing this component (which imports utils/events,
@@ -48,9 +57,21 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isOpeningEditor, setIsOpeningEditor] = useState(false);
-  const [activeTab, setActiveTab] = useState<ReceivingTab>('overview');
+  const [activeTab, setActiveTab] = useState<ReceivingTab>('progress');
   const [isCopying, setIsCopying] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const matchQuery = useQuery({
+    queryKey: ['receiving-match', String(log.id)] as const,
+    queryFn: () => fetchReceivingMatchLines(String(log.id)),
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const readiness = useMemo(
+    () => deriveCartonReadiness(log, matchQuery.data),
+    [log, matchQuery.data],
+  );
 
   const handleRefresh = () => {
     onUpdated();
@@ -128,6 +149,39 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
     }
   };
 
+  const handleSearchZohoPo = async () => {
+    if (isOpeningEditor || form.isSaving) return;
+    setIsOpeningEditor(true);
+    try {
+      const receivingId = Number(log.id);
+      if (!Number.isFinite(receivingId) || receivingId <= 0) {
+        toast.error('Receiving id missing');
+        return;
+      }
+      const res = await fetch('/api/receiving/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receiving_id: receivingId }),
+      });
+      if (!res.ok) {
+        toast.error('Search failed — try again');
+        return;
+      }
+      await matchQuery.refetch();
+      toast.success('Linked PO lines');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Search failed — try again');
+    } finally {
+      setIsOpeningEditor(false);
+    }
+  };
+
+  const primaryCta = readiness.cta === 'continue_unbox'
+    ? { label: 'Continue unbox', onClick: handleEditPO }
+    : readiness.cta === 'match_po'
+      ? { label: 'Search Zoho PO', onClick: handleSearchZohoPo }
+      : { label: 'Edit PO', onClick: handleEditPO };
+
   const backdropClose = () => {
     handleClose();
   };
@@ -155,14 +209,14 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             <Button
               type="button"
               variant="primary"
-              onClick={handleEditPO}
+              onClick={primaryCta.onClick}
               disabled={isOpeningEditor || form.isSaving}
               loading={isOpeningEditor}
               icon={<Edit />}
               iconRight={<span aria-hidden className="text-white/70">→</span>}
               className="text-caption font-black uppercase tracking-wider"
             >
-              {isOpeningEditor ? 'Opening…' : 'Edit PO'}
+              {isOpeningEditor ? 'Working…' : primaryCta.label}
             </Button>
             <IconButton
               onClick={handleClose}
@@ -220,10 +274,8 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             </div>
             <PaneHeaderTabs<ReceivingTab>
               tabs={[
-                { value: 'overview', label: 'Overview' },
-                { value: 'lines', label: 'Items', count: typeof log.count === 'number' ? log.count : undefined },
-                { value: 'timeline', label: 'Timeline' },
-                { value: 'details', label: 'Details' },
+                { value: 'progress', label: 'Progress' },
+                { value: 'items', label: 'Items', count: typeof log.count === 'number' ? log.count : undefined },
               ]}
               value={activeTab}
               onChange={setActiveTab}
@@ -233,81 +285,18 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
         <div className="space-y-4">
-          {activeTab === 'overview' && (
-            <ReceivingOverviewCard log={log} />
+          {activeTab === 'progress' && (
+            <ReceivingProgressTab log={log} readiness={readiness} form={form} />
           )}
 
-          {activeTab === 'lines' && (
-            <PoLinesSection receivingId={log.id} trackingNumber={log.tracking} />
-          )}
-
-          {activeTab === 'timeline' && (
-            <ReceivingSerialJourneys receivingId={log.id} />
-          )}
-
-          {activeTab === 'details' && (
-            <>
-          {/* Identifiers — labeled ledger rows (shipped / unfound pattern) so
-              last-4 chips cannot collide (e.g. tracking suffix vs warehouse id). */}
-          {(() => {
-            const listingRaw = String(log.listing_url || '').trim();
-            const poValue = String(
-              log.zoho_purchaseorder_number || log.zoho_purchaseorder_id || '',
-            ).trim();
-            const receiveId = String(log.zoho_purchase_receive_id || '').trim();
-            const warehouseId = String(log.zoho_warehouse_id || '').trim();
-            return (
-              <div className="space-y-0">
-                <TrackingNumberRow
-                  label="Tracking"
-                  value={form.tracking}
-                  placeholder="Tracking number"
-                  allowEdit
-                  onChange={form.setTracking}
-                  onBlur={() => void form.saveTrackingIfDirty()}
-                  keepBottomDivider={Boolean(listingRaw || poValue || receiveId || warehouseId)}
-                />
-                {listingRaw ? (
-                  <CopyableValueFieldBlock
-                    label="Listing"
-                    value={listingRaw}
-                    externalUrl={listingUrlForOpen(listingRaw)}
-                    externalLabel="Open listing"
-                    variant="flat"
-                    twoLineValue
-                    noTruncate
-                    keepBottomDivider
-                  />
-                ) : null}
-                {poValue ? (
-                  <CopyableValueFieldBlock
-                    label="PO number"
-                    value={poValue}
-                    variant="flat"
-                    keepBottomDivider
-                  />
-                ) : null}
-                {receiveId ? (
-                  <CopyableValueFieldBlock
-                    label="Zoho receive"
-                    value={receiveId}
-                    variant="flat"
-                    keepBottomDivider
-                  />
-                ) : null}
-                {warehouseId ? (
-                  <CopyableValueFieldBlock
-                    label="Warehouse"
-                    value={warehouseId}
-                    variant="flat"
-                  />
-                ) : null}
-              </div>
-            );
-          })()}
-            </>
+          {activeTab === 'items' && (
+            <ReceivingItemsTab
+              receivingId={log.id}
+              trackingNumber={log.tracking}
+              lineCount={readiness.lineCount}
+            />
           )}
 
         </div>

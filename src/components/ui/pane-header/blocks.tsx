@@ -6,6 +6,7 @@ import { HoverTooltip } from '../HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
+import { RECEIVING_WORKSPACE_HEADER_COLUMN } from '@/components/receiving/workspace/receiving-workspace-layout';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -318,6 +319,8 @@ interface PaneHeaderActionBarProps {
   iconOnly?: boolean;
   /** Custom node pinned to the right, before the prev/next chevrons (e.g. an Info button). */
   rightSlot?: ReactNode;
+  /** Extra classes applied to prev/next nav buttons (e.g. responsive hide). */
+  navClassName?: string;
   className?: string;
 }
 
@@ -339,6 +342,7 @@ export function PaneHeaderActionBar({
   variant = 'card',
   iconOnly = false,
   rightSlot,
+  navClassName,
   className,
 }: PaneHeaderActionBarProps) {
   const shell =
@@ -393,7 +397,7 @@ export function PaneHeaderActionBar({
             onClick={onPrev}
             disabled={prevDisabled}
             ariaLabel={prevTitle}
-            className={PANE_HEADER_ACTION_NAV_CLASS}
+            className={cn(PANE_HEADER_ACTION_NAV_CLASS, navClassName)}
             icon={<ChevronUp className="h-4 w-4" />}
           />
         </HoverTooltip>
@@ -405,7 +409,7 @@ export function PaneHeaderActionBar({
             onClick={onNext}
             disabled={nextDisabled}
             ariaLabel={nextTitle}
-            className={PANE_HEADER_ACTION_NAV_CLASS}
+            className={cn(PANE_HEADER_ACTION_NAV_CLASS, navClassName)}
             icon={<ChevronDown className="h-4 w-4" />}
           />
         </HoverTooltip>
@@ -420,7 +424,7 @@ export function PaneHeaderActionBar({
   if (variant === 'header') {
     return (
       <div className={cn('flex h-[40px] w-full shrink-0 items-center bg-surface-card', receivingHeaderHairlineClass, className)}>
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-6 sm:px-8">
+        <div className={cn(RECEIVING_WORKSPACE_HEADER_COLUMN, 'flex items-center gap-1')}>
           {content}
         </div>
       </div>

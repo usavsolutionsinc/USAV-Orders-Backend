@@ -1,5 +1,6 @@
 import { CartonContextCard } from '@/components/receiving/workspace/line-edit/CartonContextCard';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { isLocalPickupFulfillment } from '@/lib/receiving/fulfillment-mode';
 import type { TestingController } from './testing-panel-types';
 
 /**
@@ -51,6 +52,7 @@ export function TestingCartonHeader({
       }}
       primaryTrackingTrimmed={c.primaryTrackingTrimmed}
       filledExtraTrackingsCount={c.filledExtraTrackingsCount}
+      isLocalPickup={isLocalPickupFulfillment(row)}
       trackingEditorsOpen={c.trackingEditorsOpen}
       onToggleTrackingEditors={c.toggleTrackingEditors}
       trackingEdit={c.trackingEdit}

@@ -42,6 +42,13 @@ interface Props {
   condition?: string | null | undefined;
   onConditionChange?: (grade: string) => void;
   /**
+   * When false, the collapsed condition picker shows only its edit pencil (no
+   * selected-grade pill) — for surfaces where the grade is already displayed
+   * elsewhere (the PO-line meta row chip), so the pill isn't a redundant second
+   * label. Defaults to true (labeled pill) for the standalone unmatched flows.
+   */
+  collapsedConditionLabel?: boolean;
+  /**
    * When the serial input is empty, show a green check in place of the disabled
    * "+" so the operator can mark the item as having no serial number. Omitted →
    * the trailing control is the normal add-"+" button only.
@@ -71,6 +78,8 @@ interface Props {
    * scan field.
    */
   resultSlot?: ReactNode;
+  /** When false, serial input does not steal focus on mount (step-aware unbox). */
+  autoFocusInput?: boolean;
   /** Nested inside {@link PoLinesAccordion} — skip duplicate card chrome. */
   embedded?: boolean;
   /** Controlled edit target from the PO item header chip. */
@@ -97,6 +106,7 @@ export function SerialCard({
   onReplaceSerial,
   condition,
   onConditionChange,
+  collapsedConditionLabel = true,
   onMarkNoSerial,
   noSerialActive = false,
   noSerialSlot,
@@ -105,6 +115,7 @@ export function SerialCard({
   onNotesBlur,
   notesId,
   showSavedChips = true,
+  autoFocusInput = true,
   embedded = false,
   editingSerial = null,
   onEditingSerialChange,
@@ -173,6 +184,16 @@ export function SerialCard({
     return () => window.clearTimeout(t);
   }, [isSubmitting]);
 
+  useEffect(() => {
+    if (!autoFocusInput || disabled || isSubmitting || editing || editingSerial) return;
+    const t = window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled) return;
+      el.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [autoFocusInput, disabled, isSubmitting, editing, editingSerial]);
+
   const beginEdit = (s: SavedSerial) => {
     setEditing(s);
     onEditingSerialChange?.(s);
@@ -183,7 +204,7 @@ export function SerialCard({
     setTimeout(() => {
       const el = inputRef.current;
       if (!el) return;
-      el.focus();
+      el.focus({ preventScroll: true });
       el.select();
     }, 0);
   };
@@ -228,7 +249,7 @@ export function SerialCard({
     window.setTimeout(() => {
       const el = inputRef.current;
       if (!el || el.disabled || editing || noSerialActive) return;
-      el.focus();
+      el.focus({ preventScroll: true });
     }, 0);
   };
 
@@ -249,6 +270,7 @@ export function SerialCard({
               value={condition}
               onChange={handleConditionPick}
               collapsible
+              collapsedLabel={collapsedConditionLabel}
               expanded={condExpanded}
               onExpandedChange={setCondExpanded}
             />
@@ -274,8 +296,8 @@ export function SerialCard({
             disabled={disabled || isSubmitting}
             autoComplete="off"
             spellCheck={false}
-            // eslint-disable-next-line jsx-a11y/no-autofocus -- scan-focused workflow
-            autoFocus
+            // Programmatic focus uses preventScroll — avoid native autoFocus scroll jumps.
+            autoFocus={false}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -407,6 +429,7 @@ export function SerialChipWithMenu({
   onEdit,
   onDelete,
   onSetCondition,
+  dense,
 }: {
   serial: SavedSerial;
   isEditing: boolean;
@@ -414,6 +437,8 @@ export function SerialChipWithMenu({
   onDelete?: (s: SavedSerial) => void;
   /** When provided, the hover menu includes a condition picker for this serial. */
   onSetCondition?: (s: SavedSerial, grade: string) => void;
+  /** Compact meta-row rendering — forwarded to the inner {@link SerialChip}. */
+  dense?: boolean;
 }) {
   const sn = serial.serial_number;
   const pending = serial._optimistic;
@@ -441,7 +466,7 @@ export function SerialChipWithMenu({
           isEditing ? 'ring-2 ring-emerald-400 ring-offset-1' : ''
         }`}
       >
-        <SerialChip value={sn} width="w-fit max-w-full" pending={pending} />
+        <SerialChip value={sn} width="w-fit max-w-full" pending={pending} dense={dense} />
       </div>
       {hasActions ? (
         <div

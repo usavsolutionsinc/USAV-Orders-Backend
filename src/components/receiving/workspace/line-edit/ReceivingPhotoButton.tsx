@@ -99,6 +99,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   );
 
   const count = photos.length;
+  const hasGallery = count > 0;
   const [galleryHover, setGalleryHover] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -116,28 +117,33 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     if (hideTimer.current) clearTimeout(hideTimer.current);
   }, []);
 
+  // One consistent resting state across every PO — a calm blue-tinted pill.
+  // (Previously an `emphasized` variant added a ring/darker fill on the
+  // photos-step-with-zero-photos case, which read as an inconsistent highlight.)
   const btnClass =
     'h-8 shrink-0 gap-1 self-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-caption font-black tabular-nums text-blue-700 shadow-sm hover:bg-blue-100 hover:text-blue-700';
 
-  const title =
-    count > 0
-      ? `${count} photo${count === 1 ? '' : 's'} — click to send to phone, hover for gallery`
-      : 'Send to phone to take photos';
+  const title = hasGallery
+    ? `${count} photo${count === 1 ? '' : 's'} — click to send to phone, hover for gallery`
+    : 'Send to phone to take photos';
 
-  const ariaLabel =
-    count > 0
-      ? `${count} carton photo${count === 1 ? '' : 's'}; send to phone or hover for gallery`
-      : 'Send to phone to take photos';
+  const ariaLabel = hasGallery
+    ? `${count} carton photo${count === 1 ? '' : 's'}; send to phone or hover for gallery`
+    : 'Send to phone to take photos';
 
   return (
     <div
       className="relative shrink-0"
-      onMouseEnter={openGallery}
-      onMouseLeave={scheduleCloseGallery}
-      onFocusCapture={openGallery}
-      onBlurCapture={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleCloseGallery();
-      }}
+      onMouseEnter={hasGallery ? openGallery : undefined}
+      onMouseLeave={hasGallery ? scheduleCloseGallery : undefined}
+      onFocusCapture={hasGallery ? openGallery : undefined}
+      onBlurCapture={
+        hasGallery
+          ? (e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleCloseGallery();
+            }
+          : undefined
+      }
     >
       <HoverTooltip label={title} asChild>
         <Button
@@ -146,7 +152,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
           size="sm"
           onClick={handleRequestOnPhone}
           ariaLabel={ariaLabel}
-          aria-expanded={count > 0 ? galleryHover : undefined}
+          aria-expanded={hasGallery ? galleryHover : undefined}
           icon={<Camera className="h-4 w-4" />}
           iconRight={<Plus className="h-3 w-3" />}
           className={btnClass}
@@ -155,7 +161,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
         </Button>
       </HoverTooltip>
 
-      {count > 0 && galleryHover ? (
+      {hasGallery && galleryHover ? (
         // `pt-1.5` bridges the gap so the pointer stays inside the hover target
         // while moving from the pill to the gallery card.
         <div className="absolute right-0 top-full z-30 pt-1.5">
@@ -171,6 +177,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
               libraryHref={`/ops/photos?receivingId=${receivingId}`}
               onPhotoDeleted={(photoId) => refresh(photoId)}
               onPhotoReassigned={(photoId) => refresh(photoId)}
+              onPhotoUploaded={(photoId) => refresh(photoId)}
             />
           </div>
         </div>

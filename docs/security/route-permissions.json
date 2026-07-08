@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-07T04:06:01Z",
-  "totalRoutes": 771,
+  "generatedAt": "2026-07-07T20:13:47Z",
+  "totalRoutes": 775,
   "summary": {
-    "permissionGated": 661,
+    "permissionGated": 665,
     "authenticatedNoPermission": 36,
     "anonymousIntentional": 72,
     "serviceToService": 2,
@@ -3355,6 +3355,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/packerlogs/counts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/packerlogs/for-order/route.ts",
       "methods": [
         "GET"
@@ -4043,6 +4052,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving-lines/counts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving-lines/incoming/delivered-unscanned/route.ts",
       "methods": [
         "GET"
@@ -4195,6 +4213,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/[id]/amazon-return-lookup/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.scan_po",
       "exemptReason": null
     },
     {
@@ -6303,6 +6330,15 @@
       ],
       "gate": "withAuth",
       "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/logs/counts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.view",
       "exemptReason": null
     },
     {

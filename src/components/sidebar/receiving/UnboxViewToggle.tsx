@@ -3,8 +3,7 @@
 /**
  * Unbox sub-view pills (Unboxed / Queue / Viewed) pinned at the top of the rail.
  * Mirrors the triage Found/Unfound toggle. URL-backed via `unboxview` (handled
- * by the parent's useReceivingMode — the default sub-view id stays `recent`).
- * Extracted from ReceivingSidebarPanel.
+ * by the parent's useReceivingMode). Extracted from ReceivingSidebarPanel.
  */
 
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';

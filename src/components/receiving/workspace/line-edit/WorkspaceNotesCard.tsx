@@ -10,6 +10,7 @@
  * controller bag; the panel owns the stagger wrapper, this owns the card.
  */
 
+import type { ReceivingStepKey } from '../ReceivingProgressStepper';
 import { LineNotesTabbedCard } from './LineNotesTabbedCard';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { InlineActionFeedbackPayload } from '../InlineActionFeedbackCard';
@@ -29,81 +30,84 @@ function zohoPoNotesSkipNote(zoho?: { patched?: boolean; skipped?: string }): st
 interface WorkspaceNotesCardProps {
   row: ReceivingLineRow;
   c: UnboxLineController;
-  /** Surface a save result / error in the panel's shared feedback slot. */
   onActionFeedback: (feedback: InlineActionFeedbackPayload | null) => void;
+  activeStep?: ReceivingStepKey | null;
 }
 
-export function WorkspaceNotesCard({ row, c, onActionFeedback }: WorkspaceNotesCardProps) {
+export function WorkspaceNotesCard({ row, c, onActionFeedback, activeStep }: WorkspaceNotesCardProps) {
   return (
-    <LineNotesTabbedCard
-      internalNotes={c.notes}
-      labelNotes={c.labelNotes}
-      overallZohoNotes={row.receiving_zoho_notes ?? null}
-      lineId={row.id}
-      sku={row.sku}
-      skuTitle={row.zoho_item_title || row.item_name || null}
-      unitPrice={row.unit_price ?? null}
-      zendeskTicket={c.zendeskTrimmed || row.zendesk_ticket || null}
-      zendeskProviderTicketId={c.providerTicketId}
-      zendeskTicketSubject={c.supportTicket?.subject ?? null}
-      previousLineNotes={c.prevLineNotes}
-      onInternalNotesChange={c.setNotes}
-      onInternalNotesBlur={() => {
-        if (c.notes !== (row.notes || '')) void c.patch({ notes: c.notes });
-      }}
-      onLabelNotesChange={c.setLabelNotes}
-      onSaveLabelToInternal={() => {
-        c.setNotes(c.labelNotes);
-        if (c.labelNotes !== (row.notes || '')) void c.patch({ notes: c.labelNotes });
-      }}
-      onSaveOverallNote={async (text) => {
-        if (row.receiving_id == null) return;
-        onActionFeedback(null);
-        try {
-          const res = await fetch(`/api/receiving/${row.receiving_id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ zoho_notes: text, push_to_zoho: true }),
-          });
-          const data = (await res.json().catch(() => null)) as {
-            error?: string;
-            zoho?: { patched?: boolean; skipped?: string };
-          } | null;
-          if (res.ok) {
-            dispatchLineUpdated({ id: row.id, receiving_zoho_notes: text || null });
-            onActionFeedback({
-              tone: 'emerald',
-              headline: text ? 'Zoho notes updated' : 'Zoho notes cleared',
-              // Show the FULL PO notes (multi-line, pre-wrapped) so the operator
-              // sees exactly what landed in Zoho — not a truncated first-line preview.
-              items: text ? [text] : [],
-              note: data?.zoho?.patched ? undefined : zohoPoNotesSkipNote(data?.zoho),
-              at: Date.now(),
+    <div id="zoho-notes-card">
+      <LineNotesTabbedCard
+        internalNotes={c.notes}
+        labelNotes={c.labelNotes}
+        overallZohoNotes={row.receiving_zoho_notes ?? null}
+        lineId={row.id}
+        sku={row.sku}
+        skuTitle={row.zoho_item_title || row.item_name || null}
+        unitPrice={row.unit_price ?? null}
+        zendeskTicket={c.zendeskTrimmed || row.zendesk_ticket || null}
+        zendeskProviderTicketId={c.providerTicketId}
+        zendeskTicketSubject={c.supportTicket?.subject ?? null}
+        previousLineNotes={c.prevLineNotes}
+        onInternalNotesChange={c.setNotes}
+        onInternalNotesBlur={() => {
+          if (c.notes !== (row.notes || '')) void c.patch({ notes: c.notes });
+        }}
+        onLabelNotesChange={c.setLabelNotes}
+        onSaveLabelToInternal={() => {
+          c.setNotes(c.labelNotes);
+          if (c.labelNotes !== (row.notes || '')) void c.patch({ notes: c.labelNotes });
+        }}
+        onSaveOverallNote={async (text) => {
+          if (row.receiving_id == null) return;
+          onActionFeedback(null);
+          try {
+            const res = await fetch(`/api/receiving/${row.receiving_id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ zoho_notes: text, push_to_zoho: true }),
             });
-          } else {
+            const data = (await res.json().catch(() => null)) as {
+              error?: string;
+              zoho?: { patched?: boolean; skipped?: string };
+            } | null;
+            if (res.ok) {
+              dispatchLineUpdated({ id: row.id, receiving_zoho_notes: text || null });
+              onActionFeedback({
+                tone: 'emerald',
+                headline: text ? 'Zoho notes updated' : 'Zoho notes cleared',
+                // Show the FULL PO notes (multi-line, pre-wrapped) so the operator
+                // sees exactly what landed in Zoho — not a truncated first-line preview.
+                items: text ? [text] : [],
+                note: data?.zoho?.patched ? undefined : zohoPoNotesSkipNote(data?.zoho),
+                at: Date.now(),
+              });
+            } else {
+              onActionFeedback({
+                tone: 'amber',
+                headline: 'Could not save Zoho notes',
+                items: [],
+                note: data?.error?.trim() || 'Save failed',
+                at: Date.now(),
+              });
+            }
+          } catch {
             onActionFeedback({
               tone: 'amber',
               headline: 'Could not save Zoho notes',
               items: [],
-              note: data?.error?.trim() || 'Save failed',
+              note: 'Save failed',
               at: Date.now(),
             });
           }
-        } catch {
-          onActionFeedback({
-            tone: 'amber',
-            headline: 'Could not save Zoho notes',
-            items: [],
-            note: 'Save failed',
-            at: Date.now(),
-          });
+        }}
+        onOverallDraftChange={() => onActionFeedback(null)}
+        showZohoTab={!c.isUnfound}
+        onLoadZohoNotes={
+          row.receiving_id != null && !c.isUnfound ? () => c.syncCartonFromZoho() : undefined
         }
-      }}
-      onOverallDraftChange={() => onActionFeedback(null)}
-      showZohoTab={!c.isUnfound}
-      onLoadZohoNotes={
-        row.receiving_id != null && !c.isUnfound ? () => c.syncCartonFromZoho() : undefined
-      }
-    />
+        activeStep={activeStep}
+      />
+    </div>
   );
 }

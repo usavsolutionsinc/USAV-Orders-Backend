@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import {
   printReceivingLabel,
@@ -93,11 +93,11 @@ export function useUnboxLineController(
     setUnitLabelCondition(null);
   }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.receiving_source]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     setNotes(row.notes ?? '');
   }, [row.id, row.notes]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     setLabelNotes('');
   }, [row.id]);
 
