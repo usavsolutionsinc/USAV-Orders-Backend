@@ -75,9 +75,11 @@ export async function POST(
     }
     const eventType: InventoryEventType = eventTypeRaw;
 
-    const staffIdRaw = Number(body?.staff_id ?? body?.staffId);
+    // Server-trusted actor — never honour client-supplied staff_id.
     const staffId =
-      Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+      ctx.staffId != null && Number.isFinite(ctx.staffId) && ctx.staffId > 0
+        ? Math.floor(ctx.staffId)
+        : null;
 
     const serialUnitIdRaw = Number(body?.serial_unit_id);
     const serialUnitId =

@@ -21,6 +21,7 @@ import {
   HISTORY_SURFACE_ROUTE,
   receivingSurfaceBasePath,
 } from '@/lib/receiving/surface-path';
+import { stripCrossSurfaceParams } from '@/lib/surface-isolation';
 import type { ReceivingMode } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import {
   resolveTriageView,
@@ -171,7 +172,10 @@ export function useReceivingMode(): ReceivingModeState {
   }, [mode, isScanSurface]);
 
   const updateMode = (nextMode: ReceivingMode) => {
-    const nextParams = new URLSearchParams(searchParams.toString());
+    const nextParams = stripCrossSurfaceParams(
+      basePathForMode(nextMode),
+      new URLSearchParams(searchParams.toString()),
+    );
     // Strip mode-scoped sub-view/filter params so the target mode starts at its
     // own clean default — a stale `unboxview`/`triview`/Incoming filter must not
     // ride along into a different mode.

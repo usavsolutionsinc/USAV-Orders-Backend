@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { stripCrossSurfaceParams } from '@/lib/surface-isolation';
 import { useQueryClient } from '@tanstack/react-query';
 import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { TestingSidebarPanel } from '@/components/sidebar/TestingSidebarPanel';
@@ -92,7 +93,10 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
    * `view=testing-history` — the same params `TechDashboard` branches on.
    */
   const updateTopMode = (next: TechSidebarTopMode) => {
-    const nextParams = new URLSearchParams(searchParams.toString());
+    const nextParams = stripCrossSurfaceParams(
+      basePath,
+      new URLSearchParams(searchParams.toString()),
+    );
     nextParams.set('staffId', techId);
     if (next === 'testing' || next === 'history') {
       nextParams.set('view', next === 'testing' ? 'testing' : 'testing-history');

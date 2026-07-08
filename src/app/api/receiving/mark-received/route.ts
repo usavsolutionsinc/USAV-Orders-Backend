@@ -465,12 +465,10 @@ export const POST = withAuth(async (request, ctx) => {
     // guarantees ctx.staffId is set on this permission-gated route.
     const staffId = ctx.staffId;
 
-    // Resolve a human-readable staff name for Zoho payloads. Prefer the
-    // value the client sent, then fall back to a DB lookup, and only as a
-    // last resort show "Staff #<id>" — that fallback should be rare now
-    // since every paired session is tied to a real staff row.
-    let staffName = String(body?.staff_name || '').trim();
-    if (!staffName && staffId != null && Number.isFinite(staffId) && staffId > 0) {
+    // Resolve a human-readable staff name for Zoho payloads from the
+    // verified session actor only — never trust body.staff_name.
+    let staffName = '';
+    if (staffId != null && Number.isFinite(staffId) && staffId > 0) {
       try {
         const staffLookup = await tenantQuery<{ name: string | null }>(
           ctx.organizationId,

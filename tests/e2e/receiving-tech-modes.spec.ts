@@ -178,7 +178,7 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
     request,
   }) => {
     // Authed by the same storageState (the request fixture carries the cookie).
-    const res = await request.get('/api/receiving-lines?view=testing&limit=1');
+    const res = await request.get('/api/testing/receiving-lines?view=testing&limit=1');
     const data = await res.json().catch(() => ({}));
     const line = (data.receiving_lines || [])[0];
     test.skip(!line || line.receiving_id == null, 'no openable testing line in this environment');

@@ -4,6 +4,7 @@ import TechDashboard from '@/components/TechDashboard';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { RouteShell } from '@/design-system/components/RouteShell';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
+import { useSurfaceParamHygiene } from '@/hooks/useSurfaceParamHygiene';
 
 interface TechPageContentProps {
   techId: string;
@@ -15,6 +16,7 @@ interface TechPageContentProps {
  * (TechSidebarPanel) and History (TechDashboard) via `?pane=`.
  */
 export function TechPageContent({ techId }: TechPageContentProps) {
+  useSurfaceParamHygiene();
   useRealtimeToasts('tech');
 
   return (

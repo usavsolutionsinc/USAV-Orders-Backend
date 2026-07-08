@@ -9,6 +9,7 @@
 
 import { useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { stripCrossSurfaceParams } from '@/lib/surface-isolation';
 import { TESTING_SELECTION_SCOPE } from '@/components/tech/TestingHistoryList';
 import {
   useReceivingLineBulkSelection,
@@ -53,12 +54,13 @@ export function useTechTestingSelection(isTestingHistory: boolean): TechTestingS
     });
 
   const openTestingLine = useCallback(() => {
-    // Clicking a history row opens it in the workspace → switch to Testing mode.
-    const params = new URLSearchParams(searchParams.toString());
+    const params = stripCrossSurfaceParams(
+      pathname || '/test',
+      new URLSearchParams(searchParams.toString()),
+    );
     params.set('view', 'testing');
-    // Stay on the current Testing surface route (`/test` canonical, `/tech`
-    // legacy) — operator-surfaces refactor Phase 8 graduated /tech → /test.
-    router.replace(`${pathname || '/test'}?${params.toString()}`);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname || '/test'}?${qs}` : pathname || '/test');
   }, [router, pathname, searchParams]);
 
   return {

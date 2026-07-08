@@ -181,8 +181,8 @@ export const POST = withAuth(async (request, ctx) => {
     const zohoBillNumber = String(body?.zoho_bill_number ?? '').trim() || undefined;
     const zohoBillId = String(body?.zoho_bill_id ?? '').trim() || undefined;
 
-    let staffName = String(body?.staff_name || '').trim();
-    if (!staffName && staffId != null && staffId > 0) {
+    let staffName = '';
+    if (staffId != null && staffId > 0) {
       try {
         const staffLookup = await pool.query<{ name: string | null }>(
           `SELECT name FROM staff WHERE id = $1 LIMIT 1`,

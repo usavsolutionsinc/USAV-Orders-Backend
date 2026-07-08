@@ -12,7 +12,7 @@ import { ScanResultRow, type ScanFeedItem } from '@/components/mobile/feed/rows/
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { unitStatusToVerdict, type TestingVerdict } from '@/components/receiving/workspace/TestingStatusPills';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
-import { Button } from '@/design-system/primitives';
+import { TESTING_RECEIVING_LINES_API } from '@/lib/surface-isolation';
 
 /**
  * Mobile /m/scan recent-feed panels for the Receiving and Testing modes. These
@@ -261,7 +261,11 @@ export function TestingRecentPanel() {
       } else {
         params.set('view', 'activity');
       }
-      const res = await fetch(`/api/receiving-lines?${params.toString()}`);
+      const endpoint =
+        hasTester && params.get('view') === 'testing'
+          ? TESTING_RECEIVING_LINES_API
+          : '/api/receiving-lines';
+      const res = await fetch(`${endpoint}?${params.toString()}`);
       if (!res.ok) throw new Error('fetch failed');
       const data = (await res.json()) as { receiving_lines?: ReceivingLineRow[] };
       return data.receiving_lines ?? [];

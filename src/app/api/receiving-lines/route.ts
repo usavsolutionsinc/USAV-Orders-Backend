@@ -15,6 +15,7 @@ import {
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
+import { isTestingApiView } from '@/lib/surface-isolation';
 import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
 import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE, SHIPMENT_SCANNED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 import { isIncomingUniversal } from '@/lib/feature-flags';
@@ -173,7 +174,17 @@ function parsePositiveTechId(value: unknown): number | null {
 // ?id=<n>              → single row
 // ?receiving_id=<n>    → all lines for a package
 // ?limit&offset&search → paginated list (omit receiving_id to get all)
-export const GET = withAuth(async (request: NextRequest, ctx) => {
+//
+// Testing feeds (`view=testing`, `view=needs-test`) are served exclusively by
+// GET /api/testing/receiving-lines — never here — so package-pairing / QC scans
+// cannot pollute Unbox/Receiving list semantics.
+export type ReceivingLinesGetSurface = 'receiving' | 'testing';
+
+export async function handleReceivingLinesGet(
+  request: NextRequest,
+  ctx: { organizationId: string; staffId?: number | null },
+  surface: ReceivingLinesGetSurface = 'receiving',
+) {
   try {
     const { searchParams } = new URL(request.url);
     const id          = Number(searchParams.get('id'));
@@ -248,6 +259,32 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     // the supported view set can't drift between the two ends. `null` = no/
     // unknown view → fall back to week-range scoping below.
     const view = parseReceivingView(viewRaw);
+
+    if (surface === 'receiving' && isTestingApiView(viewRaw)) {
+      console.warn('[receiving-lines] blocked testing view on receiving endpoint', {
+        view: viewRaw,
+        orgId: ctx.organizationId,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'TESTING_VIEW_NOT_ALLOWED',
+          message: 'Use GET /api/testing/receiving-lines for testing feeds.',
+        },
+        { status: 403 },
+      );
+    }
+    if (surface === 'testing' && !isTestingApiView(viewRaw)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'INVALID_TESTING_VIEW',
+          message: 'Testing endpoint requires view=testing or view=needs-test.',
+        },
+        { status: 400 },
+      );
+    }
+
     // view=viewed only: the requesting operator, whose recently-opened lines
     // (receiving_line_views) this feed returns. `viewedParamIdx` is the $N of the
     // staff_id param once pushed, reused by the WHERE / ORDER BY / SELECT below.
@@ -1640,7 +1677,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     console.error('receiving-lines GET failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}, { permission: 'receiving.view' });
+}
+
+export const GET = withAuth(
+  (request: NextRequest, ctx) => handleReceivingLinesGet(request, ctx, 'receiving'),
+  { permission: 'receiving.view' },
+);
 
 // ─── POST ─────────────────────────────────────────────────────────────────────
 export const POST = withAuth(async (request: NextRequest, ctx) => {

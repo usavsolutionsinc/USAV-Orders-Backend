@@ -25,6 +25,7 @@ import {
   type TestingHistoryLane,
   type TestingLaneIconKey,
 } from '@/lib/station/testing-board-lanes';
+import { TESTING_RECEIVING_LINES_API } from '@/lib/surface-isolation';
 
 const TESTING_LANE_ICON: Record<TestingLaneIconKey, React.ComponentType<{ className?: string }>> = {
   check: Check,
@@ -78,7 +79,7 @@ export function TestingHistoryList({ staffId, selectMode = false, onOpenLine }: 
     queryFn: async () => {
       const params = new URLSearchParams({ limit: '500', offset: '0', include: 'serials', view: 'testing' });
       if (testerId) params.set('tester', String(testerId));
-      const res = await fetch(`/api/receiving-lines?${params.toString()}`);
+      const res = await fetch(`${TESTING_RECEIVING_LINES_API}?${params.toString()}`);
       if (!res.ok) throw new Error('fetch failed');
       return res.json();
     },

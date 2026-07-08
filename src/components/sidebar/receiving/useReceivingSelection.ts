@@ -24,6 +24,7 @@ import {
   type ReceivingMode,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { resolveLiveReceivingMode } from '@/lib/surface-isolation';
 import { mergeReceivingPackageMetaIntoRow } from '@/components/station/receiving-lines-table-helpers';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
@@ -146,7 +147,10 @@ export function useReceivingSelection({
       // would route the operator back into a fresh details stack.
       const liveMode =
         typeof window !== 'undefined'
-          ? new URLSearchParams(window.location.search).get('mode')
+          ? resolveLiveReceivingMode(
+              window.location.pathname,
+              new URLSearchParams(window.location.search),
+            )
           : modeRef.current;
       if (liveMode === 'history') {
         // History is read-only: the only thing a row click does is open the
@@ -199,7 +203,10 @@ export function useReceivingSelection({
       // event from re-arming the unbox bridge after a mode flip).
       const liveMode =
         typeof window !== 'undefined'
-          ? new URLSearchParams(window.location.search).get('mode')
+          ? resolveLiveReceivingMode(
+              window.location.pathname,
+              new URLSearchParams(window.location.search),
+            )
           : modeRef.current;
       if (liveMode === 'history' || liveMode === 'incoming') return;
       setSelectedLine((prev) => (prev?.id === row.id ? prev : row));

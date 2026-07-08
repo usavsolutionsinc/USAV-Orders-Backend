@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { isTestTrackingShortcutAllowed } from '@/lib/tenancy/test-tracking';
 import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 import { formatPSTTimestamp } from '@/utils/date';
 import { getCarrier, extractCanonicalTracking } from '@/lib/tracking-format';
@@ -1111,6 +1112,16 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     // 1b. TEST / demo shortcut — instant matched carton, no Zoho. Lets the
     //     door-scan → unbox flow be tested with a typed tracking like TEST123.
     if (isTestTracking(trackingNumber)) {
+      if (!isTestTrackingShortcutAllowed(ctx.organizationId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'TEST_TRACKING_NOT_ALLOWED',
+            message: 'Synthetic TEST* tracking is disabled outside the QA sandbox org.',
+          },
+          { status: 403 },
+        );
+      }
       const { receivingId, scanId, preexisting, poId } = await createOrGetTestReceiving(
         trackingNumber,
         carrier,

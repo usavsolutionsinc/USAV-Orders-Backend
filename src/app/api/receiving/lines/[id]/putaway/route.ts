@@ -54,9 +54,10 @@ export async function POST(
         ? Math.floor(serialUnitIdRaw)
         : null;
 
-    const staffIdRaw = Number(body?.staff_id ?? body?.staffId);
     const staffId =
-      Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+      ctx.staffId != null && Number.isFinite(ctx.staffId) && ctx.staffId > 0
+        ? Math.floor(ctx.staffId)
+        : null;
 
     const notes = String(body?.notes || '').trim() || null;
     const clientEventId = String(body?.client_event_id || '').trim() || null;

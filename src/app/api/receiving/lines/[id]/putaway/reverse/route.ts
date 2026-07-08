@@ -40,8 +40,10 @@ export async function POST(
     if (serialUnitId == null) {
       return NextResponse.json({ success: false, error: 'serial_unit_id is required' }, { status: 400 });
     }
-    const staffIdRaw = Number(body?.staff_id ?? body?.staffId);
-    const staffId = Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+    const staffId =
+      gate.ctx.staffId != null && Number.isFinite(gate.ctx.staffId) && gate.ctx.staffId > 0
+        ? Math.floor(gate.ctx.staffId)
+        : null;
     const clientEventId = String(body?.client_event_id || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
 

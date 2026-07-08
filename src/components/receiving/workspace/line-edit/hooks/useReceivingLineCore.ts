@@ -141,10 +141,10 @@ export function useReceivingLineCore(
         zendesk: persistZendeskRef.current,
         listing: persistListingRef.current,
         extra_trackings: persistExtraTrackingsRef.current.filter((t) => t.trim().length > 0),
-      });
+      }, orgId);
     }
     prevReceivingIdForFlushRef.current = next ?? null;
-  }, [row.receiving_id]);
+  }, [row.receiving_id, orgId]);
 
   // Restore Zendesk + listing + extra trackings from localStorage when switching
   // cartons (layout phase so the persist effect sees hydrated values).
@@ -157,7 +157,7 @@ export function useReceivingLineCore(
       setTrackingEditorsOpen(false);
       return;
     }
-    const d = readReceivingLineDetailsScratch(row.receiving_id);
+    const d = readReceivingLineDetailsScratch(row.receiving_id, orgId);
     // Ticket display comes from support_tickets + ticket_links (not receiving columns).
     setZendesk(d.zendesk);
     // DB-persisted listing URL wins over the per-browser scratch when present.
@@ -165,7 +165,7 @@ export function useReceivingLineCore(
     const extras = d.extra_trackings.length > 0 ? d.extra_trackings : [];
     setExtraTrackings(extras);
     setTrackingEditorsOpen(false);
-  }, [row.receiving_id, row.tracking_number]);
+  }, [row.receiving_id, row.tracking_number, orgId]);
 
   /** Listing chip/editor: always start minimized when the selected line/carton changes. */
   useLayoutEffect(() => {
@@ -189,8 +189,8 @@ export function useReceivingLineCore(
       zendesk,
       listing: listingLink,
       extra_trackings: extraTrackings.map((t) => t.trim()).filter(Boolean),
-    });
-  }, [zendesk, listingLink, extraTrackings, row.receiving_id]);
+    }, orgId);
+  }, [zendesk, listingLink, extraTrackings, row.receiving_id, orgId]);
 
   // NOTE: the Zendesk ticket link is owned end-to-end by the claim modal
   // (create / link-existing) and the ReceivingTicketChip's Unlink action, which

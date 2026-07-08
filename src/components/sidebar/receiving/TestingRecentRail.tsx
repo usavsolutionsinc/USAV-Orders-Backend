@@ -6,6 +6,7 @@ import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
 import { TestingRailFeedToggle, type TestingRailFeed } from './TestingRailFeedToggle';
 import { filterReceivingRailRows } from '@/components/sidebar/tech/filter-receiving-rail-rows';
+import { TESTING_RECEIVING_LINES_API } from '@/lib/surface-isolation';
 
 /**
  * Color logic for the left status dot in Testing view. Colors come straight
@@ -96,7 +97,7 @@ export function TestingRecentRail({
     params.set('include', 'serials');
     params.set('view', isQueue ? 'needs-test' : 'testing');
     if (hasTester) params.set('tester', String(testerId));
-    const res = await fetch(`/api/receiving-lines?${params.toString()}`);
+    const res = await fetch(`${TESTING_RECEIVING_LINES_API}?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
     const data = await res.json();
     if (!trimmedFilter) return data;

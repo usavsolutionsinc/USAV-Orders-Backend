@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSurfaceParamHygiene } from '@/hooks/useSurfaceParamHygiene';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
@@ -64,6 +65,7 @@ import { usePhotoRequestPublisher } from '@/components/sidebar/receiving/usePhot
 import { useRailEditMode } from '@/components/sidebar/receiving/useRailEditMode';
 
 export function ReceivingSidebarPanel() {
+  useSurfaceParamHygiene();
   const queryClient = useQueryClient();
   const masterNavEnabled = useMasterNavEnabled();
 

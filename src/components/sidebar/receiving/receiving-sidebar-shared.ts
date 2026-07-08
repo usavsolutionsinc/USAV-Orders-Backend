@@ -57,7 +57,16 @@ export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
  * nav within the same carton. PO item notes live in DB (`receiving_lines.notes`)
  * per line, not here.
  */
-export const RECEIVING_LINE_DETAILS_STORAGE_KEY = (receivingId: number) =>
+export const RECEIVING_LINE_DETAILS_STORAGE_KEY = (
+  receivingId: number,
+  orgId?: string | null,
+) => {
+  const org = String(orgId ?? '').trim() || 'default';
+  return `receiving:${org}:sidebar.lineDetails.v1:${receivingId}`;
+};
+
+/** Legacy key (pre org-namespacing) — read-only fallback for migration. */
+const LEGACY_RECEIVING_LINE_DETAILS_STORAGE_KEY = (receivingId: number) =>
   `receiving.sidebar.lineDetails.v1:${receivingId}`;
 
 export type ReceivingLineDetailScratch = {
@@ -69,12 +78,15 @@ export type ReceivingLineDetailScratch = {
 
 export function readReceivingLineDetailsScratch(
   receivingId: number | null,
+  orgId?: string | null,
 ): ReceivingLineDetailScratch {
   if (receivingId == null || typeof window === 'undefined') {
     return { zendesk: '', listing: '', extra_trackings: [] };
   }
   try {
-    const raw = window.localStorage.getItem(RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId));
+    const raw =
+      window.localStorage.getItem(RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId, orgId)) ??
+      window.localStorage.getItem(LEGACY_RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId));
     if (!raw) return { zendesk: '', listing: '', extra_trackings: [] };
     const o = JSON.parse(raw) as Partial<ReceivingLineDetailScratch>;
     const extrasRaw = o.extra_trackings;
@@ -94,11 +106,12 @@ export function readReceivingLineDetailsScratch(
 export function writeReceivingLineDetailsScratch(
   receivingId: number,
   d: ReceivingLineDetailScratch,
+  orgId?: string | null,
 ) {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(
-      RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId),
+      RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId, orgId),
       JSON.stringify({
         zendesk: d.zendesk,
         listing: d.listing,
