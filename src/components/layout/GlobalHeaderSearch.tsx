@@ -360,7 +360,13 @@ export function GlobalHeaderSearch() {
                   onClick={() => {
                     const next = !assistant.open;
                     assistant.setOpen(next);
-                    if (next) assistant.focusComposer();
+                    if (!next) return;
+                    if (trimmedQuery) {
+                      // Pre-fill only — operator reviews before send (exact-data handoff).
+                      assistant.seedComposer(trimmedQuery, { autoSend: false });
+                    } else {
+                      assistant.focusComposer();
+                    }
                   }}
                   aria-label={assistant.open ? 'Close assistant' : 'Open assistant'}
                   aria-expanded={assistant.open}

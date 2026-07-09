@@ -13,6 +13,8 @@
 
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { looksLikeTicketScan } from '@/lib/support/ticket-scan';
+import { searchSupportTickets } from '@/lib/search/support-ticket-search';
 
 export interface GlobalSearchResult {
   id: number;
@@ -188,14 +190,20 @@ export async function searchSkus(orgId: OrgId, query: string, limit: number): Pr
 }
 
 /**
- * Fan out across all five entity searchers — the same shape global-search's
- * handler uses (per-entity cap, degrade-not-fail per searcher).
+ * Fan out across entity searchers — the same shape global-search's handler
+ * uses (per-entity cap, degrade-not-fail per searcher). Ticket-shaped queries
+ * (`#4821` / `4821`) resolve via support_tickets FIRST so numeric ids do not
+ * false-positive on receiving/repair/order rows.
  */
 export async function searchAllEntities(
   orgId: OrgId,
   query: string,
   limit: number,
 ): Promise<GlobalSearchResult[]> {
+  if (looksLikeTicketScan(query)) {
+    const tickets = await searchSupportTickets(orgId, query).catch(() => []);
+    if (tickets.length > 0) return tickets.slice(0, limit);
+  }
   const perEntity = Math.ceil(limit / 5);
   const [orders, repairs, fba, receiving, skus] = await Promise.all([
     searchOrders(orgId, query, perEntity).catch(() => []),

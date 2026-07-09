@@ -23,6 +23,11 @@ import {
   getComposerFocusSeq,
   subscribeComposerFocus,
 } from '@/lib/assistant/composer-focus-store';
+import {
+  getComposerSeedSeq,
+  getLatestComposerSeed,
+  subscribeComposerSeed,
+} from '@/lib/assistant/composer-seed-store';
 import { cn } from '@/utils/_cn';
 import { useAssistantChat } from './useAssistantChat';
 import { AssistantEditsTray } from './AssistantEditsTray';
@@ -51,7 +56,13 @@ export function AssistantDockBody({ onClose }: { onClose: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const prevFocusSeqRef = useRef(0);
+  const prevSeedSeqRef = useRef(0);
+  const chatRef = useRef(chat);
+  const contextRef = useRef(context);
+  chatRef.current = chat;
+  contextRef.current = context;
   const focusSeq = useSyncExternalStore(subscribeComposerFocus, getComposerFocusSeq, () => 0);
+  const seedSeq = useSyncExternalStore(subscribeComposerSeed, getComposerSeedSeq, () => 0);
 
   const focusComposer = useCallback(() => {
     requestAnimationFrame(() => focusTextarea(composerRef.current));
@@ -62,6 +73,24 @@ export function AssistantDockBody({ onClose }: { onClose: () => void }) {
     prevFocusSeqRef.current = focusSeq;
     focusComposer();
   }, [focusSeq, focusComposer]);
+
+  useEffect(() => {
+    if (seedSeq === prevSeedSeqRef.current) return;
+    prevSeedSeqRef.current = seedSeq;
+    const seed = getLatestComposerSeed();
+    if (!seed?.text) return;
+    if (seed.autoSend) {
+      if (chatRef.current.status === 'streaming') {
+        setDraft(seed.text);
+        return;
+      }
+      setDraft('');
+      void chatRef.current.send(seed.text, contextRef.current);
+      return;
+    }
+    setDraft(seed.text);
+    focusComposer();
+  }, [seedSeq, focusComposer]);
 
   useEffect(() => {
     const el = composerRef.current;

@@ -129,6 +129,7 @@ const ENRICHMENT_SELECT = /* sql */ `
       WHERE ppl.organization_id = sal.organization_id
         AND ppl.owner_type = 'SKU_CATALOG'
         AND ppl.owner_id = o.sku_catalog_id
+        AND pp.source <> 'rules'
       LIMIT 1
   ) p ON TRUE
   LEFT JOIN LATERAL (
@@ -309,7 +310,7 @@ async function applyRulesPackTierFallback(executor: Queryable, salIds: number[])
        LEFT JOIN orders o ON o.id = enr.order_row_id AND o.organization_id = enr.organization_id
        LEFT JOIN sku_catalog sc ON sc.id = enr.sku_catalog_id
       WHERE enr.sal_id = ANY($1::int[])
-        AND enr.pack_tier IS NULL`,
+        AND (enr.pack_tier IS NULL OR enr.tier_source = 'rules')`,
     [salIds],
   );
 

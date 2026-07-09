@@ -268,17 +268,23 @@ function buildAnalysis(args: {
   };
 }
 
-export async function resolveLocalAiAnswer(message: string): Promise<LocalAiResolution | null> {
+export async function resolveLocalAiAnswer(
+  message: string,
+  orgId?: import('@/lib/tenancy/constants').OrgId,
+): Promise<LocalAiResolution | null> {
   if (!shouldHandleLocally(message)) return null;
 
   const queryKind = detectLocalOpsQueryKind(message) || 'summary';
   const timeframe = resolveAiTimeframe(message);
   const dimension = pickLocalOpsDimension(message);
-  const allRecords = await getPackedOrdersForAi({
-    weekStart: timeframe.start,
-    weekEnd: timeframe.end,
-    limit: 5000,
-  });
+  const allRecords = await getPackedOrdersForAi(
+    {
+      weekStart: timeframe.start,
+      weekEnd: timeframe.end,
+      limit: 5000,
+    },
+    orgId,
+  );
   const records = queryKind === 'missing_attribution'
     ? allRecords.filter((record) =>
         dimension === 'packer'

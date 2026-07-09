@@ -1,7 +1,8 @@
 /**
- * The eleven day-one read tools (plan §3.1) — the AI's eyes over the org's
- * operation: signals, journeys, feeds, graph, benchmarks, KPIs, notes,
- * mutation + chat history.
+ * Assistant read tools (plan §3.1 + Sparkles exact-data wiring) — the AI's
+ * eyes over the org's operation: signals, journeys, feeds, graph, benchmarks,
+ * KPIs, notes, mutation + chat history, plus the search narrow waist
+ * (hybrid / exact / support-ticket resolve).
  *
  * Conventions:
  *   • Every SQL leads with `organization_id = $1` (explicit predicate on top
@@ -11,11 +12,51 @@
  *   • workflow_nodes/workflow_edges carry no org column — tenant scope rides
  *     the parent workflow_definitions row, so graph tools verify definition
  *     ownership first and join through it (never trust a bare definition id).
+ *   • Search tools return SearchHit[] (or ticket→receiving refs) via existing
+ *     domain helpers — never inline SQL for entity lookup.
  *   • Row caps everywhere: these results land in a model context window.
  */
 
 import { z } from 'zod';
+import { SEARCH_ENTITY_TYPES, type SearchEntityType } from '@/lib/search/build-search-text';
+import { searchAllEntities } from '@/lib/search/global-entity-search';
+import { hybridSearch } from '@/lib/search/hybrid-retrieval';
+import { searchHitHref } from '@/lib/search/search-hit';
+import {
+  formatSupportTicketLabel,
+  resolveSupportTicketToReceiving,
+} from '@/lib/support/tickets';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { AssistantToolCtx, AssistantToolDef, AssistantToolDeps } from './types';
+
+/** Thin adapters — same bodies as search-tools.ts executors, without importing
+ *  hermes-client (server-only) into the assistant registry / unit tests. */
+async function runHybridEntitySearch(
+  orgId: OrgId,
+  args: { query: string; entityTypes?: string[]; limit?: number },
+) {
+  const rawTypes = Array.isArray(args.entityTypes) ? args.entityTypes : [];
+  const entityTypes = rawTypes.filter((t): t is SearchEntityType =>
+    (SEARCH_ENTITY_TYPES as readonly string[]).includes(t),
+  );
+  const limit =
+    typeof args.limit === 'number' && Number.isInteger(args.limit) && args.limit > 0
+      ? args.limit
+      : undefined;
+  return hybridSearch(orgId, String(args.query ?? ''), {
+    entityTypes: entityTypes.length > 0 ? entityTypes : undefined,
+    limit,
+  });
+}
+
+async function runExactIdSerialSearch(
+  orgId: OrgId,
+  args: { query: string; limit?: number },
+) {
+  const results = await searchAllEntities(orgId, args.query, args.limit ?? 20);
+  return results.map((r, rank) => ({ ...r, score: 1000 - rank, chips: [] }));
+}
 
 const rangeDays = z.number().int().min(1).max(365).default(30);
 const rowLimit = (max: number, def: number) => z.number().int().min(1).max(max).default(def);
@@ -507,5 +548,137 @@ export const getChatHistory: AssistantToolDef<
       [ctx.organizationId, input.limit],
     );
     return { sessions: r.rows };
+  },
+};
+
+// ─── Search narrow waist (adapters over existing domain helpers) ─────────────
+
+async function defaultGetSupportTicket(
+  orgId: string,
+  ticketId: number,
+): Promise<{
+  id: number;
+  provider: string;
+  externalTicketId: string | null;
+  subjectCache: string | null;
+  statusCache: string | null;
+} | null> {
+  const r = await tenantQuery<{
+    id: string;
+    provider: string;
+    external_ticket_id: string | null;
+    subject_cache: string | null;
+    status_cache: string | null;
+  }>(
+    orgId,
+    `SELECT id, provider, external_ticket_id, subject_cache, status_cache
+       FROM support_tickets
+      WHERE organization_id = $1 AND id = $2
+      LIMIT 1`,
+    [orgId, ticketId],
+  );
+  const row = r.rows[0];
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    provider: row.provider,
+    externalTicketId: row.external_ticket_id,
+    subjectCache: row.subject_cache,
+    statusCache: row.status_cache,
+  };
+}
+
+const searchEntityTypeSchema = z.enum([
+  'ORDER',
+  'SERIAL_UNIT',
+  'RECEIVING',
+  'SKU',
+  'REPAIR',
+  'FBA_SHIPMENT',
+]);
+
+export const hybridEntitySearch: AssistantToolDef<
+  z.ZodObject<{
+    query: z.ZodString;
+    entityTypes: z.ZodOptional<z.ZodArray<typeof searchEntityTypeSchema>>;
+    limit: z.ZodDefault<z.ZodNumber>;
+  }>
+> = {
+  name: 'hybrid_entity_search',
+  description:
+    'Search warehouse entities (orders, serialized units, receiving cartons, SKU catalog, repairs, FBA shipments) by natural language or identifier. Returns SearchHit[] with title, subtitle, href, score. Use FIRST for find/where/which/show/list questions and any order id, serial, SKU, tracking, or carton lookup. Prefer this over guessing. Optionally scope entityTypes.',
+  permission: 'assistant.chat',
+  inputSchema: z.object({
+    query: z.string().min(1).max(300),
+    entityTypes: z.array(searchEntityTypeSchema).max(SEARCH_ENTITY_TYPES.length).optional(),
+    limit: rowLimit(50, 12),
+  }),
+  run: async (input, ctx, deps) => {
+    const search = deps.hybridEntitySearch ?? runHybridEntitySearch;
+    const result = await search(ctx.organizationId, {
+      query: input.query,
+      entityTypes: input.entityTypes,
+      limit: input.limit,
+    });
+    return result;
+  },
+};
+
+export const exactIdSerialSearch: AssistantToolDef<
+  z.ZodObject<{ query: z.ZodString; limit: z.ZodDefault<z.ZodNumber> }>
+> = {
+  name: 'exact_id_serial_search',
+  description:
+    'Deterministic exact-identifier lookup across parent tables: order id, tracking number, SKU code, repair ticket, numeric record id, or support-ticket-shaped #NNNN. Returns SearchHit[]. Use when the user pasted a bare identifier (no spaces) and hybrid_entity_search is not needed. For #ticket scans prefer resolve_support_ticket.',
+  permission: 'assistant.chat',
+  inputSchema: z.object({
+    query: z.string().min(1).max(200),
+    limit: rowLimit(50, 20),
+  }),
+  run: async (input, ctx, deps) => {
+    const search = deps.exactIdSerialSearch ?? runExactIdSerialSearch;
+    const hits = await search(ctx.organizationId, {
+      query: input.query,
+      limit: input.limit,
+    });
+    return { hits };
+  },
+};
+
+export const resolveSupportTicket: AssistantToolDef<
+  z.ZodObject<{ scanValue: z.ZodString }>
+> = {
+  name: 'resolve_support_ticket',
+  description:
+    'Resolve a support ticket scan (#4821 or 4821) to its linked receiving carton via support_tickets + ticket_links — the same path receiving Unbox uses. Returns the ticket row, receivingId, optional lineId, and an href to open the carton. Use whenever the user mentions a #ticket or bare ticket number that looks like a support ticket.',
+  permission: 'assistant.chat',
+  inputSchema: z.object({
+    scanValue: z.string().min(1).max(32),
+  }),
+  run: async (input, ctx, deps) => {
+    const resolve = deps.resolveSupportTicket ?? resolveSupportTicketToReceiving;
+    const getTicket = deps.getSupportTicket ?? defaultGetSupportTicket;
+    const resolved = await resolve(ctx.organizationId, input.scanValue);
+    if (!resolved) {
+      return { found: false as const, scanValue: input.scanValue.trim() };
+    }
+    const ticket = await getTicket(ctx.organizationId, resolved.supportTicketId);
+    return {
+      found: true as const,
+      supportTicketId: resolved.supportTicketId,
+      label: formatSupportTicketLabel(resolved.supportTicketId),
+      receivingId: resolved.receivingId,
+      lineId: resolved.lineId ?? null,
+      href: searchHitHref('RECEIVING', resolved.receivingId),
+      ticket: ticket
+        ? {
+            id: ticket.id,
+            provider: ticket.provider,
+            externalTicketId: ticket.externalTicketId,
+            subjectCache: ticket.subjectCache,
+            statusCache: ticket.statusCache,
+          }
+        : null,
+    };
   },
 };

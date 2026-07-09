@@ -336,6 +336,7 @@ test('assistant chat route is gated by assistant.chat', () => {
   const paths = routesGatedBy('assistant.chat').map((r) => r.path);
   assert.ok(paths.includes('/api/assistant/chat/route.ts'));
   assert.ok(paths.includes('/api/assistant/mutations/route.ts'));
+  assert.ok(paths.includes('/api/mcp/route.ts'));
 });
 
 test('assistant mutation revert route is gated by studio.manage', () => {

@@ -31,6 +31,37 @@ export interface AssistantToolQueryResult {
 /** Injected DB seam — defaults to tenantQuery (GUC + explicit org predicate). */
 export interface AssistantToolDeps {
   query: (orgId: OrgId, text: string, params?: ReadonlyArray<unknown>) => Promise<AssistantToolQueryResult>;
+  /**
+   * Optional search / ticket collaborators for tools that wrap existing domain
+   * helpers (hybridSearch, searchAllEntities, resolveSupportTicketToReceiving).
+   * Defaults live on each tool so callers that only fake `query` stay valid.
+   */
+  hybridEntitySearch?: (
+    orgId: OrgId,
+    args: { query: string; entityTypes?: string[]; limit?: number },
+  ) => Promise<unknown>;
+  exactIdSerialSearch?: (
+    orgId: OrgId,
+    args: { query: string; limit?: number },
+  ) => Promise<unknown>;
+  resolveSupportTicket?: (
+    orgId: OrgId,
+    scanValue: string,
+  ) => Promise<{
+    receivingId: number;
+    lineId?: number;
+    supportTicketId: number;
+  } | null>;
+  getSupportTicket?: (
+    orgId: OrgId,
+    ticketId: number,
+  ) => Promise<{
+    id: number;
+    provider: string;
+    externalTicketId: string | null;
+    subjectCache: string | null;
+    statusCache: string | null;
+  } | null>;
 }
 
 export interface AssistantToolDef<Schema extends z.ZodTypeAny = z.ZodTypeAny, Out = unknown> {

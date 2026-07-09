@@ -1,4 +1,3 @@
-import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntentDomain, IntentParams } from '@/lib/ai/intent-router';
@@ -27,9 +26,10 @@ function formatCountLabel(count: number, singular: string, plural?: string): str
 
 type QueryRow = Record<string, unknown>;
 
-export async function fetchOrdersContext(params: IntentParams): Promise<string> {
+export async function fetchOrdersContext(params: IntentParams, orgId: OrgId): Promise<string> {
   if (params.orderId) {
-    const specific = await pool.query(
+    const specific = await tenantQuery(
+      orgId,
       `
         SELECT
           o.order_id,
@@ -57,11 +57,12 @@ export async function fetchOrdersContext(params: IntentParams): Promise<string> 
           LIMIT 1
         ) wa ON TRUE
         LEFT JOIN staff s ON s.id = wa.assigned_tech_id
-        WHERE o.order_id ILIKE $1
+        WHERE o.organization_id = $1
+          AND o.order_id ILIKE $2
         ORDER BY o.id DESC
         LIMIT 1
       `,
-      [normalizeLookupLike(params.orderId)]
+      [orgId, normalizeLookupLike(params.orderId)]
     );
 
     if (specific.rows.length > 0) {
@@ -83,7 +84,8 @@ export async function fetchOrdersContext(params: IntentParams): Promise<string> 
   }
 
   const [summary, overdue] = await Promise.all([
-    pool.query(
+    tenantQuery(
+      orgId,
       `
         SELECT
           COUNT(*) FILTER (
@@ -130,9 +132,12 @@ export async function fetchOrdersContext(params: IntentParams): Promise<string> 
           ORDER BY updated_at DESC, id DESC
           LIMIT 1
         ) wa_d ON TRUE
-      `
+        WHERE o.organization_id = $1
+      `,
+      [orgId],
     ),
-    pool.query(
+    tenantQuery(
+      orgId,
       `
         SELECT
           o.order_id,
@@ -150,12 +155,14 @@ export async function fetchOrdersContext(params: IntentParams): Promise<string> 
           LIMIT 1
         ) wa ON TRUE
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-        WHERE wa.deadline_at::date < CURRENT_DATE
+        WHERE o.organization_id = $1
+          AND wa.deadline_at::date < CURRENT_DATE
           AND NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false)
         ORDER BY wa.deadline_at ASC, o.id ASC
         LIMIT 5
-      `
+      `,
+      [orgId],
     ),
   ]);
 
@@ -179,16 +186,17 @@ export async function fetchOrdersContext(params: IntentParams): Promise<string> 
   ].join('\n');
 }
 
-export async function fetchStaffContext(params: IntentParams): Promise<string> {
-  const values: Array<string> = [];
-  let whereClause = `WHERE s.active = true`;
+export async function fetchStaffContext(params: IntentParams, orgId: OrgId): Promise<string> {
+  const values: Array<string | OrgId> = [orgId];
+  let whereClause = `WHERE s.active = true AND s.organization_id = $1`;
 
   if (params.staffName) {
     values.push(normalizeLookupLike(params.staffName));
-    whereClause += ` AND s.name ILIKE $1`;
+    whereClause += ` AND s.name ILIKE $${values.length}`;
   }
 
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `
       WITH today_tech AS (
         SELECT tested_by AS sid, COUNT(*)::int AS today_count
@@ -266,10 +274,11 @@ export async function fetchStaffContext(params: IntentParams): Promise<string> {
   ].join('\n');
 }
 
-export async function fetchRepairContext(params: IntentParams): Promise<string> {
+export async function fetchRepairContext(params: IntentParams, orgId: OrgId): Promise<string> {
   const lookup = params.ticketNumber || params.orderId;
   if (lookup) {
-    const detail = await pool.query(
+    const detail = await tenantQuery(
+      orgId,
       `
         SELECT
           rs.ticket_number,
@@ -292,14 +301,17 @@ export async function fetchRepairContext(params: IntentParams): Promise<string> 
           LIMIT 1
         ) wa ON TRUE
         LEFT JOIN staff s ON s.id = wa.assigned_tech_id
-        WHERE rs.ticket_number ILIKE $1
-           OR rs.contact_info ILIKE $1
-           OR rs.product_title ILIKE $1
-           OR rs.serial_number ILIKE $1
+        WHERE rs.organization_id = $1
+          AND (
+               rs.ticket_number ILIKE $2
+            OR rs.contact_info ILIKE $2
+            OR rs.product_title ILIKE $2
+            OR rs.serial_number ILIKE $2
+          )
         ORDER BY rs.updated_at DESC, rs.id DESC
         LIMIT 1
       `,
-      [normalizeLookupLike(lookup)]
+      [orgId, normalizeLookupLike(lookup)]
     );
 
     if (detail.rows.length > 0) {
@@ -319,18 +331,19 @@ export async function fetchRepairContext(params: IntentParams): Promise<string> 
     }
   }
 
-  const values: Array<string> = [];
+  const values: Array<string | OrgId> = [orgId];
   let statusFilter = '';
   if (params.repairStatus) {
     if (params.repairStatus === 'waiting_for_parts') {
       statusFilter = ` AND COALESCE(BTRIM(wa.out_of_stock), '') <> ''`;
     } else {
       values.push(params.repairStatus);
-      statusFilter = ` AND rs.status = $1`;
+      statusFilter = ` AND rs.status = $${values.length}`;
     }
   }
 
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `
       SELECT
         rs.status,
@@ -349,7 +362,8 @@ export async function fetchRepairContext(params: IntentParams): Promise<string> 
         ORDER BY id DESC
         LIMIT 1
       ) wa ON TRUE
-      WHERE rs.status NOT IN ('Done', 'Shipped', 'Picked Up')
+      WHERE rs.organization_id = $1
+        AND rs.status NOT IN ('Done', 'Shipped', 'Picked Up')
       ${statusFilter}
       GROUP BY rs.status
       ORDER BY rs.status
@@ -367,25 +381,31 @@ export async function fetchRepairContext(params: IntentParams): Promise<string> 
   return ['=== OPEN REPAIRS ===', ...lines, `Total open: ${total}`].join('\n');
 }
 
-export async function fetchReceivingContext(): Promise<string> {
+export async function fetchReceivingContext(orgId: OrgId): Promise<string> {
   const [receiving, lines] = await Promise.all([
-    pool.query(
+    tenantQuery(
+      orgId,
       `
         SELECT
           COUNT(*)::int AS awaiting_unboxing,
           COUNT(*) FILTER (WHERE received_at::date = CURRENT_DATE)::int AS received_today,
           COUNT(*) FILTER (WHERE is_return = true)::int AS returns_pending
         FROM receiving
-        WHERE unboxed_at IS NULL
-      `
+        WHERE organization_id = $1
+          AND unboxed_at IS NULL
+      `,
+      [orgId],
     ),
-    pool.query(
+    tenantQuery(
+      orgId,
       `
         SELECT
           COUNT(*) FILTER (WHERE workflow_status = 'EXPECTED')::int AS expected_count,
           COUNT(*) FILTER (WHERE workflow_status = 'ARRIVED')::int AS arrived_count
         FROM receiving_lines
-      `
+        WHERE organization_id = $1
+      `,
+      [orgId],
     ),
   ]);
 
@@ -437,18 +457,22 @@ export async function fetchFbaContext(params: IntentParams, orgId: OrgId): Promi
   ].join('\n');
 }
 
-export async function fetchInventoryContext(params: IntentParams): Promise<string> {
+export async function fetchInventoryContext(params: IntentParams, orgId: OrgId): Promise<string> {
   if (params.sku) {
-    const specific = await pool.query(
+    const specific = await tenantQuery(
+      orgId,
       `
         SELECT sku, product_title, stock
         FROM sku_stock
-        WHERE LOWER(COALESCE(sku, '')) ILIKE LOWER($1)
-           OR LOWER(COALESCE(product_title, '')) ILIKE LOWER($1)
+        WHERE organization_id = $1
+          AND (
+               LOWER(COALESCE(sku, '')) ILIKE LOWER($2)
+            OR LOWER(COALESCE(product_title, '')) ILIKE LOWER($2)
+          )
         ORDER BY sku ASC NULLS LAST, id DESC
         LIMIT 5
       `,
-      [normalizeLookupLike(params.sku)]
+      [orgId, normalizeLookupLike(params.sku)]
     );
 
     return [
@@ -457,16 +481,19 @@ export async function fetchInventoryContext(params: IntentParams): Promise<strin
     ].join('\n');
   }
 
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `
       SELECT
         sku,
         product_title,
         COALESCE(stock, 0) AS qty
       FROM sku_stock
+      WHERE organization_id = $1
       ORDER BY qty ASC, sku ASC NULLS LAST
       LIMIT 10
-    `
+    `,
+    [orgId],
   );
 
   return [
@@ -476,15 +503,18 @@ export async function fetchInventoryContext(params: IntentParams): Promise<strin
   ].join('\n');
 }
 
-export async function fetchExceptionsContext(): Promise<string> {
-  const result = await pool.query(
+export async function fetchExceptionsContext(orgId: OrgId): Promise<string> {
+  const result = await tenantQuery(
+    orgId,
     `
       SELECT source_station, COUNT(*)::int AS cnt
       FROM orders_exceptions
-      WHERE status = 'open'
+      WHERE organization_id = $1
+        AND status = 'open'
       GROUP BY source_station
       ORDER BY source_station
-    `
+    `,
+    [orgId],
   );
 
   const total = result.rows.reduce((sum, row) => sum + Number(row.cnt || 0), 0);
@@ -499,10 +529,10 @@ export async function fetchExceptionsContext(): Promise<string> {
   ].join('\n');
 }
 
-export async function fetchShippedContext(params: IntentParams): Promise<string> {
+export async function fetchShippedContext(params: IntentParams, orgId: OrgId): Promise<string> {
   if (!params.orderId && !params.trackingNumber) return '';
 
-  const values: string[] = [];
+  const values: Array<string | OrgId> = [orgId];
   let orderCondition = 'FALSE';
   let trackingCondition = 'FALSE';
 
@@ -515,7 +545,8 @@ export async function fetchShippedContext(params: IntentParams): Promise<string>
     trackingCondition = `stn.tracking_number_normalized = $${values.length}`;
   }
 
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `
       SELECT
         o.order_id,
@@ -532,7 +563,8 @@ export async function fetchShippedContext(params: IntentParams): Promise<string>
       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
       LEFT JOIN staff s ON s.id = tsn.tested_by
-      WHERE ${orderCondition} OR ${trackingCondition}
+      WHERE o.organization_id = $1
+        AND (${orderCondition} OR ${trackingCondition})
       GROUP BY o.id, stn.id
       ORDER BY o.id DESC
       LIMIT 3
@@ -583,24 +615,24 @@ export async function buildContextBlock(
   const tasks = selected.map(async (intent) => {
     switch (intent) {
       case 'orders':
-        return fetchOrdersContext(params);
+        return fetchOrdersContext(params, orgId);
       case 'staff':
-        return fetchStaffContext(params);
+        return fetchStaffContext(params, orgId);
       case 'repair':
-        return fetchRepairContext(params);
+        return fetchRepairContext(params, orgId);
       case 'receiving':
-        return fetchReceivingContext();
+        return fetchReceivingContext(orgId);
       case 'fba':
         return fetchFbaContext(params, orgId);
       case 'inventory':
-        return fetchInventoryContext(params);
+        return fetchInventoryContext(params, orgId);
       case 'exceptions':
-        return fetchExceptionsContext();
+        return fetchExceptionsContext(orgId);
       case 'photos':
         return fetchPhotosContext(params, orgId);
       case 'shipped':
         if (!params.orderId && !params.trackingNumber) return '';
-        return fetchShippedContext(params);
+        return fetchShippedContext(params, orgId);
       default:
         return '';
     }

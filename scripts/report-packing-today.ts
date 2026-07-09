@@ -8,15 +8,26 @@
  * Usage:
  *   npx tsx scripts/report-packing-today.ts --orgId=<uuid>
  *   npx tsx scripts/report-packing-today.ts --orgId=<uuid> --date=2026-07-08
- *   npx tsx scripts/report-packing-today.ts --orgId=<uuid> --out=reports/packing-2026-07-08.csv
- *   npx tsx scripts/report-packing-today.ts --orgId=<uuid> --backfill   # recompute enrichment for today's PACK scans first
+ *   npx tsx scripts/report-packing-today.ts --orgId=<uuid> --out=reports/packing-2026-07-08.rtf
+ *   npx tsx scripts/report-packing-today.ts --orgId=<uuid> --format=txt --out=report.txt
+ *   npx tsx scripts/report-packing-today.ts --orgId=<uuid> --days=10 --out=reports/packing-last-10-days.rtf
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import pg from 'pg';
-import { getPackingKpisForDay, packerKpiSummaryToCsv } from '../src/lib/packing/packer-kpi-queries';
+import {
+  getPackingKpisForDay,
+  getPackingKpisForLastFilledDays,
+  listRecentFilledPackDays,
+  packerKpiSummaryToCsv,
+} from '../src/lib/packing/packer-kpi-queries';
+import {
+  inferDocumentFormatFromPath,
+  packerKpiPeriodToDocument,
+  packerKpiSummaryToDocument,
+} from '../src/lib/packing/packing-report-document';
 import { getCurrentPSTDateKey } from '../src/utils/date';
 import { computePackerLogEnrichment } from '../src/lib/neon/packer-log-enrichment';
 import type { OrgId } from '../src/lib/tenancy/constants';
@@ -28,10 +39,13 @@ const args = process.argv.slice(2);
 const orgIdArg = args.find((a) => a.startsWith('--orgId='));
 const dateArg = args.find((a) => a.startsWith('--date='));
 const outArg = args.find((a) => a.startsWith('--out='));
+const formatArg = args.find((a) => a.startsWith('--format='));
+const daysArg = args.find((a) => a.startsWith('--days='));
 const BACKFILL = args.includes('--backfill');
 
 const ORG_ID = orgIdArg ? orgIdArg.slice('--orgId='.length).trim() : '';
 const DAY = dateArg ? dateArg.slice('--date='.length).trim() : getCurrentPSTDateKey();
+const DAY_COUNT = daysArg ? Math.max(1, parseInt(daysArg.slice('--days='.length), 10) || 1) : 1;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -40,7 +54,7 @@ function defaultOutPath(orgId: string, day: string): string {
   return path.resolve(`reports/packing-${day}-${shortOrg}.csv`);
 }
 
-async function backfillTodayEnrichment(pool: pg.Pool, orgId: string, day: string): Promise<number> {
+async function backfillDayEnrichment(pool: pg.Pool, orgId: string, day: string): Promise<number> {
   const found = await pool.query<{ id: number }>(
     `SELECT sal.id
        FROM station_activity_logs sal
@@ -81,23 +95,55 @@ async function main() {
 
   try {
     if (BACKFILL) {
-      const n = await backfillTodayEnrichment(pool, ORG_ID, DAY);
-      console.log(`Backfilled packer_log_enrichment for ${n} PACK scan(s) on ${DAY}.`);
+      const days =
+        DAY_COUNT > 1
+          ? await listRecentFilledPackDays(ORG_ID as OrgId, DAY_COUNT, DAY)
+          : [DAY];
+      let total = 0;
+      for (const day of days) {
+        total += await backfillDayEnrichment(pool, ORG_ID, day);
+      }
+      console.log(`Backfilled packer_log_enrichment for ${total} PACK scan(s) across ${days.length} filled day(s).`);
     }
 
-    const summary = await getPackingKpisForDay(ORG_ID as OrgId, DAY);
-    const csv = packerKpiSummaryToCsv(summary);
+    const summary =
+      DAY_COUNT > 1
+        ? await getPackingKpisForLastFilledDays(ORG_ID as OrgId, DAY_COUNT, DAY)
+        : await getPackingKpisForDay(ORG_ID as OrgId, DAY);
     const outPath = outArg ? path.resolve(outArg.slice('--out='.length)) : defaultOutPath(ORG_ID, DAY);
+    const formatFlag = formatArg?.slice('--format='.length).trim().toLowerCase();
+    const format =
+      formatFlag === 'txt' || formatFlag === 'rtf' || formatFlag === 'csv'
+        ? formatFlag
+        : inferDocumentFormatFromPath(outPath);
+
+    const content =
+      format === 'csv'
+        ? packerKpiSummaryToCsv(summary as Awaited<ReturnType<typeof getPackingKpisForDay>>)
+        : DAY_COUNT > 1
+          ? packerKpiPeriodToDocument(summary as Awaited<ReturnType<typeof getPackingKpisForLastFilledDays>>, format)
+          : packerKpiSummaryToDocument(summary as Awaited<ReturnType<typeof getPackingKpisForDay>>, format);
 
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
-    fs.writeFileSync(outPath, csv, 'utf8');
+    fs.writeFileSync(outPath, content, 'utf8');
 
     console.log(`Packing KPI report written: ${outPath}`);
-    console.log(`  Day (PST):     ${summary.day}`);
-    console.log(`  Packers:       ${summary.by_packer.length}`);
-    console.log(`  Totals:        small=${summary.totals.small_count} medium=${summary.totals.medium_count} large=${summary.totals.large_count}`);
-    console.log(`  Weighted min:  ${summary.totals.weighted_minutes} / ${summary.capacity.daily_capacity_minutes} team capacity`);
-    console.log(`  Workday min:   ${summary.capacity.workday_minutes} per packer (% of day denominator)`);
+    if (DAY_COUNT > 1) {
+      const period = summary as Awaited<ReturnType<typeof getPackingKpisForLastFilledDays>>;
+      console.log(`  Pack days:     ${period.filled_day_count} (${period.start_day} → ${period.end_day})`);
+      console.log(`  Total boxes:   ${period.totals.total_boxes_packed}`);
+      console.log(`  Weighted min:  ${period.totals.weighted_minutes}`);
+      console.log(`  Packers:       ${period.by_packer.length}`);
+      return;
+    }
+
+    const daySummary = summary as Awaited<ReturnType<typeof getPackingKpisForDay>>;
+    console.log(`  Day (PST):     ${daySummary.day}`);
+    console.log(`  Total boxes:   ${daySummary.totals.total_boxes_packed}`);
+    console.log(`  Packers:       ${daySummary.by_packer.length}`);
+    console.log(`  Totals:        small=${daySummary.totals.small_count} medium=${daySummary.totals.medium_count} large=${daySummary.totals.large_count}`);
+    console.log(`  Weighted min:  ${daySummary.totals.weighted_minutes} / ${daySummary.capacity.daily_capacity_minutes} team capacity`);
+    console.log(`  Workday min:   ${daySummary.capacity.workday_minutes} per packer (% of day denominator)`);
   } finally {
     await pool.end();
   }

@@ -11,6 +11,21 @@
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { AssistantToolCtx, AssistantToolDef, AssistantToolDeps, AssistantToolRunResult } from './types';
 import {
+  getAssignments,
+  getMyTechQueue,
+  getOperationsJourney,
+  getOrderLookup,
+  getPackingKpi,
+  getReceivingByTracking,
+  getTicketEntities,
+  listSupportFollowups,
+  listWarrantyClaims,
+  lookupSerial,
+  lookupWarrantyCoverage,
+  searchPhotosTool,
+} from './domain-read-tools';
+import {
+  exactIdSerialSearch,
   getBenchmarks,
   getChatHistory,
   getFeedState,
@@ -21,6 +36,8 @@ import {
   getSignalsByNode,
   getTopReasons,
   getUnitJourney,
+  hybridEntitySearch,
+  resolveSupportTicket,
   searchNotes,
 } from './read-tools';
 
@@ -36,6 +53,21 @@ const READ_TOOLS: ReadonlyArray<AssistantToolDef<any, unknown>> = [
   searchNotes,
   getMutationHistory,
   getChatHistory,
+  hybridEntitySearch,
+  exactIdSerialSearch,
+  resolveSupportTicket,
+  getOperationsJourney,
+  getOrderLookup,
+  lookupSerial,
+  lookupWarrantyCoverage,
+  listWarrantyClaims,
+  getAssignments,
+  getMyTechQueue,
+  listSupportFollowups,
+  searchPhotosTool,
+  getReceivingByTracking,
+  getTicketEntities,
+  getPackingKpi,
 ];
 
 export const ASSISTANT_TOOLS: ReadonlyMap<string, AssistantToolDef<any, unknown>> = new Map(

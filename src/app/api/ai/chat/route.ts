@@ -4,15 +4,13 @@
  * (NousResearch/hermes-agent), reached from Vercel via Cloudflare tunnel.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { buildContextBlock } from '@/lib/ai/context-fetchers';
-import { buildSearchContextBlock } from '@/lib/ai/search-context';
-import { detectIntents, extractParams } from '@/lib/ai/intent-router';
-import { formatAnalysisForPrompt, resolveLocalAiAnswer } from '@/lib/ai/ops-assistant';
+import { detectIntents } from '@/lib/ai/intent-router';
 import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
 import { checkRateLimit } from '@/lib/api-guard';
 import { persistChatMessage } from '@/lib/ai/chat-persistence';
 import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
 import type { AiChatRouteResponse, AiStructuredAnswer } from '@/lib/ai/types';
+import { enrichAssistantTurn } from '@/lib/assistant/enrich-turn';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
@@ -58,10 +56,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // Persist user message (fire-and-forget)
     void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'user', content: trimmedMessage });
 
-    // 1. Try local ops resolution first (deterministic DB queries — no model needed)
-    const localResolution = await resolveLocalAiAnswer(trimmedMessage);
+    // 1. Shared pre-loop: local_ops short-circuit OR live DB enrichment
+    //    (same module as /api/assistant/chat — Sparkles parity).
+    const prepared = await enrichAssistantTurn(ctx.organizationId, trimmedMessage);
 
-    if (localResolution?.mode === 'local_ops') {
+    if (prepared.kind === 'local_ops') {
+      const localResolution = prepared.resolution;
       console.info('[ai-chat] local ops answer', {
         kind: localResolution.analysis.kind,
         title: localResolution.analysis.title,
@@ -78,11 +78,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json(localPayload);
     }
 
-    // 2. Intent detection + context enrichment from live DB data
-    const intents = detectIntents(trimmedMessage);
-    const params = extractParams(trimmedMessage, intents);
+    const intents = prepared.intents.length > 0 ? prepared.intents : detectIntents(trimmedMessage);
 
-    // 2b. Bose manual RAG intercept — routes through rag.michaelgarisek.com tunnel
+    // 2. Bose manual RAG intercept — Hermes-only; routes through rag tunnel
     if (intents.includes('bose_manual')) {
       try {
         const ragResult = await queryNemoClawRag(trimmedMessage);
@@ -133,32 +131,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
     }
 
-    let enrichedMessage = trimmedMessage;
-    if (localResolution?.analysis) {
-      enrichedMessage =
-        `[Structured USAV ops data]\n${formatAnalysisForPrompt(localResolution.analysis)}\n\nUser question: ${trimmedMessage}`;
-    }
-    // Intent context + hybrid entity search run in parallel; each is
-    // independently non-fatal (degrade-not-fail — the reply must never
-    // depend on an enrichment source).
-    const [contextBlock, searchBlock] = await Promise.all([
-      intents.length > 0
-        ? buildContextBlock(intents, params, ctx.organizationId).catch((err) => {
-            console.error('[ai-chat] context fetch error (non-fatal):', err);
-            return null;
-          })
-        : Promise.resolve(null),
-      // Phase 2c (AI search plan §7.2): the same hybridSearch behind ⌘K
-      // grounds "find/where/which" questions in real org-scoped hits.
-      buildSearchContextBlock(ctx.organizationId, trimmedMessage),
-    ]);
-    if (contextBlock || searchBlock) {
-      const blocks = [contextBlock, searchBlock].filter(Boolean).join('\n\n');
-      enrichedMessage =
-        `[Live USAV data - ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PST]\n` +
-        blocks +
-        `\n\nUser question: ${trimmedMessage}`;
-    }
+    const enrichedMessage = prepared.userMessage;
 
     // 3. Send to local Hermes gateway. Hermes loads our skills (00/10/40),
     // injects business context, and may call our Python tool CLI via its
@@ -180,10 +153,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           {
             role: 'system',
             content:
-              'You are the USAV Ops Assistant embedded in the operations app. ' +
-              'Staff at a 5-person shop ask about orders, stock, staff pace, ' +
-              'receiving, and repairs. Keep answers concrete and numeric, 1-4 ' +
-              'sentences. Use ISO Pacific dates. Call tools for fresh data.',
+              'You are the Cycle Forge operations assistant. Staff ask about ' +
+              'orders, stock, staff pace, receiving, and repairs. Keep answers ' +
+              'concrete and numeric, 1-4 sentences. Use ISO Pacific dates. ' +
+              'Call tools for fresh data.',
           },
           { role: 'user', content: enrichedMessage },
         ],
