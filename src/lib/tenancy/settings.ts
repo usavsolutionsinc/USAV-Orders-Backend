@@ -101,6 +101,27 @@ export const OrgSettingsSchema = z.object({
       enforcement: z.enum(['advisory', 'block_until_matched']).default('advisory'),
     })
     .default({ enforcement: 'advisory' }),
+  // Per-org photo AI-analysis engine. Each org chooses which inference path runs
+  // when a photo is enriched into photo_analysis (see src/lib/photos/analyze.ts):
+  //   'local-vision' — the org's own RTX 5070 Ti vision box (LAN/Cloudflare-tunnel);
+  //                    photos never leave the building. THE LOCAL-FIRST DEFAULT.
+  //   'hermes'       — the self-hosted text gateway infers metadata from PO context.
+  //   'gcp-vision'   — Google Cloud Vision (photos uploaded to Google).
+  //   'catalog'      — no model; deterministic PO-derived metadata only.
+  // `enabled` is the per-org master switch (the global PHOTOS_ANALYZE_ENABLED env is
+  // the fallback when an org hasn't set one). `localVisionBaseUrl` is the
+  // SERVER-reachable base URL of the org's vision box (the cron analyze job runs on
+  // Vercel and can't reach the LAN, so this must be the Cloudflare-tunnel URL, not the
+  // browser's LAN `NEXT_PUBLIC_VISION_BASE_URL`); empty falls back to the env default.
+  // `provider`/`enabled` are intentionally OPTIONAL (no zod default) so a resolver can
+  // tell "org explicitly chose X" from "unset → use env/local-first default".
+  photoAnalysis: z
+    .object({
+      provider: z.enum(['hermes', 'gcp-vision', 'local-vision', 'catalog']).optional(),
+      enabled: z.boolean().optional(),
+      localVisionBaseUrl: z.string().default(''),
+    })
+    .default({ localVisionBaseUrl: '' }),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
@@ -142,6 +163,13 @@ export type PackingEnforcement = OrgSettings['packing']['enforcement'];
 
 export function getPackingEnforcement(settings: OrgSettings): PackingEnforcement {
   return settings.packing?.enforcement ?? 'advisory';
+}
+
+/** Per-org photo-analysis settings (see OrgSettingsSchema.photoAnalysis). */
+export type PhotoAnalysisSettings = OrgSettings['photoAnalysis'];
+
+export function getPhotoAnalysisSettings(settings: OrgSettings): PhotoAnalysisSettings {
+  return settings.photoAnalysis ?? { localVisionBaseUrl: '' };
 }
 
 export type NasStorageTargetKey = keyof typeof DEFAULT_NAS_STORAGE_TARGETS;

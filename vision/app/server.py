@@ -16,6 +16,7 @@ app = FastAPI(title="USAV Vision", version="0.1.0")
 
 # Lazy singleton — EasyOCR + models load on first /identify-label call, not at import.
 _label_identifier = None
+_photo_analyzer = None
 
 
 def get_label_identifier():
@@ -27,6 +28,16 @@ def get_label_identifier():
         use_gpu = device != "cpu"  # "auto"/"cuda" -> GPU; EasyOCR falls back if absent
         _label_identifier = LabelIdentifier(gpu=use_gpu)
     return _label_identifier
+
+
+def get_photo_analyzer():
+    """Shared PhotoAnalyzer — reuses the loaded DINOv2 engine + EasyOCR reader."""
+    global _photo_analyzer
+    if _photo_analyzer is None:
+        from .analyze import PhotoAnalyzer
+
+        _photo_analyzer = PhotoAnalyzer(get_engine(), get_label_identifier())
+    return _photo_analyzer
 
 app.add_middleware(
     CORSMiddleware,
@@ -89,6 +100,23 @@ async def identify_label(
     image = await _read_image(file)
     result = get_label_identifier().identify(image, strict=strict)
     return result
+
+
+@app.post("/analyze")
+async def analyze(
+    file: UploadFile = File(...),
+    x_vision_token: str | None = Header(default=None),
+) -> dict:
+    """Enrich a photo into catalog/claim metadata, on-prem. Returns the same shape
+    as the cloud GCP-Vision path (`src/lib/photos/analyze.ts`):
+    { ocr_text, labels, damage_detected, damage_notes, caption }. Used by the Vercel
+    photo-analysis cron when an org selects the 'local-vision' provider, so its photos
+    never leave the building. OCR (EasyOCR) + product labels (DINOv2 index) only — no
+    new model loaded.
+    """
+    _check_token(x_vision_token)
+    image = await _read_image(file)
+    return get_photo_analyzer().analyze(image)
 
 
 @app.post("/enroll")

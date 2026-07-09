@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
   isNotConfigured,
@@ -15,6 +15,7 @@ import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewer
 import { SupportChatHeader } from './SupportChatHeader';
 import { SupportChatThread } from './SupportChatThread';
 import { SupportChatComposer } from './SupportChatComposer';
+import { SupportSuggestionPanel } from './SupportSuggestionPanel';
 import { SupportLinkedContext } from './SupportLinkedContext';
 import { requesterFrom, requesterLabel } from './support-chat-utils';
 
@@ -56,6 +57,19 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
 
   const gallery = usePhotoGallery({ photos: photoUrls, showCopyLinks: false });
   const { openViewer } = gallery;
+
+  // Draft seeded into the composer when the agent accepts an AI suggestion.
+  const [seed, setSeed] = useState<{ text: string; token: number } | null>(null);
+
+  // The customer's latest message — what the AI drafts a reply to. Falls back to
+  // the ticket's opening description if there are no customer comments yet.
+  const question = useMemo(() => {
+    const requesterId = (ticket as { requester_id?: number } | null)?.requester_id;
+    const fromCustomer = (commentsData?.comments ?? []).filter((c) => c.author_id === requesterId);
+    const last = fromCustomer[fromCustomer.length - 1];
+    const text = last?.body || (ticket as { description?: string } | null)?.description || '';
+    return text.trim();
+  }, [commentsData, ticket]);
 
   const onOpenPhoto = useCallback(
     (url: string) => {
@@ -103,7 +117,18 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
         />
         <SupportLinkedContext ticketId={ticketId} onOpenPhoto={onOpenPhoto} />
       </div>
-      <SupportChatComposer ticketId={ticketId} requesterEmail={requester.email} />
+      <SupportSuggestionPanel
+        ticketId={ticketId}
+        subject={(ticket as { subject?: string }).subject}
+        question={question}
+        onUse={(text) => setSeed({ text, token: Date.now() })}
+      />
+      <SupportChatComposer
+        ticketId={ticketId}
+        requesterEmail={requester.email}
+        seedBody={seed?.text}
+        seedToken={seed?.token}
+      />
 
       {/* Shared fullscreen viewer for every photo on this ticket. */}
       <AnimatePresence>

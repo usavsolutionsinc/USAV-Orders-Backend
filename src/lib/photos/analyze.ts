@@ -2,20 +2,23 @@ import pool from '@/lib/db';
 import { readPhotoBytesById } from './read-bytes';
 import { hermesToolCall } from '@/lib/ai/hermes-tool-call';
 import { getHermesApiUrl } from '@/lib/ai/hermes-client';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { getPhotoAnalysisSettings } from '@/lib/tenancy/settings';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { resolvePhotoAnalyzeProvider, resolvePhotoAnalyzeEnabled } from './analyze-provider';
+import { analyzeWithLocalVision, resolveLocalVisionConfig } from './local-vision-client';
+import { DAMAGE_KEYWORDS, type PhotoAnalysisMetadata } from './analyze-types';
+import {
+  analyzePhoto as analyzePhotoCore,
+  type AnalyzePhotoDeps,
+  type PhotoAnalyzeContext,
+} from './analyze-core';
 
-export interface PhotoAnalysisMetadata {
-  ocr_text: string[];
-  labels: string[];
-  damage_detected: boolean;
-  damage_notes: string | null;
-  caption: string;
-}
+export type { PhotoAnalysisMetadata } from './analyze-types';
+export type { PhotoAnalyzeProvider } from './analyze-provider';
+export type { AnalyzePhotoDeps, PhotoAnalyzeContext } from './analyze-core';
 
-const DAMAGE_KEYWORDS = ['damage', 'damaged', 'tear', 'dent', 'crack', 'broken', 'crumpled'];
-
-export type PhotoAnalyzeProvider = 'hermes' | 'vision' | 'catalog';
-
-/** Off unless PHOTOS_ANALYZE_ENABLED=true. */
+/** Off unless PHOTOS_ANALYZE_ENABLED=true (the deployment-wide default). */
 export function isAnalyzeEnabled(): boolean {
   return (process.env.PHOTOS_ANALYZE_ENABLED || 'false').toLowerCase() === 'true';
 }
@@ -25,10 +28,21 @@ export function isAnalyzeOnUploadEnabled(): boolean {
   return (process.env.PHOTOS_ANALYZE_ON_UPLOAD || 'false').toLowerCase() === 'true';
 }
 
-export function getAnalyzeProvider(): PhotoAnalyzeProvider {
-  const raw = (process.env.PHOTOS_ANALYZE_PROVIDER || 'hermes').toLowerCase();
-  if (raw === 'vision' || raw === 'catalog') return raw;
-  return 'hermes';
+/**
+ * Whether analysis is enabled for a specific org — the per-org `photoAnalysis.enabled`
+ * flag wins, falling back to the deployment-wide env switch. Used by the job runner so
+ * an org that opted out is never analyzed even if another org on the same deploy is on.
+ */
+export async function isAnalyzeEnabledForOrg(organizationId: string): Promise<boolean> {
+  try {
+    const org = await getOrganization(organizationId as OrgId);
+    return resolvePhotoAnalyzeEnabled(
+      org ? getPhotoAnalysisSettings(org.settings) : undefined,
+      isAnalyzeEnabled(),
+    );
+  } catch {
+    return isAnalyzeEnabled();
+  }
 }
 
 function isGcpVisionConfigured(): boolean {
@@ -138,24 +152,12 @@ async function analyzeWithHermes(input: {
   }
 }
 
-function analyzeFromCatalog(input: {
-  poRef: string | null;
-  photoType: string | null;
-}): PhotoAnalysisMetadata {
-  const ocr = input.poRef ? [`PO ${input.poRef}`] : [];
-  return {
-    ocr_text: ocr,
-    labels: [input.photoType || 'receiving'],
-    damage_detected: false,
-    damage_notes: null,
-    caption: input.poRef ? `Photo for PO ${input.poRef}` : 'Operations photo',
-  };
-}
+// ─── Server bindings for the pure orchestration in analyze-core.ts ──────────
 
-export async function analyzePhoto(input: {
-  photoId: number;
-  organizationId: string;
-}): Promise<PhotoAnalysisMetadata> {
+async function loadContextFromDb(
+  photoId: number,
+  organizationId: string,
+): Promise<PhotoAnalyzeContext | null> {
   const photoRes = await pool.query<{
     po_ref: string | null;
     photo_type: string | null;
@@ -166,39 +168,33 @@ export async function analyzePhoto(input: {
               WHERE l.photo_id = p.id AND l.link_role = 'primary'
               ORDER BY l.id ASC LIMIT 1) AS entity_type
        FROM photos p WHERE p.id = $1 AND p.organization_id = $2`,
-    [input.photoId, input.organizationId],
+    [photoId, organizationId],
   );
   const row = photoRes.rows[0];
-  if (!row) throw new Error('Photo not found');
+  if (!row) return null;
 
-  const provider = getAnalyzeProvider();
-  let metadata: PhotoAnalysisMetadata | null = null;
-  let model = 'catalog-fallback';
+  const org = await getOrganization(organizationId as OrgId);
+  const photoSettings = org ? getPhotoAnalysisSettings(org.settings) : undefined;
+  const provider = resolvePhotoAnalyzeProvider(photoSettings, process.env.PHOTOS_ANALYZE_PROVIDER);
+  const localVisionConfig =
+    provider === 'local-vision' ? resolveLocalVisionConfig(photoSettings) : null;
 
-  if (provider === 'vision') {
-    const bytes = await readPhotoBytesById(input.photoId, input.organizationId);
-    if (bytes) metadata = await analyzeWithVision(Buffer.from(bytes.bytes));
-    if (metadata) model = 'gcp-vision';
-  } else if (provider === 'hermes') {
-    const hermes = await analyzeWithHermes({
-      poRef: row.po_ref,
-      photoType: row.photo_type,
-      entityType: row.entity_type,
-    });
-    if (hermes) {
-      metadata = hermes.metadata;
-      model = hermes.model;
-    }
-  }
+  return {
+    poRef: row.po_ref,
+    photoType: row.photo_type,
+    entityType: row.entity_type,
+    provider,
+    localVisionConfig,
+  };
+}
 
-  if (!metadata) {
-    metadata = analyzeFromCatalog({
-      poRef: row.po_ref,
-      photoType: row.photo_type,
-    });
-    model = 'catalog-fallback';
-  }
-
+/** Archive the prior enrichment (if any) then upsert the latest 1:1 row. */
+async function persistToDb(args: {
+  photoId: number;
+  organizationId: string;
+  model: string;
+  metadata: PhotoAnalysisMetadata;
+}): Promise<void> {
   // Archive prior enrichment before replacing the latest row (skip if migration pending).
   try {
     await pool.query(
@@ -206,7 +202,7 @@ export async function analyzePhoto(input: {
        SELECT a.photo_id, a.organization_id, a.model, a.metadata, a.analyzed_at
          FROM photo_analysis a
         WHERE a.photo_id = $1`,
-      [input.photoId],
+      [args.photoId],
     );
   } catch (err: unknown) {
     const code = (err as { code?: string }).code;
@@ -221,19 +217,45 @@ export async function analyzePhoto(input: {
            metadata = EXCLUDED.metadata,
            analyzed_at = NOW(),
            error_message = NULL`,
-    [input.photoId, input.organizationId, model, JSON.stringify(metadata)],
+    [args.photoId, args.organizationId, args.model, JSON.stringify(args.metadata)],
   );
-
-  return metadata;
 }
 
-export async function runAnalyzeJob(job: {
-  id: number;
-  photoId: number;
-  organizationId: string;
-}): Promise<void> {
-  if (!isAnalyzeEnabled()) {
-    throw new Error('Photo analysis is disabled (PHOTOS_ANALYZE_ENABLED=false)');
+const defaultDeps: AnalyzePhotoDeps = {
+  loadContext: loadContextFromDb,
+  readBytes: async (photoId, organizationId) => {
+    const b = await readPhotoBytesById(photoId, organizationId);
+    return b ? { bytes: b.bytes, filename: b.filename } : null;
+  },
+  runHermes: analyzeWithHermes,
+  runGcpVision: analyzeWithVision,
+  runLocalVision: analyzeWithLocalVision,
+  persist: persistToDb,
+};
+
+/**
+ * Enrich one photo into `photo_analysis`, routing to the provider THIS ORG chose.
+ * Thin wrapper over the pure `analyzePhoto` in analyze-core.ts with the real DB /
+ * provider Deps bound. Any provider returning null degrades to deterministic
+ * catalog metadata — analysis never throws on a missing model or unreachable box.
+ */
+export function analyzePhoto(
+  input: { photoId: number; organizationId: string },
+  deps: AnalyzePhotoDeps = defaultDeps,
+): Promise<PhotoAnalysisMetadata> {
+  return analyzePhotoCore(input, deps);
+}
+
+export async function runAnalyzeJob(
+  job: {
+    id: number;
+    photoId: number;
+    organizationId: string;
+  },
+  deps: AnalyzePhotoDeps = defaultDeps,
+): Promise<void> {
+  if (!(await isAnalyzeEnabledForOrg(job.organizationId))) {
+    throw new Error('Photo analysis is disabled for this org (PHOTOS_ANALYZE_ENABLED / per-org)');
   }
-  await analyzePhoto({ photoId: job.photoId, organizationId: job.organizationId });
+  await analyzePhotoCore({ photoId: job.photoId, organizationId: job.organizationId }, deps);
 }

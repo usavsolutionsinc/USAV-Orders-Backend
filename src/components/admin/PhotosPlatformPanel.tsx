@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
+import { PhotoAnalysisProviderPanel } from './PhotoAnalysisProviderPanel';
 
 interface PhotosStats {
   totals: {
@@ -90,6 +91,8 @@ export function PhotosPlatformPanel() {
           </div>
         ))}
       </div>
+
+      <PhotoAnalysisProviderPanel />
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import { strictEqual, deepStrictEqual } from 'node:assert';
-import { parseOrgSettings } from './settings';
+import { parseOrgSettings, getPhotoAnalysisSettings } from './settings';
 
 test('returns defaults for null/undefined/empty input', () => {
   const fromNull = parseOrgSettings(null);
@@ -47,4 +47,28 @@ test('falls back to defaults when input is malformed', () => {
 test('passthrough preserves unknown keys', () => {
   const s = parseOrgSettings({ timezone: 'UTC', customKey: 'preserved' });
   deepStrictEqual((s as { customKey?: string }).customKey, 'preserved');
+});
+
+test('photoAnalysis: unset leaves provider/enabled undefined (resolver decides default)', () => {
+  const s = parseOrgSettings({});
+  const pa = getPhotoAnalysisSettings(s);
+  strictEqual(pa.provider, undefined);
+  strictEqual(pa.enabled, undefined);
+  strictEqual(pa.localVisionBaseUrl, '');
+});
+
+test('photoAnalysis: a valid explicit provider is preserved', () => {
+  const s = parseOrgSettings({
+    photoAnalysis: { provider: 'local-vision', enabled: true, localVisionBaseUrl: 'https://vision.example' },
+  });
+  const pa = getPhotoAnalysisSettings(s);
+  strictEqual(pa.provider, 'local-vision');
+  strictEqual(pa.enabled, true);
+  strictEqual(pa.localVisionBaseUrl, 'https://vision.example');
+});
+
+test('photoAnalysis: a bogus provider falls the whole settings parse back to defaults', () => {
+  // enum violation → safeParse fails → defaults; provider unset, not crashed.
+  const s = parseOrgSettings({ photoAnalysis: { provider: 'midjourney' } });
+  strictEqual(getPhotoAnalysisSettings(s).provider, undefined);
 });

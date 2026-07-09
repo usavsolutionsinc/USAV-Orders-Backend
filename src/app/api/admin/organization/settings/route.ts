@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getOrganization, updateOrgSettings } from '@/lib/tenancy/organizations';
-import { DEFAULT_NAS_STORAGE_TARGETS, type OrgSettings } from '@/lib/tenancy/settings';
+import {
+  DEFAULT_NAS_STORAGE_TARGETS,
+  getPhotoAnalysisSettings,
+  type OrgSettings,
+} from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { syncAgentRootsFromSettings } from '@/lib/nas-agent-client';
+import { normalizeProvider } from '@/lib/photos/analyze-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,10 +27,20 @@ export const dynamic = 'force-dynamic';
  */
 export const GET = withAuth(async (_req: NextRequest, ctx) => {
   const org = await getOrganization(ctx.organizationId as OrgId);
+  const photoAnalysis = org
+    ? getPhotoAnalysisSettings(org.settings)
+    : { localVisionBaseUrl: '' };
   return NextResponse.json({
     stationNasPhotoFolders: org?.settings.stationNasPhotoFolders ?? {},
     nasPhotoServers: org?.settings.nasPhotoServers ?? { test: '', prod: '', active: 'prod' },
     nasStorageTargets: org?.settings.nasStorageTargets ?? DEFAULT_NAS_STORAGE_TARGETS,
+    photoAnalysis: {
+      // null provider/enabled means "inherit the deployment default" — the UI shows
+      // that as the local-first default until the org explicitly picks.
+      provider: photoAnalysis.provider ?? null,
+      enabled: photoAnalysis.enabled ?? null,
+      localVisionBaseUrl: photoAnalysis.localVisionBaseUrl ?? '',
+    },
   });
 }, { permission: 'admin.view' });
 
@@ -122,9 +137,63 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     };
   }
 
+  // ── photoAnalysis (per-org AI-analysis engine choice) ───────────────────
+  if ('photoAnalysis' in body) {
+    const raw = (body as Record<string, unknown>).photoAnalysis;
+    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+      return NextResponse.json(
+        { error: 'photoAnalysis must be an object of { provider, enabled, localVisionBaseUrl }' },
+        { status: 400 },
+      );
+    }
+    const r = raw as Record<string, unknown>;
+    // jsonb `||` replaces the whole photoAnalysis key, so merge over the CURRENT
+    // value — a partial patch (e.g. just the URL) must not clobber provider/enabled.
+    const currentOrg = await getOrganization(ctx.organizationId as OrgId);
+    const current = currentOrg ? getPhotoAnalysisSettings(currentOrg.settings) : { localVisionBaseUrl: '' };
+    const next: Record<string, unknown> = {
+      ...(current.provider ? { provider: current.provider } : {}),
+      ...(typeof current.enabled === 'boolean' ? { enabled: current.enabled } : {}),
+      localVisionBaseUrl: current.localVisionBaseUrl ?? '',
+    };
+
+    if ('provider' in r) {
+      if (r.provider === null) {
+        delete next.provider; // clear → inherit deployment default
+      } else {
+        const provider = normalizeProvider(typeof r.provider === 'string' ? r.provider : null);
+        if (!provider) {
+          return NextResponse.json(
+            { error: 'provider must be one of local-vision | hermes | gcp-vision | catalog' },
+            { status: 400 },
+          );
+        }
+        next.provider = provider;
+      }
+    }
+
+    if ('enabled' in r) {
+      if (r.enabled !== null && typeof r.enabled !== 'boolean') {
+        return NextResponse.json({ error: 'enabled must be a boolean or null' }, { status: 400 });
+      }
+      if (r.enabled === null) delete next.enabled;
+      else next.enabled = r.enabled;
+    }
+
+    if ('localVisionBaseUrl' in r) {
+      // Server-reachable tunnel URL the cron uses; must be http(s) or empty.
+      next.localVisionBaseUrl = cleanNasUrl(r.localVisionBaseUrl);
+    }
+
+    patch.photoAnalysis = next;
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(
-      { error: 'Provide stationNasPhotoFolders, nasPhotoServers, and/or nasStorageTargets' },
+      {
+        error:
+          'Provide stationNasPhotoFolders, nasPhotoServers, nasStorageTargets, and/or photoAnalysis',
+      },
       { status: 400 },
     );
   }

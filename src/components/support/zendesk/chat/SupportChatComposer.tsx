@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Globe, Lock, Mail, Paperclip, Send, X } from '@/components/Icons';
 import { Button } from '@/design-system/primitives';
 import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
@@ -26,11 +26,25 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function SupportChatComposer({
   ticketId,
   requesterEmail,
+  seedBody,
+  seedToken,
 }: {
   ticketId: number;
   requesterEmail?: string | null;
+  /** Draft text to drop into the editor (e.g. an accepted AI suggestion). */
+  seedBody?: string;
+  /** Bump this to re-apply seedBody even if the text is unchanged. */
+  seedToken?: number;
 }) {
   const [body, setBody] = useState('');
+
+  // Populate the editor when the parent seeds a draft (AI "Use draft"). Keyed on
+  // seedToken so re-using the same text still applies; never clobbers ongoing typing
+  // unless the agent explicitly accepts a new suggestion.
+  useEffect(() => {
+    if (seedBody) setBody(seedBody);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedToken]);
   const [isPublic, setIsPublic] = useState(true);
   const [files, setFiles] = useState<Added[]>([]);
   const [ccs, setCcs] = useState<string[]>([]);

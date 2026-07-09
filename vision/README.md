@@ -65,8 +65,16 @@ uvicorn vision.app.server:app --host 0.0.0.0 --port 8700
 
 - `GET  /health`   → model + index status
 - `POST /identify` (multipart `file=@photo.jpg`) → `{ candidates: [{ sku, score }] }`
+- `POST /identify-label` (multipart `file=@label.jpg`) → `{ model, raw_text, ... }`
+- `POST /analyze`  (multipart `file=@photo.jpg`) → `{ ocr_text, labels, damage_detected, damage_notes, caption }`
 - `POST /enroll`   (multipart `sku=...&file=@a.jpg&file=@b.jpg`) → appends to index
 - `POST /reindex`  → rebuild the index from `data/reference/`
+
+`/analyze` is the **local counterpart to cloud GCP Vision** — it returns the exact
+`PhotoAnalysisMetadata` shape the Next app's `src/lib/photos/analyze.ts` writes into
+`photo_analysis`. An org selects it per-tenant via the `local-vision` provider so its
+photos never leave the building (the Vercel cron reaches the box over its Cloudflare
+tunnel + `x-vision-token`). OCR (EasyOCR) + product labels (DINOv2 index), no new model.
 
 Quick test:
 
