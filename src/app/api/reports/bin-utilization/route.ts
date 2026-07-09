@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
-export async function GET(req: NextRequest) {
+// `mv_bin_utilization` is a cross-tenant materialized view (it has no
+// organization_id column). Re-scope it the same way the velocity/dead-stock
+// reports do: join the org-bearing base table (`locations`, keyed by
+// bin_id = locations.id) and filter on the caller's org. Wrapped in withAuth
+// so it can no longer be reached unauthenticated.
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(
@@ -11,29 +17,36 @@ export async function GET(req: NextRequest) {
     const room = searchParams.get('room');
     const minFill = searchParams.get('minFill');
 
-    const clauses: string[] = [];
     const params: unknown[] = [];
+    // $1 is always the org id (threaded into the join predicate below).
+    params.push(ctx.organizationId);
+    const orgIdx = params.length;
+
+    const clauses: string[] = [];
     if (room) {
       params.push(room);
-      clauses.push(`room = $${params.length}`);
+      clauses.push(`mv.room = $${params.length}`);
     }
     if (minFill) {
       const v = Number(minFill);
       if (Number.isFinite(v)) {
         params.push(v);
-        clauses.push(`(fill_ratio IS NOT NULL AND fill_ratio >= $${params.length})`);
+        clauses.push(`(mv.fill_ratio IS NOT NULL AND mv.fill_ratio >= $${params.length})`);
       }
     }
     params.push(limit);
-    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const where = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : '';
 
-    const r = await pool.query(
-      `SELECT bin_id, bin_name, barcode, room, row_label, col_label,
-              capacity, in_bin, fill_ratio, sku_count
-       FROM mv_bin_utilization
-       ${where}
-       ORDER BY fill_ratio DESC NULLS LAST, in_bin DESC
-       LIMIT $${params.length}`,
+    const r = await tenantQuery(
+      ctx.organizationId,
+      `SELECT mv.bin_id, mv.bin_name, mv.barcode, mv.room, mv.row_label, mv.col_label,
+              mv.capacity, mv.in_bin, mv.fill_ratio, mv.sku_count
+         FROM mv_bin_utilization mv
+         JOIN locations loc ON loc.id = mv.bin_id
+        WHERE loc.organization_id = $${orgIdx}
+          ${where}
+        ORDER BY mv.fill_ratio DESC NULLS LAST, mv.in_bin DESC
+        LIMIT $${params.length}`,
       params,
     );
     return NextResponse.json({ success: true, rows: r.rows });
@@ -44,4 +57,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'reports.view' });

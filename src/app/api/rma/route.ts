@@ -25,7 +25,7 @@ export const GET = withAuth(async (_request, ctx) => {
     console.error('[GET /api/rma] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'orders.view' });
+}, { permission: 'rma.view' });
 
 /**
  * POST /api/rma
@@ -83,4 +83,4 @@ export const POST = withAuth(async (request, ctx) => {
     console.error('[POST /api/rma] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'orders.view' });
+}, { permission: 'rma.manage' });

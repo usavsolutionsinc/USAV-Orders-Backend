@@ -124,6 +124,14 @@ export interface MobileFeedQueryOptions<T> {
   queryFn: () => Promise<T[]>;
   /** ms before a cached result is considered stale (default 20s — snappy tab switches). */
   staleTime?: number;
+  /**
+   * Forwarded to TanStack Query. Default (undefined → `true`) refetches on mount
+   * only when stale. Pass `'always'` for feeds whose capture flow navigates to a
+   * separate route and back — the realtime push fires while this list is
+   * unmounted, so a guaranteed remount refetch is the reconciliation path
+   * (e.g. /m/receiving's photo `×N` badge).
+   */
+  refetchOnMount?: boolean | 'always';
   enabled?: boolean;
   realtime?: {
     /** Forwarded to useRealtimeInvalidation, e.g. { receiving: true }. */
@@ -146,7 +154,7 @@ export interface MobileFeedQuery<T> {
  * instant) plus the realtime fan-in each feed needs. Returns a plain array.
  */
 export function useMobileFeedQuery<T>(opts: MobileFeedQueryOptions<T>): MobileFeedQuery<T> {
-  const { queryKey, queryFn, staleTime = 20_000, enabled = true, realtime } = opts;
+  const { queryKey, queryFn, staleTime = 20_000, refetchOnMount, enabled = true, realtime } = opts;
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery<T[]>({
@@ -154,6 +162,7 @@ export function useMobileFeedQuery<T>(opts: MobileFeedQueryOptions<T>): MobileFe
     queryFn,
     staleTime,
     enabled,
+    refetchOnMount,
     refetchOnWindowFocus: true,
   });
 

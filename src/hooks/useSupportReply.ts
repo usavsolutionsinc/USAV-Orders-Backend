@@ -21,6 +21,10 @@ export interface SupportReplyVars {
   body: string;
   isPublic: boolean;
   files?: File[];
+  /** Library photo ids (already uploaded to GCS) to attach to the comment. */
+  photoIds?: number[];
+  /** Preview urls for the staged photos, used only for the optimistic echo. */
+  attachmentPreviews?: { url: string; thumbUrl?: string }[];
   /** CC collaborator emails (public replies only). */
   emailCcs?: string[];
   /** Formatted HTML for the customer email (rendered from the markdown body). */
@@ -35,7 +39,7 @@ export function useSupportReply() {
     SupportReplyVars,
     { prev?: CommentsResult; tempId: number }
   >({
-    mutationFn: async ({ ticketId, body, isPublic, files = [], emailCcs, htmlBody }) => {
+    mutationFn: async ({ ticketId, body, isPublic, files = [], photoIds, emailCcs, htmlBody }) => {
       const fd = new FormData();
       fd.append(
         'meta',
@@ -46,6 +50,7 @@ export function useSupportReply() {
           htmlBody,
           isPublic,
           emailCcs: isPublic ? emailCcs : undefined,
+          photoIds: photoIds?.length ? photoIds : undefined,
         }),
       );
       files.forEach((f) => fd.append('files', f, f.name));
@@ -58,12 +63,12 @@ export function useSupportReply() {
       }
       return { attached: data.attached ?? 0 };
     },
-    onMutate: async ({ ticketId, body, isPublic, htmlBody }) => {
+    onMutate: async ({ ticketId, body, isPublic, htmlBody, attachmentPreviews }) => {
       await qc.cancelQueries({ queryKey: zendeskKeys.comments(ticketId) });
       const prev = qc.getQueryData<CommentsResult>(zendeskKeys.comments(ticketId));
       const tempId = -Date.now();
-      // `__ours` forces right-side placement regardless of agent-id mapping; the
-      // thread treats it as one of our messages until the server row replaces it.
+      // `__ours` marks our optimistic echo for bubble styling until the server
+      // row replaces it.
       const optimistic = {
         id: tempId,
         author_id: 0,
@@ -73,6 +78,13 @@ export function useSupportReply() {
         created_at: new Date().toISOString(),
         __ours: true,
         __optimistic: true,
+        attachments: (attachmentPreviews ?? []).map((p, i) => ({
+          id: tempId - i,
+          file_name: 'photo',
+          content_url: p.url,
+          thumbnail_url: p.thumbUrl ?? p.url,
+          content_type: 'image/*',
+        })),
       } as unknown as ZendeskComment;
       if (prev) {
         qc.setQueryData<CommentsResult>(zendeskKeys.comments(ticketId), {

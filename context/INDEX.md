@@ -2,6 +2,12 @@
 
 Comprehensive documentation for the USAV Orders Backend codebase. Use these for onboarding, feature planning, and implementation context.
 
+## Start here
+
+| File | Purpose |
+|------|---------|
+| [OVERALL-CONTEXT.md](./OVERALL-CONTEXT.md) | **Master orientation** — the single map of the whole repo + outside-the-repo (SaaS/CycleForge) context. Read this first, then dive into the files below. |
+
 ## Architecture & Reference
 
 | File | Lines | Purpose |

@@ -8,6 +8,9 @@ import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { useAiChat, type ChatMessage } from '@/components/ai/useAiChat';
 import AiOrderList from '@/components/ai/AiOrderList';
 import { linkifyOrderRefs, inferDestination, countOrderRefs, extractOrderRefs } from '@/components/ai/ai-answer-enrich';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
+import { PRODUCT_NAME_AI } from '@/lib/branding/constants';
 
 function ArrowRightGlyph({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   return (
@@ -50,18 +53,20 @@ function PencilGlyph({ className = 'h-3.5 w-3.5' }: { className?: string }) {
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={async () => {
-        try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
-      }}
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-micro font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-      aria-label="Copy answer"
-      title="Copy answer"
-    >
-      <Copy className="h-3.5 w-3.5" />
-      {copied ? 'Copied' : 'Copy'}
-    </button>
+    <HoverTooltip label="Copy answer" asChild>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={async () => {
+          try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+        }}
+        className="text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+        ariaLabel="Copy answer"
+        icon={<Copy />}
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </Button>
+    </HoverTooltip>
   );
 }
 
@@ -174,7 +179,7 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#fbfbfa]">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       {/* Thread */}
       <div
         ref={scrollRef}
@@ -188,20 +193,21 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
       >
         {isEmpty ? (
           <div className={`${colWidth} flex h-full flex-col justify-center`}>
-            <div className="flex items-center gap-2 text-gray-700">
+            <div className="flex items-center gap-2 text-text-muted">
               <Sparkles className="h-5 w-5 text-blue-500" />
-              <p className="text-base font-semibold tracking-tight text-gray-900">USAV Assistant</p>
+              <p className="text-base font-semibold tracking-tight text-text-default">{PRODUCT_NAME_AI}</p>
             </div>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
+            <p className="mt-2 text-sm leading-6 text-text-muted">
               Ask about orders, shipping, staff pace, FBA, repairs, inventory, or Bose service manuals.
             </p>
             <div className="mt-4 flex flex-col gap-2">
+              {/* ds-raw-button: full-width text-left multi-line option card — conflicts with Button's inline-flex justify-center */}
               {STARTER_PROMPTS.map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => submit(p)}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
+                  className="rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-left text-caption leading-5 text-text-muted transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-text-default"
                 >
                   {p}
                 </button>
@@ -217,18 +223,17 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
               if (msg.role === 'user') {
                 return (
                   <div key={msg.id} className="group ml-auto flex max-w-[88%] items-start gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => startEditing(msg)}
-                      disabled={status === 'streaming'}
-                      className="mt-2 hidden rounded-md p-1 text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-600 group-hover:block disabled:hidden"
-                      aria-label="Edit and resend"
-                      title="Edit & resend"
-                    >
-                      <PencilGlyph />
-                    </button>
+                    <HoverTooltip label="Edit & resend" asChild>
+                      <IconButton
+                        onClick={() => startEditing(msg)}
+                        disabled={status === 'streaming'}
+                        className="mt-2 hidden rounded-md p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted group-hover:block disabled:hidden"
+                        ariaLabel="Edit and resend"
+                        icon={<PencilGlyph />}
+                      />
+                    </HoverTooltip>
                     <div className="rounded-xl rounded-br-sm border border-blue-100 bg-blue-50 px-3.5 py-2.5">
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-gray-900">{msg.content}</p>
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-text-default">{msg.content}</p>
                     </div>
                   </div>
                 );
@@ -249,7 +254,7 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
               return (
                 <div key={msg.id} className="group max-w-full">
                   <div className="flex items-start gap-2.5">
-                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-900 text-white">
+                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-inverse text-white">
                       <Sparkles className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -262,23 +267,23 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
                             return (
                               <div className="space-y-2">
                                 <AiOrderList orderIds={refs} />
-                                <details className="text-sm leading-7 text-gray-700">
-                                  <summary className="cursor-pointer text-caption font-semibold text-gray-500 hover:text-gray-700">Show full text answer</summary>
+                                <details className="text-sm leading-7 text-text-muted">
+                                  <summary className="cursor-pointer text-caption font-semibold text-text-soft hover:text-text-muted">Show full text answer</summary>
                                   <div className="mt-1"><MarkdownRenderer content={linkifyOrderRefs(msg.content)} /></div>
                                 </details>
                               </div>
                             );
                           }
                           return (
-                            <div className="text-sm leading-7 text-gray-800">
+                            <div className="text-sm leading-7 text-text-default">
                               <MarkdownRenderer content={msg.streaming ? msg.content : linkifyOrderRefs(msg.content)} />
                               {showCaret ? <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-blue-500 align-middle" /> : null}
                             </div>
                           );
                         })()
                       ) : (
-                        <div className="flex items-center gap-2 py-1 text-caption text-gray-500">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
+                        <div className="flex items-center gap-2 py-1 text-caption text-text-soft">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" />
                           <span>{step ?? 'Working'}{status === 'streaming' && elapsed > 0 ? ` · ${elapsed}s` : ''}</span>
                         </div>
                       )}
@@ -305,15 +310,18 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
                         <div className="mt-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                           <CopyButton text={msg.content} />
                           {isLastDone ? (
-                            <button
-                              type="button"
-                              onClick={() => regenerate()}
-                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-micro font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                              aria-label="Regenerate answer"
-                              title="Regenerate answer"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" /> Retry
-                            </button>
+                            <HoverTooltip label="Regenerate answer" asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => regenerate()}
+                                className="text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+                                ariaLabel="Regenerate answer"
+                                icon={<RefreshCw />}
+                              >
+                                Retry
+                              </Button>
+                            </HoverTooltip>
                           ) : null}
                         </div>
                       ) : null}
@@ -328,15 +336,15 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-gray-200 bg-[#fbfbfa] px-3 py-3">
+      <div className="shrink-0 border-t border-border-soft bg-surface-card px-3 py-3">
         <div className={colWidth}>
           {editingId ? (
             <div className="mb-1.5 flex items-center justify-between rounded-md bg-amber-50 px-2.5 py-1 text-micro font-semibold text-amber-700">
               <span>Editing your message — the reply will be regenerated.</span>
-              <button type="button" onClick={cancelEditing} className="rounded px-1.5 py-0.5 hover:bg-amber-100" aria-label="Cancel edit">Cancel · Esc</button>
+              <Button variant="ghost" size="sm" onClick={cancelEditing} className="text-amber-700 hover:bg-amber-100" ariaLabel="Cancel edit">Cancel · Esc</Button>
             </div>
           ) : null}
-          <div className="flex items-end gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm transition-colors focus-within:border-blue-400">
+          <div className="flex items-end gap-2 rounded-xl border border-border-default bg-surface-card px-3 py-2 shadow-sm transition-colors focus-within:border-blue-400">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -344,33 +352,31 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder={editingId ? 'Edit your message…' : 'Ask about orders, staff, FBA, repairs, Bose manuals…'}
-              className="min-h-[24px] flex-1 resize-none bg-transparent text-sm leading-6 text-gray-800 placeholder-gray-400 focus:outline-none"
+              className="min-h-[24px] flex-1 resize-none bg-transparent text-sm leading-6 text-text-default placeholder-gray-400 focus:outline-none"
               style={{ maxHeight: '180px' }}
             />
             {status === 'streaming' ? (
-              <button
-                type="button"
-                onClick={stop}
-                aria-label="Stop generating"
-                title="Stop generating"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-900 bg-gray-900 text-white transition-colors hover:bg-black"
-              >
-                <StopGlyph className="h-3.5 w-3.5" />
-              </button>
+              <HoverTooltip label="Stop generating" asChild>
+                <IconButton
+                  onClick={stop}
+                  ariaLabel="Stop generating"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-surface-inverse bg-surface-inverse text-white hover:bg-surface-inverse-hover"
+                  icon={<StopGlyph className="h-3.5 w-3.5" />}
+                />
+              </HoverTooltip>
             ) : (
-              <button
-                type="button"
-                onClick={() => submit()}
-                disabled={!input.trim()}
-                aria-label={editingId ? 'Resend edited message' : 'Send message'}
-                title={editingId ? 'Resend' : 'Send'}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-900 bg-gray-900 text-white transition-colors hover:bg-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500"
-              >
-                <Send className="h-4 w-4" />
-              </button>
+              <HoverTooltip label={editingId ? 'Resend' : 'Send'} asChild>
+                <IconButton
+                  onClick={() => submit()}
+                  disabled={!input.trim()}
+                  ariaLabel={editingId ? 'Resend edited message' : 'Send message'}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-surface-inverse bg-surface-inverse text-white hover:bg-surface-inverse-hover disabled:border-border-default disabled:bg-surface-strong disabled:text-text-soft"
+                  icon={<Send className="h-4 w-4" />}
+                />
+              </HoverTooltip>
             )}
           </div>
-          <div className="mt-1.5 flex items-center justify-between gap-2 px-0.5 text-micro text-gray-400">
+          <div className="mt-1.5 flex items-center justify-between gap-2 px-0.5 text-micro text-text-faint">
             <span>Enter to send · Shift+Enter newline{status === 'streaming' ? ' · Esc to stop' : ' · ⌘K to focus'}</span>
             {status === 'streaming' ? <span className="text-blue-500">{step ?? 'Working'}{elapsed > 0 ? ` · ${elapsed}s` : ''}</span> : null}
           </div>

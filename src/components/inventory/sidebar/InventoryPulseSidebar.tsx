@@ -77,7 +77,7 @@ export function InventoryPulseSidebar() {
             }}
             bodyClassName="scrollbar-hide pb-5 space-y-2"
         >
-            <p className={`${microBadge} px-1 text-gray-500`}>
+            <p className={`${microBadge} px-1 text-text-soft`}>
                 {rows.length > 0
                     ? `${rows.length} unit${rows.length !== 1 ? 's' : ''} · newest activity first`
                     : 'Pick a unit to trace its full chain of custody'}
@@ -90,8 +90,8 @@ export function InventoryPulseSidebar() {
             ) : null}
 
             {!isError && rows.length === 0 && !isFetching ? (
-                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
-                    <p className={`${microBadge} text-gray-500`}>No units match.</p>
+                <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center">
+                    <p className={`${microBadge} text-text-soft`}>No units match.</p>
                 </div>
             ) : null}
 
@@ -115,7 +115,7 @@ export function InventoryPulseSidebar() {
                                 }}
                                 className={cn(
                                     'flex w-full cursor-pointer flex-col gap-1.5 rounded-lg px-2.5 py-2 text-left transition-colors',
-                                    active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50',
+                                    active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-surface-hover',
                                 )}
                             >
                                 {/* Title on top + status */}
@@ -123,14 +123,14 @@ export function InventoryPulseSidebar() {
                                     <span
                                         className={cn(
                                             'min-w-0 flex-1 truncate text-[13px] font-bold',
-                                            active ? 'text-blue-900' : 'text-gray-900',
+                                            active ? 'text-blue-900' : 'text-text-default',
                                         )}
                                     >
                                         {row.product_title || row.sku || row.serial_number}
                                     </span>
                                     <span
                                         className={cn(
-                                            'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                                            'shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wide',
                                             inventoryStatusBadgeClass(row.current_status),
                                         )}
                                     >
@@ -139,7 +139,7 @@ export function InventoryPulseSidebar() {
                                 </div>
                                 {/* SKU + serial copy chips, flush right */}
                                 <div className="flex w-full items-center justify-between gap-2">
-                                    <span className="min-w-0 truncate font-mono text-[11px] text-gray-400">
+                                    <span className="min-w-0 truncate font-mono text-caption text-text-faint">
                                         {meta}
                                     </span>
                                     <div className="flex shrink-0 items-center gap-1.5">

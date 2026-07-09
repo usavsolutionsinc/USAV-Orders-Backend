@@ -13,10 +13,10 @@ export const maxDuration = 120;
  * Same job the daily cron (/api/cron/replenishment/sync) runs; logged as a
  * manual run in cron_runs.
  */
-export const POST = withAuth(async () => {
+export const POST = withAuth(async (_req, ctx) => {
   try {
     await withCronRun('replenishment.sync', async () => {
-      await runReplenishmentSync();
+      await runReplenishmentSync(ctx.organizationId);
       return { ok: true };
     }, { trigger: 'manual' });
     return NextResponse.json({ ok: true });

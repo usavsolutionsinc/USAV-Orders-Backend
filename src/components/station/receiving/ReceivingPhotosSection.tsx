@@ -1,14 +1,18 @@
 'use client';
 
-import { Loader2 } from '@/components/Icons';
+import { Camera } from '@/components/Icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
+import { unboxingPhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
+import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ReceivingPhoto {
   id: number;
   receivingId: number;
   photoUrl: string;
   caption: string | null;
+  createdAt?: string;
 }
 
 interface ReceivingPhotosSectionProps {
@@ -28,6 +32,8 @@ export function ReceivingPhotosSection({
   launcherTitle = 'View Receiving Photos',
 }: ReceivingPhotosSectionProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const queryKey = ['receiving-photos', receivingId] as const;
   const { data: photos, isFetching } = useQuery<ReceivingPhoto[]>({
     queryKey,
@@ -44,9 +50,18 @@ export function ReceivingPhotosSection({
       }
       return [];
     },
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    // 30s poll is the pickup path for photos uploaded elsewhere (e.g. mobile
+    // packer). React Query pauses this while the tab is hidden by default.
+    refetchInterval: 30_000,
+    staleTime: 20_000,
   });
+
+  useReceivingPhotosRealtimeRefresh(
+    Number(receivingId),
+    staffId,
+    () => queryClient.invalidateQueries({ queryKey }),
+    staffId > 0,
+  );
 
   // Defensive — `photos` should always be an array per the queryFn, but a
   // stale React Query cache entry from an older shape could be non-array
@@ -55,39 +70,36 @@ export function ReceivingPhotosSection({
   const photosArr: ReceivingPhoto[] = Array.isArray(photos) ? photos : [];
   const galleryPhotos = photosArr
     .filter((p) => !!p.photoUrl)
-    .map((p) => ({ id: p.id, url: p.photoUrl }));
+    .map((p) => ({
+      id: p.id,
+      url: p.photoUrl,
+      meta: unboxingPhotoMeta({ caption: p.caption, createdAt: p.createdAt }),
+    }));
   const loadingEmpty = isFetching && galleryPhotos.length === 0;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-caption font-black uppercase tracking-[0.2em] text-gray-900">{sectionTitle}</h3>
-            {isFetching ? <Loader2 className="h-3 w-3 animate-spin text-gray-400" aria-hidden /> : null}
-          </div>
+          <Camera className="h-4 w-4 text-text-muted" aria-hidden />
+          <h3 className="text-caption font-black uppercase tracking-widest text-text-default">
+            {sectionTitle}
+          </h3>
         </div>
       </div>
 
       {loadingEmpty ? (
-        <div className="flex h-24 items-center justify-center rounded-xl border border-gray-100 bg-gray-50">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" aria-label="Loading photos" />
+        <div className="grid grid-cols-3 gap-2 rounded-xl border border-border-hairline bg-surface-canvas p-2">
+          <div className="h-16 rounded-lg bg-surface-sunken" aria-hidden />
+          <div className="h-16 rounded-lg bg-surface-sunken" aria-hidden />
+          <div className="h-16 rounded-lg bg-surface-sunken" aria-hidden />
+          <span className="sr-only">Loading photos</span>
         </div>
       ) : galleryPhotos.length === 0 ? (
-        <div className="flex min-h-[5.5rem] items-center justify-center rounded-xl border-2 border-dashed border-gray-100 bg-gray-50 px-4">
+        <div className="flex min-h-[5.5rem] items-center justify-center rounded-xl border-2 border-dashed border-border-hairline bg-surface-canvas px-4">
           <div className="text-center">
-            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">No photos yet</p>
-            <p className="mt-1 text-eyebrow font-medium text-gray-400">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">No photos yet</p>
+            <p className="mt-1 text-eyebrow font-medium text-text-faint">
               Mobile app → Receiving → ID <span className="font-mono font-black">#{receivingId}</span>
             </p>
           </div>
@@ -97,7 +109,11 @@ export function ReceivingPhotosSection({
           photos={galleryPhotos}
           orderId={downloadLabel ?? `recv-${receivingId}`}
           launcherTitle={launcherTitle}
+          receivingId={Number(receivingId)}
+          allowReassign
           onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
+          onPhotoReassigned={() => queryClient.invalidateQueries({ queryKey })}
+          onPhotoUploaded={() => queryClient.invalidateQueries({ queryKey })}
         />
       )}
     </div>

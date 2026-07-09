@@ -133,7 +133,7 @@ export function BlockRenderer({ instance }: { instance: BlockInstanceConfig }) {
   if (!block || !Component || !blockPermitted || (source && !canReadSource)) return null;
 
   return (
-    <Suspense fallback={<div className="h-10 animate-pulse rounded bg-gray-50" />}>
+    <Suspense fallback={<div className="h-10 animate-pulse rounded bg-surface-canvas" />}>
       <Component
         rows={rows}
         isLoading={query.isLoading}

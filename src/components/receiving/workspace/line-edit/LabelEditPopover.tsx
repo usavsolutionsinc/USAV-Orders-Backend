@@ -29,6 +29,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Calendar } from '@/design-system/components/Calendar';
 import { type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { CornerField } from '@/components/labels/CornerField';
@@ -36,6 +37,7 @@ import { useLabelDraft } from '@/components/labels/useLabelDraft';
 import { formatLabelDate, parseLabelDate } from '@/components/labels/labelDate';
 import { usePlatformCatalog, useReceivingTypeCatalog } from '@/hooks/useCatalog';
 import { Calendar as CalendarIcon, ChevronDown, Pencil, Printer, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { ConditionPills } from '../ConditionPills';
 import { ReceivingPoLabelPreview } from '../ReceivingPoLabelPreview';
@@ -66,9 +68,9 @@ export interface LabelEditDraft {
   date: string;
 }
 
-const FIELD_LABEL = `${microBadge} mb-1.5 block text-gray-500 tracking-wider`;
+const FIELD_LABEL = `${microBadge} mb-1.5 block text-text-soft tracking-wider`;
 const TEXT_INPUT =
-  'w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-label text-gray-900 outline-none transition-colors focus:border-blue-500';
+  'w-full rounded-lg border border-border-soft bg-surface-card px-2.5 py-1.5 text-label text-text-default outline-none transition-colors focus:border-blue-500';
 
 // Label-face-only platform displays appended after the org's real platforms.
 const PLATFORM_SPECIALS = ['Unfound', 'Local pickup'];
@@ -101,7 +103,7 @@ function SelectField({
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-faint" />
     </div>
   );
 }
@@ -110,16 +112,16 @@ function SelectField({
 function ManagedFieldLabel({ children, onManage }: { children: ReactNode; onManage: () => void }) {
   return (
     <div className="mb-1.5 flex items-center justify-between gap-2">
-      <span className={`${microBadge} text-gray-500 tracking-wider`}>{children}</span>
-      <button
-        type="button"
-        onClick={onManage}
-        aria-label={`Manage ${typeof children === 'string' ? children.toLowerCase() : 'list'}`}
-        title="Add / edit / delete"
-        className="text-gray-400 transition-colors hover:text-blue-600"
-      >
-        <Pencil className="h-3 w-3" />
-      </button>
+      <span className={`${microBadge} text-text-soft tracking-wider`}>{children}</span>
+      <HoverTooltip label="Add / edit / delete" asChild>
+        <IconButton
+          icon={<Pencil className="h-3 w-3" />}
+          ariaLabel={`Manage ${typeof children === 'string' ? children.toLowerCase() : 'list'}`}
+          onClick={onManage}
+          tone="accent"
+          className="text-text-faint hover:text-blue-600"
+        />
+      </HoverTooltip>
     </div>
   );
 }
@@ -191,28 +193,28 @@ export function LabelEditPopover({
       onClose={onClose}
       align="center"
       aria-label="Edit label"
-      className="w-[min(94%,38rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
+      className="w-[min(94%,38rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-border-soft"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
-        <span className={`${microBadge} flex items-center gap-1.5 text-gray-700`}>
-          <Pencil className="h-3.5 w-3.5 text-gray-500" />
+      <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-5 py-3">
+        <span className={`${microBadge} flex items-center gap-1.5 text-text-muted`}>
+          <Pencil className="h-3.5 w-3.5 text-text-soft" />
           Edit label
         </span>
-        <button
-          type="button"
+        <IconButton
+          icon={<X className="h-4 w-4" />}
+          ariaLabel="Close"
           onClick={onClose}
-          aria-label="Close"
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          className="rounded-lg p-1.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+        />
       </div>
 
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {/* Live preview — identical to the printed face. */}
-        <div className="mb-4 rounded-xl border border-gray-200/80 bg-white px-3 py-3 shadow-sm">
+        {/* Themed frame; the label face inside adapts to the theme (dark card +
+            inverted barcode in dark mode). Print output stays black-on-white. */}
+        <div className="mb-4 rounded-xl border border-border-soft/80 bg-surface-card px-3 py-3 shadow-sm">
           <ReceivingPoLabelPreview {...preview} embedded />
         </div>
 
@@ -247,14 +249,15 @@ export function LabelEditPopover({
               <label className={FIELD_LABEL}>Date</label>
               <Popover.Root open={calOpen} onOpenChange={setCalOpen}>
                 <Popover.Trigger asChild>
+                  {/* ds-raw-button: Radix Popover.Trigger asChild (select-like date trigger), not a DS Button */}
                   <button
                     type="button"
                     className={`${TEXT_INPUT} flex items-center justify-between gap-2 text-left`}
                   >
-                    <span className={`truncate ${draft.date ? '' : 'text-gray-400'}`}>
+                    <span className={`truncate ${draft.date ? '' : 'text-text-faint'}`}>
                       {draft.date || 'Pick'}
                     </span>
-                    <CalendarIcon className="h-4 w-4 shrink-0 text-gray-400" />
+                    <CalendarIcon className="h-4 w-4 shrink-0 text-text-faint" />
                   </button>
                 </Popover.Trigger>
                 <Popover.Portal>
@@ -262,7 +265,7 @@ export function LabelEditPopover({
                     align="end"
                     sideOffset={6}
                     // panelOverlay (130) clears the RightPaneOverlay panel (120).
-                    className="z-panelOverlay rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+                    className="z-panelOverlay rounded-xl border border-border-soft bg-surface-card shadow-lg ring-1 ring-black/5 focus:outline-none"
                   >
                     <Calendar
                       mode="single"
@@ -312,25 +315,21 @@ export function LabelEditPopover({
       </div>
 
       {/* Footer */}
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg px-3 py-1.5 text-mini font-bold uppercase tracking-wider text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
-        >
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-hairline bg-surface-canvas px-5 py-3">
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Printer className="h-3.5 w-3.5" />}
           onClick={() => {
             onApplyAndPrint(draft);
             onClose();
           }}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-mini font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
         >
-          <Printer className="h-3.5 w-3.5" />
           Save &amp; print
-        </button>
+        </Button>
       </div>
     </RightPaneOverlay>
 

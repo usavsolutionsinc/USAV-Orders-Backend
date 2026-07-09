@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { Camera } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { MobileReceivingPhotoStrip } from '@/components/mobile/receiving/MobileReceivingPhotoStrip';
+import { UnfoundMatchStrip } from '@/components/receiving/workspace/line-edit/UnfoundMatchStrip';
 import {
   OrderIdChip,
   TrackingChip,
@@ -12,6 +14,7 @@ import {
 } from '@/components/ui/CopyChip';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { receivingLinePhotoHrefs } from '@/lib/photos/mobile-gallery-url';
 
 interface MobileCartonSheetProps {
   row: ReceivingLineRow | null;
@@ -40,7 +43,7 @@ function getStatusDotBg(
   if (value === 'AWAITING_TEST' || value === 'IN_TEST') return 'bg-violet-500';
   if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
   if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
-  return 'bg-gray-400';
+  return 'bg-border-emphasis';
 }
 
 /**
@@ -48,7 +51,7 @@ function getStatusDotBg(
  * editor fields, no form. Header mirrors {@link MobileReceivingRow}: title +
  * qty • condition on the left (workflow icon suppressed on history/unbox feed),
  * copy chips stacked on the right. {@link MobileReceivingPhotoStrip} shows all
- * captured thumbs plus a camera xN badge; tapping opens the shared swipe viewer.
+ * captured thumbs; tapping opens the shared swipe viewer.
  * The CTA hands off to the dedicated camera route at /m/r/{id}/photos.
  */
 export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonSheetProps) {
@@ -60,6 +63,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
   const trackingValue = (row.tracking_number || '').trim();
   const qtyExpected = row.quantity_expected ?? 0;
   const qtyReceived = row.quantity_received;
+  const photoCount = row.photo_count ?? 0;
   const quantityText = `${qtyReceived}/${row.quantity_expected ?? '?'}`;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
@@ -69,26 +73,21 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
       ? 'text-yellow-600'
       : condGrade === 'PARTS'
         ? 'text-amber-800'
-        : 'text-gray-500';
+        : 'text-text-soft';
   const serialsCsv = (row.serials ?? [])
     .map((s) => (s.serial_number || '').trim())
     .filter(Boolean)
     .join(', ');
 
-  // Title shown in the camera header — same precedence as the receiving rail
-  // (RecentActivityRailBase), so unmatched cartons read "Unfound PO" and matched
-  // lines read their item title. poValue names the saved NAS file by PO#.
-  const cameraTitle = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
-  const photosHref = receivingId
-    ? `/m/r/${receivingId}/photos?title=${encodeURIComponent(cameraTitle)}${
-        poValue ? `&poRef=${encodeURIComponent(poValue)}` : ''
-      }`
-    : null;
-  const galleryHref = receivingId
-    ? `/m/r/${receivingId}/gallery?title=${encodeURIComponent(cameraTitle)}${
-        poValue ? `&poRef=${encodeURIComponent(poValue)}` : ''
-      }&back=${encodeURIComponent('/m/receiving')}`
-    : null;
+  const { captureHref: photosHref, galleryHref } = receivingLinePhotoHrefs({
+    receivingId,
+    lineId: row.id,
+    itemName: row.item_name,
+    sku: row.sku,
+    zohoItemId: row.zoho_item_id,
+    poRef: poValue || undefined,
+    back: '/m/receiving',
+  });
 
   return (
     <BottomSheet open={open} onClose={onClose} maxWidth="32rem">
@@ -96,11 +95,12 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         {/* Header — mirrors MobileReceivingRow: title + meta on the left, chips on the right. */}
         <div className="flex flex-col gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
-              title={workflowLabel}
-            />
-            <div className="line-clamp-2 text-sm font-bold text-gray-900">
+            <HoverTooltip label={workflowLabel} asChild>
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
+              />
+            </HoverTooltip>
+            <div className="line-clamp-2 text-sm font-bold text-text-default">
               {productTitle}
             </div>
           </div>
@@ -113,14 +113,13 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
                     ? 'text-yellow-600'
                     : row.quantity_expected && qtyReceived >= row.quantity_expected
                       ? 'text-emerald-600'
-                      : 'text-gray-700'
+                      : 'text-text-muted'
                 }
               >
                 {quantityText}
               </span>
-              <span className="text-gray-400">•</span>
+              <span className="text-text-faint">•</span>
               <span className={conditionColor}>{conditionLabel}</span>
-              {row.needs_test ? <span className="ml-2 text-orange-600">NEEDS TEST</span> : null}
             </span>
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -131,13 +130,21 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
           </div>
         </div>
 
+        {receivingId != null && row.receiving_source === 'unmatched' ? (
+          <UnfoundMatchStrip
+            receivingId={receivingId}
+            trackingNumber={trackingValue || null}
+            showTopRule={false}
+          />
+        ) : null}
+
         {/* Existing photos */}
-        {receivingId && galleryHref ? (
+        {receivingId && galleryHref !== '#' ? (
           <MobileReceivingPhotoStrip
             receivingId={receivingId}
             staffId={staffId}
             galleryHref={galleryHref}
-            countHint={row.photo_count ?? 0}
+            countHint={photoCount}
             onNavigate={onClose}
           />
         ) : receivingId ? null : (
@@ -147,12 +154,12 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         )}
 
         {/* Primary CTA — hands off to dedicated capture surface */}
-        {photosHref ? (
+        {photosHref !== '#' ? (
           <Link
             href={photosHref}
             prefetch={false}
             onClick={onClose}
-            aria-label="Take photos"
+            aria-label={`Take photos (${photoCount} so far)`}
             className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
             <Camera className="h-6 w-6" />

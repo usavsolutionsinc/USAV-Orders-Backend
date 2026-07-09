@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WarrantyClaimDetail } from '@/lib/warranty/types';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 async function postJson(url: string, body: unknown): Promise<{ claim: WarrantyClaimDetail }> {
   const res = await fetch(url, {
@@ -123,7 +124,7 @@ export function useWarrantyMutations() {
     mutationFn: (items: Record<string, unknown>[]) =>
       sendRaw('/api/warranty/claims/bulk', 'POST', {
         items,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: safeRandomUUID(),
       }),
     onSuccess: () => invalidate(),
   });
@@ -134,7 +135,7 @@ export function useWarrantyMutations() {
       const res = await fetch('/api/warranty/claims/bulk', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ ids, idempotencyKey: safeRandomUUID() }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) throw new Error(json?.error || `request failed (${res.status})`);

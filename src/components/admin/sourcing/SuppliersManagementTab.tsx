@@ -56,7 +56,7 @@ function SupplierLoader({ id }: { id: number }) {
     queryKey: qk.suppliers.detail(id),
     queryFn: () => jsonFetch(`/api/suppliers/${id}`),
   });
-  if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading…</div>;
+  if (isLoading) return <div className="p-6 text-sm text-text-faint">Loading…</div>;
   if (!data?.supplier) return <AdminEmptyDetail title="Supplier not found" />;
   return <SupplierForm mode="edit" supplier={data.supplier} />;
 }
@@ -111,8 +111,8 @@ function SupplierForm({ mode, supplier }: { mode: 'create' | 'edit'; supplier?: 
 
   return (
     <div className="mx-auto flex h-full max-w-lg flex-col gap-4 overflow-y-auto p-6">
-      <h2 className="text-lg font-bold text-gray-900">{mode === 'create' ? 'New supplier' : form.name}</h2>
-      {supplier?.ebay_seller_id ? <p className="-mt-2 text-caption text-gray-500">eBay seller · {supplier.ebay_seller_id}</p> : null}
+      <h2 className="text-lg font-bold text-text-default">{mode === 'create' ? 'New supplier' : form.name}</h2>
+      {supplier?.ebay_seller_id ? <p className="-mt-2 text-caption text-text-soft">eBay seller · {supplier.ebay_seller_id}</p> : null}
       <Field label="Name" required><input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Type">
@@ -139,12 +139,12 @@ function SupplierForm({ mode, supplier }: { mode: 'create' | 'edit'; supplier?: 
   );
 }
 
-const inputCls = 'w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+const inputCls = 'w-full rounded-md border border-border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-caption font-semibold text-gray-600">{label}{required ? <span className="text-red-500"> *</span> : null}</span>
+      <span className="mb-1 block text-caption font-semibold text-text-muted">{label}{required ? <span className="text-red-500"> *</span> : null}</span>
       {children}
     </label>
   );

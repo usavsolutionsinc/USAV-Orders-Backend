@@ -22,6 +22,7 @@ import { useBinsOverview, type BinsOverviewRow } from '@/hooks/useBinsOverview';
 import { useLocations } from '@/hooks/useLocations';
 import { BinDetailFlyout } from './BinDetailFlyout';
 import { ChevronDown, ChevronLeft, Layers, Printer } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { PaneHeader, PaneHeaderStatusPill } from '@/components/ui/pane-header';
 import {
   bayHand,
@@ -103,14 +104,9 @@ export function RackDetailView({ code }: RackDetailViewProps) {
           The link <span className="font-mono">{code}</span> doesn't match the rack
           label format. Scan again or pick a rack from the printer below.
         </p>
-        <button
-          type="button"
-          onClick={back}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-1.5 text-label font-semibold text-amber-800 hover:bg-amber-100"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
+        <Button variant="secondary" size="sm" icon={<ChevronLeft />} onClick={back} className="mt-3">
           Back to rack printer
-        </button>
+        </Button>
       </div>
     );
   }
@@ -131,25 +127,23 @@ export function RackDetailView({ code }: RackDetailViewProps) {
           on desktop. The custom className fully replaces the PaneHeader default
           shell (via tailwind-merge) to preserve that responsive behavior. */}
       <PaneHeader
-        className="sticky top-0 z-10 -mx-4 border-0 bg-white/95 backdrop-blur sm:mx-0 sm:rounded-2xl sm:shadow-sm sm:ring-1 sm:ring-gray-200/60"
+        className="sticky top-0 z-10 -mx-4 border-0 bg-surface-card/95 backdrop-blur sm:mx-0 sm:rounded-2xl sm:shadow-sm sm:ring-1 sm:ring-border-soft/60"
         leftSlot={
           <>
-            <button
-              type="button"
+            <IconButton
               onClick={back}
-              aria-label="Back to rack printer"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <p className="font-mono text-base font-black leading-none tracking-tight text-gray-900">
+              ariaLabel="Back to rack printer"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-soft bg-surface-card hover:bg-surface-hover"
+              icon={<ChevronLeft className="h-4 w-4" />}
+            />
+            <p className="font-mono text-base font-black leading-none tracking-tight text-text-default">
               {dashedCode}
             </p>
           </>
         }
         rightSlot={<ViewToggle mode={mode} onChange={setMode} />}
         belowSlot={
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-100 px-3 py-2 sm:px-5">
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border-hairline px-3 py-2 sm:px-5">
             {roomName && <PaneHeaderStatusPill tone="neutral">{roomName}</PaneHeaderStatusPill>}
             <PaneHeaderStatusPill tone="neutral">Aisle {pad2(segments.aisle)}</PaneHeaderStatusPill>
             <PaneHeaderStatusPill tone="neutral">Bay {pad2(segments.bay)}</PaneHeaderStatusPill>
@@ -179,7 +173,8 @@ export function RackDetailView({ code }: RackDetailViewProps) {
 
       {/* ─── Neighbor levels expander ──────────────────────────────── */}
       {otherLevels.length > 0 && mode === 'face' && (
-        <div className="rounded-2xl border border-gray-200 bg-white">
+        <div className="rounded-2xl border border-border-soft bg-surface-card">
+          {/* ds-raw-button: full-width disclosure/accordion trigger (justify-between two-column body), not a styled action button */}
           <button
             type="button"
             onClick={() => setNeighborsOpen((v) => !v)}
@@ -187,23 +182,23 @@ export function RackDetailView({ code }: RackDetailViewProps) {
             aria-expanded={neighborsOpen}
           >
             <div className="flex items-center gap-2.5">
-              <Layers className="h-4 w-4 text-gray-500" />
+              <Layers className="h-4 w-4 text-text-soft" />
               <div>
-                <p className="text-[12.5px] font-semibold text-gray-900">
+                <p className="text-[12.5px] font-semibold text-text-default">
                   Other levels on this bay
                 </p>
-                <p className="text-[10.5px] text-gray-500">
+                <p className="text-[10.5px] text-text-soft">
                   {otherLevels.length} more level{otherLevels.length === 1 ? '' : 's'} registered
                 </p>
               </div>
             </div>
             <ChevronDown
-              className={`h-4 w-4 text-gray-400 transition-transform ${neighborsOpen ? 'rotate-180' : ''}`}
+              className={`h-4 w-4 text-text-faint transition-transform ${neighborsOpen ? 'rotate-180' : ''}`}
             />
           </button>
 
           {neighborsOpen && (
-            <div className="border-t border-gray-100 px-4 py-3">
+            <div className="border-t border-border-hairline px-4 py-3">
               <div className="space-y-3">
                 {otherLevels.map((lv) => (
                   <NeighborLevel
@@ -221,12 +216,12 @@ export function RackDetailView({ code }: RackDetailViewProps) {
 
       {/* ─── Empty hint when nothing on this level ─────────────────── */}
       {!loading && focusedPositions.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-5 text-center">
-          <Printer className="mx-auto h-5 w-5 text-gray-300" />
-          <p className="mt-2 text-sm font-semibold text-gray-700">
+        <div className="rounded-2xl border border-dashed border-border-soft bg-surface-canvas/50 p-5 text-center">
+          <Printer className="mx-auto h-5 w-5 text-text-faint" />
+          <p className="mt-2 text-sm font-semibold text-text-muted">
             No positions registered on this level yet.
           </p>
-          <p className="mt-1 text-[11.5px] text-gray-500">
+          <p className="mt-1 text-[11.5px] text-text-soft">
             Print bin-level labels from the <span className="font-semibold">Labels</span> tab to
             populate this rack. Bin labels auto-register their location row.
           </p>
@@ -245,8 +240,9 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
     <div
       role="tablist"
       aria-label="View mode"
-      className="flex shrink-0 items-center rounded-full bg-gray-100 p-0.5 text-caption font-semibold"
+      className="flex shrink-0 items-center rounded-full bg-surface-sunken p-0.5 text-caption font-semibold"
     >
+      {/* ds-raw-button: segmented tab toggle (role=tab + aria-selected), not a standalone action */}
       {(['face', 'list'] as const).map((m) => (
         <button
           key={m}
@@ -256,8 +252,8 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
           onClick={() => onChange(m)}
           className={`rounded-full px-3 py-1.5 transition-colors ${
             mode === m
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-surface-card text-text-default shadow-sm'
+              : 'text-text-soft hover:text-text-muted'
           }`}
         >
           {m === 'face' ? 'Face' : 'List'}
@@ -279,18 +275,18 @@ interface RackFaceProps {
 function RackFace({ loading, positions, level, onCellClick }: RackFaceProps) {
   if (loading) {
     return (
-      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-3">
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-border-soft bg-surface-card p-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-24 w-24 shrink-0 animate-pulse rounded-2xl bg-gray-100" />
+          <div key={i} className="h-24 w-24 shrink-0 animate-pulse rounded-2xl bg-surface-sunken" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="rounded-2xl border border-border-soft bg-surface-card p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between px-1">
-        <p className="text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
+        <p className="text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
           Level {noPad(level)} · {positions.length} position{positions.length === 1 ? '' : 's'}
         </p>
         <FillLegend />
@@ -307,9 +303,9 @@ function RackFace({ loading, positions, level, onCellClick }: RackFaceProps) {
 
 function FillLegend() {
   return (
-    <div className="flex items-center gap-1.5 text-eyebrow font-semibold uppercase tracking-wider text-gray-400">
+    <div className="flex items-center gap-1.5 text-eyebrow font-semibold uppercase tracking-wider text-text-faint">
       <span className="flex items-center gap-1">
-        <span className="h-2 w-2 rounded-full bg-gray-200" /> Empty
+        <span className="h-2 w-2 rounded-full bg-surface-strong" /> Empty
       </span>
       <span className="flex items-center gap-1">
         <span className="h-2 w-2 rounded-full bg-blue-400" /> Stock
@@ -329,18 +325,19 @@ function PositionCell({ row, onClick }: { row: BinsOverviewRow; onClick: () => v
   const tone: 'empty' | 'stock' | 'issue' = hasIssue ? 'issue' : row.is_empty ? 'empty' : 'stock';
 
   const containerClass = {
-    empty: 'border-gray-200 bg-gray-50',
-    stock: 'border-blue-200 bg-white',
+    empty: 'border-border-soft bg-surface-canvas',
+    stock: 'border-blue-200 bg-surface-card',
     issue: 'border-amber-300 bg-amber-50/60',
   }[tone];
 
   const barClass = {
-    empty: 'bg-gray-200',
+    empty: 'bg-surface-strong',
     stock: 'bg-gradient-to-t from-blue-500 to-blue-400',
     issue: 'bg-gradient-to-t from-amber-500 to-amber-400',
   }[tone];
 
   return (
+    // ds-raw-button: bespoke rack-position card tile (fill bar, multi-line layout), not a standard action button
     <button
       type="button"
       onClick={onClick}
@@ -348,7 +345,7 @@ function PositionCell({ row, onClick }: { row: BinsOverviewRow; onClick: () => v
       className={`relative flex h-28 w-24 shrink-0 flex-col items-stretch overflow-hidden rounded-2xl border text-left transition-all active:scale-[0.97] ${containerClass}`}
     >
       <div className="flex items-start justify-between px-2.5 pt-2">
-        <span className="font-mono text-lg font-black tabular-nums leading-none text-gray-900">
+        <span className="font-mono text-lg font-black tabular-nums leading-none text-text-default">
           {pos}
         </span>
         {row.is_over_capacity && (
@@ -360,15 +357,15 @@ function PositionCell({ row, onClick }: { row: BinsOverviewRow; onClick: () => v
 
       <div className="mt-1 flex-1 px-2.5">
         {row.is_empty ? (
-          <p className="text-micro font-semibold uppercase tracking-wider text-gray-400">
+          <p className="text-micro font-semibold uppercase tracking-wider text-text-faint">
             Empty
           </p>
         ) : (
           <>
-            <p className="text-caption font-bold tabular-nums text-gray-900">
+            <p className="text-caption font-bold tabular-nums text-text-default">
               {row.total_qty}
             </p>
-            <p className="text-[9.5px] text-gray-500">
+            <p className="text-[9.5px] text-text-soft">
               {row.sku_count} SKU{row.sku_count === 1 ? '' : 's'}
             </p>
           </>
@@ -376,7 +373,7 @@ function PositionCell({ row, onClick }: { row: BinsOverviewRow; onClick: () => v
       </div>
 
       {/* Fill bar at bottom */}
-      <div className="mt-1 h-1.5 w-full bg-gray-100">
+      <div className="mt-1 h-1.5 w-full bg-surface-sunken">
         <div
           className={`h-full transition-all ${barClass}`}
           style={{ width: `${tone === 'empty' ? 0 : fill || 8}%` }}
@@ -399,7 +396,7 @@ function NeighborLevel({
 }) {
   return (
     <div>
-      <p className="mb-1.5 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
+      <p className="mb-1.5 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
         Level {noPad(level)} · {positions.length}
       </p>
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
@@ -424,42 +421,43 @@ function RackList({
 }) {
   if (loading) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white">
+      <div className="rounded-2xl border border-border-soft bg-surface-card">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-14 animate-pulse border-b border-gray-100 last:border-b-0" />
+          <div key={i} className="h-14 animate-pulse border-b border-border-hairline last:border-b-0" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <div className="overflow-hidden rounded-2xl border border-border-soft bg-surface-card">
       {positions.map((row, i) => {
         const pos = (row.col_label || '').split('-')[1] ?? '';
         const hasIssue = row.is_stale || row.has_low_stock || row.is_over_capacity;
         return (
+          // ds-raw-button: full-width master-detail list row (multi-column body), not a standard action button
           <button
             key={row.id}
             type="button"
             onClick={() => onRowClick(row)}
-            className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 ${
-              i > 0 ? 'border-t border-gray-100' : ''
+            className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-surface-hover active:bg-surface-sunken ${
+              i > 0 ? 'border-t border-border-hairline' : ''
             }`}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 font-mono text-base font-bold tabular-nums text-gray-900">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-sunken font-mono text-base font-bold tabular-nums text-text-default">
               {pos}
             </span>
             <div className="min-w-0 flex-1">
               {row.is_empty ? (
-                <p className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                <p className="text-label font-semibold uppercase tracking-wider text-text-faint">
                   Empty
                 </p>
               ) : (
                 <>
-                  <p className="truncate text-sm font-semibold text-gray-900">
+                  <p className="truncate text-sm font-semibold text-text-default">
                     {row.total_qty} units · {row.sku_count} SKU{row.sku_count === 1 ? '' : 's'}
                   </p>
-                  <p className="mt-0.5 text-[10.5px] text-gray-500">
+                  <p className="mt-0.5 text-[10.5px] text-text-soft">
                     Fill {row.fill_pct == null ? '—' : `${Math.round(row.fill_pct)}%`}
                     {row.last_counted ? ` · counted ${formatAgo(row.last_counted)}` : ''}
                   </p>

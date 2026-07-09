@@ -8,7 +8,7 @@ const LocationDetailView = dynamic(
     {
         ssr: false,
         loading: () => (
-            <div className="flex items-center justify-center py-16 text-gray-400">
+            <div className="flex items-center justify-center py-16 text-text-faint">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="ml-2 text-sm">Loading bin…</span>
             </div>

@@ -78,6 +78,27 @@ async function stripeRequest<T>(
 
 // ─── Public helpers ────────────────────────────────────────────────────────
 
+/**
+ * Report one AI-usage meter event (Stripe Billing Meters). `value` is the
+ * BILLED amount in integer cents; `eventName` must match the Meter's
+ * event_name configured in the Stripe dashboard. Platform credentials only —
+ * AI margin billing is platform revenue, never a tenant's own Stripe.
+ */
+export async function reportAiUsageMeterEvent(input: {
+  eventName: string;
+  stripeCustomerId: string;
+  valueCents: number;
+  idempotencyKey: string;
+}): Promise<void> {
+  const creds = await loadCreds(null);
+  await stripeRequest<{ identifier: string }>('/billing/meter_events', {
+    event_name: input.eventName,
+    identifier: input.idempotencyKey,
+    'payload[stripe_customer_id]': input.stripeCustomerId,
+    'payload[value]': input.valueCents,
+  }, creds);
+}
+
 export interface CreateCustomerInput {
   email: string;
   name?: string;

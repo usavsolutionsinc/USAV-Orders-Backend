@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stat, readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve, sep, extname, dirname } from 'node:path';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -72,6 +73,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> },
 ) {
+  // Real session + permission gate. The edge proxy only checks cookie
+  // PRESENCE, so this handler must enforce auth itself (mirrors the prod
+  // /api/nas route). Without it, anyone could read the mounted NAS share.
+  const gate = await requireRoutePerm(req, 'receiving.view');
+  if (gate.denied) return gate.denied;
   if (!ENABLED) {
     return NextResponse.json(
       { error: 'nas-dev is disabled (set NAS_DEV_ROOT to enable in a production build)' },
@@ -182,6 +188,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> },
 ) {
+  // Writes require the upload permission (mirrors the prod /api/nas route).
+  const gate = await requireRoutePerm(req, 'receiving.upload_photo');
+  if (gate.denied) return gate.denied;
   if (!ENABLED) {
     return NextResponse.json(
       { error: 'nas-dev is disabled (set NAS_DEV_ROOT to enable in a production build)' },

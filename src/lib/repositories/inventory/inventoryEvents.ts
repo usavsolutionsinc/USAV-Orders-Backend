@@ -25,6 +25,7 @@ export type InventoryEventType =
   | 'TEST_START'
   | 'TEST_PASS'
   | 'TEST_FAIL'
+  | 'DATA_WIPED'
   | 'PUTAWAY'
   | 'MOVED'
   | 'PICKED'

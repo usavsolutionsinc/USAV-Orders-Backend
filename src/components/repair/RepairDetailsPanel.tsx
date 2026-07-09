@@ -7,12 +7,13 @@
  * sections are presentational components under `./details-panel/`.
  */
 
-import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { Clock, Pencil } from '../Icons';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
-import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import DeleteButton from '@/components/ui/DeleteButton';
+import { IconButton } from '@/design-system/primitives';
 import {
   PaneHeader,
   PaneHeaderActionBar,
@@ -52,17 +53,10 @@ export function RepairDetailsPanel({
   const hasSavedNotes = String(repair.notes || '').trim().length > 0;
 
   return (
-    <>
-      <SlideOverBackdrop onClose={onClose} />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-      >
+    <DetailStackRailRegistrar id={`detail:claim:${repair.id}`} onClose={onClose}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <PaneHeader
-          className="border-gray-100 bg-white/90 backdrop-blur-xl"
+          className="border-border-hairline bg-surface-card/90 backdrop-blur-xl"
           rowClassName="px-6"
           leftSlot={
             <>
@@ -86,22 +80,23 @@ export function RepairDetailsPanel({
                           c.setIsEditingTicket(false);
                         }
                       }}
-                      className="w-full border-none bg-transparent p-0 text-sm font-black uppercase tracking-tight text-gray-900 focus:ring-0"
+                      className="w-full border-none bg-transparent p-0 text-sm font-black uppercase tracking-tight text-text-default focus:ring-0"
                       placeholder="TK Number"
                       disabled={c.isSavingTicket}
                     />
                   ) : c.zendeskTicketUrl ? (
-                    <a
-                      href={c.zendeskTicketUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block truncate transition-colors hover:text-blue-600"
-                      title={`Open Zendesk ticket ${c.ticketNumber}`}
-                    >
-                      {c.ticketNumber}
-                    </a>
+                    <HoverTooltip label={`Open Zendesk ticket ${c.ticketNumber}`} asChild>
+                      <a
+                        href={c.zendeskTicketUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate transition-colors hover:text-blue-600"
+                      >
+                        {c.ticketNumber}
+                      </a>
+                    </HoverTooltip>
                   ) : (
-                    <span className="text-gray-400">TK Number</span>
+                    <span className="text-text-faint">TK Number</span>
                   )
                 }
                 valueTitle={c.ticketNumber || 'TK Number'}
@@ -110,15 +105,13 @@ export function RepairDetailsPanel({
           }
           rightSlot={
             <>
-              <button
-                type="button"
+              <IconButton
+                icon={<Pencil className="h-4 w-4" />}
                 onClick={() => c.setIsEditingTicket(true)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-                aria-label="Edit ticket number"
+                ariaLabel="Edit ticket number"
                 disabled={c.isSavingTicket}
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-sunken"
+              />
               <PaneHeaderCloseButton onClick={onClose} ariaLabel="Close repair details" />
             </>
           }
@@ -130,7 +123,7 @@ export function RepairDetailsPanel({
                   pulse
                   className={
                     repair.status === 'Repaired, Contact Customer'
-                      ? 'text-[10px] tracking-[0.14em]'
+                      ? 'text-micro tracking-[0.14em]'
                       : undefined
                   }
                 >
@@ -170,7 +163,7 @@ export function RepairDetailsPanel({
           {c.activeTab === 'links' ? <RepairLinkageSection c={c} /> : null}
         </div>
 
-        <div className="shrink-0 bg-white pb-8">
+        <div className="shrink-0 bg-surface-card pb-8">
           {(c.isEditingNotes || hasSavedNotes) ? (
             c.isEditingNotes ? (
               <ShippedNotesComposer
@@ -212,7 +205,7 @@ export function RepairDetailsPanel({
               document.body,
             )
           : null}
-      </motion.div>
-    </>
+      </div>
+    </DetailStackRailRegistrar>
   );
 }

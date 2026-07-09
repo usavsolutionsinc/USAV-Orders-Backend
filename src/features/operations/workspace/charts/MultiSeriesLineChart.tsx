@@ -67,7 +67,7 @@ export function MultiSeriesLineChart({
     <div ref={ref} className={cn('w-full', className)}>
       <svg width={width} height={height} role="img" aria-label="Throughput over time" className="overflow-visible">
         {/* horizontal grid — inherits dark-mode via currentColor */}
-        <g className="text-gray-200">
+        <g className="text-surface-strong">
           {model.ticks.map((t, i) => {
             const y = model.yFor(t);
             return (
@@ -77,7 +77,7 @@ export function MultiSeriesLineChart({
         </g>
 
         {/* y-axis tick labels */}
-        <g className="text-gray-400">
+        <g className="text-text-faint">
           {model.ticks.map((t, i) => (
             <text
               key={i}
@@ -85,7 +85,7 @@ export function MultiSeriesLineChart({
               y={model.yFor(t) + 3}
               textAnchor="end"
               fill="currentColor"
-              className="text-[9px] font-semibold tabular-nums"
+              className="text-eyebrow font-semibold tabular-nums"
             >
               {Math.round(t).toLocaleString()}
             </text>
@@ -93,7 +93,7 @@ export function MultiSeriesLineChart({
         </g>
 
         {/* x-axis labels */}
-        <g className="text-gray-400">
+        <g className="text-text-faint">
           {xLabels.map((label, i) =>
             i % labelStride === 0 ? (
               <text
@@ -102,7 +102,7 @@ export function MultiSeriesLineChart({
                 y={height - 7}
                 textAnchor="middle"
                 fill="currentColor"
-                className="text-[9px] font-semibold"
+                className="text-eyebrow font-semibold"
               >
                 {label}
               </text>
@@ -154,8 +154,8 @@ export function MultiSeriesLineChart({
           })}
 
         {!hasData && (
-          <g className="text-gray-400">
-            <text x={width / 2} y={height / 2} textAnchor="middle" fill="currentColor" className="text-[11px] font-semibold">
+          <g className="text-text-faint">
+            <text x={width / 2} y={height / 2} textAnchor="middle" fill="currentColor" className="text-caption font-semibold">
               No activity in this range
             </text>
           </g>
@@ -167,7 +167,7 @@ export function MultiSeriesLineChart({
         {series.map((s) => (
           <div key={s.key} className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} aria-hidden />
-            <span className="text-eyebrow font-bold uppercase tracking-widest text-gray-500">{s.label}</span>
+            <span className="text-eyebrow font-bold uppercase tracking-widest text-text-soft">{s.label}</span>
           </div>
         ))}
       </div>

@@ -24,6 +24,33 @@ import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { USAV_ORG_ID } from '@/lib/tenancy/constants';
+import { isPlacementStrangleRmaRestock } from '@/lib/feature-flags';
+import { resolveSitePlacementBin } from '@/lib/workflow/placement-policy';
+import { tapWorkflow } from '@/lib/workflow/tap';
+import type { PlacementResolverDeps } from '@/lib/workflow/placement';
+
+/**
+ * A bin lookup (for the placement strangle) scoped to an open tenant client +
+ * org, mirroring receiving's RESERVE + active filter so a restock decision rule
+ * resolves a real, pickable bin. Runs on the passed client so it shares the
+ * disposition transaction's GUC + lock visibility.
+ */
+function reserveBinDepsOn(client: Pick<PoolClient, 'query'>, orgId: string): PlacementResolverDeps {
+  const find = async (barcode: string): Promise<{ id: number; name: string } | null> => {
+    const r = await client.query<{ id: number; name: string }>(
+      `SELECT id, name FROM locations
+        WHERE barcode = $1
+          AND is_active = true
+          AND bin_role = 'RESERVE'
+          AND organization_id = $2
+        ORDER BY id ASC
+        LIMIT 1`,
+      [barcode, orgId],
+    );
+    return r.rows[0] ?? null;
+  };
+  return { findByBarcode: find, findByName: async () => null };
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -296,11 +323,14 @@ export async function recordDisposition(
           sku: string | null;
           current_status: string;
           normalized_serial: string;
+          condition_grade: string | null;
         }>(
           orgId
-            ? `SELECT sku, current_status::text AS current_status, normalized_serial
+            ? `SELECT sku, current_status::text AS current_status, normalized_serial,
+                      condition_grade::text AS condition_grade
                  FROM serial_units WHERE id = $1 AND organization_id = $2 FOR UPDATE`
-            : `SELECT sku, current_status::text AS current_status, normalized_serial
+            : `SELECT sku, current_status::text AS current_status, normalized_serial,
+                      condition_grade::text AS condition_grade
                  FROM serial_units WHERE id = $1 FOR UPDATE`,
           orgId ? [input.serialUnitId, orgId] : [input.serialUnitId],
         );
@@ -374,6 +404,53 @@ export async function recordDisposition(
           // our sellable stock. Only fires when the unit is actually RETURNED;
           // other states / codes record the disposition without a status change.
           if (isInboundReturn && input.dispositionCode === 'ACCEPT' && unit.current_status === 'RETURNED') {
+            // Config-driven restock placement (§1.6 Track 1, opt-in). When the
+            // flag is on, consult the org's Studio decision policy for a restock
+            // bin (NO system default — see resolveSitePlacementBin with [] policy).
+            // With no decision node authored it resolves nothing → restock stays
+            // bin-less, exactly as before; an org that authors a rule gets the
+            // unit physically placed + current_location set, no app change.
+            const effectiveOrg = orgId ?? USAV_ORG_ID;
+            let restockBinId: number | null = null;
+            let restockBinName: string | null = null;
+
+            // Compensating sku_stock_ledger row (+1, mirrors processReturnsIntake's
+            // Path B, src/lib/inventory/returns.ts:158-167) — without this, the
+            // trigger-projected sku_stock.stock count never sees the restock, so a
+            // unit could be STOCKED here yet absent from the sellable count.
+            let restockLedgerId: number | null = null;
+            if (unit.sku) {
+              const ledgerQ = await client.query<{ id: number }>(
+                `INSERT INTO sku_stock_ledger (
+                   organization_id, sku, delta, reason, dimension, staff_id,
+                   ref_serial_unit_id, ref_order_id, notes
+                 )
+                 VALUES ($1, $2, 1, 'RETURN_CUSTOMER', 'WAREHOUSE', $3, $4, $5, $6)
+                 RETURNING id`,
+                [
+                  orgId,
+                  unit.sku,
+                  input.decidedByStaffId,
+                  input.serialUnitId,
+                  matchedOrderPk,
+                  input.notes?.trim() || `RMA disposition: ${input.dispositionCode}`,
+                ],
+              );
+              restockLedgerId = ledgerQ.rows[0]?.id ?? null;
+            }
+            if (isPlacementStrangleRmaRestock()) {
+              const resolved = await resolveSitePlacementBin({
+                orgId: effectiveOrg,
+                facts: { disposition: 'ACCEPT', grade: unit.condition_grade ?? undefined },
+                systemPolicy: [], // opt-in only — no built-in restock bin
+                binDeps: reserveBinDepsOn(client, effectiveOrg),
+              });
+              if (resolved) {
+                restockBinId = resolved.bin.binId;
+                restockBinName = resolved.bin.binName;
+              }
+            }
+
             const t = await transition(
               {
                 unitId: input.serialUnitId,
@@ -381,13 +458,28 @@ export async function recordDisposition(
                 eventType: 'ADJUSTED',
                 actorStaffId: input.decidedByStaffId,
                 station: 'SYSTEM',
-                payload: { source: 'rma.restock', rmaId: input.rmaId, dispositionCode: input.dispositionCode },
+                binId: restockBinId ?? undefined,
+                stockLedgerId: restockLedgerId,
+                payload: {
+                  source: 'rma.restock',
+                  rmaId: input.rmaId,
+                  dispositionCode: input.dispositionCode,
+                  ...(restockBinName ? { placement: restockBinName } : {}),
+                },
               },
               client,
             );
             // Pre-checked RETURNED → STOCKED is a declared edge, so this is
             // expected to succeed; a failure means concurrent drift — abort.
             if (!t.ok) throw new Error(`restock failed: ${t.error}`);
+            // Mirror parts-sort: when a bin was resolved, set current_location in
+            // the SAME tx so the unit never ends STOCKED-but-not-relocated.
+            if (restockBinId != null && restockBinName) {
+              await client.query(
+                `UPDATE serial_units SET current_location = $1, updated_at = NOW() WHERE id = $2`,
+                [restockBinName, input.serialUnitId],
+              );
+            }
             restocked = true;
           }
         }
@@ -441,22 +533,63 @@ export async function recordDisposition(
 
   // Org-scoped path: withTenantTransaction owns BEGIN/COMMIT/ROLLBACK + the GUC,
   // so `run` must not manage the transaction itself.
+  let result: RecordDispositionResult;
   if (orgId) {
     try {
-      return await withTenantTransaction(orgId, (client) => run(client, false));
+      result = await withTenantTransaction(orgId, (client) => run(client, false));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'disposition failed';
-      return { ok: false, status: 500, error: message };
+      result = { ok: false, status: 500, error: message };
+    }
+  } else {
+    // Legacy session-less path — byte-identical to the prior behavior.
+    const client = await pool.connect();
+    try {
+      result = await run(client, true);
+    } finally {
+      client.release();
     }
   }
 
-  // Legacy session-less path — byte-identical to the prior behavior.
-  const client = await pool.connect();
-  try {
-    return await run(client, true);
-  } finally {
-    client.release();
+  // Studio tap (Tap 2, §7.1 of the returns-unification plan): fired after the
+  // transaction commits, never inside it — mirrors Tap 1's timing rule in
+  // linkReturnedSerial. Only when a real unit was dispositioned (rmaId-only
+  // calls have no per-unit engine position to advance) and the write
+  // succeeded. Ports from the function's actual computed outcome, not a
+  // naive disposition-code map: ACCEPT only means "restock" when it actually
+  // did (isInboundReturn + prior RETURNED) — an OUTBOUND_TO_VENDOR RMA's
+  // ACCEPT must not falsely report `restock`. HOLD/REWORK (and a non-
+  // restocking ACCEPT) map to no port, which is correct, not an omission:
+  // the `returns` node has no lane for them yet, so the tap re-parks the
+  // unit there rather than silently inventing a route.
+  if (result.ok && input.serialUnitId != null) {
+    const port = dispositionToPort(input.dispositionCode, result.restocked);
+    await tapWorkflow({
+      serialUnitId: input.serialUnitId,
+      event: 'return_received',
+      input: port ? { disposition: port, rmaRef: input.rmaId, returnReason: input.notes ?? null } : undefined,
+      orgId,
+      staffId: input.decidedByStaffId,
+      source: 'manual',
+    });
   }
+
+  return result;
+}
+
+/**
+ * Map a disposition decision to the `returns` node's output port, from what
+ * actually happened (restocked) rather than the raw code alone — see the
+ * call site's comment for why ACCEPT can't be assumed to mean restock.
+ */
+function dispositionToPort(
+  code: DispositionCode,
+  restocked: boolean,
+): 'restock' | 'rtv' | 'scrap' | null {
+  if (restocked) return 'restock';
+  if (code === 'RTV') return 'rtv';
+  if (code === 'SCRAP') return 'scrap';
+  return null;
 }
 
 export type CloseAuthorizationResult = { ok: true } | { ok: false; status: 404 | 409; error: string };
@@ -521,6 +654,61 @@ export async function listOpen(
       ORDER BY authorized_at DESC`;
   const { rows } = orgId ? await tenantQuery(orgId, sql) : await pool.query(sql);
   return rows.map((r) => mapRow(r as never));
+}
+
+export interface DispositionBacklogRow {
+  serialUnitId: number;
+  serialNumber: string;
+  sku: string | null;
+  conditionGrade: string | null;
+  currentStatus: string;
+  /** How long it's been sitting undecided (serial_units.updated_at). */
+  updatedAt: string;
+}
+
+/**
+ * The disposition worklist (returns-unification plan §9 Stage 4): units
+ * sitting at RETURNED that have never received ANY disposition — not simply
+ * `current_status = 'RETURNED'`, which alone over-counts. A HOLD/REWORK
+ * disposition deliberately does NOT change `current_status` away from
+ * RETURNED (only ACCEPT does, via the restock branch above), so a unit a
+ * human already triaged to "needs more review" would incorrectly reappear as
+ * backlog on a bare status filter. `NOT EXISTS` against `return_dispositions`
+ * is the correct "genuinely untouched since it came back" signal. Oldest
+ * first — a worklist should surface what's waited longest.
+ */
+export async function listDispositionBacklog(
+  orgId: OrgId,
+  limit = 100,
+): Promise<DispositionBacklogRow[]> {
+  const sql = `SELECT su.id AS serial_unit_id, su.serial_number, su.sku,
+            su.condition_grade::text AS condition_grade,
+            su.current_status::text AS current_status,
+            su.updated_at::text AS updated_at
+       FROM serial_units su
+      WHERE su.organization_id = $1
+        AND su.current_status = 'RETURNED'
+        AND NOT EXISTS (
+          SELECT 1 FROM return_dispositions rd WHERE rd.serial_unit_id = su.id
+        )
+      ORDER BY su.updated_at ASC
+      LIMIT $2`;
+  const { rows } = await tenantQuery<{
+    serial_unit_id: number;
+    serial_number: string;
+    sku: string | null;
+    condition_grade: string | null;
+    current_status: string;
+    updated_at: string;
+  }>(orgId, sql, [orgId, limit]);
+  return rows.map((r) => ({
+    serialUnitId: Number(r.serial_unit_id),
+    serialNumber: r.serial_number,
+    sku: r.sku,
+    conditionGrade: r.condition_grade,
+    currentStatus: r.current_status,
+    updatedAt: r.updated_at,
+  }));
 }
 
 export async function findById(

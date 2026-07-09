@@ -72,7 +72,7 @@ interface PageHeaderProps {
 }
 
 const BACK_BUTTON_CLASS =
-  'inline-flex h-8 w-8 -ml-1 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95';
+  'inline-flex h-8 w-8 -ml-1 shrink-0 items-center justify-center rounded-lg text-text-soft transition-colors hover:bg-surface-sunken hover:text-text-default active:scale-95';
 
 export function PageHeader({
   title,
@@ -108,7 +108,7 @@ export function PageHeader({
       <ChevronLeft className="h-5 w-5" />
     </Link>
   ) : onBack ? (
-    <button type="button" onClick={onBack} aria-label="Back" className={BACK_BUTTON_CLASS}>
+    <button type="button" onClick={onBack} aria-label="Back" className={cn(BACK_BUTTON_CLASS, 'ds-raw-button')}>
       <ChevronLeft className="h-5 w-5" />
     </button>
   ) : null;

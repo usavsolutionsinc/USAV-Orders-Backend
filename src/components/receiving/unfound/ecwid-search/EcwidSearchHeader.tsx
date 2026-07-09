@@ -1,15 +1,16 @@
 import { X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { ModeButton } from './ecwid-search-rows';
 import type { EcwidProductSearchController } from './useEcwidProductSearch';
 
 /** Header bar: catalog mode toggle / back buttons / mode label + close. */
 export function EcwidSearchHeader({ c, onClose }: { c: EcwidProductSearchController; onClose: () => void }) {
-  const { popoverMode, manualTitleMode, searchFieldOverride, searchField, repairManualMode } = c;
+  const { popoverMode, manualTitleMode, searchFieldOverride, searchField, orderScope } = c;
   return (
-    <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+    <div className="flex items-center justify-between border-b border-border-hairline px-3 py-2">
       {popoverMode === 'search' && !manualTitleMode && searchFieldOverride ? (
-        <span className={`${microBadge} text-gray-700`}>Search Zoho catalog</span>
+        <span className={`${microBadge} text-text-muted`}>Search Zoho catalog</span>
       ) : popoverMode === 'search' && !manualTitleMode ? (
         <div className="flex gap-1">
           <ModeButton
@@ -24,41 +25,32 @@ export function EcwidSearchHeader({ c, onClose }: { c: EcwidProductSearchControl
           />
         </div>
       ) : popoverMode === 'search' && manualTitleMode ? (
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           type="button"
           onClick={() => {
             c.setManualTitleMode(false);
             c.setManualTitle('');
           }}
-          className={`${microBadge} rounded px-2 py-1 text-blue-700 transition-colors hover:bg-blue-50`}
+          className={`${microBadge} text-blue-700 hover:bg-blue-50 hover:text-blue-700`}
         >
           {searchFieldOverride === 'zoho_catalog' ? '← Back to Zoho search' : '← Back to Ecwid search'}
-        </button>
-      ) : popoverMode === 'repair_service' && repairManualMode ? (
-        <button
-          type="button"
-          onClick={() => {
-            c.setRepairManualMode(false);
-            c.setManualOrderId('');
-            c.setManualTitle('');
-          }}
-          className={`${microBadge} rounded px-2 py-1 text-blue-700 transition-colors hover:bg-blue-50`}
-        >
-          ← Back to recent orders
-        </button>
-      ) : (
-        <span className={`${microBadge} text-gray-700`}>
-          Recent -RS Ecwid orders
+        </Button>
+      ) : popoverMode === 'repair_service' ? (
+        <span className={`${microBadge} text-text-muted`}>
+          {orderScope === 'all' ? 'Recent Ecwid orders' : 'Recent repair orders'}
         </span>
+      ) : (
+        <span className={`${microBadge} text-text-muted`}>Ecwid search</span>
       )}
-      <button
+      <IconButton
         type="button"
         onClick={onClose}
-        aria-label="Close search"
-        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-      >
-        <X className="h-4 w-4" />
-      </button>
+        ariaLabel="Close search"
+        icon={<X className="h-4 w-4" />}
+        className="rounded-lg p-1.5 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
+      />
     </div>
   );
 }

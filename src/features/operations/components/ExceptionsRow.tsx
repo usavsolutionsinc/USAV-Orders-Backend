@@ -103,8 +103,8 @@ export function ExceptionsRow() {
     <section>
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <span className={`${sectionLabel} !text-[#A89F91]`}>Exceptions</span>
-          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-[#2D2A26] mt-0.5">
+          <span className={`${sectionLabel} !text-text-muted`}>Exceptions</span>
+          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-text-default mt-0.5">
             What needs human eyes today
           </h2>
         </div>
@@ -119,7 +119,7 @@ export function ExceptionsRow() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.04 }}
             whileHover={c.disabled ? undefined : { y: -2 }}
-            className={`block bg-white rounded-2xl border border-[#F0EDE8] p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] ${
+            className={`block bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] ${
               c.disabled ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow'
             }`}
           >
@@ -134,11 +134,11 @@ export function ExceptionsRow() {
                 </span>
               )}
             </div>
-            <div className="text-[30px] font-extrabold text-[#2D2A26] leading-none tabular-nums">
+            <div className="text-[30px] font-extrabold text-text-default leading-none tabular-nums">
               {c.value}
             </div>
-            <p className="text-[12px] font-bold text-[#2D2A26] mt-2">{c.label}</p>
-            <p className="text-[11px] font-medium text-[#A89F91] mt-0.5">{c.sub}</p>
+            <p className="text-label font-bold text-text-default mt-2">{c.label}</p>
+            <p className="text-caption font-medium text-text-muted mt-0.5">{c.sub}</p>
           </motion.a>
         ))}
       </div>

@@ -38,14 +38,15 @@ import {
 import { buildTestLabelCommands } from '@/lib/print/labelCommands';
 import { isSilentPrintEnabled, setSilentPrintEnabled } from '@/lib/print/printMode';
 import { friendlyPrintError } from '@/lib/print/printErrors';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface PrintPreferencesProps {
   onClose?: () => void;
 }
 
 const FIELD_CLS =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
-  'placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 ' +
+  'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2 text-sm text-text-default ' +
+  'placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 ' +
   'focus:ring-blue-500/20';
 
 const LANGUAGES: { id: LabelLanguage; label: string }[] = [
@@ -69,15 +70,16 @@ function SilentPrintToggle() {
     setSilentPrintEnabled(next);
   };
   return (
-    <div className="mb-4 flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+    <div className="mb-4 flex items-center gap-3 rounded-2xl border border-border-soft bg-surface-canvas px-4 py-3">
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-gray-900">Silent printing</div>
-        <p className="mt-0.5 text-xs text-gray-500">
+        <div className="text-sm font-semibold text-text-default">Silent printing</div>
+        <p className="mt-0.5 text-xs text-text-soft">
           {on
             ? 'Labels print straight to the configured printer with no dialog.'
             : 'Labels open the browser print dialog so you can pick a printer / preview.'}
         </p>
       </div>
+      {/* ds-raw-button: role="switch" toggle track + knob, not a Button/IconButton */}
       <button
         type="button"
         role="switch"
@@ -85,11 +87,11 @@ function SilentPrintToggle() {
         aria-label="Toggle silent printing"
         onClick={toggle}
         className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-          on ? 'bg-emerald-600' : 'bg-gray-300'
+          on ? 'bg-emerald-600' : 'bg-surface-strong'
         }`}
       >
         <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+          className={`inline-block h-4 w-4 transform rounded-full bg-surface-card shadow transition-transform ${
             on ? 'translate-x-6' : 'translate-x-1'
           }`}
         />
@@ -103,21 +105,20 @@ export function PrintPreferences({ onClose }: PrintPreferencesProps) {
   const webAvail = !electronAvail && isBrowserPrintSupported();
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Print preferences</h3>
-          <p className="text-xs text-gray-500">Profiles apply to this workstation only.</p>
+          <h3 className="text-base font-semibold text-text-default">Print preferences</h3>
+          <p className="text-xs text-text-soft">Profiles apply to this workstation only.</p>
         </div>
         {onClose && (
-          <button
+          <IconButton
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-          >
-            ✕
-          </button>
+            ariaLabel="Close"
+            className="rounded-xl border border-border-default bg-surface-card px-2 py-1.5 text-xs text-text-muted hover:bg-surface-hover"
+            icon={<span aria-hidden>✕</span>}
+          />
         )}
       </div>
 
@@ -176,17 +177,18 @@ function ElectronPreferences() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={refresh}
           disabled={loading}
-          className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           {loading ? 'Refreshing…' : 'Refresh printers'}
-        </button>
+        </Button>
       </div>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-gray-700">Printer</span>
+        <span className="mb-1 block text-xs font-medium text-text-muted">Printer</span>
         <select value={preset.deviceName ?? ''} onChange={(e) => update('deviceName', e.target.value || null)} className={FIELD_CLS}>
           <option value="">System default</option>
           {printers.map((p) => (
@@ -195,19 +197,19 @@ function ElectronPreferences() {
         </select>
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-gray-700">Paper size</span>
+        <span className="mb-1 block text-xs font-medium text-text-muted">Paper size</span>
         <select value={preset.paperSizeId} onChange={(e) => update('paperSizeId', e.target.value)} className={FIELD_CLS}>
           <option value={AUTO_PAPER_ID}>Let each label decide (default)</option>
           {PAPER_SIZE_OPTIONS.map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
         </select>
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-gray-700">Copies</span>
+        <span className="mb-1 block text-xs font-medium text-text-muted">Copies</span>
         <input type="number" min={1} max={20} value={preset.copies} onChange={(e) => update('copies', Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className={`${FIELD_CLS} w-24`} />
       </label>
-      <div className="flex items-center gap-3 border-t border-gray-200 pt-4">
-        <button type="button" onClick={onTest} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-500">Print test label</button>
-        {status && <span className="text-xs text-gray-500">{status}</span>}
+      <div className="flex items-center gap-3 border-t border-border-soft pt-4">
+        <Button type="button" variant="primary" size="md" onClick={onTest}>Print test label</Button>
+        {status && <span className="text-xs text-text-soft">{status}</span>}
       </div>
     </div>
   );
@@ -281,18 +283,18 @@ function BrowserProfiles() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+      <div className="rounded-xl border border-border-soft bg-surface-canvas px-3 py-2 text-xs text-text-muted">
         Pair a printer for each role. Labels &amp; receipts print silently from the browser (raw
         TSPL/ZPL/ESC-POS). Paper/office printers print silently only in the desktop app — in a
         browser tab they use the print dialog.
-        <span className="mt-1 block text-gray-500">
+        <span className="mt-1 block text-text-soft">
           If a vendor driver already owns the USB printer, WebUSB can’t reach it (“Access denied”).
           Pair it as a <strong>serial port</strong> for reliable silent printing, or remove the driver to use USB.
         </span>
       </div>
 
       {profiles.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-300 bg-white px-3 py-6 text-center text-sm text-gray-500">
+        <p className="rounded-xl border border-dashed border-border-default bg-surface-card px-3 py-6 text-center text-sm text-text-soft">
           No printers paired yet.
         </p>
       ) : (
@@ -320,22 +322,22 @@ function BrowserProfiles() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 border-t border-gray-200 pt-4">
+      <div className="flex flex-wrap gap-2 border-t border-border-soft pt-4">
         {isWebUsbSupported() && (
-          <button type="button" onClick={() => pair('usb')} disabled={busy} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          <Button type="button" variant="secondary" size="sm" onClick={() => pair('usb')} disabled={busy}>
             + Pair USB printer
-          </button>
+          </Button>
         )}
         {isWebSerialSupported() && (
-          <button type="button" onClick={() => pair('serial')} disabled={busy} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          <Button type="button" variant="secondary" size="sm" onClick={() => pair('serial')} disabled={busy}>
             + Pair serial printer
-          </button>
+          </Button>
         )}
-        <button type="button" onClick={addOsPrinter} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+        <Button type="button" variant="secondary" size="sm" onClick={addOsPrinter}>
           + Add paper / office printer
-        </button>
+        </Button>
       </div>
-      {status && <p className="text-xs text-gray-500">{status}</p>}
+      {status && <p className="text-xs text-text-soft">{status}</p>}
     </div>
   );
 }
@@ -377,19 +379,19 @@ function ProfileCard({
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3">
+    <div className="rounded-xl border border-border-soft bg-surface-card p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <input
           value={profile.name}
           onChange={(e) => set('name', e.target.value)}
-          className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold text-gray-900 hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+          className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold text-text-default hover:border-border-default focus:border-blue-500 focus:outline-none"
         />
-        <span className="shrink-0 text-caption text-gray-400">{profileSummary(profile)}</span>
+        <span className="shrink-0 text-caption text-text-faint">{profileSummary(profile)}</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <label className="block">
-          <span className="mb-1 block text-caption font-medium text-gray-600">Role</span>
+          <span className="mb-1 block text-caption font-medium text-text-muted">Role</span>
           <select value={profile.role} onChange={(e) => set('role', e.target.value as PrinterRole)} className={`${FIELD_CLS} px-2 py-1.5`}>
             {PRINTER_ROLES.map((r) => (<option key={r.id} value={r.id}>{r.label}</option>))}
           </select>
@@ -397,20 +399,20 @@ function ProfileCard({
 
         {profile.kind !== 'os' ? (
           <label className="block">
-            <span className="mb-1 block text-caption font-medium text-gray-600">Language</span>
+            <span className="mb-1 block text-caption font-medium text-text-muted">Language</span>
             <select value={profile.language} onChange={(e) => set('language', e.target.value as LabelLanguage)} className={`${FIELD_CLS} px-2 py-1.5`}>
               {LANGUAGES.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
             </select>
           </label>
         ) : (
           <label className="block">
-            <span className="mb-1 block text-caption font-medium text-gray-600">OS printer name</span>
+            <span className="mb-1 block text-caption font-medium text-text-muted">OS printer name</span>
             <input value={profile.deviceName ?? ''} onChange={(e) => set('deviceName', e.target.value)} placeholder="System default" className={`${FIELD_CLS} px-2 py-1.5`} />
           </label>
         )}
 
         <label className="block">
-          <span className="mb-1 block text-caption font-medium text-gray-600">Paper size</span>
+          <span className="mb-1 block text-caption font-medium text-text-muted">Paper size</span>
           <select value={profile.paperSizeId} onChange={(e) => set('paperSizeId', e.target.value)} className={`${FIELD_CLS} px-2 py-1.5`}>
             {sizes.map((s) => (<option key={s.id} value={s.id}>{s.label}</option>))}
           </select>
@@ -418,7 +420,7 @@ function ProfileCard({
 
         {profile.kind === 'serial' && (
           <label className="block">
-            <span className="mb-1 block text-caption font-medium text-gray-600">Baud</span>
+            <span className="mb-1 block text-caption font-medium text-text-muted">Baud</span>
             <select value={profile.baudRate ?? 9600} onChange={(e) => set('baudRate', Number(e.target.value))} className={`${FIELD_CLS} px-2 py-1.5`}>
               {[9600, 19200, 38400, 57600, 115200].map((b) => (<option key={b} value={b}>{b}</option>))}
             </select>
@@ -426,19 +428,19 @@ function ProfileCard({
         )}
 
         <label className="block">
-          <span className="mb-1 block text-caption font-medium text-gray-600">Copies</span>
+          <span className="mb-1 block text-caption font-medium text-text-muted">Copies</span>
           <input type="number" min={1} max={20} value={profile.copies} onChange={(e) => set('copies', Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className={`${FIELD_CLS} px-2 py-1.5`} />
         </label>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
-        <button type="button" onClick={onTest} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500">Test</button>
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-hairline pt-3">
+        <Button type="button" variant="primary" size="sm" onClick={onTest}>Test</Button>
         {isDefaultForRole ? (
           <span className="rounded-lg bg-green-50 px-2 py-1 text-caption font-medium text-green-700">Default for {profile.role}</span>
         ) : (
-          <button type="button" onClick={onMakeDefault} className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-caption text-gray-600 hover:bg-gray-50">Make default for {profile.role}</button>
+          <Button type="button" variant="secondary" size="sm" onClick={onMakeDefault}>Make default for {profile.role}</Button>
         )}
-        <button type="button" onClick={onRemove} className="ml-auto rounded-lg border border-gray-300 bg-white px-2 py-1 text-caption text-gray-600 hover:bg-gray-50">Remove</button>
+        <Button type="button" variant="secondary" size="sm" onClick={onRemove} className="ml-auto">Remove</Button>
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { recomputeEnrichmentForOrders } from '@/lib/neon/packer-log-enrichment';
 import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
@@ -66,7 +68,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       productTitle,
       accountSource,
       orderId,
-    });
+    }, ctx.organizationId);
 
     // Insert the new order (tracking linked later via shipment_id when packer scans)
     const result = await tenantQuery(
@@ -99,6 +101,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     await invalidateCacheTags(['orders', 'shipped']);
     await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [result.rows[0].id], source: 'orders.add' });
+    // A new order can newly match an already-packed scan by tracking — refresh
+    // the shipped-table read model for any affected PACK scans (best-effort).
+    after(() =>
+      recomputeEnrichmentForOrders(pool, [result.rows[0].id]).catch((e) =>
+        console.warn('[orders/add] enrichment recompute failed', e),
+      ),
+    );
     return NextResponse.json({
       success: true,
       message: 'Order added successfully',

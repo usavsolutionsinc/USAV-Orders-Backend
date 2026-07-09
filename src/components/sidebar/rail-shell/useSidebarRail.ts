@@ -1,9 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRailEditMode } from '@/components/sidebar/rail-edit-mode';
 import { railActivitySortMs, type SidebarRailShellProps } from './sidebar-rail-shared';
+import {
+  parseReceivingPrependedDetail,
+  receivingPrependMatchesRail,
+} from '@/lib/queries/receiving-queries';
 
 /**
  * Owns the generic sidebar-rail engine: data fetch + local mirror, optimistic
@@ -14,11 +18,20 @@ import { railActivitySortMs, type SidebarRailShellProps } from './sidebar-rail-s
  */
 export function useSidebarRail<TRow>({
   queryKey, fetchFn, updateEvent, deleteEvent, deleteGroupEvent, refreshEvents, navigateEvent,
-  selectedId, selectedRow = null, limit = 25,
+  selectedId, selectedRow = null, leadingRow = null, limit = 25,
   autoSelectFirstWhenEmpty = false,
   canAutoSelectFirst,
-  getId, getGroupId, getActivityAt, onSelect,
+  pinSelectedLead = true,
+  getId, getGroupId, getActivityAt, getReconcileId, getRowDisabled, onSelect,
 }: SidebarRailShellProps<TRow>) {
+  // Render identity: the durable key the React list reconciles by. Prefer the
+  // caller's reconcile id (e.g. a client-minted `client_event_id` that survives
+  // an optimistic stub → resolved-row swap) so the row UPDATES in place instead
+  // of unmount+remount; fall back to the numeric `id`.
+  const reconcileKey = useCallback(
+    (r: TRow): string | number => (getReconcileId ? getReconcileId(r) : getId(r)),
+    [getReconcileId, getId],
+  );
   const queryClient = useQueryClient();
   // Pencil-toggle multi-select (provided by the owning panel; inactive default
   // when no provider). While active, row clicks toggle checkboxes instead of
@@ -31,11 +44,12 @@ export function useSidebarRail<TRow>({
   const editAnchorIdRef = useRef<number | null>(null);
   useEffect(() => { editAnchorIdRef.current = null; }, [editMode.active]);
 
-  const { data, isLoading } = useQuery<TRow[]>({
+  const { data, isPending, isFetching } = useQuery<TRow[]>({
     queryKey,
     queryFn: fetchFn,
     staleTime: 20_000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 
   const sortRowsByActivity = useCallback((rows: TRow[]): TRow[] => {
@@ -47,13 +61,30 @@ export function useSidebarRail<TRow>({
   }, [getActivityAt, getId]);
 
   const [localRows, setLocalRows] = useState<TRow[] | null>(null);
-  // Mirror query data, but ALSO clear to null when the active query has no array
-  // data — i.e. a queryKey switch (e.g. tester A → tester B) where data is briefly
-  // undefined, or an error. Without the clear, the mirror keeps the previous
-  // feed's rows and renders them under the new feed's label with no skeleton.
+  // Mirror query data. For the SAME queryKey, keep the prior rows while a refetch
+  // is in flight (prevents unfound flicker during invalidate/refetch). But when
+  // the queryKey itself changes, clear immediately so rows from the previous feed
+  // can't render under the new feed's label.
+  const queryKeySig = useMemo(() => JSON.stringify(queryKey), [queryKey]);
+  const prevKeySigRef = useRef<string>(queryKeySig);
+  // Once this feed has rendered real rows, never swap back to the full skeleton
+  // on background refetch — that remount kills stagger + hover popovers and
+  // reads as a loading↔loaded flash.
+  const hadRowsForKeyRef = useRef(false);
   useEffect(() => {
-    setLocalRows(Array.isArray(data) ? sortRowsByActivity(data) : null);
-  }, [data, sortRowsByActivity]);
+    const keyChanged = prevKeySigRef.current !== queryKeySig;
+    if (keyChanged) {
+      prevKeySigRef.current = queryKeySig;
+      hadRowsForKeyRef.current = false;
+    }
+    if (Array.isArray(data)) {
+      setLocalRows(sortRowsByActivity(data));
+      return;
+    }
+    if (keyChanged) {
+      setLocalRows(null);
+    }
+  }, [data, sortRowsByActivity, queryKeySig]);
 
   useEffect(() => {
     if (!updateEvent) return;
@@ -122,6 +153,41 @@ export function useSidebarRail<TRow>({
     return () => window.removeEventListener(deleteGroupEvent, handleGroupDelete);
   }, [deleteGroupEvent, getGroupId]);
 
+  // Optimistic prepend — scan apply dispatches this with the freshly-matched rows
+  // so the rail shows the new carton instantly instead of waiting for a full
+  // refetch (which can take seconds on the heavy receiving-lines query).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const parsed = parseReceivingPrependedDetail((event as CustomEvent<unknown>).detail);
+      const { rows: detail, segments, scope } = parsed;
+      if (!Array.isArray(detail) || detail.length === 0) return;
+      if (!receivingPrependMatchesRail(queryKey, segments, scope)) return;
+      setLocalRows((rows) => {
+        const base = rows ?? [];
+        const seenLine = new Set(base.map((r) => getId(r)));
+        const seenCarton = getGroupId
+          ? new Set(
+              base
+                .map((r) => getGroupId(r))
+                .filter((id): id is number => id != null && Number.isFinite(id)),
+            )
+          : null;
+        const fresh = detail.filter((r) => {
+          if (seenLine.has(getId(r as TRow))) return false;
+          if (seenCarton && getGroupId) {
+            const gid = getGroupId(r as TRow);
+            if (gid != null && seenCarton.has(gid)) return false;
+          }
+          return true;
+        }) as TRow[];
+        if (fresh.length === 0) return base.length > 0 ? base : null;
+        return sortRowsByActivity([...fresh, ...base]);
+      });
+    };
+    window.addEventListener('receiving-lines-prepended', handler);
+    return () => window.removeEventListener('receiving-lines-prepended', handler);
+  }, [getId, getGroupId, sortRowsByActivity, queryKey]);
+
   useEffect(() => {
     if (!refreshEvents || refreshEvents.length === 0) return;
     const handler = () => { queryClient.invalidateQueries({ queryKey }); };
@@ -143,9 +209,27 @@ export function useSidebarRail<TRow>({
     },
     [deletedIds, deletedGroupIds, getId, getGroupId],
   );
-  const allRows = (Array.isArray(localRows) ? localRows : []).filter(
+  const baseRows = (Array.isArray(localRows) ? localRows : []).filter(
     (r) => !isRowDeleted(r),
   );
+  // An optimistic leading row (e.g. the triage "importing" stub) renders at the
+  // very top through the SAME row component. It is KEPT (not dropped) once the
+  // feed catches up, and its single feed twin is dropped instead — matched by
+  // exact `id` OR `reconcileKey`. This is what lets the stub reconcile to its
+  // resolved row IN PLACE: the lead keeps a stable `reconcileKey` (its
+  // client-minted id) across the swap, so React updates it rather than
+  // remounting, and the authoritative feed row it merged into is suppressed
+  // until the lead clears. Matching the EXACT twin (not the whole receiving_id
+  // group) keeps sibling lines of a multi-line carton visible.
+  const allRows = (() => {
+    if (leadingRow == null) return baseRows;
+    const leadId = getId(leadingRow);
+    const leadKey = reconcileKey(leadingRow);
+    const rest = baseRows.filter(
+      (r) => getId(r) !== leadId && reconcileKey(r) !== leadKey,
+    );
+    return [leadingRow, ...rest];
+  })();
   // `pinnedLead` marks that rows[0] is a selected row hoisted in from beyond the
   // top-N window (so the active line stays visible). `topCount` is the count of
   // genuine recent rows (excludes the pin) for the eyebrow headline.
@@ -153,6 +237,10 @@ export function useSidebarRail<TRow>({
     const top = allRows.slice(0, limit);
     const base = { rows: top, topCount: top.length, pinnedLead: false };
     if (selectedId == null) return base;
+    // Strict-order feeds (pinSelectedLead=false) never hoist the selected row —
+    // the rail must read top→bottom by its sort axis (e.g. unbox rail by
+    // unboxed_at) with no pin bounce on receive. See SidebarRailShellProps.
+    if (!pinSelectedLead) return base;
     // Never resurrect a just-deleted line via the pin — covers both a directly
     // deleted line and the synthetic stub of a deleted carton (whose group id is
     // suppressed even though its negative stub id never hit `deletedIds`).
@@ -163,7 +251,7 @@ export function useSidebarRail<TRow>({
     if (!pin || getId(pin) !== selectedId) return base;
     if (isRowDeleted(pin)) return base;
     return { rows: [pin, ...top], topCount: top.length, pinnedLead: true };
-  }, [allRows, limit, selectedId, selectedRow, getId, deletedIds, isRowDeleted]);
+  }, [allRows, limit, selectedId, selectedRow, getId, deletedIds, isRowDeleted, pinSelectedLead]);
 
   const grouped = useMemo(() => {
     type Info = { groupSize: number; groupIndex: number; groupId: number | null };
@@ -220,13 +308,22 @@ export function useSidebarRail<TRow>({
   // Walks the SAME visible order keyboard nav uses (skips collapsed group
   // members) so a chevron press never lands selection on a hidden row. With
   // nothing selected yet, prev/next both open the first rendered row.
+  // When the selected line is a sibling not listed in a carton-deduped rail
+  // (unbox Unboxed keeps one row per receiving_id), fall back to matching the
+  // selected row's group id so PO-level chevrons still step.
   useEffect(() => {
     if (!navigateEvent) return;
     const handler = (event: Event) => {
       const direction = (event as CustomEvent<'prev' | 'next'>).detail;
       if (direction !== 'prev' && direction !== 'next') return;
       if (visibleIndices.length === 0) return;
-      const curPos = visibleIndices.findIndex((i) => getId(rows[i]) === selectedId);
+      let curPos = visibleIndices.findIndex((i) => getId(rows[i]) === selectedId);
+      if (curPos < 0 && getGroupId && selectedRow != null) {
+        const selectedGroup = getGroupId(selectedRow);
+        if (selectedGroup != null) {
+          curPos = visibleIndices.findIndex((i) => getGroupId(rows[i]) === selectedGroup);
+        }
+      }
       if (curPos < 0) { onSelect(rows[visibleIndices[0]]); return; }
       const nextRowIdx = visibleIndices[curPos + (direction === 'prev' ? -1 : 1)];
       if (nextRowIdx == null) return; // already at an edge — no wrap
@@ -234,7 +331,7 @@ export function useSidebarRail<TRow>({
     };
     window.addEventListener(navigateEvent, handler);
     return () => window.removeEventListener(navigateEvent, handler);
-  }, [navigateEvent, rows, visibleIndices, selectedId, getId, onSelect]);
+  }, [navigateEvent, rows, visibleIndices, selectedId, selectedRow, getId, getGroupId, onSelect]);
 
   const autoSelectedRef = useRef(false);
   useEffect(() => {
@@ -248,11 +345,17 @@ export function useSidebarRail<TRow>({
 
   useEffect(() => {
     if (!autoSelectFirstWhenEmpty || autoSelectedRef.current) return;
-    if (selectedId != null || isLoading || rows.length === 0) return;
+    if (selectedId != null || isPending || rows.length === 0) return;
     if (canAutoSelectFirst && !canAutoSelectFirst()) return;
     autoSelectedRef.current = true;
     onSelect(rows[0]);
-  }, [autoSelectFirstWhenEmpty, canAutoSelectFirst, selectedId, isLoading, rows, onSelect]);
+  }, [autoSelectFirstWhenEmpty, canAutoSelectFirst, selectedId, isPending, rows, onSelect]);
+
+  if (rows.length > 0) {
+    hadRowsForKeyRef.current = true;
+  }
+
+  const showSkeleton = isPending && rows.length === 0 && !hadRowsForKeyRef.current;
 
   const focusRow = useCallback((idx: number) => {
     const btn = listRef.current?.querySelector<HTMLButtonElement>(`button[data-rail-row][data-rail-index="${idx}"]`);
@@ -312,8 +415,10 @@ export function useSidebarRail<TRow>({
 
   return {
     editMode,
-    isLoading,
+    showSkeleton,
+    isFetching,
     rows,
+    getRowDisabled,
     topCount,
     grouped,
     collapsedGroups,

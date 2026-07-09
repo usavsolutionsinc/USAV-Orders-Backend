@@ -75,9 +75,9 @@ export function statusColor(status?: string) {
     case 'partially_received': return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'received':           return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'open':               return 'bg-blue-50 text-blue-700 border-blue-200';
-    case 'draft':              return 'bg-gray-100 text-gray-600 border-gray-200';
+    case 'draft':              return 'bg-surface-sunken text-text-muted border-border-soft';
     case 'cancelled':          return 'bg-red-50 text-red-600 border-red-200';
-    default:                   return 'bg-gray-100 text-gray-500 border-gray-200';
+    default:                   return 'bg-surface-sunken text-text-soft border-border-soft';
   }
 }
 

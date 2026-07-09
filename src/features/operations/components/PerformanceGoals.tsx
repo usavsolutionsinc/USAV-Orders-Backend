@@ -22,7 +22,7 @@ function RadialRing({ percentage, label, countLabel, color, ringBgColor }: Radia
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className="flex items-center gap-4 bg-[#FAFAF8] border border-[#E8E4DD] p-4 rounded-2xl transition-all duration-200 hover:shadow-sm">
+    <div className="flex items-center gap-4 bg-surface-card border border-border-soft p-4 rounded-2xl transition-all duration-200 hover:shadow-sm">
       <div className="relative w-[68px] h-[68px] shrink-0">
         <svg className="w-full h-full transform -rotate-90">
           {/* Base track */}
@@ -50,14 +50,14 @@ function RadialRing({ percentage, label, countLabel, color, ringBgColor }: Radia
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[12px] font-black text-[#2D2A26] tracking-tighter tabular-nums">
+          <span className="text-label font-black text-text-default tracking-tighter tabular-nums">
             {percentage}%
           </span>
         </div>
       </div>
       <div className="text-left space-y-0.5">
-        <p className={`${sectionLabel} !text-[#A89F91]`}>{label}</p>
-        <h4 className="text-[13px] font-black text-[#2D2A26] leading-tight pr-1">
+        <p className={`${sectionLabel} !text-text-muted`}>{label}</p>
+        <h4 className="text-[13px] font-black text-text-default leading-tight pr-1">
           {countLabel}
         </h4>
       </div>
@@ -69,16 +69,16 @@ function RadialRing({ percentage, label, countLabel, color, ringBgColor }: Radia
 
 export function PerformanceGoals() {
   return (
-    <section className="bg-white rounded-3xl shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-8 select-none">
+    <section className="bg-surface-card rounded-3xl shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-8 select-none">
       {/* ── Section Header ─────────────────────────────────────── */}
       <div className="mb-8">
-        <span className={`${sectionLabel} !text-[#A89F91]`}>PERFORMANCE TRACKER</span>
-        <h2 className={`${cardTitle} !text-[#2D2A26] mt-1`}>Goals &amp; Progress</h2>
+        <span className={`${sectionLabel} !text-text-muted`}>PERFORMANCE TRACKER</span>
+        <h2 className={`${cardTitle} !text-text-default mt-1`}>Goals &amp; Progress</h2>
       </div>
 
       {/* ── Sub-section 1: Daily Milestones ────────────────────── */}
       <div className="mb-8">
-        <span className={`${sectionLabel} !text-[#A89F91] mb-3 block`}>
+        <span className={`${sectionLabel} !text-text-muted mb-3 block`}>
           01 // DAILY MILESTONES
         </span>
         <div className="grid grid-cols-2 gap-4">
@@ -100,73 +100,73 @@ export function PerformanceGoals() {
       </div>
 
       {/* ── Divider ────────────────────────────────────────────── */}
-      <div className="border-t border-[#E8E4DD] mb-8" />
+      <div className="border-t border-border-soft mb-8" />
 
       {/* ── Sub-section 2: Weekly Forecast ─────────────────────── */}
       <div className="mb-8">
-        <span className={`${sectionLabel} !text-[#A89F91] mb-3 block`}>
+        <span className={`${sectionLabel} !text-text-muted mb-3 block`}>
           02 // WEEKLY PACE
         </span>
 
-        <div className="bg-[#FAFAF8] border border-[#E8E4DD] p-5 rounded-2xl space-y-4">
+        <div className="bg-surface-card border border-border-soft p-5 rounded-2xl space-y-4">
           <div className="flex justify-between items-baseline">
-            <span className="text-[10px] font-black text-[#A89F91] uppercase tracking-wider">
+            <span className="text-micro font-black text-text-muted uppercase tracking-wider">
               Weekly Target
             </span>
-            <span className="text-[14px] font-black text-[#2D2A26] tabular-nums">
+            <span className="text-[14px] font-black text-text-default tabular-nums">
               1,480{' '}
-              <span className="text-[11px] text-[#A89F91] font-medium">/ 1,800 units</span>
+              <span className="text-caption text-text-muted font-medium">/ 1,800 units</span>
             </span>
           </div>
 
           {/* Amber progress bar */}
           <div className="space-y-1.5">
-            <div className="h-2 w-full bg-[#E8E4DD] rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-surface-sunken rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: '82%' }}
                 transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full bg-[#F59E0B] rounded-full"
+                className="h-full bg-amber-500 rounded-full"
               />
             </div>
-            <div className="flex justify-between text-[9px] font-black text-[#A89F91] uppercase tracking-wider mt-1.5">
+            <div className="flex justify-between text-eyebrow font-black text-text-muted uppercase tracking-wider mt-1.5">
               <span>Current pace</span>
               <span>82% complete</span>
             </div>
           </div>
 
-          <p className="text-[12px] text-[#6B6356] font-medium leading-relaxed">
+          <p className="text-label text-text-muted font-medium leading-relaxed">
             You&apos;re on track to exceed last week by{' '}
-            <span className="font-extrabold text-[#2D2A26]">8.4%</span> 🚀
+            <span className="font-extrabold text-text-default">8.4%</span> 🚀
           </p>
         </div>
       </div>
 
       {/* ── Divider ────────────────────────────────────────────── */}
-      <div className="border-t border-[#E8E4DD] mb-8" />
+      <div className="border-t border-border-soft mb-8" />
 
       {/* ── Sub-section 3: Smart Recommendations ───────────────── */}
       <div>
         <div className="flex items-center gap-1.5 mb-1">
-          <Sparkles className="w-3.5 h-3.5 text-[#D97706]" />
-          <span className={`${sectionLabel} !text-[#D97706]`}>03 // RECOMMENDATIONS</span>
+          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+          <span className={`${sectionLabel} !text-amber-600`}>03 // RECOMMENDATIONS</span>
         </div>
-        <h3 className={`${cardTitle} !text-[#2D2A26] mb-4`}>Smart Recommendations</h3>
+        <h3 className={`${cardTitle} !text-text-default mb-4`}>Smart Recommendations</h3>
 
         <div className="space-y-3">
           {/* Card 1: FBA Warning */}
           <motion.div
             whileHover={{ y: -1.5 }}
-            className="flex items-start gap-3.5 p-3.5 bg-amber-50/50 hover:bg-amber-50 border-l-2 border-l-[#F59E0B] border-y border-r border-[#E8E4DD] rounded-r-xl cursor-pointer transition-colors duration-150"
+            className="flex items-start gap-3.5 p-3.5 bg-amber-50/50 hover:bg-amber-50 border-l-2 border-l-[#F59E0B] border-y border-r border-border-soft rounded-r-xl cursor-pointer transition-colors duration-150"
           >
-            <div className="w-7 h-7 rounded-lg bg-[#F59E0B]/10 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-3.5 h-3.5 text-[#D97706]" />
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
             </div>
             <div className="text-left space-y-0.5">
-              <p className="text-[12px] font-bold text-[#2D2A26] leading-snug">
+              <p className="text-label font-bold text-text-default leading-snug">
                 Replenish Amazon FBA inventory soon
               </p>
-              <p className="text-[10px] text-[#A89F91] font-semibold leading-normal mt-0.5">
+              <p className="text-micro text-text-muted font-semibold leading-normal mt-0.5">
                 SKU USAV-CBL-04 inventory low (9 days remaining). Click to create shipment.
               </p>
             </div>
@@ -175,16 +175,16 @@ export function PerformanceGoals() {
           {/* Card 2: Support Ticket Queue Alert */}
           <motion.div
             whileHover={{ y: -1.5 }}
-            className="flex items-start gap-3.5 p-3.5 bg-[#E07A5F]/[0.04] hover:bg-[#E07A5F]/[0.08] border-l-2 border-l-[#E07A5F] border-y border-r border-[#E8E4DD] rounded-r-xl cursor-pointer transition-colors duration-150"
+            className="flex items-start gap-3.5 p-3.5 bg-[#E07A5F]/[0.04] hover:bg-[#E07A5F]/[0.08] border-l-2 border-l-[#E07A5F] border-y border-r border-border-soft rounded-r-xl cursor-pointer transition-colors duration-150"
           >
             <div className="w-7 h-7 rounded-lg bg-[#E07A5F]/10 flex items-center justify-center shrink-0">
               <AlertCircle className="w-3.5 h-3.5 text-[#E07A5F]" />
             </div>
             <div className="text-left space-y-0.5">
-              <p className="text-[12px] font-bold text-[#2D2A26] leading-snug">
+              <p className="text-label font-bold text-text-default leading-snug">
                 Critical Ticket Backlog
               </p>
-              <p className="text-[10px] text-[#A89F91] font-semibold leading-normal mt-0.5">
+              <p className="text-micro text-text-muted font-semibold leading-normal mt-0.5">
                 4 repairs waiting more than 48h. Tap to assign urgent technician dispatch.
               </p>
             </div>

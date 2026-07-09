@@ -28,6 +28,7 @@
 
 import { and, asc, desc, eq, notExists, sql } from 'drizzle-orm';
 import { db } from '@/lib/drizzle/db';
+import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
 import {
   itemWorkflowState,
   workflowDefinitions,
@@ -42,6 +43,12 @@ import { enrollItem } from './store';
 export type WorkflowTapEvent =
   | 'unit_received'
   | 'test_verdict'
+  // Fired by the data-wipe station action (recordDataWipe) after a secure
+  // erase / factory reset. The `data_wipe` node maps wipeSuccess → 'wiped'
+  // (→ grade) vs 'failed' (→ repair). Unlike most taps this advances ONLY the
+  // graph position — the wipe is a recorded compliance event, not a
+  // serial_units status change.
+  | 'data_wiped'
   | 'repair_completed'
   | 'listed'
   | 'packed'
@@ -50,7 +57,13 @@ export type WorkflowTapEvent =
   // its tap — no domain site fires this yet; wiring is one tapWorkflow call at
   // the pack-confirm gate once the packer adopts a scan→confirm step.
   | 'pack_verified'
-  | 'shipped';
+  | 'shipped'
+  // Fired twice per return, by design (see the done-unit re-entry branch
+  // below and the `returns` node, nodes/returns.node.ts): once with no
+  // `input.disposition` when a return is detected (the unit parks at the
+  // `returns` node), and again once a human disposition decision exists
+  // (routes the parked unit out via restock/rtv/scrap).
+  | 'return_received';
 
 export interface WorkflowTapArgs {
   serialUnitId: number;
@@ -85,25 +98,7 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
     // updateRepair), and advance() must keep doing its own read so the state
     // is fresh once a real per-unit lock lands (acquire → read → write).
     // One indexed point-select per human-paced scan is the accepted cost.
-    const [state] = await db
-      .select({
-        organizationId: itemWorkflowState.organizationId,
-        status: itemWorkflowState.status,
-        // Current parked node's registry type — for the opt-in position guard
-        // below. LEFT JOIN so an enrolled unit on a since-removed node still
-        // loads (currentNodeType null → guard treats it as a mismatch no-op).
-        currentNodeType: workflowNodes.type,
-      })
-      .from(itemWorkflowState)
-      .leftJoin(
-        workflowNodes,
-        and(
-          eq(workflowNodes.id, itemWorkflowState.currentNodeId),
-          eq(workflowNodes.workflowDefinitionId, itemWorkflowState.workflowDefinitionId),
-        ),
-      )
-      .where(eq(itemWorkflowState.serialUnitId, args.serialUnitId))
-      .limit(1);
+    const state = await loadTapState(args.serialUnitId, args.orgId ?? null);
 
     let orgId = state?.organizationId ?? null;
 
@@ -122,7 +117,23 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
         startNodeId: start.nodeId,
       });
     } else if (state.status === 'done') {
-      return; // finished runs stay finished (returns re-enter via rma_intake later)
+      // A completed run stays finished for every event EXCEPT a return: a
+      // unit that shipped-and-completed is exactly the normal case for a
+      // later return, so re-enroll it at the org's `returns`-type node
+      // (not the graph's normal entry) instead of dropping the tap. Re-
+      // running enrollItem's upsert (unique on serialUnitId) IS "re-enroll"
+      // — no new persistence mechanism needed, see store.ts.
+      if (args.event !== 'return_received') return;
+      const returnsNode = await findNodeOfType(state.organizationId, 'returns');
+      if (!returnsNode) return; // no returns node in this org's graph
+      await enrollItem({
+        orgId: state.organizationId,
+        serialUnitId: args.serialUnitId,
+        workflowDefinitionId: returnsNode.workflowDefinitionId,
+        startNodeId: returnsNode.nodeId,
+      });
+      // Fall through to advance() below so this same tap also runs the node
+      // once parked (mirrors the fresh-enrollment branch above).
     }
 
     if (!orgId) return;
@@ -145,6 +156,82 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
       err,
     );
   }
+}
+
+interface TapStateRow {
+  organizationId: string;
+  status: string;
+  /** Current parked node's registry type — for the opt-in position guard. */
+  currentNodeType: string | null;
+}
+
+/**
+ * The org-discovery + position-guard pre-read against item_workflow_state.
+ *
+ * When the caller knows the org (every route tap + the applyTransition
+ * chokepoint always pass it), the read is scoped through `withTenantDrizzle` so
+ * it carries the `app.current_org` GUC and keeps working once
+ * item_workflow_state is RLS-FORCED (Phase E); the org predicate is explicit
+ * (defense in depth). When the caller does NOT know the org — legacy lib
+ * re-taps that omit it (recordTestVerdict's pre-chokepoint path, updateRepair) —
+ * it falls back to the stateless neon-http `db` to discover the owning org by
+ * the globally-unique serial_unit_id. That fallback is an INTENTIONAL cross-org
+ * lookup and is the one residual item_workflow_state read not behind the GUC;
+ * it relies on the owner connection's RLS bypass and would need an org threaded
+ * through those legacy callers before item_workflow_state can be FORCE-enforced.
+ *
+ * LEFT JOIN on workflow_nodes (no org column) so an enrolled unit parked on a
+ * since-removed node still loads (currentNodeType null → guard treats it as a
+ * mismatch no-op).
+ */
+async function loadTapState(
+  serialUnitId: number,
+  orgId: string | null,
+): Promise<TapStateRow | undefined> {
+  if (orgId) {
+    const [row] = await withTenantDrizzle(orgId, (tx) =>
+      tx
+        .select({
+          organizationId: itemWorkflowState.organizationId,
+          status: itemWorkflowState.status,
+          currentNodeType: workflowNodes.type,
+        })
+        .from(itemWorkflowState)
+        .leftJoin(
+          workflowNodes,
+          and(
+            eq(workflowNodes.id, itemWorkflowState.currentNodeId),
+            eq(workflowNodes.workflowDefinitionId, itemWorkflowState.workflowDefinitionId),
+          ),
+        )
+        .where(
+          and(
+            eq(itemWorkflowState.organizationId, orgId),
+            eq(itemWorkflowState.serialUnitId, serialUnitId),
+          ),
+        )
+        .limit(1),
+    );
+    return row;
+  }
+
+  const [row] = await db
+    .select({
+      organizationId: itemWorkflowState.organizationId,
+      status: itemWorkflowState.status,
+      currentNodeType: workflowNodes.type,
+    })
+    .from(itemWorkflowState)
+    .leftJoin(
+      workflowNodes,
+      and(
+        eq(workflowNodes.id, itemWorkflowState.currentNodeId),
+        eq(workflowNodes.workflowDefinitionId, itemWorkflowState.workflowDefinitionId),
+      ),
+    )
+    .where(eq(itemWorkflowState.serialUnitId, serialUnitId))
+    .limit(1);
+  return row;
 }
 
 /**
@@ -215,4 +302,64 @@ async function loadEntryNode(
   if (!entry) return null;
 
   return { workflowDefinitionId: def.id, nodeId: entry.id };
+}
+
+/**
+ * The org's active workflow definition's node of a given registry TYPE (e.g.
+ * 'returns') — the re-entry point for an event that doesn't restart the
+ * normal graph entry. Sibling to findEntryNode, same active-definition
+ * lookup, but filters on node.type instead of "no inbound edges": the
+ * returns node is a second, deliberately-disconnected entry point, not the
+ * graph's leftmost node. If an org's graph somehow has more than one node of
+ * this type, the first one found wins — same "good enough, not over-
+ * engineered" tiebreak as findEntryNode's positionX ordering.
+ */
+const nodeTypeCache = new Map<
+  string,
+  { value: { workflowDefinitionId: number; nodeId: string } | null; at: number }
+>();
+
+async function findNodeOfType(
+  orgId: string,
+  nodeType: string,
+): Promise<{ workflowDefinitionId: number; nodeId: string } | null> {
+  const cacheKey = `${orgId}:${nodeType}`;
+  const cached = nodeTypeCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < ENTRY_CACHE_TTL_MS) return cached.value;
+
+  const value = await loadNodeOfType(orgId, nodeType);
+  nodeTypeCache.set(cacheKey, { value, at: Date.now() });
+  return value;
+}
+
+async function loadNodeOfType(
+  orgId: string,
+  nodeType: string,
+): Promise<{ workflowDefinitionId: number; nodeId: string } | null> {
+  const [def] = await db
+    .select({ id: workflowDefinitions.id })
+    .from(workflowDefinitions)
+    .where(
+      and(
+        eq(workflowDefinitions.organizationId, orgId),
+        eq(workflowDefinitions.isActive, true),
+      ),
+    )
+    .orderBy(desc(workflowDefinitions.version))
+    .limit(1);
+  if (!def) return null;
+
+  const [node] = await db
+    .select({ id: workflowNodes.id })
+    .from(workflowNodes)
+    .where(
+      and(
+        eq(workflowNodes.workflowDefinitionId, def.id),
+        eq(workflowNodes.type, nodeType),
+      ),
+    )
+    .limit(1);
+  if (!node) return null;
+
+  return { workflowDefinitionId: def.id, nodeId: node.id };
 }

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, Check, Loader2, X } from '@/components/Icons';
+import { AlertCircle, Check, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 
 // ─── Shared shell ──────────────────────────────────────────────────────────
 
@@ -52,30 +53,29 @@ export function ModalShell({
   // trapped if any ancestor sets transform/filter/will-change.
   return createPortal(
     <div className="fixed inset-0 z-panelPopover flex items-center justify-center p-4">
+      {/* ds-raw-button: full-bleed dismiss scrim, not a Button shape */}
       <button
         type="button"
-        className="absolute inset-0 bg-black/40"
+        className="ds-raw-button absolute inset-0 bg-scrim/40"
         aria-label="Close"
         onClick={() => { if (!busy) onClose(); }}
       />
-      <div className={`relative z-panelPopover w-full ${widthClass} overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20`}>
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+      <div className={`relative z-panelPopover w-full ${widthClass} overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-2xl shadow-zinc-900/20`}>
+        <div className="flex items-center justify-between border-b border-border-soft px-4 py-3">
           <div>
-            <p className="text-micro font-black uppercase tracking-[0.16em] text-zinc-500">{eyebrow}</p>
-            <h2 className="mt-1 text-sm font-black text-zinc-900">{title}</h2>
+            <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">{eyebrow}</p>
+            <h2 className="mt-1 text-sm font-black text-text-default">{title}</h2>
           </div>
-          <button
-            type="button"
+          <IconButton
+            icon={<X className="h-4 w-4" />}
             onClick={onClose}
             disabled={busy}
-            className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close"
+            className="rounded-full border border-border-soft bg-surface-card p-2 hover:border-border-default hover:bg-surface-hover hover:text-text-default"
+          />
         </div>
         <div className="space-y-4 px-4 py-4">{children}</div>
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-border-hairline bg-surface-canvas/60 px-4 py-3">
           {footer}
         </div>
       </div>
@@ -86,16 +86,16 @@ export function ModalShell({
 
 export function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="mb-1 block text-micro font-black uppercase tracking-[0.14em] text-zinc-500">
+    <span className="mb-1 block text-micro font-black uppercase tracking-[0.14em] text-text-soft">
       {children}
     </span>
   );
 }
 
 export const inputClass =
-  'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100';
+  'w-full rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-sm text-text-default placeholder:text-text-faint focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100';
 
-export const selectClass = inputClass + ' appearance-none bg-white';
+export const selectClass = inputClass + ' appearance-none bg-surface-card';
 
 export function PrimaryButton({
   busy, disabled, children, onClick, danger,
@@ -106,28 +106,25 @@ export function PrimaryButton({
   onClick: () => void;
   danger?: boolean;
 }) {
-  const base = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-micro font-black uppercase tracking-[0.14em] text-white transition-colors disabled:opacity-50';
-  const tone = danger
-    ? 'bg-red-600 hover:bg-red-700'
-    : 'bg-gray-900 hover:bg-gray-800';
   return (
-    <button type="button" onClick={onClick} disabled={busy || disabled} className={`${base} ${tone}`}>
-      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+    <Button
+      variant={danger ? 'danger' : 'brand'}
+      size="sm"
+      loading={busy}
+      disabled={disabled}
+      icon={<Check className="h-3.5 w-3.5" />}
+      onClick={onClick}
+    >
       {children}
-    </button>
+    </Button>
   );
 }
 
 export function SecondaryButton({ disabled, onClick, children }: { disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
-    >
+    <Button variant="secondary" size="sm" onClick={onClick} disabled={disabled}>
       {children}
-    </button>
+    </Button>
   );
 }
 

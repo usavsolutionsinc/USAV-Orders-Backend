@@ -29,8 +29,8 @@ export function EmailTab({ detail }: { detail: TriageDetail }) {
       ) : html ? (
         <EmailHtmlFrame html={html} />
       ) : (
-        <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-          <pre className="whitespace-pre-wrap break-words font-sans text-caption leading-relaxed text-gray-700">
+        <div className="rounded-md border border-border-soft bg-surface-canvas p-3">
+          <pre className="whitespace-pre-wrap break-words font-sans text-caption leading-relaxed text-text-muted">
             {text || '(empty body)'}
           </pre>
         </div>
@@ -80,7 +80,8 @@ function EmailHtmlFrame({ html }: { html: string }) {
   }, [html]);
 
   return (
-    <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
+    <div className="overflow-hidden rounded-md border border-border-soft bg-surface-card">
+      {/* ds-allow-title: iframe title is the required accessible name, not a tooltip */}
       <iframe
         ref={ref}
         sandbox=""

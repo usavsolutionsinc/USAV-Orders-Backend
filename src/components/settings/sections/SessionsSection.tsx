@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 
 interface SessionRow {
   sid: string;
@@ -61,20 +62,20 @@ export function SessionsSection() {
     await refresh();
   }, [refresh]);
 
-  if (loading) return <div className="text-sm text-gray-500">Loading…</div>;
+  if (loading) return <div className="text-sm text-text-soft">Loading…</div>;
 
   return (
     <section className="space-y-4">
       <header>
         <h1 className="sr-only">Active sessions</h1>
-        <p className="text-sm text-gray-500">Anyone signed in right now. Revoke to kick a device.</p>
+        <p className="text-sm text-text-soft">Anyone signed in right now. Revoke to kick a device.</p>
       </header>
 
       {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-border-soft bg-surface-card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-caption uppercase tracking-wider text-gray-500">
+          <thead className="bg-surface-canvas text-left text-caption uppercase tracking-wider text-text-soft">
             <tr>
               <th className="px-3 py-2">Staff</th>
               <th className="px-3 py-2">Device</th>
@@ -83,26 +84,31 @@ export function SessionsSection() {
               <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border-hairline">
             {rows.map((row) => (
               <tr key={row.sid}>
-                <td className="px-3 py-2 font-medium text-gray-900">{row.staff_name}</td>
+                <td className="px-3 py-2 font-medium text-text-default">{row.staff_name}</td>
                 <td className="px-3 py-2 text-xs">
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 mr-2">{row.device_kind}</span>
-                  {row.device_label && <span className="text-gray-500">{row.device_label}</span>}
+                  <span className="rounded-full bg-surface-sunken px-2 py-0.5 mr-2">{row.device_kind}</span>
+                  {row.device_label && <span className="text-text-soft">{row.device_label}</span>}
                 </td>
-                <td className="px-3 py-2 text-xs text-gray-500">{row.ip || '—'}</td>
-                <td className="px-3 py-2 text-xs text-gray-500">{fmtRelative(row.last_seen_at)}</td>
+                <td className="px-3 py-2 text-xs text-text-soft">{row.ip || '—'}</td>
+                <td className="px-3 py-2 text-xs text-text-soft">{fmtRelative(row.last_seen_at)}</td>
                 <td className="px-3 py-2 text-right">
-                  <button type="button" onClick={() => void revoke(row.sid)}
-                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    onClick={() => void revoke(row.sid)}
+                    className="border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  >
                     Revoke
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">No active sessions.</td></tr>
+              <tr><td colSpan={5} className="px-3 py-8 text-center text-text-faint">No active sessions.</td></tr>
             )}
           </tbody>
         </table>

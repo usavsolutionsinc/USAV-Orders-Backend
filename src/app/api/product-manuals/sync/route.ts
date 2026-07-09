@@ -11,6 +11,7 @@ import {
   upsertProductManual,
 } from '@/lib/neon/product-manuals-queries';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 
 function deriveDisplayName(fileName: string) {
   return String(fileName || '')
@@ -87,6 +88,7 @@ async function handlePost(_req: NextRequest, ctx: AuthContext) {
     }
 
     await invalidateCacheTags(['product-manuals', 'pm:manuals']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.productManuals]);
 
     return NextResponse.json({
       success: true,

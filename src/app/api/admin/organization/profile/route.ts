@@ -18,6 +18,7 @@ function profilePayload(settings: OrgSettings) {
     warrantyDays: settings.warrantyDays,
     packing: settings.packing ?? { enforcement: 'advisory' as const },
     brand: settings.brand ?? {},
+    letterhead: settings.letterhead ?? { addressLine1: '', addressLine2: '', phone: '', email: '' },
   };
 }
 
@@ -76,6 +77,17 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
       nextBrand.primaryColor = brand.primaryColor.trim();
     }
     patch.brand = nextBrand;
+  }
+  if (b.letterhead != null && typeof b.letterhead === 'object' && !Array.isArray(b.letterhead)) {
+    const lh = b.letterhead as Record<string, unknown>;
+    const nextLetterhead = { addressLine1: '', addressLine2: '', phone: '', email: '' };
+    if (typeof lh.addressLine1 === 'string') nextLetterhead.addressLine1 = lh.addressLine1.trim().slice(0, 120);
+    if (typeof lh.addressLine2 === 'string') nextLetterhead.addressLine2 = lh.addressLine2.trim().slice(0, 120);
+    if (typeof lh.phone === 'string') nextLetterhead.phone = lh.phone.trim().slice(0, 40);
+    if (typeof lh.email === 'string' && (lh.email.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lh.email.trim()))) {
+      nextLetterhead.email = lh.email.trim();
+    }
+    patch.letterhead = nextLetterhead;
   }
 
   if (Object.keys(patch).length === 0) {

@@ -83,7 +83,7 @@ export const FBA_STATUS_PILL: Record<string, string> = {
 
 /** Pill classes for an FBA status (case-insensitive); safe for unknowns. */
 export function fbaStatusPillClass(status: string): string {
-  return FBA_STATUS_PILL[status.toUpperCase()] ?? 'bg-gray-100 text-gray-600';
+  return FBA_STATUS_PILL[status.toUpperCase()] ?? 'bg-surface-sunken text-text-muted';
 }
 
 /** Allowed forward + revert transitions. Used to guard status writes. */

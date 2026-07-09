@@ -24,6 +24,6 @@ export default async function GtinPage({
   const { gtin } = await params;
   const sid = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = await getCurrentUserBySid(sid);
-  const result = await resolveGs1(`/01/${gtin}`, { isInternal: user !== null });
+  const result = await resolveGs1(`/01/${gtin}`, { isInternal: user !== null, orgId: user?.organizationId });
   redirect(result.redirect);
 }

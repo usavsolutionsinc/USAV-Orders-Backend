@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WarrantyZendeskComment } from '@/lib/warranty/zendesk-format';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 /**
  * Warranty ↔ Zendesk data layer for the ticket popover. Comments and ticket
@@ -116,7 +117,7 @@ export function useWarrantyZendeskMutations(claimId: number) {
       const res = await fetch(`/api/warranty/claims/${claimId}/zendesk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ idempotencyKey: safeRandomUUID() }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) {
@@ -141,7 +142,7 @@ export function useWarrantyZendeskMutations(claimId: number) {
       const res = await fetch(`/api/warranty/claims/${claimId}/zendesk/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body, public: isPublic, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ body, public: isPublic, idempotencyKey: safeRandomUUID() }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) throw new Error(json?.error || `request failed (${res.status})`);
@@ -156,7 +157,7 @@ export function useWarrantyZendeskMutations(claimId: number) {
       const res = await fetch(`/api/warranty/claims/${claimId}/zendesk/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ ticketId, idempotencyKey: safeRandomUUID() }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) throw new Error(json?.error || `request failed (${res.status})`);

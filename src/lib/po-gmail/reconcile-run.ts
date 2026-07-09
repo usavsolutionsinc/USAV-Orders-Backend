@@ -276,6 +276,7 @@ export async function runPoMailboxReconcile(opts: ReconcileRunOpts = {}): Promis
                   zoho_purchaseorder_id: match.zoho_purchaseorder_id,
                   trackingCandidates: item.trackingCandidates,
                   sourceSystem: 'po-gmail.reconcile',
+                  organizationId: orgId,
                 });
                 trackingLinked += r.linked;
                 trackingAlreadyLinked += r.alreadyLinked;

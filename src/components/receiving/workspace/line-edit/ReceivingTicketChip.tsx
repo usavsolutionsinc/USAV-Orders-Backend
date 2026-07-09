@@ -7,6 +7,8 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/utils/_cn';
 import { formatDateTimePST } from '@/utils/date';
 import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IdentityLinkChip } from './IdentityLinkChip';
 
 /** Numeric Zendesk id parsed out of a stored "#1234" / "1234" / ticket URL. */
@@ -70,16 +72,19 @@ export function ReceivingTicketChip({
   value,
   display,
   openHref,
+  providerTicketId,
   receivingId,
   lineId,
   onUnlinked,
 }: {
-  /** Raw stored ticket ref ("#1234") — copied + parsed for the numeric id. */
+  /** Copy value — internal ticket label (#42). */
   value: string;
-  /** Short label shown in the chip (numeric id). */
+  /** Short label shown in the chip (internal ticket id). */
   display: string;
   /** Zendesk deep link for the chip's external-link button. */
   openHref: string | null | undefined;
+  /** Provider-native id (Zendesk) for thread/unlink/archive APIs. */
+  providerTicketId?: number | null;
   receivingId: number | null;
   /** Line the ticket is linked to (RECEIVING_LINE entity); null → carton. */
   lineId: number | null;
@@ -88,7 +93,7 @@ export function ReceivingTicketChip({
 }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
-  const ticketId = parseTicketId(value);
+  const zendeskTicketId = providerTicketId ?? parseTicketId(value);
 
   return (
     <div ref={anchorRef} className="flex shrink-0 items-center">
@@ -114,7 +119,8 @@ export function ReceivingTicketChip({
         gap={6}
       >
         <TicketThreadPanel
-          ticketId={ticketId}
+          ticketId={zendeskTicketId}
+          displayTicketId={display}
           open={open}
           receivingId={receivingId}
           lineId={lineId}
@@ -130,12 +136,14 @@ export function ReceivingTicketChip({
 
 function TicketThreadPanel({
   ticketId,
+  displayTicketId,
   open,
   receivingId,
   lineId,
   onUnlinked,
 }: {
   ticketId: number | null;
+  displayTicketId: string;
   open: boolean;
   receivingId: number | null;
   lineId: number | null;
@@ -198,54 +206,55 @@ function TicketThreadPanel({
     <div
       role="dialog"
       aria-label="Ticket history"
-      className="flex max-h-[460px] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+      className="flex max-h-[460px] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-xl"
     >
-      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-gray-100 px-3 py-2">
+      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-border-hairline px-3 py-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
           <div className="min-w-0">
-            <div className="break-words text-[13px] font-semibold leading-snug text-gray-800">
-              {ticketId ? `Ticket #${ticketId}` : 'Ticket'}
+            <div className="break-words text-[13px] font-semibold leading-snug text-text-default">
+              {displayTicketId ? `Ticket ${displayTicketId.startsWith('#') ? displayTicketId : `#${displayTicketId}`}` : 'Ticket'}
             </div>
             {data?.ticket.subject ? (
-              <div className="break-words text-[10px] leading-snug text-gray-400">{data.ticket.subject}</div>
+              <div className="break-words text-micro leading-snug text-text-faint">{data.ticket.subject}</div>
             ) : null}
           </div>
         </div>
         <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {data?.ticket.status ? (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-text-soft">
               {data.ticket.status}
             </span>
           ) : null}
           {data?.ticket.url ? (
-            <a
-              href={data.ticket.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open in Zendesk"
-              title="Open in Zendesk"
-              className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            <HoverTooltip label="Open in Zendesk" asChild>
+              <a
+                href={data.ticket.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open in Zendesk"
+                className="rounded-md p-1 text-text-faint transition hover:bg-surface-sunken hover:text-text-muted"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </HoverTooltip>
           ) : null}
         </div>
       </header>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {!ticketId ? (
-          <p className="py-6 text-center text-sm text-gray-400">No ticket id to look up.</p>
+          <p className="py-6 text-center text-sm text-text-faint">No ticket id to look up.</p>
         ) : isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
           </div>
         ) : isError ? (
-          <p className="rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-600">
+          <p className="rounded-md bg-rose-50 px-2 py-1.5 text-caption text-rose-600">
             History unavailable: {error instanceof Error ? error.message : 'request failed'}
           </p>
         ) : !data || data.comments.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-400">No history yet.</p>
+          <p className="py-6 text-center text-sm text-text-faint">No history yet.</p>
         ) : (
           <ul className="space-y-2">
             {data.comments.map((c) => (
@@ -256,45 +265,51 @@ function TicketThreadPanel({
                   c.public ? 'border-blue-100 bg-blue-50/60' : 'border-amber-100 bg-amber-50/60',
                 )}
               >
-                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide">
+                <div className="mb-1 flex items-center justify-between gap-2 text-micro uppercase tracking-wide">
                   <span className={c.public ? 'font-semibold text-blue-600' : 'font-semibold text-amber-600'}>
                     {c.public ? 'Public reply' : 'Internal note'}
                   </span>
-                  <span className="flex items-center gap-1 normal-case text-gray-400">
+                  <span className="flex items-center gap-1 normal-case text-text-faint">
                     <Clock className="h-3 w-3" />
                     {formatDateTimePST(c.createdAt)}
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap break-words text-[13px] leading-snug text-gray-800">{c.body}</p>
+                <p className="whitespace-pre-wrap break-words text-[13px] leading-snug text-text-default">{c.body}</p>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
-        <span className="min-w-0 flex-1 text-[11px] leading-snug text-gray-400">
+      <footer className="flex flex-wrap items-center gap-2 border-t border-border-hairline bg-surface-canvas/60 px-3 py-2.5">
+        <span className="min-w-0 flex-1 text-caption leading-snug text-text-faint">
           Unlinking only removes our reference — the ticket stays in Zendesk.
         </span>
-        <button
-          type="button"
-          disabled={archive.isPending || receivingId == null || ticketId == null}
-          onClick={() => archive.mutate()}
-          title="Archive this carton's photos to the ticket's NAS folder"
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
-        >
-          {archive.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-          Archive
-        </button>
-        <button
-          type="button"
+        <HoverTooltip label="Archive this carton's photos to the ticket's NAS folder" asChild>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={archive.isPending}
+            icon={<Archive className="h-3.5 w-3.5" />}
+            disabled={archive.isPending || receivingId == null || ticketId == null}
+            onClick={() => archive.mutate()}
+            aria-label="Archive this carton's photos to the ticket's NAS folder"
+            className="shrink-0 border border-blue-200 bg-surface-card text-blue-700 ring-0 hover:bg-blue-50"
+          >
+            Archive
+          </Button>
+        </HoverTooltip>
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={unlink.isPending}
+          icon={<Unlink className="h-3.5 w-3.5" />}
           disabled={unlink.isPending || receivingId == null}
           onClick={() => unlink.mutate()}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+          className="shrink-0 border border-rose-200 bg-surface-card text-rose-600 ring-0 hover:bg-rose-50"
         >
-          {unlink.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" />}
           Unlink
-        </button>
+        </Button>
       </footer>
     </div>
   );

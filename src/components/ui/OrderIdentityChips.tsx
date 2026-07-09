@@ -42,6 +42,9 @@ export interface OrderIdentityChipsProps {
   tracking: string;
   /** Action node for the empty tracking slot (ignored when `tracking` is present). */
   trackingAction?: React.ReactNode;
+  /** Optional 4th column — the serial chip on station (Tech) rows. Omitted on the
+   *  dashboard order tables, which keep the 3-column platform/id/tracking cluster. */
+  serialChip?: React.ReactNode;
   isMobile: boolean;
 }
 
@@ -55,6 +58,7 @@ export function OrderIdentityChips({
   hideOrderId,
   tracking,
   trackingAction,
+  serialChip,
   isMobile,
 }: OrderIdentityChipsProps) {
   const columns: ChipColumn[] = [
@@ -89,6 +93,11 @@ export function OrderIdentityChips({
       node: tracking ? <TrackingOrSkuScanChip value={tracking} /> : (trackingAction ?? null),
     },
   ];
+
+  // Station (Tech) rows append a serial column, matching `buildStationChipColumns`.
+  if (serialChip !== undefined) {
+    columns.push({ key: 'serial', width: CHIP_COL.serial, node: serialChip });
+  }
 
   return isMobile ? (
     <div className={dashboardOrderRowChipsClass(true)}>

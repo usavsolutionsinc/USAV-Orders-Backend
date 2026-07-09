@@ -1,4 +1,6 @@
 import { sectionLabel, tableHeader, dataValue } from '@/design-system/tokens/typography/presets';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import type { StaffScheduleMatrixDay } from '@/lib/staff-availability';
 import type { StaffDayOfWeek } from '@/lib/staff-schedule';
@@ -39,36 +41,42 @@ export function NextWeekScheduleTable({
       <div className={`${sectionLabel} mb-2 flex items-center justify-between`}>
         <span>Next Week (Mon-Fri)</span>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={!thisWeekStartDate || !nextWeekStartDate || copyPending}
             onClick={() => onCopyWeek('from_week')}
-            className={`${tableHeader} h-7 border border-gray-300 px-3 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${tableHeader} h-7`}
           >
             Copy This Week
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={!thisWeekStartDate || !nextWeekStartDate || copyPending}
             onClick={() => onCopyWeek('template')}
-            className={`${tableHeader} h-7 border border-gray-300 px-3 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${tableHeader} h-7`}
           >
             Reset to Template
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={onToggleExpanded}
-            className={`${tableHeader} h-7 border border-gray-300 px-3 text-gray-700 hover:bg-gray-50`}
+            className={`${tableHeader} h-7`}
           >
             {calendarExpanded ? 'Hide' : 'Show'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {calendarExpanded && (
-        <div className="overflow-x-auto border border-gray-200 bg-white">
+        <div className="overflow-x-auto border border-border-soft bg-surface-card">
           <div className="min-w-[920px]">
-            <div className="grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-gray-200 bg-gray-50 px-4 py-2.5">
+            <div className="grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-border-soft bg-surface-canvas px-4 py-2.5">
               <span className={tableHeader}>Staff</span>
               {nextBusinessDays.map((day) => (
                 <span key={`upcoming-${day.date}`} className={`${tableHeader} text-center`}>
@@ -79,8 +87,8 @@ export function NextWeekScheduleTable({
             {filteredStaff.map((member) => (
               <div
                 key={`upcoming-row-${member.id}`}
-                className={`grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-gray-100 px-4 py-2 ${
-                  member.active ? 'bg-white' : 'bg-gray-50'
+                className={`grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(90px,1fr))] items-center border-b border-border-hairline px-4 py-2 ${
+                  member.active ? 'bg-surface-card' : 'bg-surface-canvas'
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -89,7 +97,7 @@ export function NextWeekScheduleTable({
                     className="inline-block h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/5"
                     style={{ backgroundColor: getStaffColorHex(member) }}
                   />
-                  <p className={`${dataValue} truncate uppercase tracking-[0.02em] ${member.active ? 'text-gray-900' : 'text-gray-500'}`}>
+                  <p className={`${dataValue} truncate uppercase tracking-[0.02em] ${member.active ? 'text-text-default' : 'text-text-soft'}`}>
                     {member.name}
                   </p>
                 </div>
@@ -98,36 +106,41 @@ export function NextWeekScheduleTable({
                   const buttonKey = `${member.id}:${day.date}`;
                   const isDisabled = !member.active || savingScheduleKey === buttonKey || weekUpdatePending;
                   return (
-                    <button
-                      type="button"
+                    <HoverTooltip
                       key={`upcoming-${member.id}-${day.date}`}
-                      disabled={isDisabled}
-                      onClick={() => {
-                        if (blockedByRule) {
-                          onBlockedScheduleCell(member.id, day.dayOfWeek, day.date);
-                          return;
-                        }
-                        onToggleNextWeekSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active));
-                      }}
-                      className={[
-                        `${tableHeader} mx-2 h-7 border text-center leading-7 transition-colors`,
-                        !member.active
-                          ? 'border-gray-200 bg-gray-100 text-gray-400'
-                          : hasConflict
-                            ? 'border-amber-300 bg-amber-50 text-amber-800'
-                            : blockedByRule
-                              ? 'border-red-200 bg-red-50 text-red-700'
-                              : isScheduled
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-500',
-                        isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
-                      ].join(' ')}
-                      aria-pressed={isScheduled}
-                      aria-label={`${member.name} next week ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
-                      title={`${member.name} • ${day.label} ${day.date}${blockedByRule ? ' • blocked by availability rule' : ''}`}
+                      label={`${member.name} • ${day.label} ${day.date}${blockedByRule ? ' • blocked by availability rule' : ''}`}
+                      asChild
                     >
-                      {!member.active ? 'Inactive' : hasConflict ? 'Conflict' : blockedByRule ? 'Blocked' : isScheduled ? 'On' : 'Off'}
-                    </button>
+                      {/* ds-raw-button: multi-state schedule-cell toggle (5 conditional states, aria-pressed) */}
+                      <button
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => {
+                          if (blockedByRule) {
+                            onBlockedScheduleCell(member.id, day.dayOfWeek, day.date);
+                            return;
+                          }
+                          onToggleNextWeekSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active));
+                        }}
+                        className={[
+                          `${tableHeader} mx-2 h-7 border text-center leading-7 transition-colors`,
+                          !member.active
+                            ? 'border-border-soft bg-surface-sunken text-text-faint'
+                            : hasConflict
+                              ? 'border-amber-300 bg-amber-50 text-amber-800'
+                              : blockedByRule
+                                ? 'border-red-200 bg-red-50 text-red-700'
+                                : isScheduled
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : 'border-border-soft bg-surface-canvas text-text-soft',
+                          isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-border-emphasis',
+                        ].join(' ')}
+                        aria-pressed={isScheduled}
+                        aria-label={`${member.name} next week ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
+                      >
+                        {!member.active ? 'Inactive' : hasConflict ? 'Conflict' : blockedByRule ? 'Blocked' : isScheduled ? 'On' : 'Off'}
+                      </button>
+                    </HoverTooltip>
                   );
                 })}
               </div>

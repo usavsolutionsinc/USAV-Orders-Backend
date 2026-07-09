@@ -41,7 +41,6 @@ export function TestingLineSlot({
       saved={serials}
       expected={expected}
       verdict={c.deriveLineVerdict(serials)}
-      isMutating={c.isMutating}
       isSubmitting={c.serialSubmitting}
       disabled={disabled}
       autoFocus={autoFocus}

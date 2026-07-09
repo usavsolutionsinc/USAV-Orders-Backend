@@ -44,6 +44,13 @@ export interface ShippedOrder {
   packer_photos_url: any;
   tracking_type: string | null;
   account_source: string | null;
+  /**
+   * Phase-5 governing-event READ projections (denormalized from audit_logs onto
+   * `orders`): first-time-only stamps of when tracking was added / a label was
+   * printed. Drive the row's TRK/LBL "done" dots. audit_logs stays the SoR.
+   */
+  tracking_added_at?: string | null;
+  label_printed_at?: string | null;
   notes: string;
   sale_amount?: string | number | null;
   currency?: string | null;

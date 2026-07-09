@@ -36,6 +36,7 @@ import {
   CARRIER_MISMATCH_PREDICATE,
   SHIPMENT_SCANNED_PREDICATE,
 } from '@/lib/receiving/delivered-unscanned';
+import { isIncomingUniversal } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -273,7 +274,26 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
       });
     }
 
-    return NextResponse.json({ success: true, ...row, delivered_email: deliveredEmail, by_carrier });
+    // Universal Incoming (flag-gated): eBay buyer lines still awaiting their Zoho
+    // PO — the "Needs Zoho link (n)" pill (plan §6.2/§8.2). 0 when the flag is off
+    // so the response shape and the legacy Zoho-only tiles are unchanged.
+    let ebay_pending = 0;
+    if (await isIncomingUniversal(orgId)) {
+      const er = await tenantQuery<{ ebay_pending: number }>(
+        orgId,
+        `SELECT COUNT(*) FILTER (
+                  WHERE rl.inbound_source_type = 'ebay' AND rl.zoho_purchaseorder_id IS NULL
+                )::int AS ebay_pending
+           FROM receiving_lines rl
+          WHERE rl.organization_id = $1
+            AND rl.workflow_status = 'EXPECTED'
+            AND COALESCE(rl.quantity_received, 0) = 0`,
+        [orgId],
+      );
+      ebay_pending = er.rows[0]?.ebay_pending ?? 0;
+    }
+
+    return NextResponse.json({ success: true, ...row, delivered_email: deliveredEmail, ebay_pending, by_carrier });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to compute summary';
     console.error('receiving-lines/incoming/summary failed:', error);

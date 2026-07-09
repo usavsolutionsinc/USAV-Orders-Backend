@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import {
   unitStatusToVerdict,
+  verdictToUnitStatus,
   type TestingVerdict,
 } from '@/components/receiving/workspace/TestingStatusPills';
 import { type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
@@ -20,6 +21,7 @@ import {
 } from '@/lib/print/printProductLabel';
 import { normalizeSku } from '@/utils/sku';
 import { useReceivingLineCore } from '@/components/receiving/workspace/line-edit/hooks/useReceivingLineCore';
+import { useCartonLabelEditor } from '@/components/receiving/workspace/line-edit/hooks/useCartonLabelEditor';
 import { dispatchTestingLineUpdated } from '@/components/tech/testing-line-events';
 
 interface NextIdResponse {
@@ -63,13 +65,18 @@ export function useTestingLineController(
   const labelColor = opts?.labelColor ?? '';
   const core = useReceivingLineCore(row, staffId, { dispatchLine: dispatchTestingLineUpdated });
   const queryClient = useQueryClient();
+  // Editable carton label (default draft + preview payload + Save & print),
+  // driving the label preview's pencil → editor CTA — same face as unbox.
+  const cartonLabel = useCartonLabelEditor(row, core, {
+    conditionCode: row.condition_grade || 'USED_A',
+    notes: (row.notes || '').trim(),
+  });
 
   const [serialSubmitting, setSerialSubmitting] = useState(false);
   const serialSubmittingRef = useRef(false);
   const [notes, setNotes] = useState<string>('');
   const [isPrinting, setIsPrinting] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
-  const [pairOpen, setPairOpen] = useState(false);
   const [activeSlotByLine, setActiveSlotByLine] = useState<Record<number, number>>({});
   const [previewBySerialUnit, setPreviewBySerialUnit] = useState<Record<number, AllocatedUnit>>({});
   const [isMutating, setIsMutating] = useState(false);
@@ -83,7 +90,11 @@ export function useTestingLineController(
   }, [row.id, row.notes]);
 
   // Refresh the line's serials when it changes — table-side caches are slower.
+  // A synthetic unfound-carton stub carries a negative id and has no
+  // receiving_lines row to fetch (buildUnmatchedStubRow), so skip the request
+  // rather than firing a guaranteed `success:false` GET on every stub scan.
   const refreshLineWithSerials = useCallback(async (id: number) => {
+    if (!Number.isFinite(id) || id <= 0) return;
     try {
       const res = await fetch(`/api/receiving-lines?id=${id}&include=serials`);
       const data = await res.json();
@@ -96,7 +107,7 @@ export function useTestingLineController(
   }, []);
 
   useEffect(() => {
-    if (row.id) void refreshLineWithSerials(row.id);
+    if (row.id > 0) void refreshLineWithSerials(row.id);
   }, [row.id, refreshLineWithSerials]);
 
   // Write a unit's new current_status into the accordion's siblings query cache
@@ -126,9 +137,34 @@ export function useTestingLineController(
     [queryClient],
   );
 
-  // ── Per-unit verdict ──────────────────────────────────────────────────────
+  // ── Per-unit verdict (optimistic) ─────────────────────────────────────────
+  // Reflect the verdict IMMEDIATELY so the pill highlights and the Pass·Print
+  // button enables with no processing wait, then persist in the background and
+  // roll the unit status back on failure. `isMutating` stays a NON-blocking
+  // "saving" chip on the toolbar — it no longer gates the verdict pills.
   const handleSlotVerdict = useCallback(
     async (lineId: number, serial: UnitSlotSerial, next: TestingVerdict) => {
+      const priorStatus = serial.current_status;
+      const optimisticStatus = verdictToUnitStatus(next);
+      const receivingId = row.receiving_id;
+
+      // Write one status to this serial across both stores the pills read from.
+      const applyStatus = (status: string | null | undefined) => {
+        if (status && lineId === row.id) {
+          const nextSerials = (row.serials ?? []).map((s) =>
+            s.id === serial.id ? { ...s, current_status: status } : s,
+          );
+          dispatchTestingLineUpdated({ id: lineId, serials: nextSerials });
+        }
+        if (status && typeof receivingId === 'number') {
+          patchSiblingUnitStatus(receivingId, lineId, serial.id, status);
+        }
+      };
+
+      applyStatus(optimisticStatus);
+      window.dispatchEvent(new CustomEvent('testing-result-recorded'));
+      if (next === 'TESTING_FAILED' && lineId === row.id) setClaimOpen(true);
+
       setIsMutating(true);
       try {
         const res = await fetch(`/api/serial-units/${serial.id}/test`, {
@@ -143,24 +179,14 @@ export function useTestingLineController(
         const data = await res.json().catch(() => null);
         if (!res.ok || !data?.ok) {
           toast.error(data?.error || `Verdict save failed (${res.status})`);
+          applyStatus(priorStatus); // roll back the optimistic verdict
+          if (next === 'TESTING_FAILED' && lineId === row.id) setClaimOpen(false);
           return;
         }
 
-        const nextStatus: string | undefined = data.unit?.current_status;
-        if (lineId === row.id) {
-          const nextSerials = (row.serials ?? []).map((s) =>
-            s.id === serial.id ? { ...s, current_status: nextStatus ?? s.current_status } : s,
-          );
-          dispatchTestingLineUpdated({ id: lineId, serials: nextSerials });
-        }
-
-        const receivingId = row.receiving_id;
-        if (nextStatus && typeof receivingId === 'number') {
-          patchSiblingUnitStatus(receivingId, lineId, serial.id, nextStatus);
-        }
-
-        window.dispatchEvent(new CustomEvent('testing-result-recorded'));
-
+        // The server's unit status already equals `optimisticStatus`, so leave
+        // it (re-dispatching could clobber a newer press); only reconcile the
+        // derived line-level state the server computes across all units.
         if (data.line) {
           dispatchTestingLineUpdated({
             id: lineId,
@@ -169,12 +195,10 @@ export function useTestingLineController(
             disposition_code: data.line.disposition_code,
           });
         }
-
-        if (next === 'TESTING_FAILED' && lineId === row.id) {
-          setClaimOpen(true);
-        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Verdict request failed');
+        applyStatus(priorStatus); // roll back the optimistic verdict
+        if (next === 'TESTING_FAILED' && lineId === row.id) setClaimOpen(false);
       } finally {
         setIsMutating(false);
       }
@@ -571,6 +595,12 @@ export function useTestingLineController(
     handleSlotVerdict, applyLineVerdict, deriveLineVerdict,
     enqueueSerial, deleteSerial, replaceSerial,
     handlePrimary, handleApplyAndPrint,
-    claimOpen, setClaimOpen, pairOpen, setPairOpen,
+    // Editable carton label — preview payload + editor draft/build/apply (the
+    // label preview's Carton option; pencil → LabelEditPopover → Save & print).
+    cartonLabelPayload: cartonLabel.defaultPayload,
+    cartonLabelDraftDefaults: cartonLabel.draftDefaults,
+    buildCartonLabelPayload: cartonLabel.buildPayload,
+    applyCartonLabel: cartonLabel.applyAndPrint,
+    claimOpen, setClaimOpen,
   };
 }

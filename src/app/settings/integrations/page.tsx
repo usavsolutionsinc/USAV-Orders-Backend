@@ -20,6 +20,7 @@ import { getConnector } from '@/lib/integrations/connectors/registry';
 import { integrationLimitStatus } from '@/lib/integrations/connectors/connections';
 import { IntegrationCard } from './IntegrationCard';
 import { ResultBanner } from './ResultBanner';
+import { CsvOrderImport } from '@/components/orders/CsvOrderImport';
 import {
   PROVIDER_CATALOG,
   INTEGRATION_CATEGORIES,
@@ -41,7 +42,7 @@ interface AmazonRow {
   status: string | null; last_error: string | null; last_sync_at: Date | null;
 }
 interface EbayRow {
-  id: number; account_name: string; token_expires_at: Date | null; is_active: boolean | null; last_sync_date: Date | null;
+  id: number; account_name: string; token_expires_at: Date | null; is_active: boolean | null; last_sync_date: Date | null; account_role: string | null;
 }
 
 function relTime(d: Date | null): string | null {
@@ -81,10 +82,10 @@ export default async function IntegrationsPage({
       [orgId],
     ),
     pool.query<EbayRow>(
-      `SELECT id, account_name, token_expires_at, is_active, last_sync_date
+      `SELECT id, account_name, token_expires_at, is_active, last_sync_date, account_role
          FROM ebay_accounts
         WHERE organization_id = $1 AND (platform = 'EBAY' OR platform IS NULL)
-        ORDER BY account_name`,
+        ORDER BY account_role DESC, account_name`,
       [orgId],
     ),
   ]);
@@ -124,7 +125,8 @@ export default async function IntegrationsPage({
         const minutesLeft = e.token_expires_at ? Math.round((new Date(e.token_expires_at).getTime() - Date.now()) / 60000) : null;
         const status: AccountSummary['status'] = e.is_active === false ? 'revoked' : minutesLeft != null && minutesLeft < 60 ? 'expiring' : 'active';
         const detail = e.is_active === false ? 'inactive' : minutesLeft == null ? undefined : minutesLeft <= 0 ? 'token expired' : `token ${minutesLeft}m left`;
-        return { id: e.id, label: e.account_name, status, detail };
+        const role: AccountSummary['role'] = e.account_role === 'buyer' ? 'buyer' : 'seller';
+        return { id: e.id, label: e.account_name, status, detail, role };
       });
       const status: ProviderState['status'] = accounts.length === 0
         ? 'not_connected'
@@ -150,20 +152,20 @@ export default async function IntegrationsPage({
   const connectedCount = PROVIDER_CATALOG.filter((p) => buildState(p).status === 'connected').length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-gray-50 antialiased">
+    <div className="flex h-full min-h-0 flex-col bg-surface-canvas antialiased">
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-6 px-6 py-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[13px] text-gray-500">
+          <p className="text-[13px] text-text-soft">
             Connect this workspace to the marketplaces and services it runs on. Credentials are encrypted at rest in the workspace vault.
           </p>
           <div className="flex items-center gap-2">
             {!limit.unlimited && (
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${limit.atLimit ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`rounded-full px-2.5 py-1 text-caption font-semibold ${limit.atLimit ? 'bg-amber-100 text-amber-700' : 'bg-surface-sunken text-text-muted'}`}>
                 {limit.used} / {limit.max} integrations{limit.atLimit ? ' · upgrade to add more' : ''}
               </span>
             )}
-            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
+            <span className="rounded-full bg-surface-sunken px-2.5 py-1 text-caption font-semibold text-text-muted">
               {connectedCount} / {PROVIDER_CATALOG.length} connected
             </span>
           </div>
@@ -176,7 +178,7 @@ export default async function IntegrationsPage({
           if (providers.length === 0) return null;
           return (
             <section key={category} className="space-y-3">
-              <h2 className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">{category}</h2>
+              <h2 className="text-caption font-black uppercase tracking-[0.18em] text-text-faint">{category}</h2>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {providers.map((def) => {
                   const state = buildState(def);
@@ -194,6 +196,13 @@ export default async function IntegrationsPage({
             </section>
           );
         })}
+
+        <section className="space-y-3">
+          <h2 className="text-caption font-black uppercase tracking-[0.18em] text-text-faint">Import</h2>
+          <div className="rounded-xl border border-border-soft bg-surface-card p-4">
+            <CsvOrderImport />
+          </div>
+        </section>
         </div>
       </main>
     </div>

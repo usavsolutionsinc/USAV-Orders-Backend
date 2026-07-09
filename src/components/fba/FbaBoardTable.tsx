@@ -6,7 +6,8 @@ import { Check, ChevronRight, ClipboardList } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { sectionLabel, framerPresence, framerTransition, SkeletonList } from '@/design-system';
-import WeekHeader from '@/components/ui/WeekHeader';
+import { IconButton } from '@/design-system/primitives';
+import DateRangeHeader from '@/components/ui/DateRangeHeader';
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
 
@@ -282,7 +283,7 @@ export function FbaBoardTable({
   }, [sortedItems, emitSelection]);
 
   const weekHeader = (
-    <WeekHeader
+    <DateRangeHeader
       label="Today"
       count={sortedItems.length}
       weekRange={weekRange}
@@ -321,7 +322,7 @@ export function FbaBoardTable({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {weekHeader}
       <div className="min-h-0 flex-1 overflow-auto">
-      <div className="divide-y divide-gray-200">
+      <div className="divide-y divide-border-soft">
         {sortedItems.map((item, index) => {
           const isSelected = selectedIds.has(item.item_id);
           return (
@@ -343,7 +344,7 @@ export function FbaBoardTable({
               className={[
                 'grid min-h-[44px] cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 transition-colors',
                 ui.rowFocusRing,
-                isSelected ? ui.rowSelected : 'bg-white hover:bg-gray-50',
+                isSelected ? ui.rowSelected : 'bg-surface-card hover:bg-surface-hover',
               ].join(' ')}
             >
               {/* Left: theme-aware checkbox — design system PrintTableCheckbox */}
@@ -359,11 +360,11 @@ export function FbaBoardTable({
 
               {/* Center: title + qty/status row */}
               <div key="center" className="flex min-w-0 flex-col gap-0.5">
-                <p className="whitespace-normal break-words text-sm font-bold leading-snug text-gray-900">
+                <p className="whitespace-normal break-words text-sm font-bold leading-snug text-text-default">
                   {item.display_title}
                 </p>
                 <div className="flex flex-wrap items-center gap-3 text-caption">
-                  <span className="flex items-center gap-1 font-bold text-gray-600">
+                  <span className="flex items-center gap-1 font-bold text-text-muted">
                     <ClipboardList className="h-3.5 w-3.5 text-purple-500" />
                     <span className="tabular-nums">{item.expected_qty}</span>
                   </span>
@@ -373,7 +374,7 @@ export function FbaBoardTable({
                   </span>
                   <StatusPill status={item.item_status} />
                   {item.condition && (
-                    <span className="font-bold text-gray-500">{item.condition}</span>
+                    <span className="font-bold text-text-soft">{item.condition}</span>
                   )}
                 </div>
               </div>
@@ -382,17 +383,16 @@ export function FbaBoardTable({
               <div key="actions" className="flex shrink-0 items-center gap-1.5">
                 <FnskuChip value={item.fnsku} />
                 {onDetailOpen && (
-                  <button
+                  <IconButton
                     type="button"
+                    icon={<ChevronRight className="h-3.5 w-3.5" />}
+                    ariaLabel={`Details for ${item.fnsku}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onDetailOpen(item);
                     }}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                    aria-label={`Details for ${item.fnsku}`}
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+                  />
                 )}
               </div>
             </motion.div>

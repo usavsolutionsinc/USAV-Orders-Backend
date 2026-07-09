@@ -6,6 +6,7 @@ import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-f
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishActivityLogged, publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -37,6 +38,7 @@ async function findOrderByShipment(
   shipmentId: number | null,
   key18: string | null,
   last8: string | null,
+  orgId: string,
 ) {
   if (!shipmentId && !key18 && !last8) return null;
   const r = await db.query(
@@ -67,11 +69,14 @@ async function findOrderByShipment(
        WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK' AND status NOT IN ('CANCELED','DONE')
        ORDER BY id DESC LIMIT 1
      ) wa_p ON TRUE
-     WHERE ($1::bigint IS NOT NULL AND o.shipment_id = $1)
-        OR (stn.id IS NOT NULL AND $2::text IS NOT NULL
-            AND RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized,'')), '[^A-Z0-9]', '', 'g'), 18) = $2)
-        OR (stn.id IS NOT NULL AND $3::text IS NOT NULL
-            AND RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized,''), '[^0-9]', '', 'g'), 8) = $3)
+     WHERE o.organization_id = $4
+       AND (
+         ($1::bigint IS NOT NULL AND o.shipment_id = $1)
+          OR (stn.id IS NOT NULL AND $2::text IS NOT NULL
+              AND RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized,'')), '[^A-Z0-9]', '', 'g'), 18) = $2)
+          OR (stn.id IS NOT NULL AND $3::text IS NOT NULL
+              AND RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized,''), '[^0-9]', '', 'g'), 8) = $3)
+       )
      ORDER BY
        CASE
          WHEN $1::bigint IS NOT NULL AND o.shipment_id = $1 THEN 0
@@ -83,7 +88,7 @@ async function findOrderByShipment(
        END,
        o.id DESC
      LIMIT 1`,
-    [shipmentId, key18, last8],
+    [shipmentId, key18, last8, orgId],
   );
   return r.rows[0] ?? null;
 }
@@ -147,7 +152,7 @@ async function ensureFnskuCatalog(db: typeof pool, orgId: OrgId, fnsku: string) 
   const inserted = await db.query(
     `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at, organization_id)
      VALUES ($1, NULL, NULL, NULL, TRUE, NOW(), NOW(), $2)
-     ON CONFLICT (fnsku) DO UPDATE
+     ON CONFLICT (organization_id, fnsku) DO UPDATE
        SET is_active = TRUE, last_seen_at = NOW(), updated_at = NOW()
      RETURNING fnsku, product_title, asin, sku`,
     [normalized, orgId],
@@ -370,6 +375,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         await client.query('COMMIT');
         await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+      await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
+        await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
         if (!isFbaSource) {
           await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: fnskuLogId!, source: ROUTE });
         }
@@ -425,11 +432,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
 
       // ── TRACKING path ──────────────────────────────────────────────────
-      const resolved = await resolveShipmentId(value);
+      const resolved = await resolveShipmentId(value, ctx.organizationId);
       const key18 = normalizeTrackingKey18(value);
       const last8Raw = normalizeTrackingLast8(value);
       const last8 = /^\d{8}$/.test(last8Raw) && !looksLikeFnsku(value) ? last8Raw : null;
-      const order = await findOrderByShipment(client as any, resolved.shipmentId, key18, last8);
+      const order = await findOrderByShipment(client as any, resolved.shipmentId, key18, last8, ctx.organizationId);
 
       if (!order) {
         // No order found — create exception + SAL
@@ -442,7 +449,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           staffName: staff.name,
           reason: 'not_found',
           notes: isFbaSource ? 'FBA scan: tracking not found in orders' : 'Tech scan: tracking not found in orders',
-        }, client);
+        }, client, ctx.organizationId);
         ordersExceptionId = upsertResult.exception?.id ?? null;
 
         const testDateTime = formatPSTTimestamp();
@@ -461,6 +468,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         await client.query('COMMIT');
         await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+      await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
+        await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
         if (salId && !isFbaSource) await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
         if (salId) publishActivityLogged({ organizationId: ctx.organizationId, id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
 
@@ -518,6 +527,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
       await client.query('COMMIT');
       await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+      await invalidateCacheTags(ctx.organizationId, isFbaSource ? [CACHE_TAGS.fbaStageCounts] : [CACHE_TAGS.orders, CACHE_TAGS.ordersNext, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail]);
       if (salId && !isFbaSource) await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
       if (salId) publishActivityLogged({ organizationId: ctx.organizationId, id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
       if (!isFbaSource) {

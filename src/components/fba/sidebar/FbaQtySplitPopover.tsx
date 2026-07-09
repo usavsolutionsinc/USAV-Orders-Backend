@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { DeferredQtyInput } from '@/design-system/primitives';
+import { Button, DeferredQtyInput } from '@/design-system/primitives';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 
@@ -39,10 +39,10 @@ export function FbaQtySplitPopover({
       animate={framerPresence.dropdownPanel.animate}
       exit={framerPresence.dropdownPanel.exit}
       transition={framerTransition.dropdownOpen}
-      className="absolute inset-x-0 top-0 z-dropdown mx-2 rounded-lg border border-blue-200 bg-white p-3 shadow-lg"
+      className="absolute inset-x-0 top-0 z-dropdown mx-2 rounded-lg border border-blue-200 bg-surface-card p-3 shadow-lg"
     >
-      <p className={`${microBadge} mb-2 tracking-wider text-gray-600`}>
-        Move how many? <span className="font-mono text-gray-900">{fnsku}</span>
+      <p className={`${microBadge} mb-2 tracking-wider text-text-muted`}>
+        Move how many? <span className="font-mono text-text-default">{fnsku}</span>
       </p>
 
       <div className="flex items-center gap-2">
@@ -51,26 +51,28 @@ export function FbaQtySplitPopover({
           min={1}
           max={maxQty}
           onChange={setMoveQty}
-          className="h-8 w-16 rounded-md border border-gray-200 bg-white text-center text-sm font-black tabular-nums outline-none"
+          className="h-8 w-16 rounded-md border border-border-soft bg-surface-card text-center text-sm font-black tabular-nums outline-none"
         />
-        <span className={`${microBadge} text-gray-400`}>of {maxQty}</span>
+        <span className={`${microBadge} text-text-faint`}>of {maxQty}</span>
       </div>
 
       <div className="mt-2.5 flex gap-2">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => onConfirm(moveQty)}
-          className="flex h-7 flex-1 items-center justify-center rounded-md bg-blue-600 text-micro font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
+          className="h-7 flex-1 text-micro font-bold uppercase tracking-wider"
         >
           Move
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onCancel}
-          className="flex h-7 flex-1 items-center justify-center rounded-md border border-gray-200 text-micro font-bold uppercase tracking-wider text-gray-600 transition-colors hover:bg-gray-50"
+          className="h-7 flex-1 text-micro font-bold uppercase tracking-wider text-text-muted"
         >
           Cancel
-        </button>
+        </Button>
       </div>
     </motion.div>
   );

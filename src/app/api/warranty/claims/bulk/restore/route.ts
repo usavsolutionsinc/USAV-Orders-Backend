@@ -49,7 +49,7 @@ export const POST = withAuth(async (request, ctx) => {
         else foreignIds.push(id);
       }
 
-      const { restored, notFound } = await restoreClaims(ownedIds, ctx.staffId ?? null);
+      const { restored, notFound } = await restoreClaims(ownedIds, ctx.staffId ?? null, ctx.organizationId);
 
       const results = [
         ...restored.map((d) => ({ id: d.id, ok: true as const, claimNumber: d.claimNumber })),

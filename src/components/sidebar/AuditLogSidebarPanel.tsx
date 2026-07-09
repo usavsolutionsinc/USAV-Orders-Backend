@@ -47,9 +47,9 @@ export function AuditLogSidebarPanel() {
   return (
     <SidebarShell
       headerAbove={
-        <div className={`${SIDEBAR_GUTTER} py-3 border-b border-gray-100`}>
+        <div className={`${SIDEBAR_GUTTER} py-3 border-b border-border-hairline`}>
           <p className={`px-1 ${sectionLabel} text-emerald-600`}>Audit Log</p>
-          <p className={`mt-1 px-1 text-caption font-semibold leading-snug text-gray-500`}>
+          <p className={`mt-1 px-1 text-caption font-semibold leading-snug text-text-soft`}>
             Who, when, and what changed.
           </p>
         </div>
@@ -122,13 +122,13 @@ export function AuditLogSidebarPanel() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-3">
             <User className="h-6 w-6" />
           </div>
-          <p className="text-caption font-bold text-gray-900 mb-1">Staff Audit Feed</p>
-          <p className="text-[11px] text-gray-500 max-w-[180px] mx-auto">
+          <p className="text-caption font-bold text-text-default mb-1">Staff Audit Feed</p>
+          <p className="text-caption text-text-soft max-w-[180px] mx-auto">
             Select a staff member in the filters above to load their cross-section audit feed.
           </p>
         </div>
       ) : (
-        <div className="px-4 py-6 text-center text-xs text-gray-400">
+        <div className="px-4 py-6 text-center text-xs text-text-faint">
           Select a section above.
         </div>
       )}

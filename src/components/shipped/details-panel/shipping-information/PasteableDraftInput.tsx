@@ -21,13 +21,13 @@ export function PasteableDraftInput({
   void ariaLabel;
   void title;
   return (
-    <div className="relative rounded-xl border border-gray-200 bg-white transition-colors focus-within:border-blue-400">
+    <div className="relative rounded-xl border border-border-soft bg-surface-card transition-colors focus-within:border-blue-400">
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`h-10 w-full border-0 bg-transparent px-3 text-sm font-bold text-gray-900 outline-none ${inputClassName}`}
+        className={`h-10 w-full border-0 bg-transparent px-3 text-sm font-bold text-text-default outline-none ${inputClassName}`}
       />
     </div>
   );

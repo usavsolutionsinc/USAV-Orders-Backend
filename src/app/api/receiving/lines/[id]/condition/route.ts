@@ -57,13 +57,15 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     id: number;
     receiving_id: number | null;
     condition_grade: Grade;
+    condition_set_at: string | null;
   }>(
     ctx.organizationId,
     `UPDATE receiving_lines
         SET condition_grade = $1::condition_grade_enum,
+            condition_set_at = COALESCE(condition_set_at, NOW()),
             updated_at = NOW()
       WHERE id = $2 AND organization_id = $3
-      RETURNING id, receiving_id, condition_grade`,
+      RETURNING id, receiving_id, condition_grade, condition_set_at::text AS condition_set_at`,
     [grade, lineId, ctx.organizationId],
   );
   const updated = result.rows[0];

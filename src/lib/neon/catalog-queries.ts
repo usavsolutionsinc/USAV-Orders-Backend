@@ -14,6 +14,12 @@
 
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { SUBSTITUTION_REASONS } from '@/lib/fulfillment/substitution-reasons';
+import { SHORT_PICK_REASONS } from '@/lib/picking/short-pick-reasons';
+import { REPAIR_FAILURE_REASONS } from '@/lib/repair/repair-failure-reasons';
+import { RECEIVING_EXCEPTION_CODES, RECEIVING_EXCEPTION_META } from '@/lib/receiving/exception-codes';
+import { SKU_STOCK_REASONS } from '@/lib/sku/sku-stock-reasons';
+import { SERIAL_ABSENT_REASONS } from '@/lib/receiving/serial-absent-reasons';
 
 export interface PlatformRow {
   id: number;
@@ -70,7 +76,7 @@ const SEED_PLATFORMS: Array<[slug: string, label: string, tone: string, sort: nu
   ['walmart', 'Walmart', 'text-amber-700', 50],
   ['goodwill', 'Goodwill', 'text-sky-600', 60],
   ['ecwid', 'ECWID-RS', 'text-blue-600', 70],
-  ['other', 'Other', 'text-slate-500', 99],
+  ['other', 'Other', 'text-text-soft', 99],
 ];
 const SEED_TYPES: Array<[slug: string, label: string, kind: string, isReturn: boolean, sort: number]> = [
   ['po', 'PO', 'both', false, 10],
@@ -102,19 +108,79 @@ export async function seedOrgCatalog(organizationId: OrgId): Promise<void> {
         [organizationId, slug, label, kind, isReturn, sort],
       );
     }
-    // platform_accounts (mirrors migration 2026-06-14f): eBay storefronts from
-    // ebay_accounts, plus one default '<platform>-main' account per non-eBay
-    // platform so every channel is reachable through an account.
-    await client.query(
-      `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, integration_scope, is_active)
-       SELECT ea.organization_id, p.id, ea.account_name, ea.account_name, ea.account_name, COALESCE(ea.is_active, true)
-         FROM ebay_accounts ea
-         JOIN platforms p ON p.organization_id = ea.organization_id AND p.slug = 'ebay'
-        WHERE ea.organization_id = $1
-          AND ea.account_name IS NOT NULL AND BTRIM(ea.account_name) <> ''
-       ON CONFLICT (organization_id, platform_id, slug) DO NOTHING`,
-      [organizationId],
-    );
+    // Class-D substitution reason vocabulary (flow_context='substitution'),
+    // derived from the built-in registry SoT (substitution-reasons.ts) so the
+    // codes/labels never drift. `category` is NULL — the inventory ledger axis
+    // doesn't apply. Mirrors migration 2026-06-28_reason_codes_flow_context.sql.
+    let subSort = 0;
+    for (const r of SUBSTITUTION_REASONS) {
+      subSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'substitution', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, subSort],
+      );
+    }
+    let spSort = 0;
+    for (const r of SHORT_PICK_REASONS) {
+      spSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'short_pick', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, spSort],
+      );
+    }
+    let rfSort = 0;
+    for (const r of REPAIR_FAILURE_REASONS) {
+      rfSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'repair_failure', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, rfSort],
+      );
+    }
+    // Receiving-exception vocabulary is BEHAVIOR-BEARING (codes stay system, owned
+    // by exception-codes.ts); seeded here only so tenants can see/relabel them.
+    let reSort = 0;
+    for (const code of RECEIVING_EXCEPTION_CODES) {
+      reSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'receiving_exception', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, code, RECEIVING_EXCEPTION_META[code].label, reSort],
+      );
+    }
+    // SKU-stock quick-adjust reasons (codes stay system — the replenish trigger
+    // keys on 'SOLD'; seeded for tenant relabeling).
+    let ssSort = 0;
+    for (const r of SKU_STOCK_REASONS) {
+      ssSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'inventory_adjust', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, ssSort],
+      );
+    }
+    // Serial-absent waiver reasons (flow_context='serial_absent_reason') — why a
+    // received unit was committed with no serial. Built-in registry SoT is
+    // serial-absent-reasons.ts; tenant-relabelable. Mirrors migration
+    // 2026-06-29e_reason_codes_serial_absent.sql.
+    let saSort = 0;
+    for (const r of SERIAL_ABSENT_REASONS) {
+      saSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'serial_absent_reason', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, saSort],
+      );
+    }
+    await syncEbayAccountsToPlatformAccounts(organizationId, client);
     await client.query(
       `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, is_active)
        SELECT p.organization_id, p.id, p.slug || '-main', p.label, true
@@ -124,6 +190,34 @@ export async function seedOrgCatalog(organizationId: OrgId): Promise<void> {
       [organizationId],
     );
   });
+}
+
+/**
+ * Mirror eBay seller rows in `ebay_accounts` into `platform_accounts` so the
+ * catalog + Incoming account chip stay in sync after OAuth connect (the one-shot
+ * migration 2026-06-14f backfill does not re-run on its own). Skips ZOHO token
+ * rows (platform='ZOHO') — only real eBay seller connections.
+ */
+export async function syncEbayAccountsToPlatformAccounts(
+  organizationId: OrgId,
+  client?: { query: (text: string, params?: unknown[]) => Promise<unknown> },
+): Promise<void> {
+  const sql = `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, integration_scope, is_active)
+       SELECT ea.organization_id, p.id, ea.account_name, ea.account_name, ea.account_name, COALESCE(ea.is_active, true)
+         FROM ebay_accounts ea
+         JOIN platforms p ON p.organization_id = ea.organization_id AND p.slug = 'ebay'
+        WHERE ea.organization_id = $1
+          AND (ea.platform = 'EBAY' OR ea.platform IS NULL)
+          AND ea.account_name IS NOT NULL AND BTRIM(ea.account_name) <> ''
+       ON CONFLICT (organization_id, platform_id, slug) DO UPDATE SET
+         integration_scope = EXCLUDED.integration_scope,
+         is_active         = EXCLUDED.is_active,
+         updated_at        = NOW()`;
+  if (client) {
+    await client.query(sql, [organizationId]);
+    return;
+  }
+  await tenantQuery(organizationId, sql, [organizationId]);
 }
 
 /** lowercase-kebab/underscore slug from a free-text label. */

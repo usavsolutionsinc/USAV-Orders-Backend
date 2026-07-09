@@ -13,6 +13,7 @@ import {
   SectionHeader,
   GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
+import { IconButton } from '@/design-system/primitives';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
 import { useFeedWindow } from '@/components/mobile/feed/useMobileFeed';
 import { ScanResultRow, type ScanFeedItem } from '@/components/mobile/feed/rows/ScanResultRow';
@@ -44,6 +45,7 @@ const INTAKE_STORAGE_KEY = 'receive.intakeClassification.v1';
 /** Pill colors for the "Receiving as" selector + scan-row chip. */
 function intakeToneClass(tone: IntakeTone, active: boolean): string {
   const A: Record<IntakeTone, string> = {
+    // ds-allow-raw-neutral: identity/tone hue — slate IS the IntakeTone key among colored siblings, not chrome
     slate: 'bg-slate-600 text-white border-slate-600',
     blue: 'bg-blue-600 text-white border-blue-600',
     rose: 'bg-rose-600 text-white border-rose-600',
@@ -51,7 +53,7 @@ function intakeToneClass(tone: IntakeTone, active: boolean): string {
     emerald: 'bg-emerald-600 text-white border-emerald-600',
   };
   const I: Record<IntakeTone, string> = {
-    slate: 'bg-white text-slate-600 border-slate-200',
+    slate: 'bg-surface-card text-text-muted border-border-soft',
     blue: 'bg-blue-50 text-blue-700 border-blue-100',
     rose: 'bg-rose-50 text-rose-700 border-rose-100',
     amber: 'bg-amber-50 text-amber-700 border-amber-100',
@@ -69,7 +71,13 @@ const FILTERS: { key: TriageFilter; label: string }[] = [
   { key: 'normal', label: 'Normal' },
 ];
 
-export default function RedesignedMobileReceive() {
+export default function RedesignedMobileReceive({
+  surface = 'triage',
+  title = 'Triage',
+}: {
+  surface?: 'triage' | 'unbox';
+  title?: string;
+}) {
   const [cameraActive, setCameraActive] = useState(false);
   const [input, setInput] = useState('');
   const [scans, setScans] = useState<ScanResult[]>([]);
@@ -125,8 +133,17 @@ export default function RedesignedMobileReceive() {
           credentials: 'include',
           body: JSON.stringify({
             trackingNumber: tracking,
-            // Tag the carton with the sticky intake default (omit UNKNOWN).
-            ...(intakeForScan !== 'UNKNOWN' ? { classification: intakeForScan } : {}),
+            intakeSurface: surface,
+            // SPEED-FIRST: resolve from LOCAL data only — no synchronous Zoho
+            // round-trip on the scan path (desktop parity). A local miss still
+            // creates + returns the unfound carton (receiving_id set), so the
+            // row resolves instantly and links to /m/r/[id]; live Zoho re-checks
+            // are operator-initiated there (UnfoundMatchStrip) with the
+            // reconcile cron as the passive backstop.
+            localOnly: true,
+            ...(intakeForScan !== 'UNKNOWN' && surface === 'triage'
+              ? { classification: intakeForScan }
+              : {}),
           }),
         });
         const data = await res.json().catch(() => null);
@@ -176,7 +193,7 @@ export default function RedesignedMobileReceive() {
         inFlight.current = false;
       }
     },
-    [],
+    [surface],
   );
 
   // Feed camera-decoded values into the same lookup path. Start/stop strictly
@@ -262,12 +279,12 @@ export default function RedesignedMobileReceive() {
     <div className={`h-full ${TOKENS.colors.background} flex flex-col`}>
       {/* Input Section */}
       <div className="px-6 pt-4 pb-4">
+        <h1 className="mb-4 text-xl font-black tracking-tight text-blue-950">{title}</h1>
         {/* Input Bar */}
         <div className="flex flex-col gap-4">
-          {/* "Receiving as" — sticky intake default applied to every scan, so a
-              whole pallet of FBA returns can be tagged with one pick. */}
+          {surface === 'triage' ? (
           <div>
-            <p className="mb-1.5 px-1 text-[10px] font-black uppercase tracking-widest text-blue-300">
+            <p className="mb-1.5 px-1 text-micro font-black uppercase tracking-widest text-blue-300">
               Receiving as
             </p>
             <div className="flex gap-2 overflow-x-auto no-scrollbar">
@@ -277,7 +294,7 @@ export default function RedesignedMobileReceive() {
                   <button
                     key={o.value}
                     onClick={() => selectIntake(o.value)}
-                    className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 ${intakeToneClass(o.tone, active)}`}
+                    className={`ds-raw-button shrink-0 rounded-full border px-3 py-1.5 text-caption font-black uppercase tracking-wider transition-all active:scale-95 ${intakeToneClass(o.tone, active)}`}
                   >
                     {o.label}
                   </button>
@@ -285,6 +302,7 @@ export default function RedesignedMobileReceive() {
               })}
             </div>
           </div>
+          ) : null}
 
           <div className="relative group">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -297,14 +315,14 @@ export default function RedesignedMobileReceive() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && lookup(input)}
               placeholder="Scan or enter tracking..."
-              className="w-full bg-white border border-blue-100 rounded-[24px] pl-11 pr-14 py-5 text-base font-bold text-blue-950 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-blue-300"
+              className="w-full bg-surface-card border border-blue-100 rounded-[24px] pl-11 pr-14 py-5 text-base font-bold text-blue-950 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-blue-300"
             />
-            <button
+            <IconButton
+              ariaLabel="Look up tracking"
               onClick={() => lookup(input)}
-              className="absolute right-2 top-2 bottom-2 h-12 w-12 bg-blue-600 text-white rounded-[18px] flex items-center justify-center active:scale-90 transition-all shadow-lg"
-            >
-              <Plus className="h-6 w-6" />
-            </button>
+              icon={<Plus className="h-6 w-6" />}
+              className="absolute right-2 top-2 bottom-2 flex h-12 w-12 items-center justify-center rounded-[18px] bg-blue-600 text-white shadow-lg active:scale-90"
+            />
           </div>
 
           <GlassButton
@@ -335,7 +353,7 @@ export default function RedesignedMobileReceive() {
               muted
             />
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-64 h-36 rounded-2xl border-2 border-white/40 bg-white/5 backdrop-blur-[1px] relative">
+              <div className="w-64 h-36 rounded-2xl border-2 border-glass/40 bg-glass/5 backdrop-blur-[1px] relative">
                 <motion.div
                   animate={{ top: ['5%', '95%', '5%'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -348,7 +366,7 @@ export default function RedesignedMobileReceive() {
       </AnimatePresence>
 
       {/* History Tray — shared feed, newest at the top. */}
-      <div className="flex min-h-0 flex-1 flex-col bg-slate-50 pt-6">
+      <div className="flex min-h-0 flex-1 flex-col bg-surface-canvas pt-6">
         <div className="px-6">
           <SectionHeader title="Recent Receipts" />
         </div>
@@ -369,12 +387,13 @@ export default function RedesignedMobileReceive() {
                     : 'bg-rose-50 text-rose-700 border-rose-100'
                   : active
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-blue-600 border-blue-100';
+                    : 'bg-surface-card text-blue-600 border-blue-100';
             return (
+              // ds-raw-button: segmented triage filter toggle pill (with count) — not a DS Button
               <button
                 key={key}
                 onClick={() => setFilter(key)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 ${tone}`}
+                className={`ds-raw-button flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-caption font-black uppercase tracking-wider transition-all active:scale-95 ${tone}`}
               >
                 {label}
                 <span className={`tabular-nums ${active ? 'opacity-90' : 'opacity-50'}`}>{count}</span>

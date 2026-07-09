@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { MasterNav, MasterNavProvider } from '@/components/sidebar/master-nav';
 import { SidebarContextPanel } from '@/components/sidebar/SidebarContextPanel';
 
@@ -21,6 +22,7 @@ const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
   'sourcing',
   'outbound',
   'packer',
+  'support',
 ]);
 
 export interface SidebarShellProps {
@@ -50,7 +52,7 @@ export function SidebarShell({
 }: SidebarShellProps) {
   return (
     <aside
-      className={`h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col ${
+      className={`h-full w-full bg-surface-card border-r border-border-default overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col ${
         // In the mobile drawer, inset the top so the header clears the notch /
         // status bar (parity with the old drawer trigger).
         inDrawer ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]' : ''
@@ -84,19 +86,17 @@ export function MobileSidebarOverlay({ onClose, children }: MobileSidebarOverlay
     <div className="md:hidden fixed inset-0 z-panel">
       <button
         type="button"
-        className="absolute inset-0 bg-gray-900/35"
+        className="ds-raw-button absolute inset-0 bg-scrim/35"
         onClick={onClose}
         aria-label="Close sidebar overlay"
       />
       <div className="relative h-full max-w-[94vw]">{children}</div>
-      <button
-        type="button"
+      <IconButton
         onClick={onClose}
-        className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-gray-900/10 flex items-center justify-center"
-        aria-label="Close sidebar"
-      >
-        <X className="h-5 w-5" />
-      </button>
+        ariaLabel="Close sidebar"
+        icon={<X className="h-5 w-5" />}
+        className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-surface-card border border-border-emphasis text-text-muted shadow-lg shadow-gray-900/10 flex items-center justify-center"
+      />
     </div>
   );
 }

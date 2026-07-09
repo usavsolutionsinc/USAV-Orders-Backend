@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 
 interface CreateRoleDialogProps {
   open: boolean;
@@ -55,16 +56,16 @@ export function CreateRoleDialog({ open, onClose, onCreated }: CreateRoleDialogP
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) onClose(); }}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-gray-900">Create role</h2>
-        <p className="mt-0.5 text-xs text-gray-500">
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/60 p-4" onClick={() => { if (!busy) onClose(); }}>
+      <div className="w-full max-w-md rounded-2xl bg-surface-card p-5" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-text-default">Create role</h2>
+        <p className="mt-0.5 text-xs text-text-soft">
           New role starts with no permissions. Add toggles in the editor after creation.
         </p>
 
         <div className="mt-5 space-y-3">
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Label</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Label</span>
             <input
               autoFocus
               value={label}
@@ -73,30 +74,30 @@ export function CreateRoleDialog({ open, onClose, onCreated }: CreateRoleDialogP
                 if (!key) setKey(slugify(e.target.value));
               }}
               onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="Shift Lead"
             />
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Key (slug)</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Key (slug)</span>
             <input
               value={key}
               onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 40))}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-mono outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm font-mono outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="shift_lead"
             />
-            <span className="mt-0.5 block text-micro text-gray-400">Stable identifier; cannot be changed later.</span>
+            <span className="mt-0.5 block text-micro text-text-faint">Stable identifier; cannot be changed later.</span>
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Color</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Color</span>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                className="h-9 w-12 cursor-pointer rounded-md border border-gray-300"
+                className="h-9 w-12 cursor-pointer rounded-md border border-border-default"
               />
-              <code className="rounded-md bg-gray-100 px-2 py-1 text-caption font-mono text-gray-700">{color}</code>
+              <code className="rounded-md bg-surface-sunken px-2 py-1 text-caption font-mono text-text-muted">{color}</code>
             </div>
           </label>
         </div>
@@ -104,12 +105,12 @@ export function CreateRoleDialog({ open, onClose, onCreated }: CreateRoleDialogP
         {err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" onClick={submit} disabled={busy || !label.trim()} className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-blue-700">
-            {busy ? 'Creating…' : 'Create'}
-          </button>
+          </Button>
+          <Button variant="primary" size="sm" onClick={submit} loading={busy} disabled={!label.trim()}>
+            Create
+          </Button>
         </div>
       </div>
     </div>

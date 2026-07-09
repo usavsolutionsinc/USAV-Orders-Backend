@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 type Section = 'receiving' | 'packing' | 'tech' | 'sku' | 'staff';
 
@@ -129,12 +130,12 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
   const itemParam = ITEM_PARAM_FOR_SECTION[section];
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <div className="border-b border-border-soft bg-surface-card px-6 py-4">
         <p className="text-micro font-bold uppercase tracking-widest text-emerald-700">
           {section} audit · daily report
         </p>
-        <h2 className="mt-0.5 text-base font-bold text-gray-900">
+        <h2 className="mt-0.5 text-base font-bold text-text-default">
           {rangeLabel(new URLSearchParams(searchParams.toString()))}
         </h2>
         <div className="mt-2 flex flex-wrap gap-3">
@@ -154,15 +155,15 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           <Card title="Hourly distribution">
             <div className="flex h-24 items-end gap-[2px]">
               {data.by_hour.map((h) => (
-                <div
-                  key={h.hour}
-                  className="flex-1 rounded-sm bg-emerald-500/80"
-                  style={{ height: `${Math.max(2, (h.count / peakHourCount) * 100)}%` }}
-                  title={`${h.hour}:00 — ${fmtNumber(h.count)}`}
-                />
+                <HoverTooltip key={h.hour} label={`${h.hour}:00 — ${fmtNumber(h.count)}`} asChild>
+                  <div
+                    className="flex-1 rounded-sm bg-emerald-500/80"
+                    style={{ height: `${Math.max(2, (h.count / peakHourCount) * 100)}%` }}
+                  />
+                </HoverTooltip>
               ))}
             </div>
-            <div className="mt-1 flex justify-between text-eyebrow tabular-nums text-gray-400">
+            <div className="mt-1 flex justify-between text-eyebrow tabular-nums text-text-faint">
               <span>0:00</span>
               <span>6:00</span>
               <span>12:00</span>
@@ -174,21 +175,21 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           {/* Top actions */}
           <Card title="Top actions">
             {data.by_action.length === 0 ? (
-              <p className="text-caption text-gray-400">No events.</p>
+              <p className="text-caption text-text-faint">No events.</p>
             ) : (
               <ul className="space-y-1.5">
                 {data.by_action.slice(0, 8).map((a) => (
                   <li key={a.action} className="flex items-center gap-2 text-caption">
-                    <span className="w-32 shrink-0 truncate font-semibold text-gray-800">
+                    <span className="w-32 shrink-0 truncate font-semibold text-text-default">
                       {actionLabel(a.action)}
                     </span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
                       <div
                         className="h-full bg-sky-500"
                         style={{ width: `${(a.count / peakActionCount) * 100}%` }}
                       />
                     </div>
-                    <span className="w-10 shrink-0 text-right tabular-nums text-gray-500">
+                    <span className="w-10 shrink-0 text-right tabular-nums text-text-soft">
                       {fmtNumber(a.count)}
                     </span>
                   </li>
@@ -200,7 +201,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           {/* Top staff */}
           <Card title="Top staff">
             {data.by_staff.length === 0 ? (
-              <p className="text-caption text-gray-400">No events.</p>
+              <p className="text-caption text-text-faint">No events.</p>
             ) : (
               <ul className="space-y-1.5">
                 {data.by_staff.map((s) => (
@@ -208,18 +209,18 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
                     <button
                       type="button"
                       onClick={() => setParam('staffId', String(s.staff_id))}
-                      className="flex w-full items-center gap-2 text-left text-caption hover:opacity-80"
+                      className="ds-raw-button flex w-full items-center gap-2 text-left text-caption hover:opacity-80"
                     >
-                      <span className="w-32 shrink-0 truncate font-semibold text-gray-800">
+                      <span className="w-32 shrink-0 truncate font-semibold text-text-default">
                         {s.name ?? `#${s.staff_id}`}
                       </span>
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
                         <div
                           className="h-full bg-violet-500"
                           style={{ width: `${(s.count / peakStaffCount) * 100}%` }}
                         />
                       </div>
-                      <span className="w-10 shrink-0 text-right tabular-nums text-gray-500">
+                      <span className="w-10 shrink-0 text-right tabular-nums text-text-soft">
                         {fmtNumber(s.count)}
                       </span>
                     </button>
@@ -232,7 +233,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           {/* Top items */}
           <Card title={`Top ${section === 'staff' ? 'staff' : 'items'}`}>
             {data.by_item.length === 0 ? (
-              <p className="text-caption text-gray-400">No events.</p>
+              <p className="text-caption text-text-faint">No events.</p>
             ) : (
               <ul className="space-y-1.5">
                 {data.by_item.map((it) => {
@@ -250,16 +251,16 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
                           itemParam ? 'hover:opacity-80' : ''
                         }`}
                       >
-                        <span className="w-32 shrink-0 truncate font-mono font-semibold text-gray-800">
+                        <span className="w-32 shrink-0 truncate font-mono font-semibold text-text-default">
                           {it.label}
                         </span>
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
                           <div
                             className="h-full bg-emerald-500"
                             style={{ width: `${(it.count / peakItemCount) * 100}%` }}
                           />
                         </div>
-                        <span className="w-10 shrink-0 text-right tabular-nums text-gray-500">
+                        <span className="w-10 shrink-0 text-right tabular-nums text-text-soft">
                           {fmtNumber(it.count)}
                         </span>
                       </Element>
@@ -277,8 +278,8 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">{title}</p>
+    <div className="rounded-xl border border-border-soft bg-surface-card p-4">
+      <p className="text-micro font-bold uppercase tracking-widest text-text-soft">{title}</p>
       <div className="mt-2">{children}</div>
     </div>
   );
@@ -319,7 +320,7 @@ function CenterMessage({
     <div className="flex h-full items-center justify-center p-6">
       <p
         className={`text-center text-label ${
-          tone === 'error' ? 'text-rose-600' : 'text-gray-400'
+          tone === 'error' ? 'text-rose-600' : 'text-text-faint'
         }`}
       >
         {label}

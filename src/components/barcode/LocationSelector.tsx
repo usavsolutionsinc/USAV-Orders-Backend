@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useLocations } from '@/hooks/useLocations';
 import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
 import { Plus, Check, X, MapPin, Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -116,8 +118,8 @@ export function LocationSelector({
 
   if (loading) {
     return (
-      <div className={`flex items-center gap-2 ${compact ? 'px-5 py-3' : 'px-5 py-4'} bg-white`}>
-        <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+      <div className={`flex items-center gap-2 ${compact ? 'px-5 py-3' : 'px-5 py-4'} bg-surface-card`}>
+        <Loader2 className="h-3 w-3 animate-spin text-text-faint" />
         <span className={sectionLabel}>Loading locations…</span>
       </div>
     );
@@ -126,7 +128,7 @@ export function LocationSelector({
   // ── Compact mode: single flat dropdown ──
   if (compact) {
     return (
-      <div className="bg-white">
+      <div className="bg-surface-card">
         <div className="flex items-stretch">
           <div className="flex-1 min-w-0">
             <ViewDropdown
@@ -134,21 +136,24 @@ export function LocationSelector({
               value={value}
               onChange={onChange}
               variant="boxy"
-              buttonClassName="h-12 w-full border-b border-gray-200 bg-white px-5 pr-12 text-left text-micro font-black uppercase tracking-widest text-gray-900 outline-none transition-colors hover:bg-gray-50"
+              buttonClassName="h-12 w-full border-b border-border-soft bg-surface-card px-5 pr-12 text-left text-micro font-black uppercase tracking-widest text-text-default outline-none transition-colors hover:bg-surface-hover"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAdd(!showAdd)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-4 border-b border-l border-gray-200 transition-colors ${
-              showAdd ? 'bg-gray-100 text-gray-600' : 'bg-white text-blue-600 hover:bg-blue-50'
-            }`}
-            title={showAdd ? 'Cancel' : 'Add new location'}
-          >
-            {showAdd ? <X className="h-3.5 w-3.5" /> : (
-              <><Plus className="h-3.5 w-3.5" /><span className="text-eyebrow font-black uppercase tracking-widest">New</span></>
-            )}
-          </button>
+          <HoverTooltip label={showAdd ? 'Cancel' : 'Add new location'} asChild>
+            {/* ds-raw-button: structural input-adjacent cell with conditional icon-only vs icon+label content + load-bearing border-b/border-l chrome, not a single DS variant */}
+            <button
+              type="button"
+              onClick={() => setShowAdd(!showAdd)}
+              aria-label={showAdd ? 'Cancel' : 'Add new location'}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-4 border-b border-l border-border-soft transition-colors ${
+                showAdd ? 'bg-surface-sunken text-text-muted' : 'bg-surface-card text-blue-600 hover:bg-blue-50'
+              }`}
+            >
+              {showAdd ? <X className="h-3.5 w-3.5" /> : (
+                <><Plus className="h-3.5 w-3.5" /><span className="text-eyebrow font-black uppercase tracking-widest">New</span></>
+              )}
+            </button>
+          </HoverTooltip>
         </div>
         {showAdd && <AddForm {...{ newName, setNewName, newRoom, setNewZone, handleAdd, handleAddKeyDown, creating, createError }} />}
       </div>
@@ -157,12 +162,12 @@ export function LocationSelector({
 
   // ── Full mode: current badge + zone picker + row×col grid ──
   return (
-    <div className="bg-white">
+    <div className="bg-surface-card">
       {/* Current location badge */}
       {currentLocation && (
-        <div className="flex items-center gap-2 px-5 py-2.5 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-2 px-5 py-2.5 bg-surface-canvas border-b border-border-soft">
           <MapPin className="h-3 w-3 text-orange-500" />
-          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Current:</span>
+          <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Current:</span>
           <span className="text-xs font-black font-mono text-orange-600">{currentLocation}</span>
         </div>
       )}
@@ -175,26 +180,29 @@ export function LocationSelector({
             value={selectedRoom}
             onChange={(z) => { setSelectedZone(z); if (!z) onChange(''); }}
             variant="boxy"
-            buttonClassName="h-14 w-full border-b border-gray-400 bg-white px-5 pr-12 text-left text-sm font-bold uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50"
+            buttonClassName="h-14 w-full border-b border-border-emphasis bg-surface-card px-5 pr-12 text-left text-sm font-bold uppercase tracking-wide text-text-default outline-none transition-colors hover:bg-surface-hover"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAdd(!showAdd)}
-          className={`flex-shrink-0 flex items-center gap-1.5 px-4 border-b border-l border-gray-400 transition-colors ${
-            showAdd ? 'bg-gray-100 text-gray-600' : 'bg-white text-blue-600 hover:bg-blue-50'
-          }`}
-          title={showAdd ? 'Cancel' : 'Add new location'}
-        >
-          {showAdd ? <X className="h-3.5 w-3.5" /> : (
-            <><Plus className="h-3.5 w-3.5" /><span className="text-eyebrow font-black uppercase tracking-widest">New</span></>
-          )}
-        </button>
+        <HoverTooltip label={showAdd ? 'Cancel' : 'Add new location'} asChild>
+          {/* ds-raw-button: structural input-adjacent cell with conditional icon-only vs icon+label content + load-bearing border-b/border-l chrome, not a single DS variant */}
+          <button
+            type="button"
+            onClick={() => setShowAdd(!showAdd)}
+            aria-label={showAdd ? 'Cancel' : 'Add new location'}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-4 border-b border-l border-border-emphasis transition-colors ${
+              showAdd ? 'bg-surface-sunken text-text-muted' : 'bg-surface-card text-blue-600 hover:bg-blue-50'
+            }`}
+          >
+            {showAdd ? <X className="h-3.5 w-3.5" /> : (
+              <><Plus className="h-3.5 w-3.5" /><span className="text-eyebrow font-black uppercase tracking-widest">New</span></>
+            )}
+          </button>
+        </HoverTooltip>
       </div>
 
       {/* Row × Col grid */}
       {grid && (
-        <div className="border-b border-gray-200 px-4 py-3">
+        <div className="border-b border-border-soft px-4 py-3">
           <div className="flex items-center gap-2 mb-2">
             <span className={sectionLabel}>Select Bin — {selectedRoom}</span>
             {value && (
@@ -209,9 +217,9 @@ export function LocationSelector({
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="w-10 p-1 text-eyebrow font-black text-gray-400 text-center">ROW</th>
+                  <th className="w-10 p-1 text-eyebrow font-black text-text-faint text-center">ROW</th>
                   {grid.allCols.map((col) => (
-                    <th key={col} className="p-1 text-eyebrow font-black text-gray-400 text-center min-w-[36px]">
+                    <th key={col} className="p-1 text-eyebrow font-black text-text-faint text-center min-w-[36px]">
                       {col}
                     </th>
                   ))}
@@ -220,7 +228,7 @@ export function LocationSelector({
               <tbody>
                 {grid.rowLabels.map((row) => (
                   <tr key={row}>
-                    <td className="p-1 text-micro font-black text-gray-500 text-center">{row}</td>
+                    <td className="p-1 text-micro font-black text-text-soft text-center">{row}</td>
                     {grid.allCols.map((col) => {
                       const hasCell = grid.rows[row]?.includes(col);
                       const bin = locations.find(
@@ -231,25 +239,28 @@ export function LocationSelector({
                       const isCurrent = binBarcode === currentLocation;
 
                       if (!hasCell) {
-                        return <td key={col} className="p-1"><div className="h-8 rounded bg-gray-50" /></td>;
+                        return <td key={col} className="p-1"><div className="h-8 rounded bg-surface-canvas" /></td>;
                       }
 
                       return (
                         <td key={col} className="p-1">
-                          <button
-                            type="button"
-                            onClick={() => handleGridSelect(row, col)}
-                            className={`h-8 w-full rounded text-eyebrow font-black uppercase tracking-wider transition-all ${
-                              isSelected
-                                ? 'bg-blue-600 text-white ring-2 ring-blue-300'
-                                : isCurrent
-                                  ? 'bg-orange-100 text-orange-700 border border-orange-300'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700'
-                            }`}
-                            title={binBarcode}
-                          >
-                            {isSelected ? <Check className="h-3 w-3 mx-auto" /> : `${row}${col}`}
-                          </button>
+                          <HoverTooltip label={binBarcode} asChild>
+                            {/* ds-raw-button: row×col bin-grid selection tile with conditional 3-way fill (selected/current/default), not a single DS variant */}
+                            <button
+                              type="button"
+                              onClick={() => handleGridSelect(row, col)}
+                              aria-label={binBarcode}
+                              className={`h-8 w-full rounded text-eyebrow font-black uppercase tracking-wider transition-all ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                                  : isCurrent
+                                    ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                                    : 'bg-surface-sunken text-text-muted hover:bg-blue-50 hover:text-blue-700'
+                              }`}
+                            >
+                              {isSelected ? <Check className="h-3 w-3 mx-auto" /> : `${row}${col}`}
+                            </button>
+                          </HoverTooltip>
                         </td>
                       );
                     })}
@@ -263,7 +274,8 @@ export function LocationSelector({
 
       {/* If zone selected but no grid (zone-only location), select it directly */}
       {selectedRoom && !grid && (
-        <div className="border-b border-gray-200 px-5 py-3">
+        <div className="border-b border-border-soft px-5 py-3">
+          {/* ds-raw-button: full-width selection-state toggle with conditional selected/unselected fill, not a single DS variant */}
           <button
             type="button"
             onClick={() => {
@@ -273,7 +285,7 @@ export function LocationSelector({
             className={`w-full h-10 rounded-lg text-sm font-bold transition-colors ${
               value === selectedRoom
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-blue-50'
+                : 'bg-surface-sunken text-text-muted hover:bg-blue-50'
             }`}
           >
             {value === selectedRoom ? '✓ Selected' : `Select "${selectedRoom}"`}
@@ -298,7 +310,7 @@ function AddForm({
   creating: boolean; createError: Error | null;
 }) {
   return (
-    <div className="border-b border-gray-200 bg-blue-50/40 px-5 py-3 space-y-2">
+    <div className="border-b border-border-soft bg-blue-50/40 px-5 py-3 space-y-2">
       <div className="flex gap-2">
         <input
           type="text"
@@ -308,7 +320,7 @@ function AddForm({
           placeholder="Location name *"
           autoFocus
           autoComplete="off"
-          className="flex-1 h-9 rounded-lg border border-gray-300 px-3 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="flex-1 h-9 rounded-lg border border-border-default px-3 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-surface-card"
         />
         <input
           type="text"
@@ -317,16 +329,19 @@ function AddForm({
           onKeyDown={handleAddKeyDown}
           placeholder="Room (optional)"
           autoComplete="off"
-          className="w-32 h-9 rounded-lg border border-gray-300 px-3 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="w-32 h-9 rounded-lg border border-border-default px-3 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-surface-card"
         />
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="md"
           onClick={handleAdd}
           disabled={creating || !newName.trim()}
-          className="h-9 px-3 rounded-lg bg-blue-600 text-white disabled:opacity-40 flex items-center gap-1"
-        >
-          {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-        </button>
+          loading={creating}
+          icon={<Check className="h-3.5 w-3.5" />}
+          ariaLabel="Add location"
+          className="rounded-lg px-3"
+        />
       </div>
       {createError && (
         <p className="text-micro font-bold text-red-600">{createError.message}</p>

@@ -34,7 +34,7 @@ function GoalRing({ percent, color }: { percent: number; color: string }) {
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[12px] font-extrabold text-[#2D2A26] tabular-nums tracking-tight">
+        <span className="text-label font-extrabold text-text-default tabular-nums tracking-tight">
           {clamped}%
         </span>
       </div>
@@ -61,7 +61,7 @@ function StaffGoalCard({ row, index }: {
       viewport={{ once: true }}
       transition={{ delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -2 }}
-      className="bg-white rounded-[20px] border border-[#F0EDE8] p-4 flex items-center gap-3
+      className="bg-surface-card rounded-[20px] border border-border-soft p-4 flex items-center gap-3
                  shadow-[0_2px_12px_rgba(161,140,90,0.04)]
                  hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)]
                  transition-shadow min-w-[260px] sm:min-w-0"
@@ -70,21 +70,21 @@ function StaffGoalCard({ row, index }: {
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-6 h-6 rounded-full bg-[#F5F3EF] text-[#6B6356] text-[9px] font-extrabold flex items-center justify-center shrink-0">
+          <div className="w-6 h-6 rounded-full bg-surface-canvas text-text-muted text-eyebrow font-extrabold flex items-center justify-center shrink-0">
             {initials || '··'}
           </div>
-          <p className="text-[13px] font-bold text-[#2D2A26] truncate leading-tight">
+          <p className="text-[13px] font-bold text-text-default truncate leading-tight">
             {row.name}
           </p>
         </div>
-        <p className="text-[10px] font-bold text-[#A89F91] uppercase tracking-[0.14em] mb-1.5">
+        <p className="text-micro font-bold text-text-muted uppercase tracking-[0.14em] mb-1.5">
           {row.station}
         </p>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-[#6B6356] tabular-nums">
+          <span className="text-caption font-semibold text-text-muted tabular-nums">
             {row.current} / {row.goal}
           </span>
-          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${tone.chip}`}>
+          <span className={`text-eyebrow font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${tone.chip}`}>
             {tone.label}
           </span>
         </div>
@@ -101,17 +101,17 @@ export function StaffGoalsRail({ staffProgress, isLoading }: StaffGoalsRailProps
     <section>
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <span className={`${sectionLabel} !text-[#A89F91]`}>
+          <span className={`${sectionLabel} !text-text-muted`}>
             Staff goals · today
           </span>
-          <h2 className="text-[20px] sm:text-[22px] font-extrabold tracking-tight text-[#2D2A26] mt-1">
+          <h2 className="text-[20px] sm:text-[22px] font-extrabold tracking-tight text-text-default mt-1">
             Who’s pacing where
           </h2>
         </div>
         {rows.length > 0 && (
-          <span className="text-[11px] font-semibold text-[#A89F91] tabular-nums shrink-0">
-            <span className="text-[#2D2A26] font-extrabold">{onTrack}</span>
-            <span className="text-[#C4BAA8]">/{rows.length}</span> on track
+          <span className="text-caption font-semibold text-text-muted tabular-nums shrink-0">
+            <span className="text-text-default font-extrabold">{onTrack}</span>
+            <span className="text-text-soft">/{rows.length}</span> on track
           </span>
         )}
       </div>
@@ -119,13 +119,13 @@ export function StaffGoalsRail({ staffProgress, isLoading }: StaffGoalsRailProps
       {isLoading && rows.length === 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-[100px] bg-white/60 rounded-[20px] border border-[#F0EDE8] animate-pulse" />
+            <div key={i} className="h-[100px] bg-surface-card/60 rounded-[20px] border border-border-soft animate-pulse" />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-white border border-dashed border-[#E8E4DD] rounded-[20px] p-8 text-center">
-          <p className="text-[13px] font-semibold text-[#6B6356]">No staff goals set yet.</p>
-          <p className="text-[11px] text-[#A89F91] mt-1">Set daily goals from the staff settings to track progress here.</p>
+        <div className="bg-surface-card border border-dashed border-border-soft rounded-[20px] p-8 text-center">
+          <p className="text-[13px] font-semibold text-text-muted">No staff goals set yet.</p>
+          <p className="text-caption text-text-muted mt-1">Set daily goals from the staff settings to track progress here.</p>
         </div>
       ) : (
         <div className="overflow-x-auto -mx-4 sm:mx-0 pb-1">

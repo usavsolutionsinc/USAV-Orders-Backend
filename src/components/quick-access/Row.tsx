@@ -3,8 +3,7 @@
 import type { ReactNode } from 'react';
 
 interface RowProps {
-  icon: ReactNode;
-  iconBg?: string;
+  icon?: ReactNode;
   label: string;
   subLabel?: ReactNode;
   trailing?: ReactNode;
@@ -14,38 +13,49 @@ interface RowProps {
 }
 
 /**
- * Shared row used by Actions, Pinned, and Recent sections. Compact 2026
- * styling: 32×32 icon container, two lines of text, optional trailing slot.
+ * Shared quick-access row — flat, icon-paired, design-system anatomy.
+ * Selection is background + ring only; no decorative icon circles.
  */
-export function Row({ icon, iconBg = 'bg-gray-900', label, subLabel, trailing, onClick, active, ariaCurrent }: RowProps) {
+export function Row({
+  icon,
+  label,
+  subLabel,
+  trailing,
+  onClick,
+  active,
+  ariaCurrent,
+}: RowProps) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick?.();
-        }
-      }}
       aria-current={ariaCurrent ? 'page' : undefined}
-      className={`group flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-        active ? 'bg-blue-50' : 'hover:bg-gray-50 active:bg-gray-100'
+      className={`group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+        active
+          ? 'bg-blue-50 ring-1 ring-inset ring-blue-400'
+          : 'hover:bg-surface-hover active:bg-surface-sunken'
       }`}
     >
-      <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-white ${iconBg}`}>
-        {icon}
-      </span>
+      {icon ? (
+        <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center text-text-muted">
+          {icon}
+        </span>
+      ) : null}
       <span className="min-w-0 flex-1">
-        <span className={`block truncate text-sm font-semibold ${active ? 'text-blue-700' : 'text-gray-900'}`}>
+        <span
+          className={`block truncate text-caption font-bold ${
+            active ? 'text-blue-700' : 'text-text-default'
+          }`}
+        >
           {label}
         </span>
-        {subLabel && (
-          <span className="block truncate text-caption font-medium text-gray-500">{subLabel}</span>
-        )}
+        {subLabel ? (
+          <span className="block truncate text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
+            {subLabel}
+          </span>
+        ) : null}
       </span>
-      {trailing && <span className="ml-2 flex-shrink-0">{trailing}</span>}
-    </div>
+      {trailing ? <span className="ml-1 flex-shrink-0">{trailing}</span> : null}
+    </button>
   );
 }

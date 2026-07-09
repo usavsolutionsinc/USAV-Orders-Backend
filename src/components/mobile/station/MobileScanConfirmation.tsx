@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Barcode, Package, Settings, Loader2 } from '@/components/Icons';
+import { MapPin, Barcode, Package, Settings } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import {
   framerPresenceMobile,
   framerTransitionMobile,
@@ -36,7 +37,7 @@ const TYPE_CONFIG: Record<string, {
     Icon: MapPin,
     badge: 'bg-blue-100 text-blue-700 border-blue-200',
     confirmBtn: 'bg-blue-600 active:bg-blue-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-blue-500/30 text-white border-blue-400/50',
   },
   SERIAL: {
@@ -44,7 +45,7 @@ const TYPE_CONFIG: Record<string, {
     Icon: Barcode,
     badge: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     confirmBtn: 'bg-emerald-600 active:bg-emerald-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-emerald-500/30 text-white border-emerald-400/50',
   },
   FNSKU: {
@@ -52,7 +53,7 @@ const TYPE_CONFIG: Record<string, {
     Icon: Package,
     badge: 'bg-violet-100 text-violet-700 border-violet-200',
     confirmBtn: 'bg-violet-600 active:bg-violet-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-violet-500/30 text-white border-violet-400/50',
   },
   REPAIR: {
@@ -60,24 +61,28 @@ const TYPE_CONFIG: Record<string, {
     Icon: Settings,
     badge: 'bg-amber-100 text-amber-700 border-amber-200',
     confirmBtn: 'bg-amber-600 active:bg-amber-700',
-    pill: 'bg-white/10 text-white/70 border-white/20',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
     pillActive: 'bg-amber-500/30 text-white border-amber-400/50',
   },
   SKU: {
     label: 'SKU',
     Icon: Barcode,
-    badge: 'bg-gray-100 text-gray-700 border-gray-200',
+    badge: 'bg-surface-sunken text-text-muted border-border-soft',
+    // ds-allow-raw-neutral: neutral member of the per-type colored confirm-button family (blue/emerald/violet/amber-600) — a themed token would drift from its colored siblings
     confirmBtn: 'bg-gray-700 active:bg-gray-800',
-    pill: 'bg-white/10 text-white/70 border-white/20',
-    pillActive: 'bg-gray-500/30 text-white border-gray-400/50',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
+    // ds-allow-raw-neutral: neutral member of the colored active-pill family (blue/emerald/violet/amber-500/30); glass(#fff)/scrim(#020617) can't reproduce a mid-gray wash
+    pillActive: 'bg-gray-500/30 text-white border-border-emphasis/50',
   },
   COMMAND: {
     label: 'Command',
     Icon: Settings,
-    badge: 'bg-gray-100 text-gray-700 border-gray-200',
+    badge: 'bg-surface-sunken text-text-muted border-border-soft',
+    // ds-allow-raw-neutral: neutral member of the per-type colored confirm-button family (blue/emerald/violet/amber-600) — a themed token would drift from its colored siblings
     confirmBtn: 'bg-gray-700 active:bg-gray-800',
-    pill: 'bg-white/10 text-white/70 border-white/20',
-    pillActive: 'bg-gray-500/30 text-white border-gray-400/50',
+    pill: 'bg-glass/10 text-white/70 border-glass/20',
+    // ds-allow-raw-neutral: neutral member of the colored active-pill family (blue/emerald/violet/amber-500/30); glass(#fff)/scrim(#020617) can't reproduce a mid-gray wash
+    pillActive: 'bg-gray-500/30 text-white border-border-emphasis/50',
   },
 };
 
@@ -117,10 +122,10 @@ export function MobileScanConfirmation({
       transition={framerTransitionMobile.confirmationSlideUp}
       className="absolute inset-x-0 bottom-0 z-10"
     >
-      <div className="bg-white rounded-t-3xl shadow-2xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="bg-surface-card rounded-t-3xl shadow-2xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         {/* ── Header: "Detected as" + badge ── */}
         <div className="mb-4">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-2">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-text-faint mb-2">
             Detected As
           </p>
           <div className="flex items-center gap-3">
@@ -129,7 +134,7 @@ export function MobileScanConfirmation({
               {config.label}
             </span>
             {carrier && (
-              <span className="text-xs font-black text-gray-500 uppercase tracking-wider">
+              <span className="text-xs font-black text-text-soft uppercase tracking-wider">
                 {carrier.replace(/_/g, ' ')}
               </span>
             )}
@@ -137,18 +142,18 @@ export function MobileScanConfirmation({
         </div>
 
         {/* ── Scanned value ── */}
-        <div className="bg-gray-50 rounded-2xl border border-gray-200 px-4 py-3 mb-4">
-          <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 mb-1">
+        <div className="bg-surface-canvas rounded-2xl border border-border-soft px-4 py-3 mb-4">
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-text-faint mb-1">
             Scanned Value
           </p>
-          <p className="text-base font-mono font-black text-gray-900 break-all leading-snug">
+          <p className="text-base font-mono font-black text-text-default break-all leading-snug">
             {scannedValue}
           </p>
         </div>
 
         {/* ── Override pills ── */}
         <div className="mb-5">
-          <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-500 mb-2">
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-text-soft mb-2">
             Not right? It&apos;s a:
           </p>
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
@@ -157,12 +162,13 @@ export function MobileScanConfirmation({
               const pillConfig = TYPE_CONFIG[type] || TYPE_CONFIG.TRACKING;
               const PillIcon = pillConfig.Icon;
               return (
+                // ds-raw-button: segmented scan-type override toggle pill — not a DS Button
                 <button
                   key={type}
                   type="button"
                   onClick={() => setCurrentType(type)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3.5 min-h-[44px] text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
-                    isActive ? pillConfig.badge : 'bg-gray-100 text-gray-500 border-gray-200'
+                  className={`ds-raw-button flex items-center gap-1.5 rounded-full border px-3.5 min-h-[44px] text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
+                    isActive ? pillConfig.badge : 'bg-surface-sunken text-text-soft border-border-soft'
                   }`}
                 >
                   <PillIcon className="h-3.5 w-3.5" />
@@ -175,30 +181,22 @@ export function MobileScanConfirmation({
 
         {/* ── Action buttons ── */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={() => onConfirm(scannedValue, currentType)}
-            disabled={isLoading}
-            className={`flex-1 h-[52px] rounded-2xl text-white text-label font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${config.confirmBtn}`}
+            loading={isLoading}
+            icon={
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            }
+            className={`h-[52px] flex-1 ${config.confirmBtn}`}
           >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                Confirm
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={onRescan}
-            className="h-[52px] px-5 rounded-2xl bg-gray-100 text-gray-700 text-label font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
-          >
+            Confirm
+          </Button>
+          <Button variant="secondary" onClick={onRescan} className="h-[52px] px-5">
             Rescan
-          </button>
+          </Button>
         </div>
       </div>
     </motion.div>

@@ -60,24 +60,18 @@ export interface ReceivingSortOption {
 }
 
 /**
- * History sort axes, in lifecycle order: SCANNED (door) → UNBOXED → RECEIVED.
- * These are three genuinely distinct receiving timestamps:
- *   • scanned_newest  — the dock scan (receiving.received_at, despite its name
- *                       this is the arrival/scan moment; via last_activity_at).
- *   • unboxed_newest  — items counted out of the carton (receiving.unboxed_at).
- *   • received_newest — the terminal DONE / "Received" transition
- *                       (receiving_lines.received_done_at), reached at full
- *                       mark-received or the Zoho-received reconcile.
- * The server understands all three ids (route.ts historySort).
+ * History sort axes — each maps to a lifecycle timestamp for day-banding,
+ * within-day order, and the server ORDER BY:
+ *   • unboxed_newest — receiving.unboxed_at (default).
+ *   • scanned_newest — first tracking scan / door scan.
  */
 export const HISTORY_SORT_OPTIONS = [
-  { id: 'scanned_newest', label: 'Scanned' },
   { id: 'unboxed_newest', label: 'Unboxed' },
-  { id: 'received_newest', label: 'Received' },
+  { id: 'scanned_newest', label: 'Scanned' },
 ] as const satisfies readonly ReceivingSortOption[];
 
 /** Implicit default — omitted from the URL when active. */
-export const HISTORY_DEFAULT_SORT = 'scanned_newest';
+export const HISTORY_DEFAULT_SORT = 'unboxed_newest';
 
 /** Coerce an arbitrary `?sort=` to a valid History sort (default on miss). */
 export function normalizeHistorySort(raw: string | null | undefined): string {
@@ -86,18 +80,15 @@ export function normalizeHistorySort(raw: string | null | undefined): string {
 }
 
 /**
- * Which row timestamp the History day-banding + within-day order keys on.
- * History is client-sorted (serverSorted=false): the day band a group lands in
- * and the order within it both derive from this axis, so the sort only takes
- * visible effect once the client groups on the matching timestamp.
+ * Maps a History `?sort=` value to the lifecycle axis used for day-banding and
+ * within-day order. Must stay aligned with the server ORDER BY for each sort id.
  */
 export function historySortGroupAxis(
   sort: string | null | undefined,
-): 'scanned' | 'unboxed' | 'received' {
+): 'scanned' | 'unboxed' {
   const s = normalizeHistorySort(sort);
-  if (s === 'unboxed_newest') return 'unboxed';
-  if (s === 'received_newest') return 'received';
-  return 'scanned';
+  if (s === 'scanned_newest') return 'scanned';
+  return 'unboxed';
 }
 
 /**
@@ -220,11 +211,9 @@ const historyMode: ReceivingModeDescriptor = {
     if (ctx.historySearch) p.set('search', ctx.historySearch);
     p.set('search_field', ctx.historySearchField);
     p.set('search_scope', ctx.historySearchScope);
-    // Send the sort so the server returns the right 500-row window for the
-    // chosen axis (scanned default vs unboxed). The client re-bands/re-orders
-    // to match via historySortGroupAxis — both layers key on the same axis.
-    const sort = normalizeHistorySort(ctx.historySort);
-    if (sort !== HISTORY_DEFAULT_SORT) p.set('sort', sort);
+    // Always send sort so the server window matches the client axis (default
+    // unboxed is omitted from the browser URL but must reach the API).
+    p.set('sort', normalizeHistorySort(ctx.historySort));
     return p;
   },
   queryKey(ctx) {

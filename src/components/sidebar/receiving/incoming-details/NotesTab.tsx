@@ -70,7 +70,7 @@ export function NotesTab({
 
   return (
     <div>
-      <label className="block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+      <label className="block text-eyebrow font-black uppercase tracking-wider text-text-soft">
         Carton notes
       </label>
       <textarea
@@ -79,9 +79,9 @@ export function NotesTab({
         onChange={(e) => setValue(e.target.value)}
         rows={6}
         placeholder="Vendor context, claim handoff, anything the receiver should see…"
-        className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+        className="mt-1 w-full rounded-md border border-border-soft bg-surface-card px-2 py-1.5 text-caption font-medium leading-snug text-text-default placeholder:text-text-faint focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
       />
-      <div className="mt-2 text-eyebrow font-semibold text-gray-400">
+      <div className="mt-2 text-eyebrow font-semibold text-text-faint">
         {saving ? 'Saving…' : 'Saves when you click away'}
       </div>
     </div>

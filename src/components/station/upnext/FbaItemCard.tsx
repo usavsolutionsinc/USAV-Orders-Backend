@@ -13,6 +13,7 @@ import {
   DetailCell,
   CopyIconButton,
   ExternalLinkButton,
+  IconButton,
 } from '@/design-system';
 import { ExternalLink, Settings } from '@/components/Icons';
 import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
@@ -57,7 +58,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
       >
         {/* ── Row 1 — FNSKU id · pending group · trailing chevron. ── */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5 text-caption font-semibold text-gray-500">
+          <div className="flex min-w-0 items-center gap-1.5 text-caption font-semibold text-text-soft">
             {canOpenAsin ? (
               <button
                 type="button"
@@ -65,25 +66,25 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                   e.stopPropagation();
                   if (card.asinUrl) window.open(card.asinUrl, '_blank', 'noopener,noreferrer');
                 }}
-                className="inline-flex items-center gap-1 rounded font-mono font-bold text-purple-700 hover:text-blue-600"
+                className="ds-raw-button inline-flex items-center gap-1 rounded font-mono font-bold text-purple-700 hover:text-blue-600"
                 aria-label="Open FBA item on Amazon"
               >
                 #{card.fnskuLast4}
-                <ExternalLink className="h-3 w-3 text-gray-300 group-hover:text-blue-400" />
+                <ExternalLink className="h-3 w-3 text-text-faint group-hover:text-blue-400" />
               </button>
             ) : (
               <span className="font-mono font-bold text-purple-700">
                 #{card.fnskuLast4}
               </span>
             )}
-            <span className="text-gray-300">·</span>
-            <span className="truncate text-gray-700">
+            <span className="text-text-faint">·</span>
+            <span className="truncate text-text-muted">
               {card.pendingTitle || item.shipment_ref || 'FBA item'}
             </span>
           </div>
           <span
             aria-hidden
-            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-gray-400 transition-transform ${
+            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center text-sm leading-none text-text-faint transition-transform ${
               isExpanded ? 'rotate-90 text-purple-600' : ''
             }`}
           >
@@ -92,7 +93,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
         </div>
 
         {/* ── Row 2 — title (clamp-1) with qty + condition inline. ── */}
-        <h4 className="mt-0.5 line-clamp-1 text-sm font-semibold leading-snug tracking-tight text-gray-900">
+        <h4 className="mt-0.5 line-clamp-1 text-sm font-semibold leading-snug tracking-tight text-text-default">
           <InlineQtyPrefix quantity={card.qtyLabel} />
           {card.conditionLabel && (
             <>
@@ -163,13 +164,12 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                       <span className={`${dataValue} text-caption normal-case tracking-normal`}>
                         {item.assigned_tech_name || 'Unassigned'}
                       </span>
-                      <button
+                      <IconButton
+                        icon={<Settings className="w-3.5 h-3.5 text-text-faint group-hover:text-purple-600" />}
+                        ariaLabel="Edit assignment"
                         onClick={card.openAssignment}
-                        className="flex-shrink-0 text-gray-400 hover:text-purple-600 transition-colors"
-                        aria-label="Edit assignment"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
+                        className="group flex-shrink-0"
+                      />
                     </div>
                   </DetailCell>
                   <DetailCell label="FNSKU">

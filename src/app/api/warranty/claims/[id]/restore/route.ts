@@ -27,7 +27,7 @@ export const POST = withAuth(async (request, ctx) => {
     return NextResponse.json({ ok: false, error: 'claim not found or not deleted' }, { status: 404 });
   }
 
-  const { restored } = await restoreClaims([id], ctx.staffId ?? null);
+  const { restored } = await restoreClaims([id], ctx.staffId ?? null, ctx.organizationId);
   if (restored.length === 0) {
     return NextResponse.json({ ok: false, error: 'claim not found or not deleted' }, { status: 404 });
   }

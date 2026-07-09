@@ -16,6 +16,7 @@ import {
   ShoppingCart,
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { SOURCE_PLATFORMS } from '@/lib/source-platform';
 
@@ -56,7 +57,16 @@ export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
  * nav within the same carton. PO item notes live in DB (`receiving_lines.notes`)
  * per line, not here.
  */
-export const RECEIVING_LINE_DETAILS_STORAGE_KEY = (receivingId: number) =>
+export const RECEIVING_LINE_DETAILS_STORAGE_KEY = (
+  receivingId: number,
+  orgId?: string | null,
+) => {
+  const org = String(orgId ?? '').trim() || 'default';
+  return `receiving:${org}:sidebar.lineDetails.v1:${receivingId}`;
+};
+
+/** Legacy key (pre org-namespacing) — read-only fallback for migration. */
+const LEGACY_RECEIVING_LINE_DETAILS_STORAGE_KEY = (receivingId: number) =>
   `receiving.sidebar.lineDetails.v1:${receivingId}`;
 
 export type ReceivingLineDetailScratch = {
@@ -68,12 +78,15 @@ export type ReceivingLineDetailScratch = {
 
 export function readReceivingLineDetailsScratch(
   receivingId: number | null,
+  orgId?: string | null,
 ): ReceivingLineDetailScratch {
   if (receivingId == null || typeof window === 'undefined') {
     return { zendesk: '', listing: '', extra_trackings: [] };
   }
   try {
-    const raw = window.localStorage.getItem(RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId));
+    const raw =
+      window.localStorage.getItem(RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId, orgId)) ??
+      window.localStorage.getItem(LEGACY_RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId));
     if (!raw) return { zendesk: '', listing: '', extra_trackings: [] };
     const o = JSON.parse(raw) as Partial<ReceivingLineDetailScratch>;
     const extrasRaw = o.extra_trackings;
@@ -93,11 +106,12 @@ export function readReceivingLineDetailsScratch(
 export function writeReceivingLineDetailsScratch(
   receivingId: number,
   d: ReceivingLineDetailScratch,
+  orgId?: string | null,
 ) {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(
-      RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId),
+      RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId, orgId),
       JSON.stringify({
         zendesk: d.zendesk,
         listing: d.listing,
@@ -161,22 +175,6 @@ export const RECEIVING_TYPE_OPTS = [
 
 /** Carton-level default types the carton pill can set (PICKUP is a carton source, not a pill type). */
 export const CARTON_INTAKE_TYPES = ['PO', 'RETURN', 'TRADE_IN'] as const;
-
-/**
- * Effective receiving type for a line: the per-line override wins, else the
- * carton-level default, else 'PO'. One resolver so every surface (pill, label,
- * copy-all) reads type the same way. See migration 2026-06-13b.
- */
-export function effectiveReceivingType(
-  lineOverride: string | null | undefined,
-  cartonDefault: string | null | undefined,
-): string {
-  const ov = (lineOverride || '').trim().toUpperCase();
-  if (ov && ov !== 'PO') return ov;
-  const def = (cartonDefault || '').trim().toUpperCase();
-  if (def) return def;
-  return ov || 'PO';
-}
 
 // Pill options + printed-label map both derive from the platform SoT so a
 // platform never reads two ways across surfaces. Add a platform in
@@ -296,10 +294,7 @@ export function resolvePoScanValue(
 // ── Scan / exception types ──────────────────────────────────────────────────
 
 export function randomId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 // ── Listing URL helpers ─────────────────────────────────────────────────────
@@ -318,9 +313,9 @@ export function listingUrlForOpen(raw: string): string | null {
   }
 }
 
-/** Desktop receiving page deep link (`/receiving?recvId=…&lineId=…`). */
+/** Desktop Unbox surface deep link (`/unbox?recvId=…&lineId=…`). */
 export function receivingShareUrl(receivingId: number, lineId?: number): string {
-  const path = '/receiving';
+  const path = '/unbox';
   if (typeof window !== 'undefined') {
     const u = new URL(path, window.location.origin);
     u.searchParams.set('recvId', String(receivingId));
@@ -383,9 +378,9 @@ export function readSelectLineDetail(
 // ── Form input class tokens ─────────────────────────────────────────────────
 
 export const SELECT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-caption font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-border-soft bg-surface-card px-1.5 py-0.5 text-caption font-semibold text-text-default focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 export const INPUT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-caption font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-border-soft bg-surface-card px-1.5 py-0.5 text-caption font-semibold text-text-default placeholder:text-text-faint focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 
 // ── Type scale (sidebar + workspace share this) ─────────────────────────────
 /**
@@ -400,37 +395,37 @@ export const INPUT_CLASS =
  */
 
 export const TYPE_PRODUCT_TITLE_CLASS =
-  'text-sm font-extrabold leading-snug tracking-tight text-slate-900 break-words';
+  'text-sm font-extrabold leading-snug tracking-tight text-text-default break-words';
 
 export const TYPE_PRODUCT_TITLE_COMPACT_CLASS =
-  'text-sm font-extrabold leading-snug tracking-tight text-slate-900 break-words line-clamp-3';
+  'text-sm font-extrabold leading-snug tracking-tight text-text-default break-words line-clamp-3';
 
 export const TYPE_SECTION_TITLE_CLASS =
   'shrink-0 text-micro font-black uppercase tracking-wider';
 
 export const TYPE_FIELD_LABEL_CLASS =
-  'block text-eyebrow font-black uppercase tracking-[0.14em] text-slate-500';
+  'block text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft';
 
 export const TYPE_HEADER_SUMMARY_CLASS =
-  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-eyebrow font-semibold leading-none tracking-wide text-gray-600';
+  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-eyebrow font-semibold leading-none tracking-wide text-text-muted';
 
 export const TYPE_INPUT_INLINE_CLASS =
-  'text-caption font-semibold text-gray-900 placeholder:font-medium placeholder:text-gray-400';
+  'text-caption font-semibold text-text-default placeholder:font-medium placeholder:text-text-faint';
 
 // ── Flow-section class + tone tokens ────────────────────────────────────────
 
 export const FLOW_SECTION_BTN_CLASS =
-  'flex min-h-[28px] w-full items-center gap-2 px-2 py-0.5 text-left transition-colors hover:bg-gray-50';
+  'flex min-h-[28px] w-full items-center gap-2 px-2 py-0.5 text-left transition-colors hover:bg-surface-hover';
 
 export const FLOW_SECTION_TITLE_CLASS = TYPE_SECTION_TITLE_CLASS;
 export const FLOW_SECTION_SUMMARY_CLASS = TYPE_HEADER_SUMMARY_CLASS;
 /** Back-compat alias — field labels above inputs. */
 export const FLOW_SECTION_LABEL = TYPE_FIELD_LABEL_CLASS;
 
-export const FLOW_SECTION_SUMMARY_SEP_CLASS = 'shrink-0 select-none font-normal text-gray-400';
+export const FLOW_SECTION_SUMMARY_SEP_CLASS = 'shrink-0 select-none font-normal text-text-faint';
 
 export const RECEIVING_SCAN_RULE_LINE_CLASS =
-  '-mx-3 h-px shrink-0 bg-slate-300 transition-colors group-focus-within:bg-blue-500';
+  '-mx-3 h-px shrink-0 bg-surface-strong transition-colors group-focus-within:bg-blue-500';
 
 export const RECEIVING_TRAIL_SLOT_CLASS =
   'flex h-[14px] w-[14px] shrink-0 items-center justify-center';
@@ -438,14 +433,14 @@ export const RECEIVING_TRAIL_SLOT_CLASS =
 export const RECEIVING_TRAIL_BTN_CLASS =
   'flex h-full w-full items-center justify-center rounded-sm transition-colors duration-100 ease-out active:scale-95';
 
-export const TRACKING_REMOVE_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-gray-400 hover:text-gray-900`;
-export const TRACKING_ADD_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-slate-500 hover:text-slate-800`;
+export const TRACKING_REMOVE_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-text-faint hover:text-text-default`;
+export const TRACKING_ADD_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-text-soft hover:text-text-default`;
 
 export const TRACKING_ROW_LEADING_ICON_CLASS =
-  'shrink-0 text-gray-400 transition-colors duration-100 ease-out group-focus-within:text-gray-900';
+  'shrink-0 text-text-faint transition-colors duration-100 ease-out group-focus-within:text-text-default';
 
 export const RECEIVING_CHIP_EDIT_BTN_CLASS =
-  'flex size-[22px] shrink-0 items-center justify-center rounded-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 active:scale-95';
+  'flex size-[22px] shrink-0 items-center justify-center rounded-sm text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-default active:scale-95';
 
 // ── Section tone tokens ─────────────────────────────────────────────────────
 /**
@@ -539,10 +534,11 @@ export const RECEIVING_VARIANT_THEME: Record<ReceivingVariant, ReceivingVariantS
   OTHER: {
     tone: 'gray',
     label: 'Other',
-    chip: 'bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200',
+    chip: 'bg-surface-sunken text-text-muted ring-1 ring-inset ring-border-soft',
+    // ds-allow-raw-neutral: identity/tone hue — OTHER's gray among blue/rose/amber/emerald variants, not chrome
     cta: 'bg-gray-700 hover:bg-gray-800',
-    focusRing: 'focus:ring-gray-400/30 focus:border-gray-400',
-    iconBg: 'bg-gray-700',
+    focusRing: 'focus:ring-gray-400/30 focus:border-border-emphasis', // ds-allow-raw-neutral: identity/tone hue
+    iconBg: 'bg-gray-700', // ds-allow-raw-neutral: identity/tone hue
   },
 };
 
@@ -604,6 +600,77 @@ export const CLAIM_SEVERITY_OPTIONS: ReadonlyArray<{
   { value: 'high',   label: 'High',   active: 'bg-rose-600 text-white',    inactive: 'bg-rose-50 text-rose-700' },
 ];
 
+import { normalizeScanKey } from '@/lib/receiving/scan/normalize';
+
+/** Stable rail reconcile key for a scan still in flight (no receiving_id yet). */
+export function pendingScanReconcileKey(trackingNumber: string): string {
+  return `scan:${normalizeScanKey(trackingNumber)}`;
+}
+
+/** Negative line id for a pre-resolve pending scan — cannot collide with DB ids. */
+function pendingScanLineId(trackingNumber: string): number {
+  const key = normalizeScanKey(trackingNumber);
+  let h = 5381;
+  for (let i = 0; i < key.length; i++) {
+    h = ((h << 5) + h) ^ key.charCodeAt(i);
+  }
+  return -(Math.abs(h) || 1);
+}
+
+/**
+ * Instant triage-rail row shown the moment a tracking # is scanned, before
+ * lookup-po returns. Title = the tracking #; reconciles in place once the
+ * resolved carton prepends under `carton:{receiving_id}` and this leading row
+ * clears.
+ */
+export function buildPendingScanStubRow(trackingNumber: string): ReceivingLineRow {
+  const trimmed = trackingNumber.trim();
+  const now = new Date().toISOString();
+  return {
+    id: pendingScanLineId(trimmed),
+    receiving_id: null,
+    client_event_id: pendingScanReconcileKey(trimmed),
+    tracking_number: trimmed,
+    carrier: null,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: null,
+    zoho_purchaseorder_number: null,
+    item_name: trimmed,
+    sku: null,
+    quantity_received: 0,
+    quantity_expected: null,
+    qa_status: 'PENDING',
+    workflow_status: 'ARRIVED',
+    disposition_code: 'HOLD',
+    condition_grade: '',
+    disposition_audit: [],
+    needs_test: true,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    receiving_type: 'PO',
+    notes: null,
+    created_at: now,
+    last_activity_at: now,
+    scanned_at: now,
+    image_url: null,
+    source_platform: null,
+    receiving_source: null,
+  };
+}
+
+/** True while a row is the pre-resolve triage leading stub (not yet clickable). */
+export function isPendingTriageScanRow(row: ReceivingLineRow): boolean {
+  return (
+    row.receiving_id == null
+    && typeof row.client_event_id === 'string'
+    && row.client_event_id.startsWith('scan:')
+  );
+}
+
 /**
  * Synthesize a ReceivingLineRow for an unmatched carton that has no
  * receiving_lines rows yet (operator just scanned the tracking; no items
@@ -653,5 +720,78 @@ export function buildUnmatchedStubRow(
     image_url: null,
     source_platform: null,
     receiving_source: 'unmatched',
+  };
+}
+
+/**
+ * Final-shape row for the Unbox UNBOXED rail — title is stable from the first
+ * paint ("Unfound PO"), keyed on `carton:{receivingId}` so no tracking# →
+ * unfound title flicker or disappear/reappear on refetch.
+ */
+export function buildUnboxRailUnmatchedRow(
+  receivingId: number,
+  trackingNumber: string,
+): ReceivingLineRow {
+  const now = new Date().toISOString();
+  return {
+    ...buildUnmatchedStubRow(receivingId, trackingNumber),
+    item_name: 'Unfound PO',
+    workflow_status: 'DONE',
+    client_event_id: `carton:${receivingId}`,
+    scanned_at: now,
+    last_activity_at: now,
+    created_at: now,
+  };
+}
+
+/**
+ * Optimistic OPEN stub for a MATCHED carton — a full {@link ReceivingLineRow}
+ * seeded from a lookup-po line summary so the right-pane workspace opens the
+ * instant the PO resolves, before the `include=serials` hydration fetch lands.
+ * The workspace is keyed on receiving_id, so the real row reconciles IN PLACE
+ * (no remount), mirroring the unmatched optimistic-open in scan-apply.ts.
+ *
+ * Carries the REAL line id (positive) so the hydration reconcile targets the same
+ * line, and `receiving_source` is null (NOT 'unmatched') so the matched UI — not
+ * the unfound UI — renders during the brief pre-hydration window.
+ */
+export function buildMatchedStubRow(
+  receivingId: number,
+  trackingNumber: string,
+  line: PoLineSummary,
+): ReceivingLineRow {
+  return {
+    id: line.id,
+    receiving_id: receivingId,
+    tracking_number: trackingNumber,
+    carrier: null,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: line.zoho_purchaseorder_id,
+    zoho_purchaseorder_number: line.zoho_purchaseorder_number,
+    item_name: line.item_name,
+    sku: line.sku,
+    quantity_received: line.quantity_received,
+    quantity_expected: line.quantity_expected,
+    qa_status: 'PENDING',
+    workflow_status: null,
+    disposition_code: 'HOLD',
+    // Seed the real grade from the summary so the header reads correctly the
+    // moment the pane opens; the hydration fetch reconciles it in place. Falls
+    // back to '' (don't auto-mark the Condition step) when the summary lacks one.
+    condition_grade: line.condition_grade ?? '',
+    disposition_audit: [],
+    needs_test: true,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    receiving_type: line.receiving_type,
+    notes: null,
+    created_at: null,
+    image_url: line.image_url,
+    source_platform: null,
+    receiving_source: null,
   };
 }

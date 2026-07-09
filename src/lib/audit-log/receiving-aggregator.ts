@@ -413,11 +413,17 @@ export async function getReceivingAuditPO(
         ? orgId
           ? tenantQuery(
               orgId,
-              `SELECT * FROM receiving WHERE id = ANY($1::int[]) AND organization_id = $2 ORDER BY id`,
+              `SELECT r.*, stn.tracking_number_raw AS receiving_tracking_number
+                 FROM receiving r
+                 LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+                WHERE r.id = ANY($1::int[]) AND r.organization_id = $2 ORDER BY r.id`,
               [cartonIds, orgId],
             )
           : pool.query(
-              `SELECT * FROM receiving WHERE id = ANY($1::int[]) ORDER BY id`,
+              `SELECT r.*, stn.tracking_number_raw AS receiving_tracking_number
+                 FROM receiving r
+                 LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+                WHERE r.id = ANY($1::int[]) ORDER BY r.id`,
               [cartonIds],
             )
         : Promise.resolve({ rows: [] }),
@@ -425,17 +431,12 @@ export async function getReceivingAuditPO(
       // Lifecycle spine via the shared reader (Phase 0). Keyed on this PO's
       // lines + cartons; receiving does its own staff/bin/serial enrichment
       // from batched maps below, so the reader's joined fields are ignored here.
-      // NOTE: readInventorySpine does not yet accept an orgId param (object
-      // opts has no orgId field), so we cannot thread orgId through here. The
-      // lineIds/cartonIds are already org-scoped (derived from the org-filtered
-      // lineRows), so results stay within this org's rows; once the sibling
-      // gains an orgId opt this should be passed through.
       readInventorySpine({
         lineIds,
         cartonIds,
         order: 'desc',
         limit: 1000,
-      }),
+      }, orgId),
 
       orgId
         ? tenantQuery(

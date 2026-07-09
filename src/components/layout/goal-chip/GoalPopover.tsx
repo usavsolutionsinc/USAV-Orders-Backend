@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bell, Check, Clock, RotateCcw, Barcode } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { Button } from '@/design-system/primitives';
 import { RECUR_INTERVALS, STATION_LABEL, toneFor } from './goal-chip-shared';
 import { GoalRing } from './GoalRing';
 import { TaskList } from './TaskList';
@@ -32,16 +33,16 @@ export function GoalPopover({
       initial={{ opacity: 0, y: -6, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-      className="w-[290px] origin-top-left overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_12px_40px_rgba(20,30,55,0.16)]"
+      className="w-[290px] origin-top-left overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-[0_12px_40px_rgba(20,30,55,0.16)]"
     >
       {/* header: title + Switch (only when there are secondary stations) */}
-      <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3.5 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border-hairline px-3.5 py-3">
         <div className="flex items-center gap-2.5">
           <GoalRing percent={view.percent} color={tone.ring} size={38} />
           <div className="leading-tight">
-            <p className="text-[13px] font-bold tracking-tight text-gray-900">Today&apos;s {STATION_LABEL[active]} goal</p>
+            <p className="text-[13px] font-bold tracking-tight text-text-default">Today&apos;s {STATION_LABEL[active]} goal</p>
             <p className="mt-0.5 flex items-center gap-1.5">
-              <span className="text-[10px] font-semibold tabular-nums text-gray-500">
+              <span className="text-micro font-semibold tabular-nums text-text-soft">
                 {chipCount.value} / {chipCount.total}
               </span>
               <span className={cn('rounded-full px-1.5 py-px text-[8.5px] font-black uppercase tracking-wider ring-1', tone.chip)}>
@@ -51,16 +52,15 @@ export function GoalPopover({
           </div>
         </div>
         {hasSwitch && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RotateCcw className="h-3 w-3" />}
             onClick={() => g.setSwitching((s) => !s)}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-bold transition-colors',
-              g.switching ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900',
-            )}
+            className={cn('shrink-0', g.switching && 'bg-blue-50 text-blue-600')}
           >
-            <RotateCcw className="h-3 w-3" /> Switch
-          </button>
+            Switch
+          </Button>
         )}
       </div>
 
@@ -74,25 +74,26 @@ export function GoalPopover({
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
             className="p-2"
           >
-            <p className="px-2 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-wider text-gray-400">Your stations</p>
+            <p className="px-2 pb-1.5 pt-1 text-eyebrow font-bold uppercase tracking-wider text-text-faint">Your stations</p>
             {goals.map((gg) => {
               const pct = gg.target <= 0 ? 0 : Math.round((gg.scanCount / gg.target) * 100);
               const gt = toneFor(pct);
               const on = gg.station === active;
               return (
+                // ds-raw-button — multi-line text-left station row
                 <button
                   key={gg.station}
                   type="button"
                   onClick={() => g.onSelectStation(gg.station)}
-                  className={cn('flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors', on ? 'bg-blue-50/70' : 'hover:bg-gray-50')}
+                  className={cn('flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors', on ? 'bg-blue-50/70' : 'hover:bg-surface-hover')}
                 >
                   <GoalRing percent={pct} color={gt.ring} size={30} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12px] font-bold text-gray-900">
+                    <span className="block truncate text-label font-bold text-text-default">
                       {STATION_LABEL[gg.station]}
                       {gg.isPrimary && <span className="ml-1.5 text-[8.5px] font-black uppercase tracking-wider text-blue-500">primary</span>}
                     </span>
-                    <span className="text-[9.5px] font-semibold tabular-nums text-gray-500">{gg.scanCount}/{gg.target} scans</span>
+                    <span className="text-[9.5px] font-semibold tabular-nums text-text-soft">{gg.scanCount}/{gg.target} scans</span>
                   </span>
                   {on && <Check className="h-3.5 w-3.5 text-blue-600" />}
                 </button>
@@ -109,15 +110,16 @@ export function GoalPopover({
           >
             {/* mode toggle: Scans · Auto / Recurring / To-do */}
             <div className="px-3 pt-3">
-              <div className="flex w-full items-center gap-0.5 rounded-xl bg-gray-100 p-0.5 ring-1 ring-gray-200">
+              <div className="flex w-full items-center gap-0.5 rounded-xl bg-surface-sunken p-0.5 ring-1 ring-border-soft">
                 {(['scans', 'recurring', 'todo'] as const).map((m) => (
+                  // ds-raw-button — segmented mode toggle
                   <button
                     key={m}
                     type="button"
                     onClick={() => g.changeMode(m)}
                     className={cn(
-                      'relative flex-1 rounded-lg px-1.5 py-1.5 text-[10px] font-bold transition-colors',
-                      g.mode === m ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-900',
+                      'relative flex-1 rounded-lg px-1.5 py-1.5 text-micro font-bold transition-colors',
+                      g.mode === m ? 'bg-surface-card text-text-default shadow-sm ring-1 ring-border-soft' : 'text-text-soft hover:text-text-default',
                     )}
                   >
                     {m === 'scans' ? 'Scans · auto' : m === 'recurring' ? 'Recurring' : 'To-do'}
@@ -130,10 +132,10 @@ export function GoalPopover({
             {g.mode === 'scans' ? (
               <div className="px-3.5 py-3.5">
                 <div className="flex items-end justify-between">
-                  <span className="text-[28px] font-extrabold leading-none tabular-nums text-gray-900">{view.scanCount}</span>
-                  <span className="pb-0.5 text-[12px] font-bold tabular-nums text-gray-400">of {view.target}</span>
+                  <span className="text-[28px] font-extrabold leading-none tabular-nums text-text-default">{view.scanCount}</span>
+                  <span className="pb-0.5 text-label font-bold tabular-nums text-text-faint">of {view.target}</span>
                 </div>
-                <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200">
+                <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-surface-sunken ring-1 ring-border-soft">
                   <motion.div
                     className="h-full rounded-full"
                     style={{ backgroundColor: tone.ring }}
@@ -141,7 +143,7 @@ export function GoalPopover({
                     transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
                   />
                 </div>
-                <p className="mt-2 flex items-center gap-1 text-[10.5px] font-semibold text-gray-500">
+                <p className="mt-2 flex items-center gap-1 text-[10.5px] font-semibold text-text-soft">
                   <Barcode className="h-3 w-3" />
                   Live deduped scans for this station.
                 </p>
@@ -153,18 +155,19 @@ export function GoalPopover({
               <div>
                 {/* whole-list reset interval */}
                 <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
-                  <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                  <span className="flex items-center gap-1 text-eyebrow font-bold uppercase tracking-wider text-text-faint">
                     <Clock className="h-3 w-3" /> Resets every
                   </span>
-                  <div className="flex gap-0.5 rounded-lg bg-gray-100 p-0.5 ring-1 ring-gray-200">
+                  <div className="flex gap-0.5 rounded-lg bg-surface-sunken p-0.5 ring-1 ring-border-soft">
                     {RECUR_INTERVALS.map((opt) => (
+                      // ds-raw-button — segmented interval toggle
                       <button
                         key={opt.label}
                         type="button"
                         onClick={() => g.changeInterval(opt.ms)}
                         className={cn(
-                          'rounded-md px-1.5 py-0.5 text-[10px] font-bold transition-colors',
-                          g.intervalMs === opt.ms ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-900',
+                          'rounded-md px-1.5 py-0.5 text-micro font-bold transition-colors',
+                          g.intervalMs === opt.ms ? 'bg-surface-card text-text-default shadow-sm ring-1 ring-border-soft' : 'text-text-soft hover:text-text-default',
                         )}
                       >
                         {opt.label}

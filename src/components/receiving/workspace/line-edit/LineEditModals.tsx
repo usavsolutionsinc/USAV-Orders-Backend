@@ -9,6 +9,7 @@
 
 import { ReceivingAuditModal } from '../ReceivingAuditModal';
 import { ReceivingClaimModal } from '../ReceivingClaimModal';
+import { SendPhotoNoteModal } from '../SendPhotoNoteModal';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { UnboxLineController } from './unbox-line-controller';
 
@@ -27,6 +28,11 @@ export function LineEditModals({ row, c }: LineEditModalsProps) {
           receivingId={row.receiving_id}
         />
       ) : null}
+      <SendPhotoNoteModal
+        open={c.photoNoteOpen}
+        row={row}
+        onClose={() => c.setPhotoNoteOpen(false)}
+      />
       <ReceivingClaimModal
         open={c.claimModalOpen}
         row={row}
@@ -35,15 +41,12 @@ export function LineEditModals({ row, c }: LineEditModalsProps) {
           c.setClaimModalOpen(false);
           c.setReturnClaimPrefill(null);
         }}
-        onTicketCreated={(tk) => {
-          // Keep the in-memory zendesk value in sync (persisted to the line by
-          // the claim route + the Receive/patch save flow).
-          if (!c.zendesk.trim()) c.setZendesk(tk);
+        onTicketCreated={() => {
+          void c.invalidateSupportTicket();
           dispatchLineUpdated({ id: row.id, notes: row.notes });
         }}
         onTicketUnlinked={() => {
-          c.setZendesk('');
-          dispatchLineUpdated({ id: row.id, zendesk_ticket: null, notes: row.notes });
+          void c.invalidateSupportTicket();
         }}
       />
     </>

@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, Image, X } from '@/components/Icons';
+import { History, Loader2, Smartphone } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { safeChannelName, getScanLogChannelName } from '@/lib/realtime/channels';
+import { cn } from '@/utils/_cn';
+import { QuickAccessPanelShell } from './QuickAccessPanelShell';
 
 interface ScanHistoryEntry {
   id: number;
@@ -42,10 +44,7 @@ interface HistoryEntry {
 }
 
 function timeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffMs = now - then;
-  const diffMin = Math.floor(diffMs / 60000);
+  const diffMin = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
   if (diffMin < 1) return 'Just now';
   if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
@@ -53,23 +52,92 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diffHr / 24)}d ago`;
 }
 
-function carrierBadgeColor(carrier: string | null): string {
+function carrierChipClass(carrier: string | null): string {
   const c = (carrier || '').toLowerCase();
-  if (c.includes('ups')) return 'bg-amber-100 text-amber-700 border-amber-200';
-  if (c.includes('fedex')) return 'bg-purple-100 text-purple-700 border-purple-200';
-  if (c.includes('usps')) return 'bg-blue-100 text-blue-700 border-blue-200';
-  return 'bg-gray-100 text-gray-600 border-gray-200';
+  if (c.includes('ups')) return 'bg-amber-50 text-amber-700 ring-amber-200';
+  if (c.includes('fedex')) return 'bg-violet-50 text-violet-700 ring-violet-200';
+  if (c.includes('usps')) return 'bg-blue-50 text-blue-700 ring-blue-200';
+  return 'bg-surface-sunken text-text-muted ring-border-soft';
+}
+
+function PhotoStrip({ photos }: { photos: HistoryPhoto[] }) {
+  if (photos.length === 0) return null;
+  const visible = photos.slice(0, 2);
+  const extra = photos.length - visible.length;
+
+  return (
+    <span className="flex shrink-0 items-center -space-x-1.5">
+      {visible.map((photo) => (
+        <span
+          key={photo.id}
+          className="relative h-8 w-8 overflow-hidden rounded-md ring-1 ring-border-soft"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photo.url} alt="" className="h-full w-full object-cover" />
+        </span>
+      ))}
+      {extra > 0 ? (
+        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-sunken text-micro font-bold text-text-soft ring-1 ring-border-soft">
+          +{extra}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function PanelSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="pb-2">
+      <p className="px-2 pb-0.5 text-eyebrow font-black uppercase tracking-widest text-text-faint">
+        {label}
+      </p>
+      <div className="space-y-0.5">{children}</div>
+    </section>
+  );
+}
+
+function HistoryRow({
+  title,
+  meta,
+  icon,
+  trailing,
+  active,
+  onClick,
+}: {
+  title: string;
+  meta: ReactNode;
+  icon: React.ReactNode;
+  trailing?: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors',
+        active
+          ? 'bg-blue-50 ring-1 ring-inset ring-blue-400'
+          : 'hover:bg-surface-hover active:bg-surface-sunken',
+      )}
+    >
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center text-text-muted">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-caption font-bold text-text-default">{title}</span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
+          {meta}
+        </span>
+      </span>
+      {trailing ? <span className="shrink-0">{trailing}</span> : null}
+    </button>
+  );
 }
 
 interface PhoneHistoryPopoverProps {
   onClose: () => void;
 }
 
-/**
- * Replaces the older phone-pair status panel in QuickAccessFab. Lists the
- * signed-in staff's most recently packed orders (auth-cookie backed via
- * /api/packing-logs/history) and lets them tap to resume in the packer.
- */
 export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
   const router = useRouter();
   const { user } = useAuth();
@@ -96,28 +164,6 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
     }
   }, []);
 
-  useEffect(() => {
-    void fetchScans();
-  }, [fetchScans]);
-
-  // Live-prepend: when this staff scans a receiving label on their phone, the
-  // resolver publishes on scanlog:{staffId} — refetch so it appears instantly.
-  const scanLogChannel = safeChannelName(() => getScanLogChannelName(orgId!, staffId));
-  useAblyChannel(
-    scanLogChannel,
-    'scan_logged',
-    () => { void fetchScans(); },
-    !!scanLogChannel && staffId > 0,
-  );
-
-  const handleOpenScan = useCallback(
-    (entry: ScanHistoryEntry) => {
-      onClose();
-      router.push(entry.desktopHref);
-    },
-    [onClose, router],
-  );
-
   const fetchHistory = useCallback(async () => {
     try {
       const res = await fetch('/api/packing-logs/history?limit=10', {
@@ -139,8 +185,9 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
   }, []);
 
   useEffect(() => {
+    void fetchScans();
     void fetchHistory();
-  }, [fetchHistory]);
+  }, [fetchScans, fetchHistory]);
 
   useEffect(() => {
     const handler = () => { void fetchHistory(); };
@@ -148,7 +195,23 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
     return () => window.removeEventListener('usav-refresh-data', handler);
   }, [fetchHistory]);
 
-  const handleResume = useCallback(
+  const scanLogChannel = safeChannelName(() => getScanLogChannelName(orgId!, staffId));
+  useAblyChannel(
+    scanLogChannel,
+    'scan_logged',
+    () => { void fetchScans(); },
+    !!scanLogChannel && staffId > 0,
+  );
+
+  const openScan = useCallback(
+    (entry: ScanHistoryEntry) => {
+      onClose();
+      router.push(entry.desktopHref);
+    },
+    [onClose, router],
+  );
+
+  const resumePack = useCallback(
     (entry: HistoryEntry) => {
       onClose();
       router.push(entry.resumeHref);
@@ -156,140 +219,75 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
     [onClose, router],
   );
 
-  const [first, ...rest] = entries ?? [];
-
   return (
-    <div
-      role="dialog"
-      aria-label="Phone history"
-      className="flex w-[320px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+    <QuickAccessPanelShell
+      title="Phone history"
+      subtitle="Packs and scans from your phone"
+      onClose={onClose}
     >
-      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-gray-100 px-4 py-3">
-        <div>
-          <p className="text-micro font-black uppercase tracking-widest text-gray-500">
-            Phone history
-          </p>
-          <p className="mt-0.5 text-sm font-black text-gray-900">
-            Recent packs · tap to resume
-          </p>
+      {scans && scans.length > 0 ? (
+        <PanelSection label="Recent scans">
+          {scans.map((s) => (
+            <HistoryRow
+              key={s.id}
+              title={s.rawValue}
+              icon={<Smartphone className="h-3.5 w-3.5" />}
+              meta={
+                <>
+                  <span>{s.typeLabel}</span>
+                  <span>{timeAgo(s.scannedAt)}</span>
+                </>
+              }
+              onClick={() => openScan(s)}
+            />
+          ))}
+        </PanelSection>
+      ) : null}
+
+      {entries === null ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-caption text-text-soft">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading packs…
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="text-gray-400 hover:text-gray-700"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </header>
-
-      {/* Fixed-height body: scans + packs load/refetch at different times, so
-          a max-height container resizes the whole popover as sections pop in.
-          Locking the height keeps the frame still — content scrolls inside. */}
-      <div className="h-[min(480px,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-4 py-2">
-        {scans && scans.length > 0 && (
-          <section className="mb-3">
-            <p className="mb-1 text-micro font-black uppercase tracking-widest text-gray-500">
-              Phone scans · tap to open
-            </p>
-            <div className="overflow-hidden rounded-lg border border-gray-100 divide-y divide-gray-100">
-              {scans.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => handleOpenScan(s)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-gray-50 hover:bg-gray-50"
-                >
-                  <span className="inline-flex shrink-0 items-center rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-gray-600">
-                    {s.typeLabel}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-label font-bold text-gray-900">
-                    {s.rawValue}
-                  </span>
-                  <span className="shrink-0 text-micro text-gray-400">{timeAgo(s.scannedAt)}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-        {entries === null ? (
-          <div className="flex items-center justify-center py-6">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />
-          </div>
-        ) : entries.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-5 text-center text-caption italic text-gray-400">
-            {error ?? 'No recent packs yet — pack an order to see history here.'}
-          </p>
-        ) : (
-          <div className="space-y-2">
-          {first && (
-            <button
-              type="button"
-              onClick={() => handleResume(first)}
-              className="w-full rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-left transition-colors active:bg-emerald-100"
-            >
-              <p className="text-eyebrow font-black uppercase tracking-widest text-emerald-700">
-                Resume last pack
-              </p>
-              <p className="mt-0.5 truncate text-sm font-black text-gray-900">
-                {first.productTitle || first.tracking || `Log #${first.packerLogId}`}
-              </p>
-              <div className="mt-1 flex items-center gap-2 text-micro text-gray-600">
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {timeAgo(first.packedAt)}
-                </span>
-                {first.carrier && (
-                  <span
-                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${carrierBadgeColor(first.carrier)}`}
-                  >
-                    {first.carrier}
-                  </span>
-                )}
-                {first.photos.length > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-gray-400">
-                    <Image className="h-3 w-3" />
-                    {first.photos.length}
-                  </span>
-                )}
-              </div>
-            </button>
-          )}
-
-          {rest.length > 0 && (
-            <div className="max-h-[260px] overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-100">
-              {rest.map((entry) => (
-                <button
-                  key={entry.packerLogId}
-                  type="button"
-                  onClick={() => handleResume(entry)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-gray-50"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-label font-bold text-gray-900">
-                      {entry.productTitle || entry.tracking || `Log #${entry.packerLogId}`}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-micro text-gray-500">
-                      <span>{timeAgo(entry.packedAt)}</span>
-                      {entry.tracking && (
-                        <span className="font-mono">TRK {getLast4(entry.tracking)}</span>
-                      )}
-                      {entry.sku && <span className="truncate">{entry.sku}</span>}
-                    </div>
-                  </div>
-                  {entry.photos.length > 0 && (
-                    <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-gray-400">
-                      <Image className="h-3 w-3" />
-                      {entry.photos.length}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-          </div>
-        )}
-      </div>
-    </div>
+      ) : entries.length === 0 ? (
+        <p className="mx-2 rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-soft">
+          {error ?? 'No recent packs yet. Pack an order on your phone to see it here.'}
+        </p>
+      ) : (
+        <PanelSection label="Recent packs">
+          {entries.map((entry, index) => {
+            const title = entry.productTitle || entry.tracking || `Log #${entry.packerLogId}`;
+            return (
+              <HistoryRow
+                key={entry.packerLogId}
+                active={index === 0}
+                title={title}
+                icon={<History className="h-3.5 w-3.5" />}
+                meta={
+                  <>
+                    {index === 0 ? <span className="text-blue-700">Latest</span> : null}
+                    <span>{timeAgo(entry.packedAt)}</span>
+                    {entry.carrier ? (
+                      <span
+                        className={cn(
+                          'inline-flex rounded-full px-1.5 py-0.5 text-micro font-black uppercase tracking-widest ring-1 ring-inset',
+                          carrierChipClass(entry.carrier),
+                        )}
+                      >
+                        {entry.carrier}
+                      </span>
+                    ) : null}
+                    {entry.tracking ? <span>TRK {getLast4(entry.tracking)}</span> : null}
+                    {entry.sku ? <span className="normal-case tracking-normal">{entry.sku}</span> : null}
+                  </>
+                }
+                trailing={<PhotoStrip photos={entry.photos} />}
+                onClick={() => resumePack(entry)}
+              />
+            );
+          })}
+        </PanelSection>
+      )}
+    </QuickAccessPanelShell>
   );
 }

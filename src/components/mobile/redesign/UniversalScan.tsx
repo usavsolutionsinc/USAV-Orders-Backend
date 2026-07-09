@@ -187,7 +187,7 @@ export default function RedesignedMobileUniversalScan() {
           left/right to move between Receiving Scans, Testing Orders and
           Prepacked Products; both panels share one grid cell so heights don't
           jump, and `dragDirectionLock` keeps each list's vertical scroll. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-1 overflow-hidden bg-slate-50">
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-1 overflow-hidden bg-surface-canvas">
         <AnimatePresence mode="sync" custom={direction} initial={false}>
         <motion.div
           key={mode}
@@ -202,7 +202,7 @@ export default function RedesignedMobileUniversalScan() {
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.18}
           onDragEnd={handleSwipe}
-          className="col-start-1 row-start-1 flex min-h-0 touch-pan-y flex-col bg-slate-50"
+          className="col-start-1 row-start-1 flex min-h-0 touch-pan-y flex-col bg-surface-canvas"
         >
           {mode === 'testing' ? (
             // Testing — desktop-wired "Recently Tested" rail above the inline

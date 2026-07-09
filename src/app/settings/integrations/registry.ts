@@ -33,6 +33,7 @@ export const INTEGRATION_CATEGORIES = [
   'Marketplaces',
   'Storefronts & POS',
   'Operations',
+  'Storage & Backup',
   'Support',
   'Shipping carriers',
   'Realtime & AI',
@@ -55,7 +56,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
   {
     key: 'ebay',
     label: 'eBay',
-    description: 'Storefront orders + tracking reconciliation.',
+    description: 'Selling: storefront orders + tracking. Purchasing: buyer-account orders flow into Incoming.',
     category: 'Marketplaces',
     connect: 'ebay',
     oauthStartPath: '/api/ebay/connect',
@@ -80,7 +81,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     description: 'In-store POS + walk-ins — OAuth via the Nango connector.',
     category: 'Storefronts & POS',
     connect: 'nango',
-    badge: 'bg-slate-200 text-slate-700',
+    badge: 'bg-surface-strong text-text-muted',
   },
 
   // ── Operations ──
@@ -103,6 +104,19 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     badge: 'bg-green-100 text-green-700',
   },
 
+  // ── Storage & Backup ──
+  {
+    key: 'google_drive',
+    label: 'Google Drive',
+    description: 'Back up photo originals to your own Google Drive — sign in with Google, no storage to pay us for.',
+    category: 'Storage & Backup',
+    connect: 'oauth',
+    oauthStartPath: '/api/integrations/google-drive/connect',
+    healthPath: '/api/integrations/google-drive/health',
+    docsUrl: 'https://developers.google.com/drive/api/guides/about-sdk',
+    badge: 'bg-yellow-100 text-yellow-700',
+  },
+
   // ── Support ──
   {
     key: 'zendesk',
@@ -112,14 +126,27 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     connect: 'vault',
     badge: 'bg-emerald-100 text-emerald-700',
   },
+  {
+    key: 'nextiva',
+    label: 'Nextiva',
+    description: 'Business phone — call log, voicemail follow-ups, click-to-call.',
+    category: 'Support',
+    connect: 'vault',
+    healthPath: '/api/integrations/nextiva/health',
+    badge: 'bg-violet-100 text-violet-700',
+  },
 
   // ── Shipping carriers ──
   { key: 'ups',  label: 'UPS',   description: 'Tracking + webhook callbacks.', category: 'Shipping carriers', connect: 'vault', badge: 'bg-amber-100 text-amber-800' },
   { key: 'fedex', label: 'FedEx', description: 'Shipment tracking.',           category: 'Shipping carriers', connect: 'vault', badge: 'bg-purple-100 text-purple-700' },
   { key: 'usps', label: 'USPS',  description: 'OAuth + label tracking.',       category: 'Shipping carriers', connect: 'vault', badge: 'bg-blue-100 text-blue-800' },
+  { key: 'shipstation', label: 'ShipStation', description: 'Rate-shop + buy/void labels (v2) and pull orders (v1).', category: 'Shipping carriers', connect: 'vault', docsUrl: 'https://docs.shipstation.com/', badge: 'bg-violet-100 text-violet-700' },
 
   // ── Realtime & AI ──
-  { key: 'ollama', label: 'Ollama (AI)', description: 'Local LLM via Cloudflare tunnel.',    category: 'Realtime & AI', connect: 'vault', badge: 'bg-gray-200 text-gray-700' },
+  { key: 'ollama', label: 'Self-hosted AI (Ollama / custom)', description: 'Any OpenAI-compatible endpoint you run (Ollama, LM Studio, vLLM). Payload: {"baseUrl","model","embedModel"?,"apiKey"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-surface-strong text-text-muted' },
+  { key: 'ai_gateway', label: 'Vercel AI Gateway', description: 'One key, every model — powers AI search + Ask AI. Payload: {"apiKey","chatModel"?,"embedModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-surface-inverse text-white' },
+  { key: 'openai', label: 'OpenAI', description: 'Direct key for AI-search embeddings + Ask AI. Payload: {"apiKey","chatModel"?,"embedModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-emerald-100 text-emerald-700' },
+  { key: 'anthropic', label: 'Anthropic', description: 'Claude for Ask AI (chat only — embeddings need another provider). Payload: {"apiKey","chatModel"?}.', category: 'Realtime & AI', connect: 'vault', badge: 'bg-amber-100 text-amber-700' },
 ];
 
 // ── Shared status shapes (server-computed, passed to the client cards) ──
@@ -131,6 +158,8 @@ export interface AccountSummary {
   label: string;
   status: 'active' | 'error' | 'expiring' | 'revoked' | 'unknown';
   detail?: string;
+  /** eBay only: 'seller' (outbound) vs 'buyer' (purchasing → Universal Incoming). */
+  role?: 'seller' | 'buyer';
 }
 
 export interface ProviderState {
@@ -155,5 +184,6 @@ export function managePermission(def: ProviderDef): string {
   if (def.connect === 'amazon') return 'integrations.amazon';
   if (def.connect === 'ebay') return 'integrations.ebay';
   if (def.connect === 'oauth' && def.key === 'zoho') return 'integrations.zoho';
+  if (def.connect === 'oauth' && def.key === 'google_drive') return 'integrations.google_drive';
   return 'admin.manage_features';
 }

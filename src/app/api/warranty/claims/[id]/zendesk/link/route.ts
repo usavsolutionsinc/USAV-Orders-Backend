@@ -117,7 +117,7 @@ export const POST = withAuth(async (request, ctx) => {
 
       let ticket;
       try {
-        ticket = await getTicket(ticketId);
+        ticket = await getTicket(ticketId, ctx.organizationId);
       } catch (err) {
         if (err instanceof ZendeskNotConfiguredError) {
           return { status: 503, body: { ok: false, error: 'Zendesk is not configured' } };
@@ -148,7 +148,7 @@ export const POST = withAuth(async (request, ctx) => {
       // for resolution, so never clobber a value another system set.
       if (!ticket.external_id) {
         try {
-          await updateTicket(ticketId, { external_id: buildExternalId('WARRANTY_CLAIM', id) });
+          await updateTicket(ticketId, { external_id: buildExternalId('WARRANTY_CLAIM', id) }, ctx.organizationId);
         } catch (extErr) {
           console.warn('[POST .../zendesk/link] external_id backfill failed', extErr);
         }

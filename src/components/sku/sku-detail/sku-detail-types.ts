@@ -70,8 +70,6 @@ export interface SkuDetailData {
   }>;
 }
 
-export const REASON_OPTIONS = ['RECEIVED', 'SOLD', 'DAMAGED', 'ADJUSTMENT', 'RETURNED', 'CYCLE_COUNT'] as const;
-
 export interface SkuDetailViewProps {
   sku: string;
   /** 'panel' = slide-in overlay (used from SkuBrowser), 'page' = full-page layout */

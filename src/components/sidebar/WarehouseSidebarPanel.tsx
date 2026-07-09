@@ -28,6 +28,7 @@ import { RoomsSidebarList } from '@/components/warehouse/RoomsSidebarList';
 import { WarehouseSkuSearchResults } from '@/components/warehouse/WarehouseSkuSearchResults';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
 import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
+import { useAuth } from '@/contexts/AuthContext';
 import { RoomFinderProvider, useRoomFinder } from '@/components/warehouse/roomFinderContext';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 
@@ -52,6 +53,7 @@ function WarehouseSidebarInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const masterNavEnabled = useMasterNavEnabled();
+  const { user } = useAuth();
   const tab = parseTab(searchParams.get('tab'));
   const { rooms, bins } = useLocations();
   const { query: roomQuery, setQuery: setRoomQuery } = useRoomFinder();
@@ -102,7 +104,7 @@ function WarehouseSidebarInner() {
 
   return (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       headerAbove={
         <>
           {!masterNavEnabled && (
@@ -171,8 +173,10 @@ function WarehouseSidebarInner() {
         </div>
       )}
 
-      <footer className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">
-        <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV INV</p>
+      <footer className="p-4 border-t border-border-hairline opacity-30 mt-auto text-center">
+        <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-text-soft">
+          {(user?.organizationName || 'Workspace').toUpperCase()} INV
+        </p>
       </footer>
     </SidebarShell>
   );
@@ -192,12 +196,12 @@ function LabelsSidebarBody() {
         <BinLabelPrinter variant="sidebar" />
       </div>
       <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4 lg:hidden`}>
-        <p className="text-caption text-gray-500">
+        <p className="text-caption text-text-soft">
           Build a bin label in the main workspace — pick a room, then drill into
           aisle, bay, level, and position. Live preview + QR render alongside the
           picker.
         </p>
-        <p className="text-micro text-gray-400">
+        <p className="text-micro text-text-faint">
           Tip: ⌘P / Ctrl+P prints the current label once all steps are picked.
         </p>
       </div>
@@ -214,12 +218,12 @@ function RacksSidebarBody() {
         <RackLabelPrinter variant="sidebar" />
       </div>
       <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4 lg:hidden`}>
-        <p className="text-caption text-gray-500">
+        <p className="text-caption text-text-soft">
           Print a rack-level label in the main workspace — pick a room, then
           aisle, bay, and level. No position needed; one label covers the whole
           rack column on that level.
         </p>
-        <p className="text-micro text-gray-400">
+        <p className="text-micro text-text-faint">
           Scanning a rack label opens the rack view so pickers and putaway can
           see everything on it at once.
         </p>
@@ -233,12 +237,12 @@ function RacksSidebarBody() {
 function BinsSidebarBody() {
   return (
     <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4`}>
-      <p className="text-caption text-gray-500">
+      <p className="text-caption text-text-soft">
         Filter, sort, and select bins in the table to the right. Click any
         bin to see its full contents + history.
       </p>
       <div>
-        <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
+        <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
           Recent activity
         </h3>
         <RecentBinsActivity />
@@ -252,11 +256,11 @@ function RecentBinsActivity() {
   // identifier off. Falls back to an empty state if the timeline endpoint
   // requires an id — surface a hint then.
   return (
-    <div className="rounded-xl border border-dashed border-gray-200 bg-white p-3 text-center">
-      <p className="text-caption text-gray-500">
+    <div className="rounded-xl border border-dashed border-border-soft bg-surface-card p-3 text-center">
+      <p className="text-caption text-text-soft">
         Click a bin in the table to see its history.
       </p>
-      <p className="mt-1 text-micro text-gray-400">
+      <p className="mt-1 text-micro text-text-faint">
         A cross-bin feed lands in the next update.
       </p>
     </div>
@@ -280,7 +284,7 @@ function MapSidebarBody() {
   return (
     <div className={`space-y-4 ${SIDEBAR_GUTTER} py-4`}>
       <div>
-        <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
+        <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
           View by
         </h3>
         <div className="grid grid-cols-3 gap-1">
@@ -291,10 +295,10 @@ function MapSidebarBody() {
                 key={m}
                 type="button"
                 onClick={() => setView(m)}
-                className={`rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
+                className={`ds-raw-button rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
                   active
                     ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-text-muted hover:bg-surface-sunken'
                 }`}
               >
                 {m === 'fill' ? 'Fill' : m === 'age' ? 'Age' : 'Issues'}
@@ -305,7 +309,7 @@ function MapSidebarBody() {
       </div>
 
       <div>
-        <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
+        <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
           Legend
         </h3>
         <MapLegend mode={view} />

@@ -1,42 +1,67 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 import { MobileTopBar } from './MobileTopBar';
 import { MobileSidebarDrawer } from './MobileSidebarDrawer';
 import { TOKENS } from './DesignSystem';
 import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
+import { ErrorBoundary } from '@/components/error/ErrorBoundary';
+import { Button } from '@/design-system/primitives';
 
 /**
- * Global Mobile Shell for 2026 Redesign
+ * Phone fallback when a page subtree throws. Without this, a render crash bubbles
+ * to global-error and blanks the whole app to a WHITE SCREEN with nothing to act
+ * on. Here it degrades to a readable, retryable card (house "degrade-not-fail")
+ * and `ErrorBoundary` logs the true cause to the console for diagnosis.
+ */
+function MobilePageError(error: Error, reset: () => void) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="w-full max-w-sm rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-6">
+        <p className="text-sm font-black uppercase tracking-[0.18em] text-rose-700">
+          This screen hit an error
+        </p>
+        <p className="mt-2 break-words text-caption font-semibold text-rose-600">
+          {error.message || 'Something went wrong rendering this page.'}
+        </p>
+        <Button variant="danger" size="lg" onClick={reset} className="mt-4">
+          Try again
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Global Mobile Shell for 2026 Redesign.
+ * Fullscreen photo flows live under `app/m/(immersive)` and do not mount this shell.
  */
 
-// The primary tab pages share ONE identical header (goal chip + global actions).
-// It's rendered once here — outside the route-keyed transition — so it persists
-// across tab navigation instead of re-mounting (and re-fetching the goal) per
-// page. Detail pages (/m/r/*, /m/orders/*, photos…) ship their own headers, so
-// the shared bar is gated to these exact routes.
-const HEADER_ROUTES = new Set(['/m/home', '/m/receiving', '/m/scan', '/m/receive', '/m/pick', '/m/pack']);
+const HEADER_ROUTES = new Set([
+  '/m/home',
+  '/m/receiving',
+  '/m/scan',
+  '/m/receive',
+  '/m/triage',
+  '/m/unbox',
+  '/m/pick',
+  '/m/pack',
+]);
 
 export const RedesignedMobileShell = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Navigation now lives in the left slide-over drawer, opened from the menu
-  // button in the shared MobileTopBar. The bar (and thus the menu button) only
-  // renders on the primary header routes below, so capture flows (`…/photos`
-  // full-screen camera surfaces) and the sign-in screen never get the toggle.
   const showHeader = !!pathname && HEADER_ROUTES.has(pathname);
 
   return (
-    <div className={`flex h-[100dvh] min-h-0 flex-col ${TOKENS.colors.background} font-sans antialiased overflow-hidden`}>
-      {/* Shared header — rendered once, persists across tab navigation. The
-          menu button opens the left navigation drawer. */}
+    <div
+      className={`flex h-full min-h-0 flex-col overflow-hidden font-sans antialiased safe-area-padding ${TOKENS.colors.background}`}
+    >
       {showHeader && <MobileTopBar onMenu={() => setSidebarOpen(true)} />}
 
-      {/* Page Content with Transitions */}
-      <main className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain pb-safe">
+      <main className="relative min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-contain">
         <AnimatePresence mode="wait">
           <motion.div
             key={pathname}
@@ -45,19 +70,21 @@ export const RedesignedMobileShell = ({ children }: { children: React.ReactNode 
             exit={{ opacity: 0 }}
             transition={{
               duration: 0.15,
-              ease: [0.23, 1, 0.32, 1] // Custom ease-out
+              ease: [0.23, 1, 0.32, 1],
             }}
             className="h-full"
           >
-            {children}
+            <ErrorBoundary key={pathname} label="mobile-page" fallback={MobilePageError}>
+              {children}
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {/* Left navigation drawer (replaces the old fixed bottom nav). */}
-      <MobileSidebarDrawer open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Suspense fallback={null}>
+        <MobileSidebarDrawer open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      </Suspense>
 
-      {/* Phone↔desktop receiving bridge (scan → camera, share → sheet). */}
       <ReceivingPhoneBridgeMount />
     </div>
   );

@@ -125,19 +125,19 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       ? 'rl.zoho_line_item_id'
       : 'NULL::text AS zoho_line_item_id';
     const qaStatusSelect = hasLineColumn('qa_status')
-      ? 'rl.qa_status'
+      ? 'rlt.qa_status'
       : "'PENDING'::text AS qa_status";
     const conditionGradeSelect = hasLineColumn('condition_grade')
-      ? 'rl.condition_grade'
+      ? 'rlt.condition_grade'
       : "'USED_A'::text AS condition_grade";
     const needsTestSelect = hasLineColumn('needs_test')
-      ? 'COALESCE(rl.needs_test, false) AS needs_test'
+      ? 'COALESCE(rlt.needs_test, false) AS needs_test'
       : 'false AS needs_test';
     const assignedTechIdSelect = hasLineColumn('assigned_tech_id')
-      ? 'rl.assigned_tech_id'
+      ? 'rlt.assigned_tech_id'
       : 'NULL::int AS assigned_tech_id';
     const assignedTechJoin = hasLineColumn('assigned_tech_id')
-      ? 'rl.assigned_tech_id'
+      ? 'rlt.assigned_tech_id'
       : 'NULL::int';
     const notesSelect = hasLineColumn('notes')
       ? 'rl.notes'
@@ -169,7 +169,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     }>(
       orgId,
       `SELECT DISTINCT r.id,
-              COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
+              stn.tracking_number_raw AS receiving_tracking_number,
               COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS carrier,
               ${receivedAtSelect},
               ${receivingDateSelect},
@@ -238,6 +238,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
               st.name AS assigned_tech_name,
               ${notesSelect}
        FROM receiving_lines rl
+       LEFT JOIN receiving_line_testing rlt
+         ON rlt.receiving_line_id = rl.id
+        AND rlt.organization_id = rl.organization_id
        LEFT JOIN staff st
          ON st.id = ${assignedTechJoin}
         AND st.organization_id = rl.organization_id

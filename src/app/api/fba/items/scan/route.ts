@@ -3,6 +3,7 @@ import { withTenantTransaction } from '@/lib/tenancy/db';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { publishFbaItemChanged, publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -270,6 +271,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     } = outcome;
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     publishFbaItemChanged({
       action: 'scan',
       shipmentId: Number(updatedItem?.shipment_id || 0),

@@ -93,7 +93,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       sku: row.sku,
       itemNumber: row.item_number,
       photos: photosByLog.get(row.packer_log_id) ?? [],
-      resumeHref: '/packer',
+      resumeHref: '/pack',
     }));
 
     return NextResponse.json({ entries });

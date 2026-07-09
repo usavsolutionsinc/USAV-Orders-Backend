@@ -139,6 +139,7 @@ export async function exchangeCode(args: {
 export interface UserInfo {
   sub: string;
   email?: string;
+  email_verified?: boolean;
   name?: string;
   preferred_username?: string;
 }
@@ -170,4 +171,61 @@ export function decodeIdTokenClaimsUnsafe(idToken: string): UserInfo | null {
   } catch {
     return null;
   }
+}
+
+export interface IdTokenClaims extends UserInfo {
+  iss?: string;
+  aud?: string | string[];
+  exp?: number;
+  iat?: number;
+  nonce?: string;
+  email_verified?: boolean;
+}
+
+export class IdTokenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IdTokenError';
+  }
+}
+
+/**
+ * Validate the standard claims of an id_token: `iss` matches the configured
+ * provider issuer, `aud` contains our client_id, and `exp`/`iat` are within a
+ * small clock skew. Throws `IdTokenError` on any mismatch; returns the decoded
+ * claims on success.
+ *
+ * NOTE ON THE SIGNATURE: this validates CLAIMS, not the RS256 signature. In the
+ * authorization-code flow the id_token arrives over a direct, server-to-server
+ * TLS call to the token endpoint (see `exchangeCode`) — never through the
+ * browser — so OIDC Core §3.1.3.7 permits TLS server authentication in place of
+ * verifying the JWS signature. Full JWKS (`jwks_uri`) signature verification is
+ * the documented v2 hardening (it would also let us accept id_tokens that
+ * travel through the front channel); we don't pull a JWS library in for it yet.
+ */
+export function validateIdTokenClaims(
+  idToken: string,
+  opts: { issuer: string; clientId: string; clockSkewSec?: number },
+): IdTokenClaims {
+  const claims = decodeIdTokenClaimsUnsafe(idToken) as IdTokenClaims | null;
+  if (!claims) throw new IdTokenError('id_token could not be parsed');
+
+  const norm = (s: string) => s.replace(/\/+$/, '');
+  const skew = opts.clockSkewSec ?? 120;
+  const now = Math.floor(Date.now() / 1000);
+
+  if (claims.iss && norm(claims.iss) !== norm(opts.issuer)) {
+    throw new IdTokenError('id_token issuer mismatch');
+  }
+  const aud = Array.isArray(claims.aud) ? claims.aud : claims.aud ? [claims.aud] : [];
+  if (aud.length > 0 && !aud.includes(opts.clientId)) {
+    throw new IdTokenError('id_token audience mismatch');
+  }
+  if (typeof claims.exp === 'number' && claims.exp + skew < now) {
+    throw new IdTokenError('id_token expired');
+  }
+  if (typeof claims.iat === 'number' && claims.iat - skew > now) {
+    throw new IdTokenError('id_token issued in the future');
+  }
+  return claims;
 }

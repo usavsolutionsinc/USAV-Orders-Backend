@@ -37,12 +37,12 @@ export function StaffRecipientList({
   className = '',
 }: StaffRecipientListProps) {
   if (staff.length === 0) {
-    return <p className={cn('px-1 py-2 text-center text-micro italic text-gray-400', className)}>{emptyLabel}</p>;
+    return <p className={cn('px-1 py-2 text-center text-micro italic text-text-faint', className)}>{emptyLabel}</p>;
   }
 
   return (
     <div className={cn('max-h-[180px] overflow-y-auto', className)}>
-      <p className="px-1 pb-1 text-micro font-black uppercase tracking-widest text-gray-500">
+      <p className="px-1 pb-1 text-micro font-black uppercase tracking-widest text-text-soft">
         {title}
       </p>
       <ul className="space-y-1">
@@ -54,8 +54,8 @@ export function StaffRecipientList({
                 type="button"
                 onClick={() => onPick(s)}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
-                  active ? 'bg-blue-50' : 'hover:bg-white active:bg-gray-100',
+                  'ds-raw-button flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+                  active ? 'bg-blue-50' : 'hover:bg-surface-card active:bg-surface-sunken',
                 )}
               >
                 <span
@@ -64,10 +64,10 @@ export function StaffRecipientList({
                 >
                   {initials(s.name)}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-900">
+                <span className="min-w-0 flex-1 truncate text-label font-bold text-text-default">
                   {s.name}
                 </span>
-                <span className="shrink-0 text-micro uppercase tracking-wide text-gray-400">
+                <span className="shrink-0 text-micro uppercase tracking-wide text-text-faint">
                   {s.role}
                 </span>
                 {active ? <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" /> : null}

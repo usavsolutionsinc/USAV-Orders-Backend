@@ -8,7 +8,7 @@ import type { OrgId } from '@/lib/tenancy/constants';
  * instead of minting a new one.
  *
  * Linkage: packer_logs.shipment_id ↔ the order's shipment, matched through both
- * orders.shipment_id and the order_shipment_links junction (multi-tracking POs).
+ * orders.shipment_id and the shipment_links junction (multi-tracking POs).
  * Returns null when the order hasn't been packed yet.
  */
 export async function findPackerLogForOrder(
@@ -31,9 +31,10 @@ export async function findPackerLogForOrder(
              AND o.shipment_id IS NOT NULL
           UNION
           SELECT osl.shipment_id
-            FROM order_shipment_links osl
-            JOIN orders o2 ON o2.id = osl.order_row_id AND o2.organization_id = $1
-           WHERE osl.order_row_id = $2
+            FROM shipment_links osl
+            JOIN orders o2 ON o2.id = osl.owner_id AND o2.organization_id = $1
+           WHERE osl.owner_type = 'ORDER'
+             AND osl.owner_id = $2
              AND osl.shipment_id IS NOT NULL
         )
       ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC

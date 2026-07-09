@@ -70,7 +70,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             name: customer.name,
             phone: customer.phone,
             email: customer.email || undefined,
-        });
+        }, orgId);
 
         // Step 2: Create repair row with customer_id FK
         const repairRecord = await createRepair({
@@ -85,13 +85,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             sourceSystem: normalizedSourceSku ? 'ecwid' : null,
             sourceSku: normalizedSourceSku || null,
             customerId: customerRecord.id,
-        });
+        }, orgId);
 
         const dbId = repairRecord.id;
         const finalRSNumber = repairRecord.ticket_number;
 
         // Link customer entity_id to this repair (if newly created)
-        await linkCustomerToRepair(customerRecord.id, dbId);
+        await linkCustomerToRepair(customerRecord.id, dbId, orgId);
 
         // Step 3: Upload signature to Vercel Blob + create document record
         // Primary: JSON stroke data stored in document_data (always saved)
@@ -146,7 +146,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                             terms: 'Your Bose product has been received into our repair center. Under normal circumstances it will be repaired within the next 3-10 working days. There is a 30 day Warranty on all our repair services.',
                             signedAt: new Date().toISOString(),
                         }),
-                        ctx.organizationId,
+                        ctx.organizationId ?? orgId,
                     ],
                 );
                 documentId = docResult.rows[0]?.id ?? null;
@@ -177,7 +177,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             }, { idempotencyKey });
             console.log('Zendesk ticket created:', zendeskTicketNumber ?? 'missing ticket number');
             if (zendeskTicketNumber) {
-                await updateRepairField(dbId, 'ticket_number', zendeskTicketNumber);
+                await updateRepairField(dbId, 'ticket_number', zendeskTicketNumber, orgId);
             }
         } catch (error: any) {
             console.error('Failed to create Zendesk ticket:', error);
@@ -186,7 +186,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // Step 5: Insert work_assignment
         try {
             await createAssignment({
-                organizationId: ctx.organizationId,
+                organizationId: orgId,
                 entityType: 'REPAIR',
                 entityId: dbId,
                 workType: 'REPAIR',
@@ -200,7 +200,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         // Invalidate repair cache
         await invalidateCacheTags(['repair-service']);
-        await publishRepairChanged({ organizationId: ctx.organizationId, repairIds: [Number(dbId)], source: 'repair.submit' });
+        await publishRepairChanged({ organizationId: orgId, repairIds: [Number(dbId)], source: 'repair.submit' });
 
         return NextResponse.json({
             success: true,
@@ -214,11 +214,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             signatureWarning,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error submitting repair form:', error);
+        const message = error instanceof Error ? error.message : 'Failed to submit repair form';
         return NextResponse.json({
-            error: 'Failed to submit repair form',
-            details: error.message
+            error: message,
+            details: message,
         }, { status: 500 });
     }
 }, { permission: 'repair.intake' });

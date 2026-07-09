@@ -15,7 +15,7 @@ interface InlineNoticeProps {
 }
 
 const toneClasses: Record<InlineNoticeTone, string> = {
-  neutral: 'border-slate-200 bg-slate-50 text-slate-700',
+  neutral: 'border-border-soft bg-surface-canvas text-text-muted',
   info: 'border-blue-200 bg-blue-50 text-blue-800',
   success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
   warning: 'border-amber-200 bg-amber-50 text-amber-800',

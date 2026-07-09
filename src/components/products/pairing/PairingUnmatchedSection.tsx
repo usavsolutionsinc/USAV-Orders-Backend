@@ -67,17 +67,17 @@ export function PairingUnmatchedSection({ query, onPairIdentifier, onAddSku }: P
   if (data && unmapped.length === 0 && !offerAdd) return null;
 
   return (
-    <div className="shrink-0 border-b border-gray-200 bg-gray-50/60">
+    <div className="shrink-0 border-b border-border-soft bg-surface-canvas/60">
       <div className={`flex items-center justify-between ${SIDEBAR_GUTTER} py-1.5`}>
-        <span className="text-micro font-black uppercase tracking-wider text-gray-500">
+        <span className="text-micro font-black uppercase tracking-wider text-text-soft">
           Not in the queue
         </span>
-        {loading && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
+        {loading && <Loader2 className="h-3 w-3 animate-spin text-text-faint" />}
       </div>
 
       {/* Unmapped account-source identifiers */}
       {unmapped.length > 0 && (
-        <ul className="max-h-52 divide-y divide-gray-100 overflow-y-auto border-t border-gray-100 bg-white">
+        <ul className="max-h-52 divide-y divide-border-hairline overflow-y-auto border-t border-border-hairline bg-surface-card">
           {unmapped.map((id) => {
             const style = platformStyle(id.platform);
             // Ecwid's item id is an internal numeric product id — show its SKU
@@ -91,25 +91,25 @@ export function PairingUnmatchedSection({ query, onPairIdentifier, onAddSku }: P
                 <button
                   type="button"
                   onClick={() => onPairIdentifier(id)}
-                  className={`flex w-full items-center gap-2 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
+                  className={`ds-raw-button flex w-full items-center gap-2 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
                 >
                   <span className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0 text-eyebrow font-semibold uppercase tracking-wider ${style.chip}`}>
                     {style.label}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate font-mono text-xs font-bold text-gray-900">{value}</span>
+                      <span className="truncate font-mono text-xs font-bold text-text-default">{value}</span>
                       {id.orderCount > 0 && (
                         <span className="shrink-0 text-eyebrow font-bold uppercase tracking-wider text-amber-700">
                           {id.orderCount} ord
                         </span>
                       )}
                     </div>
-                    <p className="truncate text-micro text-gray-500">
+                    <p className="truncate text-micro text-text-soft">
                       {id.suggestedTitle || 'No linked title — unmapped'}
                     </p>
                   </div>
-                  <Link2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <Link2 className="h-3.5 w-3.5 shrink-0 text-text-faint" />
                 </button>
               </li>
             );
@@ -119,11 +119,11 @@ export function PairingUnmatchedSection({ query, onPairIdentifier, onAddSku }: P
 
       {/* Add the searched Zoho SKU to the catalog */}
       {offerAdd && (
-        <div className={`border-t border-gray-100 ${SIDEBAR_GUTTER} py-2`}>
+        <div className={`border-t border-border-hairline ${SIDEBAR_GUTTER} py-2`}>
           <button
             type="button"
             onClick={onAddSku}
-            className="flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/60 px-2.5 py-2 text-left transition-colors hover:bg-blue-50"
+            className="ds-raw-button flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/60 px-2.5 py-2 text-left transition-colors hover:bg-blue-50"
           >
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white">
               <Plus className="h-3.5 w-3.5" />

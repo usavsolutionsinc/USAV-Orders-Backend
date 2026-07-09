@@ -2,17 +2,9 @@ import { createHash } from 'node:crypto';
 import type { PhotoBytes } from '@/lib/receiving-claim-photos';
 import { readPhotoBytes as readLegacyPhotoBytes } from '@/lib/receiving-claim-photos';
 import { getStorageAdapter } from './storage/registry';
-import { getPrimaryPhotoStorage, getPhotoStorageRows } from './storage/resolve-primary';
+import { getPhotoStorageRows } from './storage/resolve-primary';
 import { readLegacyUrlBytes } from './storage/legacy-adapter';
 import { gcsAdapter } from './storage/gcs-adapter';
-import pool from '@/lib/db';
-
-const MIME: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-};
 
 function guessFilename(objectKey: string, contentType: string | null): string {
   const base = objectKey.split('/').pop() || 'photo.jpg';
@@ -54,6 +46,25 @@ export async function readPhotoBytesById(
     const url = nasMirror.legacyUrl || nasMirror.objectKey;
     const legacy = await readLegacyPhotoBytes(url);
     if (legacy) return legacy;
+  }
+
+  // Google Drive backup (object_key is the Drive file id; reads need the org's
+  // OAuth token, so this can't go through the generic bucket/objectKey adapter).
+  const driveRow = rows.find((r) => r.provider === 'google_drive');
+  if (driveRow?.objectKey) {
+    try {
+      const { getDriveFileMedia } = await import('./drive/client');
+      const media = await getDriveFileMedia(organizationId, driveRow.objectKey);
+      if (media) {
+        return {
+          bytes: media.bytes,
+          filename: guessFilename(driveRow.objectKey, driveRow.contentType),
+          contentType: driveRow.contentType || media.contentType || 'image/jpeg',
+        };
+      }
+    } catch {
+      /* fall through — Drive may be reconnecting */
+    }
   }
 
   if (primary?.legacyUrl) {

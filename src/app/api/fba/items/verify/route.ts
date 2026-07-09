@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/items/verify ────────────────────────────────────────────────
@@ -105,6 +106,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
 
     await invalidateCacheTags(['fba-board']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaItemChanged({ action: 'verify', shipmentId: Number(shipment_id || 0), itemId: Number(outcome.item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.verify', organizationId: ctx.organizationId });
 
     return NextResponse.json({

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
+import { Button } from '@/design-system/primitives';
 import { PhotoAnalysisProviderPanel } from './PhotoAnalysisProviderPanel';
 
 interface PhotosStats {
@@ -52,7 +53,7 @@ export function PhotosPlatformPanel() {
   });
 
   if (isLoading) {
-    return <p className="text-sm text-gray-500">Loading photo platform stats…</p>;
+    return <p className="text-sm text-text-soft">Loading photo platform stats…</p>;
   }
   if (error || !data) {
     return (
@@ -65,8 +66,8 @@ export function PhotosPlatformPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-gray-900">Photo platform</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-lg font-bold text-text-default">Photo platform</h2>
+        <p className="mt-1 text-sm text-text-soft">
           GCS storage, NAS cold mirror, and analysis job counts for this organization.
         </p>
       </div>
@@ -82,45 +83,44 @@ export function PhotosPlatformPanel() {
         ].map((card) => (
           <div
             key={card.label}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
+            className="rounded-xl border border-border-soft bg-surface-card px-4 py-3 shadow-sm"
           >
-            <p className="text-micro font-bold uppercase tracking-wider text-gray-400">
+            <p className="text-micro font-bold uppercase tracking-wider text-text-faint">
               {card.label}
             </p>
-            <p className="mt-1 text-2xl font-black tabular-nums text-gray-900">{card.value}</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-text-default">{card.value}</p>
           </div>
         ))}
       </div>
 
       <PhotoAnalysisProviderPanel />
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-border-soft bg-surface-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold text-gray-800">NAS mirror backlog</p>
-            <p className="text-caption text-gray-500">
+            <p className="text-sm font-bold text-text-default">NAS mirror backlog</p>
+            <p className="text-caption text-text-soft">
               Enqueues mirror jobs for GCS photos older than the configured threshold.
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
             disabled={mirror.isPending}
             onClick={() => mirror.mutate(25)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {mirror.isPending ? 'Enqueueing…' : 'Run mirror sync'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {data.byMonth.length > 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-bold text-gray-800">Uploads by month</p>
+        <div className="rounded-xl border border-border-soft bg-surface-card p-4 shadow-sm">
+          <p className="text-sm font-bold text-text-default">Uploads by month</p>
           <ul className="mt-3 space-y-1.5">
             {data.byMonth.map((row) => (
               <li
                 key={row.month}
-                className="flex items-center justify-between text-sm text-gray-700"
+                className="flex items-center justify-between text-sm text-text-muted"
               >
                 <span>{row.month}</span>
                 <span className="font-mono font-semibold tabular-nums">{row.count}</span>

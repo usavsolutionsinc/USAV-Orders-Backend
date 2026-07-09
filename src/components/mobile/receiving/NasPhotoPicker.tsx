@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 import {
   attachNasPhoto,
   listNasDir,
@@ -87,30 +88,32 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
   const files = entries.filter((e) => e.type === 'file');
 
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-modal flex flex-col bg-black text-white">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-modal flex flex-col bg-stage text-white">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-glass/10 px-4 py-3">
         <div className="min-w-0">
           <p className="text-micro font-black uppercase tracking-[0.22em] text-white/60">
             Select from NAS
           </p>
           <p className="truncate text-sm font-black text-white">/{dir || 'Photos'}</p>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onClose}
-          className="rounded-full bg-white/10 px-3.5 py-2 text-caption font-black uppercase tracking-widest active:bg-white/20"
+          className="h-auto rounded-full bg-glass/10 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-glass/20 hover:text-white active:bg-glass/20"
         >
           Close
-        </button>
+        </Button>
       </div>
 
       {/* Breadcrumb / up */}
       {dir ? (
+        // ds-raw-button: full-width text-left breadcrumb row (not a label/icon button)
         <button
           type="button"
           onClick={goUp}
-          className="border-b border-white/10 px-4 py-2 text-left text-caption font-bold uppercase tracking-widest text-blue-400 active:bg-white/5"
+          className="border-b border-glass/10 px-4 py-2 text-left text-caption font-bold uppercase tracking-widest text-blue-400 active:bg-glass/5"
         >
           ↑ Up a folder
         </button>
@@ -121,19 +124,20 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
         {loading ? (
           <div className="grid grid-cols-3 gap-0.5 p-0.5">
             {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="aspect-square animate-pulse bg-gray-900" />
+              <div key={i} className="aspect-square animate-pulse bg-stage-raised" />
             ))}
           </div>
         ) : error ? (
           <div className="px-6 py-12 text-center">
             <p className="text-label font-bold text-rose-400">{error}</p>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => void load(dir)}
-              className="mt-4 rounded-full bg-white/10 px-4 py-2 text-caption font-black uppercase tracking-widest active:bg-white/20"
+              className="mt-4 h-auto rounded-full bg-glass/10 px-4 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-glass/20 hover:text-white active:bg-glass/20"
             >
               Retry
-            </button>
+            </Button>
           </div>
         ) : entries.length === 0 ? (
           <p className="px-6 py-12 text-center text-label font-bold text-white/70">
@@ -143,13 +147,13 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
           <>
             {/* Folders */}
             {folders.length > 0 ? (
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-glass/5">
                 {folders.map((f) => (
                   <button
                     key={f.relPath}
                     type="button"
                     onClick={() => setDir(f.relPath)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-white/5"
+                    className="ds-raw-button flex w-full items-center gap-3 px-4 py-3 text-left active:bg-glass/5"
                   >
                     <span className="text-lg">📁</span>
                     <span className="truncate text-sm font-bold">{f.name}</span>
@@ -160,7 +164,7 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
 
             {/* Files */}
             {files.length > 0 ? (
-              <div className="grid grid-cols-3 gap-0.5 bg-black p-0.5">
+              <div className="grid grid-cols-3 gap-0.5 bg-stage p-0.5">
                 {files.map((f) => {
                   const isSel = selected.has(f.url);
                   return (
@@ -168,7 +172,7 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
                       key={f.relPath}
                       type="button"
                       onClick={() => toggle(f.url)}
-                      className="relative aspect-square bg-gray-900"
+                      className="ds-raw-button relative aspect-square bg-stage-raised"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -192,19 +196,19 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
       </div>
 
       {/* Footer action */}
-      <div className="border-t border-white/10 p-3">
-        <button
-          type="button"
+      <div className="border-t border-glass/10 p-3">
+        <Button
+          variant="primary"
           disabled={selected.size === 0 || attaching}
           onClick={handleAttach}
-          className="w-full rounded-full bg-blue-600 px-4 py-3 text-label font-black uppercase tracking-widest text-white active:bg-blue-700 disabled:opacity-40"
+          className="w-full rounded-full px-4 py-3"
         >
           {attaching
             ? 'Attaching…'
             : selected.size === 0
               ? 'Select photos'
               : `Attach ${selected.size} photo${selected.size === 1 ? '' : 's'}`}
-        </button>
+        </Button>
       </div>
     </div>
   );

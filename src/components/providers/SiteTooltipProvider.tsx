@@ -265,7 +265,7 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
                 onLayoutAnimationComplete={handleLayoutAnimComplete}
                 transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                 style={{ overflow: 'hidden' }}
-                className="flex max-w-[min(90vw,24rem)] items-start gap-2 rounded-md bg-gray-900 px-2.5 py-1.5 text-caption font-semibold text-white shadow-md"
+                className="flex max-w-[min(90vw,24rem)] items-start gap-2 rounded-md bg-surface-inverse px-2.5 py-1.5 text-caption font-semibold text-white shadow-md"
               >
                 <AnimatePresence mode="popLayout">
                   <motion.div
@@ -280,11 +280,11 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
                       {session.value}
                     </span>
                     {session.action === 'external-link' ? (
-                      <ExternalLink className="h-3 w-3 shrink-0 text-gray-400" aria-hidden />
+                      <ExternalLink className="h-3 w-3 shrink-0 text-text-faint" aria-hidden />
                     ) : session.copied ? (
                       <Check className="h-3 w-3 shrink-0 text-emerald-400" />
                     ) : (
-                      <Copy className="h-3 w-3 shrink-0 text-gray-500" />
+                      <Copy className="h-3 w-3 shrink-0 text-text-soft" />
                     )}
                   </motion.div>
                 </AnimatePresence>
@@ -293,7 +293,7 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
               <motion.span
                 layout="position"
                 transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-                className="absolute border-x-4 border-b-0 border-t-4 border-x-transparent border-t-gray-900"
+                className="absolute border-x-4 border-b-0 border-t-4 border-x-transparent border-t-surface-inverse"
                 style={{ left: caretOffsetX, transform: 'translateX(-50%)' }}
               />
             </div>

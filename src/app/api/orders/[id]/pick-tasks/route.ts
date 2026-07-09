@@ -19,11 +19,7 @@ export const GET = withAuth(async (request, ctx) => {
 
   try {
     // Org-ownership precheck on the [id] before delegating: orders is tenant-owned,
-    // so a cross-tenant id reads back nothing → 404 (never 403). loadPickTasks
-    // (src/lib/picking/sessions.ts) is a shared module outside this fileset and
-    // not yet org-parameterized — it runs its own raw-pool reads (incl. a
-    // sc.sku = su.sku string join), so its internal isolation is a tracked
-    // follow-up; this precheck is the route-level gate available without editing it.
+    // so a cross-tenant id reads back nothing → 404 (never 403).
     const ownQ = await tenantQuery<{ id: number }>(
       ctx.organizationId,
       'SELECT id FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1',
@@ -33,7 +29,10 @@ export const GET = withAuth(async (request, ctx) => {
       return NextResponse.json({ ok: false, error: 'order not found' }, { status: 404 });
     }
 
-    const tasks = await loadPickTasks(orderId);
+    // Pass the org id so loadPickTasks takes its GUC-scoped branch (explicit
+    // organization_id predicates on the sku_catalog / locations / sku_platform_ids
+    // string joins) instead of the legacy unscoped raw-pool reads.
+    const tasks = await loadPickTasks(orderId, ctx.organizationId);
     if (!tasks) {
       return NextResponse.json({ ok: false, error: 'order not found' }, { status: 404 });
     }

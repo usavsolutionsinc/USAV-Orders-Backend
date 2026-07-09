@@ -16,7 +16,7 @@ interface PhotoRequestPayload {
 /**
  * Phone-side receiver for the desktop scan → camera flow. When the receiving
  * workstation matches a PO# or tracking scan it publishes
- * `receiving_photo_request` on `station:{staffId}` (implicit pairing — the
+ * `receiving_photo_request` on `staffstation:{staffId}` (implicit pairing — the
  * channel name is the gate, no claim flow). Here the SAME staff's phone
  * auto-opens the MobilePackerSpamCamera by routing to the existing
  * `/m/r/{id}/photos?requestId=` capture page, so the operator can immediately

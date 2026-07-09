@@ -5,20 +5,33 @@ import { useQuery } from '@tanstack/react-query';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { useDebounce } from '@/hooks';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
+import { usePhotoLibraryDefaultMediaType } from '@/hooks/usePhotoLibraryDefaultMediaType';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
+import {
+  sourceScopeFromFilters,
+  todayFoldersDateFilter,
+  type PhotoLibrarySourceScope,
+} from '@/lib/photos/library-filter-state';
 import {
   buildPhotoLibraryRefinements,
   photoLibraryStructuredFilterCount,
 } from '@/lib/photos/library-refinements';
-import { PhotoFolderTree } from './PhotoFolderTree';
 import { PhotoLibraryFilterDropdown } from './PhotoLibraryFilterDropdown';
 import { PhotoLibraryNasBackup } from './PhotoLibraryNasBackup';
 import { PhotoStationFolders } from './PhotoStationFolders';
+import { PhotoLabelsSection } from './PhotoLabelsSection';
+import { MediaSavedViewsSection } from './MediaSavedViewsSection';
+import { useAuth } from '@/contexts/AuthContext';
 import type { StaffRecipient } from '@/components/quick-access/StaffRecipientList';
 
+const SEARCH_PLACEHOLDER = 'PO, order, tracking, serial, ticket, or text…';
+
 export function PhotoLibrarySidebarPanel() {
-  const { filters, patch, setDatePreset, clearStructured, clearAll } =
+  const { filters, display, patch, setDatePreset, clearStructured, applyView } =
     usePhotoLibraryUrlState();
+  usePhotoLibraryDefaultMediaType(filters, patch);
+  const { has } = useAuth();
+  const canManagePhotos = has('photos.manage');
   const { query, photos } = usePhotoLibrary(filters);
   const { data: staffRows = [] } = useQuery<StaffRecipient[]>({
     queryKey: ['staff-picker'],
@@ -31,19 +44,23 @@ export function PhotoLibrarySidebarPanel() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const [searchInput, setSearchInput] = useState(filters.q ?? '');
-  const debouncedQ = useDebounce(searchInput, 250);
+  const [searchInput, setSearchInput] = useState(filters.poFinder ?? filters.q ?? '');
+  const debouncedInput = useDebounce(searchInput, 250);
 
   useEffect(() => {
-    setSearchInput(filters.q ?? '');
-  }, [filters.q]);
+    setSearchInput(filters.poFinder ?? filters.q ?? '');
+  }, [filters.q, filters.poFinder]);
 
   useEffect(() => {
-    const trimmed = debouncedQ.trim();
-    if (trimmed === (filters.q ?? '')) return;
-    patch({ q: trimmed || undefined });
+    const trimmed = debouncedInput.trim();
+    if (trimmed === (filters.poFinder ?? '')) return;
+    patch({
+      poFinder: trimmed || undefined,
+      poFinderKind: trimmed ? 'any' : undefined,
+      q: undefined,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQ]);
+  }, [debouncedInput]);
 
   const refinements = useMemo(
     () =>
@@ -54,20 +71,38 @@ export function PhotoLibrarySidebarPanel() {
   );
 
   const structuredCount = photoLibraryStructuredFilterCount(filters);
+  const activeScope = sourceScopeFromFilters(filters);
+
+  const inferredScope = useMemo<PhotoLibrarySourceScope | null>(() => {
+    if (activeScope !== 'all' || !filters.poRef) return null;
+    const counts = new Map<PhotoLibrarySourceScope, number>();
+    for (const photo of photos) {
+      if (photo.sourceScope) counts.set(photo.sourceScope, (counts.get(photo.sourceScope) ?? 0) + 1);
+    }
+    let best: PhotoLibrarySourceScope | null = null;
+    let bestCount = 0;
+    for (const [scope, count] of counts) {
+      if (count > bestCount) {
+        best = scope;
+        bestCount = count;
+      }
+    }
+    return best;
+  }, [activeScope, filters.poRef, photos]);
 
   return (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       search={{
         value: searchInput,
         onChange: setSearchInput,
         onClear: () => setSearchInput(''),
-        placeholder: 'PO, tracking, or text in photo…',
+        placeholder: SEARCH_PLACEHOLDER,
         isSearching: query.isFetching && !query.isLoading,
         variant: 'blue',
       }}
       filter={{
-        label: 'Photo filters',
+        label: 'Media filters',
         refinements,
         activeCount: structuredCount,
         onClearAll: clearStructured,
@@ -75,7 +110,6 @@ export function PhotoLibrarySidebarPanel() {
           <PhotoLibraryFilterDropdown
             filters={filters}
             onPatch={patch}
-            onDatePreset={setDatePreset}
             onClose={onClose}
             staffOptions={staffRows}
           />
@@ -83,38 +117,51 @@ export function PhotoLibrarySidebarPanel() {
       }}
       bodyClassName="scrollbar-hide pb-2 pt-2"
       footer={
-        <div className="border-t border-gray-100 px-3 py-2">
+        <div className="space-y-1 border-t border-border-hairline px-3 py-2">
           <PhotoLibraryNasBackup />
         </div>
       }
     >
-      {refinements.length > 0 || filters.q ? (
-        <div className="mb-3 px-1">
-          <button
-            type="button"
-            onClick={clearAll}
-            className="text-micro font-bold uppercase tracking-wider text-gray-400 hover:text-gray-900"
-          >
-            Clear all filters
-          </button>
-        </div>
-      ) : null}
-      <PhotoStationFolders
-        activeScope={filters.sourceScope ?? 'all'}
-        photos={photos}
-        filters={filters}
-        onSelectScope={(scope) =>
-          patch({ sourceScope: scope, dateFrom: undefined, dateTo: undefined, poRef: undefined })
+      <MediaSavedViewsSection
+        currentFilters={filters}
+        currentView={display.view}
+        savable={
+          structuredCount > 0 ||
+          !!filters.poFinder ||
+          !!filters.q ||
+          !!filters.imageType ||
+          !!filters.label ||
+          (!!filters.sourceScope && filters.sourceScope !== 'all') ||
+          display.view !== 'folders'
         }
-        onSelectDate={(sel) => patch({ dateFrom: sel.dateFrom, dateTo: sel.dateTo, poRef: sel.poRef })}
+        canManage={canManagePhotos}
+        onApply={(payload) => applyView(payload.filters, payload.view)}
       />
-
-      <div className="mt-3 border-t border-gray-100 pt-3">
-        <PhotoFolderTree
-          selectedFolderId={filters.folderId ? Number(filters.folderId) : null}
-          onSelectFolder={(id) => patch({ folderId: id ? String(id) : undefined })}
-        />
-      </div>
+      <PhotoStationFolders
+        activeScope={activeScope}
+        activeImageType={filters.imageType ?? null}
+        activeDocumentType={filters.documentType ?? 'all'}
+        activeOutboundMedia={filters.outboundMedia ?? 'documents'}
+        inferredScope={inferredScope}
+        onSelect={({ scope, imageType }) =>
+          patch({
+            sourceScope: scope,
+            imageType,
+            documentType: scope === 'outbound' ? filters.documentType ?? 'all' : undefined,
+            outboundMedia: scope === 'outbound' ? filters.outboundMedia ?? 'documents' : undefined,
+            ...todayFoldersDateFilter(),
+            poRef: undefined,
+            label: undefined,
+          })
+        }
+        onDocumentTypeSelect={(documentType) => patch({ documentType, outboundMedia: 'documents' })}
+        onPackPhotosSelect={() => patch({ outboundMedia: 'pack_photos', documentType: undefined })}
+      />
+      <PhotoLabelsSection
+        activeLabel={filters.label ?? null}
+        scopeImageType={filters.imageType}
+        onSelect={(label) => patch({ label })}
+      />
     </SidebarShell>
   );
 }

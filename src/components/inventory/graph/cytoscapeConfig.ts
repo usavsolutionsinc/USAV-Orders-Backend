@@ -55,6 +55,24 @@ export const stylesheet: StylesheetStyle[] = [
     },
   },
   {
+    // Parts-graph pairing state (only the parts view sets `reviewState`; the
+    // relationship graph's nodes omit it, so these selectors never match there).
+    selector: "node[reviewState = 'confirmed']",
+    style: {
+      'background-color': '#dcfce7', // emerald-100
+      'border-color': '#059669', // emerald-600
+    },
+  },
+  {
+    selector: "node[reviewState = 'not_a_part']",
+    style: {
+      'background-color': '#f3f4f6', // gray-100
+      'border-color': '#9ca3af', // gray-400
+      'border-style': 'dashed',
+      color: '#9ca3af',
+    } as cytoscape.Css.Node,
+  },
+  {
     selector: 'node:selected, node[?focused]',
     style: {
       'border-width': 3,

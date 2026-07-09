@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 
 interface MobilePoQrScanSheetProps {
@@ -52,28 +53,26 @@ export function MobilePoQrScanSheet({ isOpen, onClose, onDecode }: MobilePoQrSca
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-panel flex flex-col bg-black"
+          className="fixed inset-0 z-panel flex flex-col bg-stage"
         >
-          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 bg-white border-b border-gray-200">
+          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 bg-surface-card border-b border-border-soft">
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-text-soft">
                 Scan PO
               </p>
-              <p className="mt-1 text-xs font-bold text-gray-700">
+              <p className="mt-1 text-xs font-bold text-text-muted">
                 Point at the PO barcode or QR
               </p>
             </div>
-            <button
-              type="button"
+            <IconButton
+              icon={<X className="h-5 w-5" />}
               onClick={onClose}
-              aria-label="Close"
-              className="h-11 w-11 flex items-center justify-center rounded-full bg-gray-100 text-gray-700 active:bg-gray-200 transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
+              ariaLabel="Close"
+              className="h-11 w-11 flex items-center justify-center rounded-full bg-surface-sunken text-text-muted active:bg-surface-strong"
+            />
           </div>
 
-          <div className="flex-1 relative overflow-hidden bg-gray-900">
+          <div className="flex-1 relative overflow-hidden bg-stage-raised">
             <video
               ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
               autoPlay
@@ -85,18 +84,18 @@ export function MobilePoQrScanSheet({ isOpen, onClose, onDecode }: MobilePoQrSca
             />
 
             {scanner.scanStatus === 'error' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-white">
-                <p className="text-sm font-bold text-gray-900 mb-1">Camera unavailable</p>
-                <p className="text-xs text-gray-500 mb-4 max-w-[260px]">
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-surface-card">
+                <p className="text-sm font-bold text-text-default mb-1">Camera unavailable</p>
+                <p className="text-xs text-text-soft mb-4 max-w-[260px]">
                   {scanner.error || 'Enable camera access in your browser settings.'}
                 </p>
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   onClick={() => void scanner.startScanning()}
-                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700"
+                  className="h-11 px-5"
                 >
                   Try Again
-                </button>
+                </Button>
               </div>
             )}
 
@@ -121,10 +120,10 @@ export function MobilePoQrScanSheet({ isOpen, onClose, onDecode }: MobilePoQrSca
                 <button
                   type="button"
                   onClick={() => scanner.toggleTorch()}
-                  className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                  className={`ds-raw-button h-10 w-10 rounded-full flex items-center justify-center ${
                     scanner.torchOn
                       ? 'bg-yellow-400/30 text-yellow-200 border border-yellow-400/50'
-                      : 'bg-white/15 text-white/80 border border-white/25'
+                      : 'bg-glass/15 text-white/80 border border-glass/25'
                   }`}
                   aria-label={scanner.torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
                 >

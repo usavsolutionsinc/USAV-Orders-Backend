@@ -31,7 +31,7 @@ export const GET = withAuth(async () => {
     console.error('[chat-sessions] list error:', err?.message);
     return NextResponse.json({ error: 'Failed to load sessions' }, { status: 500 });
   }
-}, { permission: 'dashboard.view' });
+}, { permission: 'dashboard.view', feature: 'aiChat' });
 
 /**
  * DELETE /api/ai/chat-sessions?id=<sessionId> — delete a session
@@ -48,4 +48,4 @@ export const DELETE = withAuth(async (req: NextRequest) => {
     console.error('[chat-sessions] delete error:', err?.message);
     return NextResponse.json({ error: 'Failed to delete session' }, { status: 500 });
   }
-}, { permission: 'dashboard.view' });
+}, { permission: 'dashboard.view', feature: 'aiChat' });

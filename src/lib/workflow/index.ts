@@ -20,10 +20,15 @@ import { redisAdvanceLock } from './lock';
 import './nodes/receiving.node';
 import './nodes/inspection.node';
 import './nodes/repair.node';
+import './nodes/data-wipe.node';
 import './nodes/list-ebay.node';
+import './nodes/list.node';
 import './nodes/pack.node';
 import './nodes/kit-verify.node';
 import './nodes/ship.node';
+import './nodes/returns.node';
+import './nodes/rtv.node';
+import './nodes/parts-harvest.node';
 import './nodes/decision.node';
 
 /**

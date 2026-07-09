@@ -42,20 +42,20 @@ export function SearchesPane() {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <h1 className="mb-4 text-xl font-bold text-gray-900">Standing searches <span className="text-gray-400">({rows.length})</span></h1>
+      <h1 className="mb-4 text-xl font-bold text-text-default">Standing searches <span className="text-text-faint">({rows.length})</span></h1>
 
       {/* Create */}
       <form
-        className="mb-5 flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-3"
+        className="mb-5 flex items-center gap-2 rounded-xl border border-border-soft bg-surface-card p-3"
         onSubmit={(e) => { e.preventDefault(); if (query.trim()) create.mutate({ query: query.trim(), cadence }); }}
       >
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="What to watch for, e.g. “SoundLink Mini battery”"
-          className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
+          className="min-w-0 flex-1 rounded-lg border border-border-soft px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
         />
-        <select value={cadence} onChange={(e) => setCadence(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-700 focus:border-blue-400 focus:outline-none">
+        <select value={cadence} onChange={(e) => setCadence(e.target.value)} className="rounded-lg border border-border-soft px-2 py-1.5 text-sm text-text-muted focus:border-blue-400 focus:outline-none">
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>
           <option value="off">Manual</option>
@@ -70,22 +70,22 @@ export function SearchesPane() {
       ) : (
         <ul className="space-y-2">
           {rows.map((s) => (
-            <li key={s.id} className={`flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 ${s.is_active ? '' : 'opacity-60'}`}>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cadenceTone[s.cadence] ?? cadenceTone.off}`}>{CADENCE_LABEL[s.cadence] ?? s.cadence}</span>
+            <li key={s.id} className={`flex items-center gap-3 rounded-xl border border-border-soft bg-surface-card p-3 ${s.is_active ? '' : 'opacity-60'}`}>
+              <span className={`rounded-full px-2 py-0.5 text-micro font-semibold ${cadenceTone[s.cadence] ?? cadenceTone.off}`}>{CADENCE_LABEL[s.cadence] ?? s.cadence}</span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-gray-900">{s.label || s.query}</p>
-                <p className="truncate text-caption text-gray-500">
+                <p className="truncate text-sm font-semibold text-text-default">{s.label || s.query}</p>
+                <p className="truncate text-caption text-text-soft">
                   {s.product_title ?? s.sku ?? s.query}
                   {s.last_run_at ? ` · last run ${new Date(s.last_run_at).toLocaleDateString()}${s.last_hit_count != null ? ` · ${s.last_hit_count} hit${s.last_hit_count === 1 ? '' : 's'}` : ''}` : ' · never run'}
                 </p>
               </div>
               <Button variant="secondary" size="sm" loading={run.isPending} onClick={() => run.mutate(s.id)}>Run now</Button>
               {s.is_active && s.cadence !== 'off' ? (
-                <button type="button" onClick={() => patch.mutate({ id: s.id, cadence: 'off' })} className="rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100">Pause</button>
+                <Button variant="ghost" size="sm" type="button" onClick={() => patch.mutate({ id: s.id, cadence: 'off' })}>Pause</Button>
               ) : (
-                <button type="button" onClick={() => patch.mutate({ id: s.id, isActive: true, cadence: 'daily' })} className="rounded-md px-2 py-1 text-caption font-semibold text-emerald-700 hover:bg-emerald-50">Resume</button>
+                <Button variant="ghost" size="sm" type="button" onClick={() => patch.mutate({ id: s.id, isActive: true, cadence: 'daily' })} className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700">Resume</Button>
               )}
-              <button type="button" onClick={() => remove.mutate(s.id)} className="rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100">Remove</button>
+              <Button variant="ghost" size="sm" type="button" onClick={() => remove.mutate(s.id)}>Remove</Button>
             </li>
           ))}
         </ul>

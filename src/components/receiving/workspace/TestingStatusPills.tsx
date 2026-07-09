@@ -31,7 +31,7 @@ const TEST_OPTS: Array<{
     label: 'Pass',
     tone: {
       active: 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 ring-emerald-700',
-      inactive: 'bg-white text-emerald-800 ring-emerald-200 hover:bg-emerald-50',
+      inactive: 'bg-surface-card text-emerald-800 ring-emerald-200 hover:bg-emerald-50',
     },
   },
   {
@@ -39,7 +39,7 @@ const TEST_OPTS: Array<{
     label: 'Test Again',
     tone: {
       active: 'bg-amber-500 text-white shadow-sm shadow-amber-200 ring-amber-600',
-      inactive: 'bg-white text-amber-800 ring-amber-200 hover:bg-amber-50',
+      inactive: 'bg-surface-card text-amber-800 ring-amber-200 hover:bg-amber-50',
     },
   },
   {
@@ -47,7 +47,7 @@ const TEST_OPTS: Array<{
     label: 'Testing Failed',
     tone: {
       active: 'bg-rose-600 text-white shadow-sm shadow-rose-200 ring-rose-700',
-      inactive: 'bg-white text-rose-800 ring-rose-200 hover:bg-rose-50',
+      inactive: 'bg-surface-card text-rose-800 ring-rose-200 hover:bg-rose-50',
     },
   },
 ];
@@ -91,7 +91,7 @@ export function TestingStatusPills({ value, onChange, disabled = false }: Props)
             aria-checked={isActive}
             onClick={() => onChange(opt.value)}
             disabled={disabled}
-            className={`inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
+            className={`ds-raw-button inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
               isActive ? opt.tone.active : opt.tone.inactive
             }`}
           >
@@ -161,4 +161,21 @@ export function unitStatusToVerdict(
   if (s === 'IN_TEST') return 'TEST_AGAIN';
   if (s === 'ON_HOLD') return 'TESTING_FAILED';
   return null;
+}
+
+/**
+ * Inverse of {@link unitStatusToVerdict}: the `serial_units.current_status` the
+ * /api/serial-units/[id]/test endpoint writes for a verdict. Used to reflect a
+ * verdict optimistically before the server round-trip resolves.
+ *   PASS → 'TESTED' · TEST_AGAIN → 'IN_TEST' · TESTING_FAILED → 'ON_HOLD'
+ */
+export function verdictToUnitStatus(verdict: TestingVerdict): string {
+  switch (verdict) {
+    case 'PASS':
+      return 'TESTED';
+    case 'TEST_AGAIN':
+      return 'IN_TEST';
+    case 'TESTING_FAILED':
+      return 'ON_HOLD';
+  }
 }

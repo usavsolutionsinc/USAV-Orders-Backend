@@ -24,6 +24,7 @@ import {
   Calendar as CalendarIcon,
 } from '@/components/Icons';
 import { Calendar as CalendarPicker } from '@/design-system/components/Calendar';
+import { Button } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/toast';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -202,14 +203,12 @@ export function ShippedActionsButton({ defaultDateKey }: ShippedActionsButtonPro
           <button
             type="button"
             aria-label="Shipped actions — sync to Zoho or print a pickup report"
-            // Plain template literal (not cn/twMerge): the app's custom `text-label`
-            // utility is misread by tailwind-merge as a color and dropped on merge.
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label font-bold text-gray-700 ring-1 ring-inset ring-gray-200 transition-colors hover:ring-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            className="ds-raw-button flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label font-bold text-text-muted ring-1 ring-inset ring-border-soft transition-colors hover:ring-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           >
             {triggerBusy ? (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
             ) : (
-              <RefreshCw className="h-4 w-4 shrink-0 text-gray-500" />
+              <RefreshCw className="h-4 w-4 shrink-0 text-text-soft" />
             )}
             <span className="flex-1 text-left">Sync &amp; Report</span>
             {canZoho && pendingCount > 0 ? (
@@ -226,17 +225,17 @@ export function ShippedActionsButton({ defaultDateKey }: ShippedActionsButtonPro
             align="start"
             sideOffset={6}
             style={{ width: 'var(--radix-popover-trigger-width)' }}
-            className="z-dropdown rounded-2xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5 focus:outline-none"
+            className="z-dropdown rounded-2xl border border-border-soft bg-surface-card p-3 shadow-xl ring-1 ring-black/5 focus:outline-none"
           >
             {tabs.length > 1 ? (
-              <div className="mb-3 flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+              <div className="mb-3 flex items-center gap-1 rounded-xl bg-surface-sunken p-1">
                 {tabs.map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setTab(t)}
-                    className={`flex-1 rounded-lg px-3 py-1.5 text-eyebrow font-black uppercase tracking-wider transition-colors ${
-                      tab === t ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    className={`ds-raw-button flex-1 rounded-lg px-3 py-1.5 text-eyebrow font-black uppercase tracking-wider transition-colors ${
+                      tab === t ? 'bg-surface-card text-blue-700 shadow-sm' : 'text-text-soft hover:text-text-muted'
                     }`}
                   >
                     {t === 'sync' ? 'Sync' : 'Report'}
@@ -247,30 +246,31 @@ export function ShippedActionsButton({ defaultDateKey }: ShippedActionsButtonPro
 
             {tab === 'sync' && canZoho ? (
               <div className="space-y-2">
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="lg"
                   onClick={openSyncDialog}
-                  className={`flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-white transition-all hover:bg-blue-700 active:scale-95 ${sectionLabel}`}
+                  icon={<RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />}
+                  className={`w-full ${sectionLabel}`}
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
                   Preview &amp; Sync to Zoho
                   {pendingCount > 0 ? (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-mini font-black">
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-glass/25 px-1.5 text-mini font-black">
                       {pendingCount}
                     </span>
                   ) : null}
-                </button>
-                <p className="px-1 text-eyebrow leading-relaxed text-gray-400">
+                </Button>
+                <p className="px-1 text-eyebrow leading-relaxed text-text-faint">
                   Pushes each packer-scanned shipped order to Zoho as one bundle
                   (sales order → package → shipment → invoice).
                 </p>
               </div>
             ) : (
               <div>
-                <div className="flex items-center gap-1.5 border-b border-gray-100 px-1 pb-2 text-eyebrow font-black uppercase tracking-wider text-slate-500">
-                  <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
+                <div className="flex items-center gap-1.5 border-b border-border-hairline px-1 pb-2 text-eyebrow font-black uppercase tracking-wider text-text-soft">
+                  <CalendarIcon className="h-3.5 w-3.5 text-text-faint" />
                   Print pickup report — pick a date
-                  {reportBusy ? <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-blue-500" /> : <Printer className="ml-auto h-3.5 w-3.5 text-slate-300" />}
+                  {reportBusy ? <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-blue-500" /> : <Printer className="ml-auto h-3.5 w-3.5 text-text-faint" />}
                 </div>
                 <CalendarPicker
                   mode="single"

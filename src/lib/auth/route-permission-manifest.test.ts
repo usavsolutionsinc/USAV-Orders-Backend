@@ -52,6 +52,39 @@ test('regression: work_orders.view gates the assignments routes', () => {
   assert.ok(paths.some((p) => p.includes('assignments')), 'work_orders.view should gate some assignments route');
 });
 
+test('regression: rma.view/rma.manage gate the RMA routes (not orders.view)', () => {
+  // Returns-unification Phase 4 Stage 1 (Gap #8): RMA routes were previously
+  // gated by the generic orders.view; migrated to a dedicated rma.* pair so
+  // access can be granted independently of general order visibility.
+  const viewPaths = routesGatedBy('rma.view').map((r) => r.path);
+  const managePaths = routesGatedBy('rma.manage').map((r) => r.path);
+  const allRmaPaths = [...viewPaths, ...managePaths];
+  assert.ok(allRmaPaths.includes('/api/rma/route.ts'), 'rma.* should gate /api/rma');
+  assert.ok(allRmaPaths.includes('/api/rma/[id]/route.ts'), 'rma.* should gate /api/rma/[id]');
+  assert.ok(allRmaPaths.includes('/api/rma/by-number/[number]/route.ts'), 'rma.* should gate the by-number lookup');
+  assert.ok(managePaths.includes('/api/rma/[id]/close/route.ts'), 'rma.manage should gate close');
+  assert.ok(managePaths.includes('/api/rma/[id]/disposition/route.ts'), 'rma.manage should gate disposition');
+  assert.ok(managePaths.includes('/api/rma/[id]/mark-received/route.ts'), 'rma.manage should gate mark-received');
+  assert.ok(!routesGatedBy('orders.view').some((r) => r.path.startsWith('/api/rma/')), 'no RMA route should still be on orders.view');
+});
+
+test('regression: label.manifest.manage gates the label-manifest mutation routes', () => {
+  // Serial↔label pairing Phase 3 — manifest create/seal/dissolve + item add/remove
+  // are gated by the new label.manifest.manage; the read (GET detail) stays on the
+  // shared print.label so anyone who can print can build/scan a kit.
+  const managePaths = routesGatedBy('label.manifest.manage').map((r) => r.path);
+  assert.ok(managePaths.includes('/api/label-manifests/route.ts'), 'create gated by label.manifest.manage');
+  assert.ok(managePaths.includes('/api/label-manifests/[id]/seal/route.ts'), 'seal gated by label.manifest.manage');
+  assert.ok(managePaths.includes('/api/label-manifests/[id]/dissolve/route.ts'), 'dissolve gated by label.manifest.manage');
+  assert.ok(managePaths.includes('/api/label-manifests/[id]/items/route.ts'), 'add items gated by label.manifest.manage');
+  assert.ok(
+    managePaths.includes('/api/label-manifests/[id]/items/[serialUnitId]/route.ts'),
+    'remove item gated by label.manifest.manage',
+  );
+  const printPaths = routesGatedBy('print.label').map((r) => r.path);
+  assert.ok(printPaths.includes('/api/label-manifests/[id]/route.ts'), 'GET detail gated by print.label');
+});
+
 test('regression: sourcing.view gates the Bose model + compatibility read routes', () => {
   const paths = routesGatedBy('sourcing.view').map((r) => r.path);
   // Bose Sourcing Engine Phase 1 — the manifest records the first-declared
@@ -83,6 +116,27 @@ test('regression: photos.view gates the photo library route', () => {
 test('regression: photos.share gates share pack creation', () => {
   const paths = routesGatedBy('photos.share').map((r) => r.path);
   assert.ok(paths.includes('/api/photos/share-packs/route.ts'), 'photos.share should gate share pack POST');
+});
+
+test('regression: receiving.upload_photo gates photo reassignment', () => {
+  const paths = routesGatedBy('receiving.upload_photo').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/photos/[id]/reassign/route.ts'),
+    'receiving.upload_photo should gate photo reassignment',
+  );
+});
+
+test('regression: photo-label routes are gated (read on view, writes on manage)', () => {
+  // Vocabulary list + per-photo label read land on the per-file minimum
+  // (photos.view, the GET); the POST/PUT/PATCH/DELETE writes assert photos.manage
+  // in-handler. The manage-gated single-label + bulk routes are recorded directly.
+  const view = routesGatedBy('photos.view').map((r) => r.path);
+  assert.ok(view.includes('/api/photos/labels/route.ts'), 'photos.view should gate the labels vocabulary route');
+  assert.ok(view.includes('/api/photos/[id]/labels/route.ts'), 'photos.view should gate the per-photo labels route');
+
+  const manage = routesGatedBy('photos.manage').map((r) => r.path);
+  assert.ok(manage.includes('/api/photos/labels/[id]/route.ts'), 'photos.manage should gate single-label edit/delete');
+  assert.ok(manage.includes('/api/photos/labels/bulk-apply/route.ts'), 'photos.manage should gate bulk label apply');
 });
 
 test('regression: inventory.list_unit gates the per-unit listing route (engine Phase 1.4)', () => {
@@ -219,16 +273,72 @@ test('regression: handling_unit.manage gates the assign/unassign mutations', () 
   );
 });
 
-test('regression: photos.manage gates the photo-folder CRUD + assignment routes', () => {
-  // Phase 2 photo-library master folders. Reads (list folders) stay on
-  // photos.view; every folder mutation + photo assignment requires photos.manage.
-  const paths = routesGatedBy('photos.manage').map((r) => r.path);
+test('regression: integrations.google_drive gates the Drive connect + health routes', () => {
+  // Google Drive photo backup. The OAuth callback is intentionally ungated
+  // (encrypted-state public redirect, like the Amazon/eBay callbacks) and is
+  // not asserted here.
+  const paths = routesGatedBy('integrations.google_drive').map((r) => r.path);
   assert.ok(
-    paths.includes('/api/photos/folders/[id]/route.ts'),
-    'photos.manage should gate folder rename/move/delete',
+    paths.includes('/api/integrations/google-drive/connect/route.ts'),
+    'integrations.google_drive should gate the Drive connect route',
   );
   assert.ok(
-    paths.includes('/api/photos/folders/[id]/items/route.ts'),
-    'photos.manage should gate folder photo assignment',
+    paths.includes('/api/integrations/google-drive/health/route.ts'),
+    'integrations.google_drive should gate the Drive health route',
   );
+});
+
+test('regression: the image-type registry route is permission-gated', () => {
+  // The saved-folder system was replaced by the image-type registry. The
+  // route file is gated (manifest records the per-file minimum, photos.view for
+  // the GET list); the POST that creates a custom type additionally enforces
+  // photos.manage in-handler (see /api/photos/image-types/route.ts).
+  const route = routeByPath('/api/photos/image-types/route.ts');
+  assert.ok(route, 'the image-types route should be in the manifest');
+  assert.equal(route.gate, 'withAuth');
+  assert.equal(route.permission, 'photos.view');
+});
+
+test('regression: shipping.buy_label gates the outbound rate-shop + label-purchase routes (ShipStation)', () => {
+  const paths = routesGatedBy('shipping.buy_label').map((r) => r.path);
+  assert.ok(paths.includes('/api/outbound/rates/route.ts'), 'shipping.buy_label should gate rate-shop');
+  assert.ok(
+    paths.includes('/api/outbound/labels/purchase/route.ts'),
+    'shipping.buy_label should gate label purchase',
+  );
+});
+
+test('regression: shipping.void_label gates the label-void route', () => {
+  const paths = routesGatedBy('shipping.void_label').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/outbound/labels/void/route.ts'),
+    'shipping.void_label should gate label void',
+  );
+});
+
+test('regression: the ShipStation webhook is a signature-verified public route', () => {
+  const route = routeByPath('/api/webhooks/shipstation/[token]/route.ts');
+  assert.ok(route, 'the ShipStation webhook should be in the manifest');
+  assert.equal(route.permission, null);
+  assert.ok(route.exemptReason, 'the ShipStation webhook should be exempt (signature-gated)');
+});
+
+test('regression: ai.search gates the AI retrieve endpoint (AI search Phase 1)', () => {
+  const route = routeByPath('/api/ai/retrieve/route.ts');
+  assert.ok(route, 'the AI retrieve route should be in the manifest');
+  assert.equal(route.gate, 'withAuth');
+  assert.equal(route.permission, 'ai.search');
+  const paths = routesGatedBy('ai.search').map((r) => r.path);
+  assert.ok(paths.includes('/api/ai/retrieve/route.ts'), 'ai.search should gate /api/ai/retrieve');
+});
+
+test('assistant chat route is gated by assistant.chat', () => {
+  const paths = routesGatedBy('assistant.chat').map((r) => r.path);
+  assert.ok(paths.includes('/api/assistant/chat/route.ts'));
+  assert.ok(paths.includes('/api/assistant/mutations/route.ts'));
+});
+
+test('assistant mutation revert route is gated by studio.manage', () => {
+  const paths = routesGatedBy('studio.manage').map((r) => r.path);
+  assert.ok(paths.includes('/api/assistant/mutations/[id]/revert/route.ts'));
 });

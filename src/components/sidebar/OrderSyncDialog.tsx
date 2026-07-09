@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Check, Loader2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
 import { TrackingChip, OrderIdChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
@@ -38,7 +39,7 @@ function statusDot(status: SyncTaskStatus) {
   if (status === 'running') return <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />;
   if (status === 'done') return <Check className="w-3.5 h-3.5 text-emerald-600" />;
   if (status === 'error') return <AlertTriangle className="w-3.5 h-3.5 text-red-500" />;
-  return <span className="block w-2 h-2 rounded-full bg-gray-300" />;
+  return <span className="block w-2 h-2 rounded-full bg-surface-strong" />;
 }
 
 function statusLabel(status: SyncTaskStatus, summary?: string) {
@@ -52,12 +53,12 @@ function badge(kind: 'inserted' | 'updated' | 'deleted' | 'unknown' | 'resolved'
   const map: Record<string, string> = {
     inserted: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     updated: 'bg-blue-50 text-blue-700 ring-blue-200',
-    deleted: 'bg-gray-50 text-gray-600 ring-gray-200',
+    deleted: 'bg-surface-canvas text-text-muted ring-border-soft',
     unknown: 'bg-amber-50 text-amber-700 ring-amber-200',
     resolved: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     open: 'bg-red-50 text-red-700 ring-red-200',
   };
-  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
+  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
 }
 
 function TransferTab({ tab, label }: { tab: TransferTabState; label: string }) {
@@ -69,7 +70,7 @@ function TransferTab({ tab, label }: { tab: TransferTabState; label: string }) {
 
   if (tab.status === 'idle') {
     return (
-      <div className="flex h-full flex-col items-center justify-center py-12 text-gray-400">
+      <div className="flex h-full flex-col items-center justify-center py-12 text-text-faint">
         <p className={fieldLabel}>{label} sync hasn’t started yet.</p>
       </div>
     );
@@ -143,11 +144,11 @@ function TransferTab({ tab, label }: { tab: TransferTabState; label: string }) {
       )}
 
       {tab.status === 'running' && noRows ? (
-        <p className={`${fieldLabel} text-gray-500`}>Waiting for {label} to finish…</p>
+        <p className={`${fieldLabel} text-text-soft`}>Waiting for {label} to finish…</p>
       ) : noRows ? (
-        <p className={`${fieldLabel} text-gray-500`}>No changes — already up to date.</p>
+        <p className={`${fieldLabel} text-text-soft`}>No changes — already up to date.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200">
+        <div className="overflow-hidden rounded-xl border border-border-soft">
           <DetailTable
             rows={[
               ...(details?.inserted ?? []).map((r) => ({ kind: 'inserted' as const, row: r })),
@@ -164,7 +165,7 @@ function TransferTab({ tab, label }: { tab: TransferTabState; label: string }) {
 function ExceptionsTab({ tab }: { tab: ExceptionsTabState }) {
   if (tab.status === 'idle') {
     return (
-      <div className="flex h-full flex-col items-center justify-center py-12 text-gray-400">
+      <div className="flex h-full flex-col items-center justify-center py-12 text-text-faint">
         <p className={fieldLabel}>Exceptions sync runs after Google Sheets and Ecwid finish.</p>
       </div>
     );
@@ -193,11 +194,11 @@ function ExceptionsTab({ tab }: { tab: ExceptionsTabState }) {
       </div>
 
       {resolved.length === 0 && stillOpen.length === 0 ? (
-        <p className={`${fieldLabel} text-gray-500`}>
+        <p className={`${fieldLabel} text-text-soft`}>
           {tab.status === 'running' ? 'Looking for matches…' : 'No open exceptions to process.'}
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200">
+        <div className="overflow-hidden rounded-xl border border-border-soft">
           <ExceptionTable resolved={resolved} stillOpen={stillOpen} />
         </div>
       )}
@@ -209,7 +210,7 @@ function SummaryStat({ label, value, tone }: { label: string; value: number; ton
   const toneMap = {
     emerald: 'border-emerald-200 bg-emerald-50/60 text-emerald-700',
     blue: 'border-blue-200 bg-blue-50/60 text-blue-700',
-    gray: 'border-gray-200 bg-gray-50/60 text-gray-700',
+    gray: 'border-border-soft bg-surface-canvas/60 text-text-muted',
     red: 'border-red-200 bg-red-50/60 text-red-700',
   } as const;
   return (
@@ -241,8 +242,8 @@ function DetailTable({
   return (
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
-          <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+        <thead className="sticky top-0 z-10 bg-surface-canvas text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
+          <tr className="text-micro uppercase tracking-wide text-text-soft">
             <th className="px-3 py-2 font-semibold">Order</th>
             <th className="px-3 py-2 font-semibold">Product</th>
             <th className="px-3 py-2 font-semibold">SKU</th>
@@ -250,27 +251,27 @@ function DetailTable({
             <th className="px-3 py-2 font-semibold text-right">Kind</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border-hairline">
           {rows.map(({ kind, row }, i) => {
             const provenance = kind !== 'inserted' ? formatExistingProvenance(row) : null;
             return (
-              <tr key={`${kind}:${row.orderId}:${i}`} className="hover:bg-gray-50/60">
+              <tr key={`${kind}:${row.orderId}:${i}`} className="hover:bg-surface-canvas/60">
                 <td className="px-3 py-2 align-top">
                   {row.orderId ? (
                     <OrderIdChip value={row.orderId} display={getLast4(row.orderId)} />
                   ) : (
-                    <span className="font-mono text-xs text-gray-400">—</span>
+                    <span className="font-mono text-xs text-text-faint">—</span>
                   )}
                   {provenance ? (
-                    <div className="mt-0.5 pl-1.5 text-[10px] font-normal text-gray-400">{provenance}</div>
+                    <div className="mt-0.5 pl-1.5 text-micro font-normal text-text-faint">{provenance}</div>
                   ) : null}
                 </td>
-                <td className="px-3 py-2 text-gray-700 align-top">
+                <td className="px-3 py-2 text-text-muted align-top">
                   {row.productTitle || (
                     <span className="text-amber-700">Unknown Product</span>
                   )}
                   {row.titleSource && row.titleSource !== 'sheet' && row.productTitle ? (
-                    <span className="ml-1 text-[10px] uppercase tracking-wide text-gray-400">
+                    <span className="ml-1 text-micro uppercase tracking-wide text-text-faint">
                       · {row.titleSource.replace('_', ' ')}
                     </span>
                   ) : null}
@@ -282,14 +283,14 @@ function DetailTable({
                       display={getLast4(row.sku || row.itemNumber)}
                     />
                   ) : (
-                    <span className="font-mono text-xs text-gray-400">—</span>
+                    <span className="font-mono text-xs text-text-faint">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2 align-top">
                   {row.tracking ? (
                     <TrackingChip value={row.tracking} display={getLast4(row.tracking)} />
                   ) : (
-                    <span className="font-mono text-xs text-gray-400">—</span>
+                    <span className="font-mono text-xs text-text-faint">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2 text-right align-top">
@@ -318,8 +319,8 @@ function ExceptionTable({
   return (
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
-          <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+        <thead className="sticky top-0 z-10 bg-surface-canvas text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
+          <tr className="text-micro uppercase tracking-wide text-text-soft">
             <th className="px-3 py-2 font-semibold">Exception</th>
             <th className="px-3 py-2 font-semibold">Tracking</th>
             <th className="px-3 py-2 font-semibold">Source</th>
@@ -327,13 +328,13 @@ function ExceptionTable({
             <th className="px-3 py-2 font-semibold text-right">Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border-hairline">
           {rows.map(({ kind, row }) => (
-            <tr key={`${kind}:${row.exceptionId}`} className="hover:bg-gray-50/60">
-              <td className="px-3 py-2 font-mono text-xs text-gray-900">#{row.exceptionId}</td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-700">{row.tracking || '—'}</td>
-              <td className="px-3 py-2 text-xs text-gray-600">{row.sourceStation || '—'}</td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-600">
+            <tr key={`${kind}:${row.exceptionId}`} className="hover:bg-surface-canvas/60">
+              <td className="px-3 py-2 font-mono text-xs text-text-default">#{row.exceptionId}</td>
+              <td className="px-3 py-2 font-mono text-xs text-text-muted">{row.tracking || '—'}</td>
+              <td className="px-3 py-2 text-xs text-text-muted">{row.sourceStation || '—'}</td>
+              <td className="px-3 py-2 font-mono text-xs text-text-muted">
                 {row.matchedOrderId != null ? `#${row.matchedOrderId}` : '—'}
               </td>
               <td className="px-3 py-2 text-right">
@@ -401,7 +402,7 @@ export function OrderSyncDialog({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={framerTransition.overlayScrim}
-      className="fixed inset-0 z-panelPopover flex items-center justify-center bg-gray-950/40 px-4 py-6"
+      className="fixed inset-0 z-panelPopover flex items-center justify-center bg-scrim/40 px-4 py-6"
       onClick={() => {
         if (!isRunning) onClose();
       }}
@@ -412,12 +413,12 @@ export function OrderSyncDialog({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: 'spring', damping: 26, stiffness: 320, mass: 0.55 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-gray-200"
+        className="relative flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-surface-card shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-border-soft"
       >
-            <header className="flex items-start gap-3 border-b border-gray-200 px-5 py-3.5">
+            <header className="flex items-start gap-3 border-b border-border-soft px-5 py-3.5">
               <div className="flex-1 min-w-0">
-                <p className={`${microBadge} text-gray-500`}>Order Sync</p>
-                <h2 className={`${sectionLabel} text-gray-900 mt-0.5`}>
+                <p className={`${microBadge} text-text-soft`}>Order Sync</p>
+                <h2 className={`${sectionLabel} text-text-default mt-0.5`}>
                   {isRunning ? 'Importing latest orders' : 'Import complete'}
                 </h2>
               </div>
@@ -431,27 +432,26 @@ export function OrderSyncDialog({
                   {(elapsedMs / 1000).toFixed(1)}s
                 </motion.span>
                 {isRunning && onCancel ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={onCancel}
-                    className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition hover:bg-red-100"
+                    className="bg-red-50 text-red-700 ring-red-200 ring-inset hover:bg-red-100"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 ) : null}
-                <button
-                  type="button"
+                <IconButton
+                  icon={<X className="w-4 h-4" />}
+                  ariaLabel="Close"
                   onClick={onClose}
                   disabled={isRunning}
-                  className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                  className="rounded-lg p-1.5 hover:bg-surface-sunken"
+                />
               </div>
             </header>
 
-            <nav className="flex items-end gap-1 border-b border-gray-200 px-3 pt-2">
+            <nav className="flex items-end gap-1 border-b border-border-soft px-3 pt-2">
               {TABS.map((tab) => {
                 const isActive = activeTab === tab.id;
                 const meta = tabBadges[tab.id];
@@ -460,8 +460,9 @@ export function OrderSyncDialog({
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
-                      isActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                    /* ds-raw-button: segmented tab with animated layoutId underline — not a Button shape */
+                    className={`ds-raw-button relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
+                      isActive ? 'text-text-default' : 'text-text-soft hover:text-text-muted'
                     }`}
                   >
                     <span>{tab.label}</span>
@@ -469,7 +470,7 @@ export function OrderSyncDialog({
                       {statusDot(meta.status)}
                     </span>
                     {meta.count > 0 ? (
-                      <span className="ml-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-700">
+                      <span className="ml-0.5 rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-bold tabular-nums text-text-muted">
                         {meta.count}
                       </span>
                     ) : null}
@@ -505,28 +506,23 @@ export function OrderSyncDialog({
               </AnimatePresence>
             </div>
 
-            <footer className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-2.5">
-              <div className="flex items-center gap-3 text-xs text-gray-600">
+            <footer className="flex items-center justify-between gap-3 border-t border-border-soft bg-surface-canvas px-5 py-2.5">
+              <div className="flex items-center gap-3 text-xs text-text-muted">
                 <span className="inline-flex items-center gap-1.5">
                   {statusDot(sheets.status)} <span>{statusLabel(sheets.status, sheets.summary)}</span>
                 </span>
-                <span className="text-gray-300">·</span>
+                <span className="text-text-faint">·</span>
                 <span className="inline-flex items-center gap-1.5">
                   {statusDot(ecwid.status)} <span>{statusLabel(ecwid.status, ecwid.summary)}</span>
                 </span>
-                <span className="text-gray-300">·</span>
+                <span className="text-text-faint">·</span>
                 <span className="inline-flex items-center gap-1.5">
                   {statusDot(exceptions.status)} <span>{statusLabel(exceptions.status, exceptions.summary)}</span>
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isRunning}
-                className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
-              >
+              <Button variant="brand" size="sm" onClick={onClose} disabled={isRunning}>
                 {isRunning ? 'Running…' : 'Close'}
-              </button>
+              </Button>
             </footer>
       </motion.div>
     </motion.div>

@@ -3,6 +3,13 @@ import { tenantQuery } from '@/lib/tenancy/db';
 import { normalizeIdentifier } from '@/lib/product-manuals';
 import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
+
+interface ResolvedManuals {
+  found: boolean;
+  manuals: unknown[];
+}
 
 function buildDocUrls(googleFileId: string) {
   return {
@@ -28,6 +35,18 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       );
     }
 
+    // Cached on the request identifiers (org-scoped). Manuals change only on a
+    // product_manuals upsert; the crosswalk changes on catalog/pairing writes —
+    // so tag with both and let those writers bust it. Skips even the crosswalk
+    // resolve on a cache hit.
+    const cacheKey = `${normalizedItemNumber || 'nis'}:${sku.trim().toUpperCase() || 'nsku'}`;
+    const resolved = await getOrSet<ResolvedManuals>(
+      CACHE_NS.manual,
+      orgId,
+      cacheKey,
+      1800, // 30 min; writes invalidate the tags
+      [CACHE_TAGS.productManuals, CACHE_TAGS.skuCatalog],
+      async () => {
     // ── Hub-first: resolve through sku_catalog ──────────────────────────────
     // Thread orgId so the crosswalk (sku_catalog / sku_platform_ids) only
     // matches THIS tenant's catalog — otherwise org A could resolve to org B's
@@ -111,7 +130,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     }
 
     if (rows.length === 0) {
-      return NextResponse.json({ success: true, found: false, manuals: [] });
+      return { found: false, manuals: [] };
     }
 
     const manuals = rows.map((row) => ({
@@ -127,7 +146,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       ...buildDocUrls(row.google_file_id),
     }));
 
-    return NextResponse.json({ success: true, found: true, manuals });
+    return { found: true, manuals };
+      },
+    );
+
+    return NextResponse.json({ success: true, found: resolved.found, manuals: resolved.manuals });
   } catch (error: any) {
     if (error?.code === '42P01') {
       return NextResponse.json(

@@ -13,7 +13,7 @@ interface SkeletonProps {
 export function SkeletonBase({ className = '', width, height, circle }: SkeletonProps) {
   return (
     <div
-      className={`bg-gray-200 animate-pulse ${circle ? 'rounded-full' : 'rounded-md'} ${className}`}
+      className={`bg-surface-strong animate-pulse ${circle ? 'rounded-full' : 'rounded-md'} ${className}`}
       style={{
         width: width ?? '100%',
         height: height ?? '1rem',
@@ -27,7 +27,7 @@ export function SkeletonRow() {
     <motion.div
       {...framerPresence.tableRow}
       transition={framerTransition.tableRowMount}
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-2.5 border-b border-gray-100"
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-2.5 border-b border-border-hairline"
     >
       <div className="flex flex-col gap-2">
         <SkeletonBase width="60%" height="0.875rem" />
@@ -54,13 +54,13 @@ export function SkeletonOrderCard() {
     <motion.div
       {...framerPresence.upNextRow}
       transition={framerTransition.upNextRowMount}
-      className="relative bg-white px-3 py-2.5 border-b border-gray-100"
+      className="relative bg-surface-card px-3 py-2.5 border-b border-border-hairline"
     >
       {/* Row 1 — meta line */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <SkeletonBase width="48px" height="10px" />
-          <span className="h-1 w-1 rounded-full bg-gray-200" />
+          <span className="h-1 w-1 rounded-full bg-surface-strong" />
           <SkeletonBase width="64px" height="10px" />
         </div>
         <SkeletonBase width="14px" height="14px" />

@@ -12,7 +12,7 @@ const STATUS_DOT: Record<string, string> = {
   pending: 'bg-amber-500',
   hold: 'bg-violet-500',
   solved: 'bg-emerald-500',
-  closed: 'bg-gray-400',
+  closed: 'bg-border-emphasis',
 };
 
 /**
@@ -30,20 +30,20 @@ export function SupportTicketRow({
 }) {
   const sb = statusBadge(ticket.status);
   const pb = priorityBadge(ticket.priority);
-  const dot = STATUS_DOT[String(ticket.status)] ?? 'bg-gray-400';
+  const dot = STATUS_DOT[String(ticket.status)] ?? 'bg-border-emphasis';
 
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
-        'block w-full px-3 py-2 text-left transition',
-        selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50',
+        'ds-raw-button block w-full px-3 py-2 text-left transition',
+        selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-surface-hover',
       )}
     >
       <div className="flex items-center gap-2">
         <span className={cn('h-2 w-2 shrink-0 rounded-full', dot)} />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-gray-900">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text-default">
           {ticket.subject || '(no subject)'}
         </span>
         {pb ? (
@@ -52,7 +52,7 @@ export function SupportTicketRow({
           </span>
         ) : null}
       </div>
-      <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-[11px] text-gray-400">
+      <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-caption text-text-faint">
         <span className="font-semibold uppercase tracking-wide">{sb.label}</span>
         <span>·</span>
         <span>#{ticket.id}</span>

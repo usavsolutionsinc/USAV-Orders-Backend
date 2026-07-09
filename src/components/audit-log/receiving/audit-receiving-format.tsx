@@ -30,10 +30,10 @@ export function relTime(iso: string | null | undefined): string {
 type IconName = 'box' | 'check' | 'photo' | 'user' | 'warn' | 'tag' | 'sync';
 
 const KIND_META: Record<string, { label: string; tone: string; icon: IconName }> = {
-  CARTON_CREATED:      { label: 'Package created',     tone: 'bg-slate-100 text-slate-700 ring-slate-200',   icon: 'box' },
+  CARTON_CREATED:      { label: 'Package created',     tone: 'bg-surface-sunken text-text-muted ring-border-soft',   icon: 'box' },
   CARTON_RECEIVED:     { label: 'Package received',    tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check' },
   CARTON_UNBOXED:      { label: 'Package unboxed',     tone: 'bg-sky-50 text-sky-700 ring-sky-200',          icon: 'box' },
-  LINE_CREATED:        { label: 'Line synced',        tone: 'bg-slate-100 text-slate-700 ring-slate-200',   icon: 'sync' },
+  LINE_CREATED:        { label: 'Line synced',        tone: 'bg-surface-sunken text-text-muted ring-border-soft',   icon: 'sync' },
   RECEIVED:            { label: 'Line received',      tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check' },
   TEST_START:          { label: 'Test started',       tone: 'bg-amber-50 text-amber-700 ring-amber-200',    icon: 'warn' },
   TEST_PASS:           { label: 'Test passed',        tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check' },
@@ -46,7 +46,7 @@ const KIND_META: Record<string, { label: string; tone: string; icon: IconName }>
   ADJUSTED:            { label: 'Stock adjusted',     tone: 'bg-amber-50 text-amber-700 ring-amber-200',    icon: 'warn' },
   RETURNED:            { label: 'Returned',           tone: 'bg-amber-50 text-amber-700 ring-amber-200',    icon: 'warn' },
   SCRAPPED:            { label: 'Scrapped',           tone: 'bg-rose-50 text-rose-700 ring-rose-200',       icon: 'warn' },
-  NOTE:                { label: 'Note',               tone: 'bg-slate-100 text-slate-700 ring-slate-200',   icon: 'tag' },
+  NOTE:                { label: 'Note',               tone: 'bg-surface-sunken text-text-muted ring-border-soft',   icon: 'tag' },
   DISPOSITION_CHANGED: { label: 'Disposition changed', tone: 'bg-amber-50 text-amber-700 ring-amber-200',   icon: 'tag' },
   PHOTO_ADDED:         { label: 'Photo added',        tone: 'bg-sky-50 text-sky-700 ring-sky-200',          icon: 'photo' },
 };
@@ -55,7 +55,7 @@ export function kindMeta(kind: string) {
   return (
     KIND_META[kind] ?? {
       label: kind.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
-      tone: 'bg-slate-100 text-slate-700 ring-slate-200',
+      tone: 'bg-surface-sunken text-text-muted ring-border-soft',
       icon: 'tag' as const,
     }
   );

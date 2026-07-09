@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { RefreshCw } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 
 export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -87,21 +88,25 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
   const anyPending = zohoRefreshMutation.isPending || zohoSyncMutation.isPending || zohoImportOneMutation.isPending;
 
   return (
-    <div className={embedded ? 'space-y-4' : 'space-y-4 border border-gray-200 bg-white p-5'}>
-      <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-gray-200 pb-3' : ''}`}>
+    <div className={embedded ? 'space-y-4' : 'space-y-4 border border-border-soft bg-surface-card p-5'}>
+      <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-border-soft pb-3' : ''}`}>
         <div>
-          <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Zoho Receiving Sync</h2>
-          <p className="text-eyebrow font-bold text-gray-500 mt-1">Refresh the Zoho token, sync expected PO lines, or import one purchase receive.</p>
+          <h2 className="text-sm font-black uppercase tracking-widest text-text-default">Zoho Receiving Sync</h2>
+          <p className="text-eyebrow font-bold text-text-soft mt-1">Refresh the Zoho token, sync expected PO lines, or import one purchase receive.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => void handleRefresh()}
+          <Button
+            variant="ghost"
+            size="md"
+            icon={<RefreshCw />}
+            loading={zohoRefreshMutation.isPending}
             disabled={anyPending}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-gray-700 disabled:opacity-50"
+            onClick={() => void handleRefresh()}
+            className="bg-surface-sunken hover:bg-surface-strong text-micro font-black uppercase tracking-widest text-text-muted"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${zohoRefreshMutation.isPending ? 'animate-spin' : ''}`} />
             {zohoRefreshMutation.isPending ? 'Refreshing...' : 'Refresh Token'}
-          </button>
+          </Button>
+          {/* ds-raw-button */}
           <button
             onClick={() => void handleSync()}
             disabled={anyPending}
@@ -118,15 +123,17 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
           value={purchaseReceiveId}
           onChange={(e) => setPurchaseReceiveId(e.target.value)}
           placeholder="Enter purchase receive ID"
-          className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-micro font-bold uppercase tracking-widest text-gray-900 outline-none focus:border-emerald-500"
+          className="flex-1 rounded-xl border border-border-soft bg-surface-canvas px-3 py-2 text-micro font-bold uppercase tracking-widest text-text-default outline-none focus:border-emerald-500"
         />
-        <button
-          onClick={() => void handleImportOne()}
+        <Button
+          variant="primary"
+          size="md"
           disabled={!purchaseReceiveId.trim() || anyPending}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+          onClick={() => void handleImportOne()}
+          className="text-micro font-black uppercase tracking-widest"
         >
           {zohoImportOneMutation.isPending ? 'Importing...' : 'Import Receive'}
-        </button>
+        </Button>
       </div>
 
       {status && (

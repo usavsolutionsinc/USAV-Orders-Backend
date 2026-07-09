@@ -40,9 +40,9 @@ export const GET = withAuth(async (request, ctx) => {
     }
 
     const [quality, failures, repairs] = await Promise.all([
-      recomputeUnitQuality(serialUnitId),
-      listUnitFailureTags(serialUnitId),
-      listUnitRepairs(serialUnitId),
+      recomputeUnitQuality(serialUnitId, orgId),
+      listUnitFailureTags(serialUnitId, orgId),
+      listUnitRepairs(serialUnitId, orgId),
     ]);
 
     return NextResponse.json({

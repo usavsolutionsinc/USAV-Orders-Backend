@@ -30,6 +30,7 @@ const EVENT_MAP: Record<string, { title: string; tone: TimelineTone }> = {
   TEST_START: { title: 'Testing started', tone: 'info' },
   TEST_PASS: { title: 'Tested — Pass', tone: 'success' },
   TEST_FAIL: { title: 'Tested — Fail', tone: 'danger' },
+  DATA_WIPED: { title: 'Data wiped', tone: 'info' },
   GRADED: { title: 'Graded', tone: 'info' },
   REPAIR_STARTED: { title: 'Repair started', tone: 'warning' },
   REPAIR_COMPLETED: { title: 'Repair completed', tone: 'success' },
@@ -86,6 +87,7 @@ export function inventoryEventsToTimeline(rows: InventoryTimelineRow[]): Timelin
       subtitle,
       ref,
       actor: r.actor_name ?? undefined,
+      sourceEventType: r.event_type,
     };
   });
 }

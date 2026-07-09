@@ -1,12 +1,12 @@
 'use client';
 
-import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 
 type IconButtonTone = 'neutral' | 'accent';
 
 const toneClassName: Record<IconButtonTone, string> = {
-  neutral: 'text-gray-500 hover:text-gray-900',
-  accent: 'text-gray-500 hover:text-blue-600',
+  neutral: 'text-text-soft hover:text-text-default',
+  accent: 'text-text-soft hover:text-blue-600',
 };
 
 export interface IconButtonProps
@@ -19,19 +19,23 @@ export interface IconButtonProps
   tone?: IconButtonTone;
 }
 
-export function IconButton({
-  icon,
-  onClick,
-  className = '',
-  ariaLabel,
-  title,
-  tone = 'neutral',
-  disabled = false,
-  type = 'button',
-  ...rest
-}: IconButtonProps) {
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  {
+    icon,
+    onClick,
+    className = '',
+    ariaLabel,
+    title,
+    tone = 'neutral',
+    disabled = false,
+    type = 'button',
+    ...rest
+  },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       onClick={onClick}
       disabled={disabled}
@@ -47,4 +51,4 @@ export function IconButton({
       {icon}
     </button>
   );
-}
+});

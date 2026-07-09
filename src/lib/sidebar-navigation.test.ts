@@ -7,6 +7,7 @@ import {
   SIDEBAR_PAGE_NAV,
   getSidebarPageNav,
   getSidebarHref,
+  getSidebarRouteKey,
   applyModeTarget,
   resolveSidebarMode,
 } from '@/lib/sidebar-navigation';
@@ -20,7 +21,6 @@ test('getSidebarNavItems omits mobile-restricted routes in mobile mode', () => {
 
   assert.equal(navIds.includes('operations'), false);
   assert.equal(navIds.includes('support'), false);
-  assert.equal(navIds.includes('previous-quarters'), false);
   assert.equal(navIds.includes('admin'), false);
   assert.equal(navIds.includes('dashboard'), true);
   assert.equal(navIds.includes('fba'), true);
@@ -32,7 +32,6 @@ test('getSidebarNavItems omits mobile-restricted routes in mobile mode', () => {
 test('isSidebarRouteMobileRestricted only flags mobile-blocked routes', () => {
   assert.equal(isSidebarRouteMobileRestricted('operations'), true);
   assert.equal(isSidebarRouteMobileRestricted('support'), true);
-  assert.equal(isSidebarRouteMobileRestricted('previous-quarters'), true);
   assert.equal(isSidebarRouteMobileRestricted('admin'), true);
   assert.equal(isSidebarRouteMobileRestricted('dashboard'), false);
   assert.equal(isSidebarRouteMobileRestricted('fba'), false);
@@ -136,9 +135,11 @@ test('getSidebarHref resolves every sidebar page to its real route', () => {
 });
 
 // resolveSidebarMode returns null for single-surface pages (no mode row).
+// NB: `support` gained tickets/voicemail/calls modes in SIDEBAR_PAGE_NAV, so it
+// is no longer modeless — use `ai-chat`, which lives only in APP_SIDEBAR_NAV.
 test('resolveSidebarMode returns null for pages without modes', () => {
-  assert.equal(getSidebarPageNav('support'), undefined);
-  assert.equal(resolveSidebarMode('support', { pathname: '/support', params: new URLSearchParams() }), null);
+  assert.equal(getSidebarPageNav('ai-chat'), undefined);
+  assert.equal(resolveSidebarMode('ai-chat', { pathname: '/ai-chat', params: new URLSearchParams() }), null);
   assert.equal(resolveSidebarMode('settings', { pathname: '/settings', params: new URLSearchParams() }), null);
 });
 
@@ -149,16 +150,32 @@ test('resolveSidebarMode reads the operations mode', () => {
   assert.equal(resolveSidebarMode('operations', at('mode=analytics')), 'analytics');
   assert.equal(resolveSidebarMode('operations', at('mode=insights')), 'insights');
   assert.equal(resolveSidebarMode('operations', at('mode=history')), 'history');
+  assert.equal(resolveSidebarMode('operations', at('mode=signals')), 'signals');
   assert.equal(resolveSidebarMode('operations', at('mode=bogus')), 'live');
 });
 
-// Packing is modeful: bare /packer is Standard; ?packMode= drives Fragile/Multi.
+// Packing is modeful: bare /pack is Standard; ?packMode= drives Fragile/Multi.
+// The surface graduated /packer → /pack (operator-surfaces Phase 7); the mode is
+// param-based so it resolves identically on either route.
 test('resolveSidebarMode reads the packer pack-mode', () => {
-  const at = (search = '') => ({ pathname: '/packer', params: new URLSearchParams(search) });
+  const at = (search = '') => ({ pathname: '/pack', params: new URLSearchParams(search) });
   assert.equal(resolveSidebarMode('packer', at()), 'standard');
   assert.equal(resolveSidebarMode('packer', at('packMode=fragile')), 'fragile');
   assert.equal(resolveSidebarMode('packer', at('packMode=multi')), 'multi');
   assert.equal(resolveSidebarMode('packer', at('packMode=bogus')), 'standard');
+  // Legacy route still resolves the same mode (proxy redirects it to /pack).
+  assert.equal(
+    resolveSidebarMode('packer', { pathname: '/packer', params: new URLSearchParams() }),
+    'standard',
+  );
+});
+
+// The Pack surface + its legacy alias both resolve to the `packer` nav key so the
+// sidebar item stays active across the migration.
+test('getSidebarRouteKey maps the Pack surface + legacy alias to packer', () => {
+  assert.equal(getSidebarRouteKey('/pack'), 'packer');
+  assert.equal(getSidebarRouteKey('/pack/'), 'packer');
+  assert.equal(getSidebarRouteKey('/packer'), 'packer');
 });
 
 // Spot-check the gnarly real-world deep-links the panels read today, so the
@@ -172,6 +189,22 @@ test('resolver matches existing panel derivations for known deep-links', () => {
   assert.equal(resolveSidebarMode('receiving', at('/receiving', 'mode=incoming')), 'incoming');
   assert.equal(resolveSidebarMode('receiving', at('/receiving', 'mode=pickup')), 'pickup');
   assert.equal(resolveSidebarMode('receiving', at('/receiving')), 'receive');
+  // Unbox + Triage are now their own first-class surface routes — resolved
+  // path-based, even with a deep-link param present.
+  assert.equal(resolveSidebarMode('receiving', at('/unbox')), 'receive');
+  assert.equal(resolveSidebarMode('receiving', at('/unbox', 'recvId=123')), 'receive');
+  assert.equal(resolveSidebarMode('receiving', at('/triage')), 'triage');
+  assert.equal(resolveSidebarMode('receiving', at('/triage', 'triview=unfound')), 'triage');
+  assert.equal(resolveSidebarMode('receiving', at('/incoming')), 'incoming');
+  assert.equal(resolveSidebarMode('receiving', at('/incoming', 'state=IN_TRANSIT')), 'incoming');
+  // Pickup + History graduated to their own routes (Phase 9) — resolved path-based
+  // (`/receiving/history` must beat the `/receiving` params fall-through), while the
+  // legacy `?mode=` deep-links still resolve for back-compat.
+  assert.equal(resolveSidebarMode('receiving', at('/pickup')), 'pickup');
+  assert.equal(resolveSidebarMode('receiving', at('/receiving/history')), 'history');
+  assert.equal(resolveSidebarMode('receiving', at('/receiving/history', 'q=abc')), 'history');
+  assert.equal(getSidebarRouteKey('/pickup'), 'receiving');
+  assert.equal(getSidebarRouteKey('/receiving/history'), 'receiving');
   // FBA defaults to combine, not the leftmost-listed plan.
   assert.equal(resolveSidebarMode('fba', at('/fba')), 'combine');
   assert.equal(resolveSidebarMode('fba', at('/fba', 'mode=plan')), 'plan');
@@ -180,6 +213,18 @@ test('resolver matches existing panel derivations for known deep-links', () => {
   assert.equal(resolveSidebarMode('dashboard', at('/dashboard')), 'unshipped');
   assert.equal(resolveSidebarMode('dashboard', at('/dashboard', 'pending=')), 'unshipped');
   // Tech: top-mode switch only — view=testing flips to Testing, else Shipping.
+  // The surface graduated /tech → /test (operator-surfaces Phase 8); the mode is
+  // param-based so it resolves identically on the canonical route + legacy alias.
+  assert.equal(resolveSidebarMode('tech', at('/test', 'view=testing')), 'testing');
+  assert.equal(resolveSidebarMode('tech', at('/test', 'staffId=7')), 'shipping');
   assert.equal(resolveSidebarMode('tech', at('/tech', 'view=testing')), 'testing');
-  assert.equal(resolveSidebarMode('tech', at('/tech', 'staffId=7')), 'shipping');
+  assert.equal(resolveSidebarMode('tech', at('/tech', 'view=testing-history')), 'history');
+});
+
+// The Test surface + its legacy alias both resolve to the `tech` nav key so the
+// sidebar item stays active across the migration.
+test('getSidebarRouteKey maps the Test surface + legacy alias to tech', () => {
+  assert.equal(getSidebarRouteKey('/test'), 'tech');
+  assert.equal(getSidebarRouteKey('/test/'), 'tech');
+  assert.equal(getSidebarRouteKey('/tech'), 'tech');
 });

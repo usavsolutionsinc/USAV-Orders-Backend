@@ -97,7 +97,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const sidebarSearch = (params.search || '').trim();
 
   return (
-    <div className="flex h-full w-full bg-gray-50">
+    <div className="flex h-full w-full bg-surface-canvas">
       <div className="flex-1 min-w-0 overflow-hidden">
         <div className="h-full min-h-0 w-full">
           {renderTab(activeTab, { searchValue: sidebarSearch, mode: params.mode })}

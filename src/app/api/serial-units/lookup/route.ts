@@ -28,9 +28,10 @@ import {
  *     current_location, updated_at, is_return
  *   } | null,
  *   matched_order: {
- *     order_id, product_title, sku, condition, tracking_number,
- *     allocation_state
+ *     order_id, item_number, account_source, product_title, sku, condition,
+ *     tracking_number, allocation_state
  *   } | null   // the shipped sales order this serial belongs to, when known
+ *              // (item_number → listing link via getExternalUrlByItemNumber)
  * }
  */
 export const GET = withAuth(async (request, ctx) => {
@@ -44,7 +45,7 @@ export const GET = withAuth(async (request, ctx) => {
   }
 
   try {
-    const row = await findByNormalizedSerial(trimmed);
+    const row = await findByNormalizedSerial(trimmed, ctx.organizationId);
 
     // Resolve the originating sales order two ways:
     //   1. inventory-v2: serial_units → order_unit_allocations → orders, when
@@ -113,6 +114,8 @@ export const GET = withAuth(async (request, ctx) => {
       matched_order: matched
         ? {
             order_id: matched.order_id,
+            item_number: matched.item_number,
+            account_source: matched.account_source,
             product_title: matched.product_title,
             sku: matched.sku,
             condition: matched.condition,

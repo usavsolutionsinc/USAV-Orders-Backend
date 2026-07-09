@@ -8,6 +8,7 @@
 
 import { useCallback, useState } from 'react';
 import { ALL_ROLES } from '@/lib/auth/permissions-shared';
+import { Button } from '@/design-system/primitives';
 
 interface AddStaffDialogProps {
   open: boolean;
@@ -34,15 +35,27 @@ export function AddStaffDialog({ open, onClose, onCreated }: AddStaffDialogProps
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: trimmed, role, employeeCode: code.trim() || null }),
       });
+      // Parse the body once, tolerantly — a 403 from the admin.manage_staff
+      // gate (or any non-JSON error page) must surface in the banner, not throw
+      // an unhandled rejection that leaves the button silently doing nothing.
+      const data = await r.json().catch(() => ({} as Record<string, unknown>));
       if (!r.ok) {
-        const data = await r.json().catch(() => ({}));
-        setErr(String((data as { error?: string }).error || 'Could not add staff.'));
+        const fallback = r.status === 401 || r.status === 403
+          ? "You don't have permission to add staff."
+          : 'Could not add staff.';
+        setErr(String((data as { error?: string }).error || fallback));
         return;
       }
-      const data = await r.json() as { staff: { id: number } };
-      onCreated(data.staff.id);
+      const newId = (data as { staff?: { id?: number } }).staff?.id;
+      if (typeof newId !== 'number') {
+        setErr('Staff created but the response was malformed — refresh to see them.');
+        return;
+      }
+      onCreated(newId);
       setName(''); setCode(''); setRole('packer');
       onClose();
+    } catch {
+      setErr('Network error — could not add staff. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -51,41 +64,41 @@ export function AddStaffDialog({ open, onClose, onCreated }: AddStaffDialogProps
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-gray-900">Add staff</h2>
-        <p className="mt-0.5 text-xs text-gray-500">
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-surface-card p-5" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-text-default">Add staff</h2>
+        <p className="mt-0.5 text-xs text-text-soft">
           Creates an invited account. Generate an enrollment QR to let them set a PIN.
         </p>
 
         <div className="mt-5 space-y-3">
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Name</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Name</span>
             <input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="Jane Doe"
             />
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Role</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Role</span>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as typeof ALL_ROLES[number])}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
             >
               {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Employee code (optional)</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Employee code (optional)</span>
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="EMP-001"
             />
           </label>
@@ -94,12 +107,12 @@ export function AddStaffDialog({ open, onClose, onCreated }: AddStaffDialogProps
         {err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          <Button variant="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" onClick={submit} disabled={busy || !name.trim()} className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-blue-700">
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={busy || !name.trim()}>
             {busy ? 'Adding…' : 'Add'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

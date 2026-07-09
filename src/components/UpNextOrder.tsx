@@ -171,7 +171,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               switcher matches the global sidebar's view switcher.
               Suppressed entirely when no tabs survive HIDDEN_UP_NEXT_TAB_IDS
               filtering (e.g., when only orders are present). ── */}
-        <div className="sticky top-0 z-10 bg-white pb-0.5">
+        <div className="sticky top-0 z-10 bg-surface-card pb-0.5">
           {sliderItems.length > 0 ? (
             <HorizontalButtonSlider
               items={sliderItems}
@@ -198,7 +198,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                     </span>
                   )}
                   {lateCount > 0 && dueTodayCount > 0 && (
-                    <span className="text-gray-500 text-eyebrow">·</span>
+                    <span className="text-text-soft text-eyebrow">·</span>
                   )}
                   {dueTodayCount > 0 && (
                     <span className="flex items-center gap-1 text-eyebrow font-black uppercase tracking-widest text-amber-500">
@@ -238,7 +238,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         {/* ── Filter bar ── */}
         {tabCounts[effectiveTab] > 0 && (() => {
           const filterBar = (
-            <div className="md:hidden bg-white/90 backdrop-blur-sm border-t border-gray-100 px-1 py-1.5">
+            <div className="md:hidden bg-surface-card/90 backdrop-blur-sm border-t border-border-hairline px-1 py-1.5">
               <UpNextFilterBar
                 searchText={searchText}
                 onSearchChange={setSearchText}
@@ -261,7 +261,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               view-only and triggers the same preview action as a card click. ── */}
         <div className="sticky bottom-0 left-0 right-0 z-20 -mx-1 mt-2 hidden md:block">
           <div className="pointer-events-none absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-white to-transparent" />
-          <div className="bg-white/95 px-1 pb-1.5 pt-1 backdrop-blur-sm">
+          <div className="bg-surface-card/95 px-1 pb-1.5 pt-1 backdrop-blur-sm">
             <ScanToPreviewInput orders={[...nonStockOrders, ...stockOrders]} />
           </div>
         </div>

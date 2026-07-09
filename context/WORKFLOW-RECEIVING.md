@@ -1,7 +1,40 @@
 # Receiving Workflow — Complete Flow
 
 ## Overview
-Receiving handles inbound packages from vendors (purchase orders) and customer returns. Items flow through: scan tracking → auto-match Zoho PO → unbox & classify → QA → disposition.
+
+Receiving handles inbound packages from vendors (purchase orders) and customer returns. Cycle Forge splits the operator experience into two **independent surfaces** that share only the receiving record, tracking/STN, and line pairing — not timestamps or hard gates:
+
+| Surface | Route | Operator job |
+|---------|-------|--------------|
+| **Triage** | `/triage` (`/m/triage` mobile scan) | Door scan → classify → stage → pair → save for unbox |
+| **Unbox** | `/unbox` (`/m/unbox` mobile scan) | Bench scan → item photos → condition → serial → **Receive** (into tenant inventory SoT) |
+
+### Independent mode scans
+
+Scans record `receiving_scans.intake_surface` (`triage` | `unbox`):
+
+- **Triage scan** stamps `received_at` / `received_by` (package accepted at the dock).
+- **Unbox scan** stamps `unbox_opened_at` / `unbox_opened_by` only — never `received_at`. If the carton had no prior triage scan, `receiving.unbox_only_intake = true`.
+- The **Receive** action (`unboxed_at`, line `UNBOXED` workflow stage) posts received quantities to the tenant's
+  external inventory system of record (e.g. Zoho) via `POST /api/receiving/mark-received-po` — not by either scan.
+  The floating button label stays **Receive** / **Receive all** so operator copy matches ERP/inventory integrations.
+
+Small-business tenants can open Unbox without triage. Industry-standard steps surface as **soft recommendations** (`WorkflowRecommendationsStrip`) — never hard stops.
+
+### Photo intent
+
+- **Triage** — package / box exterior (`receiving_package` photo type; filtered via `photoIntent=package`).
+- **Unbox** — item interior (`receiving_item`; `photoIntent=item`).
+
+### Serial numbers
+
+Serial capture is **unbox-only** — the serial is not visible until the carton is opened.
+
+---
+
+## Legacy modes (pre–surface split)
+
+The sections below describe older Mode 1/2/3 components still present under `/receiving` sub-routes during migration. Prefer `/triage` and `/unbox` for new work.
 
 ---
 

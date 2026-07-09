@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { upsertProductManual } from '@/lib/product-manuals';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 
 async function handlePost(request: NextRequest, ctx: AuthContext) {
@@ -28,6 +29,7 @@ async function handlePost(request: NextRequest, ctx: AuthContext) {
 
     // Invalidate all by-category combined caches so the next page load reflects the new manual
     await invalidateCacheTags(['pm:manuals']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.productManuals]);
 
     return NextResponse.json({ success: true, manual }, { status: 201 });
   } catch (error: any) {

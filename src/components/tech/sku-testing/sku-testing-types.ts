@@ -51,5 +51,5 @@ export function needsValueInput(kind?: string | null): boolean {
 
 // Mirrors the surface tokens in TechTestingWorkspace — flat hairline card +
 // quieted section label. Keep these in sync (see /design-demo).
-export const SECTION = 'rounded-2xl bg-white p-4 ring-1 ring-gray-200/70';
-export const EYEBROW = 'text-caption font-semibold text-gray-400';
+export const SECTION = 'rounded-2xl bg-surface-card p-4 ring-1 ring-border-soft/70';
+export const EYEBROW = 'text-caption font-semibold text-text-faint';

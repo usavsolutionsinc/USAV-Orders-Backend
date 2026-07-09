@@ -22,13 +22,15 @@ import {
 } from '@/lib/photos/queries/receiving-list';
 import { createSharePack } from '@/lib/photos/share-packs';
 import { linkPhoto } from '@/lib/photos/service';
-import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
+import { buildExternalId, linkTicket, linkTicketToShipment } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getNasStorageTarget } from '@/lib/tenancy/settings';
 import { upsertClaimSellerMessage } from '@/lib/receiving-claim-seller-message';
+import { claimTicketLinkEntity } from '@/lib/support/tickets';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,11 +48,25 @@ interface ClaimRequest {
   /** Photo row ids (from /api/receiving-photos) to upload to Zendesk as files. */
   attachPhotoIds?: number[];
   /**
+   * CC collaborator emails. Zendesk only emails CCs on a PUBLIC comment, so
+   * these are applied only when `notePublic` is true (matches the UI, which
+   * hides the CC field on an internal note).
+   */
+  ccEmails?: string[];
+  /**
+   * File the opening comment as a PUBLIC reply (emails the requester + CCs)
+   * instead of the default internal note (`public: false`).
+   */
+  notePublic?: boolean;
+  /**
    * Operator "Test create": assemble the ticket exactly as it would be filed,
    * but create nothing — no Zendesk ticket, no NAS archive, no DB writes.
    */
   dryRun?: boolean;
 }
+
+/** Loose email shape — Zendesk validates for real; this just drops obvious junk. */
+const CLAIM_CC_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Create a Zendesk ticket for a receiving claim (damage / missing / wrong
@@ -81,6 +97,20 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const editedSubject = typeof body.subject === 'string' ? body.subject.trim() : '';
     const editedDescription = typeof body.description === 'string' ? body.description.trim() : '';
 
+    // Recipients: default is an internal note. When the operator opts into a
+    // public reply, the opening comment is public and any CC'd emails are added
+    // as collaborators (Zendesk only emails CCs on a public comment).
+    const notePublic = body.notePublic === true;
+    const ccEmails = notePublic && Array.isArray(body.ccEmails)
+      ? Array.from(
+          new Set(
+            body.ccEmails
+              .map((e) => String(e).trim())
+              .filter((e) => CLAIM_CC_EMAIL_RE.test(e)),
+          ),
+        )
+      : [];
+
     // Always build the template — even when the operator edited the subject/body
     // — so we have the PO#/tracking to name the photo attachments after the PO.
     const template = await buildReceivingClaimTemplate({
@@ -89,7 +119,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       claimType,
       reason: body.reason,
       poReceivingLink: poReceivingLink(req, receivingId),
-    });
+    }, ctx.organizationId);
     const subject = editedSubject || template.subject;
     const description = editedDescription || template.description;
 
@@ -103,8 +133,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           : `RCV-${receivingId}`
     ).replace(/[^A-Za-z0-9._-]+/g, '-');
 
-    const entityType = lineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
-    const entityId = lineId != null ? lineId : receivingId;
+    const { entityType, entityId } = claimTicketLinkEntity(lineId, receivingId);
 
     // Dry-run ("Test create"): we've assembled the exact subject/body that would
     // be filed; now short-circuit before any side-effect — no Zendesk ticket, no
@@ -120,6 +149,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         subject,
         description,
         attachCount,
+        notePublic,
+        ccCount: ccEmails.length,
       });
     }
 
@@ -157,7 +188,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             ).toLowerCase();
             const fileName = `${fileLabel}_${String(seq).padStart(3, '0')}.${ext}`;
             try {
-              uploads.push(await uploadFileToZendesk(fileName, pb.bytes, pb.contentType));
+              uploads.push(await uploadFileToZendesk(fileName, pb.bytes, pb.contentType, ctx.organizationId));
             } catch (upErr) {
               console.warn('[zendesk-claim] photo upload failed', row.id, upErr);
             }
@@ -175,14 +206,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
               comment: {
                 body: description,
                 html_body: claimBodyToHtml(description),
-                public: false,
+                public: notePublic,
                 uploads: uploads.length ? uploads : undefined,
               },
               type: 'task',
               tags: ['receiving_claim', `claim_${claimType}`],
               external_id: buildExternalId(entityType, entityId),
+              ...(ccEmails.length
+                ? { email_ccs: ccEmails.map((user_email) => ({ user_email, action: 'put' as const })) }
+                : {}),
             },
             { idempotencyKey: idempotencyKey ?? undefined },
+            ctx.organizationId,
           );
         } catch (err: unknown) {
           if (err instanceof ZendeskNotConfiguredError) {
@@ -280,6 +315,21 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             entityId,
             staffId: ctx.staffId,
           });
+          const shipmentRow = await tenantQuery<{ shipment_id: number | null }>(
+            ctx.organizationId,
+            `SELECT shipment_id FROM receiving
+              WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [receivingId, ctx.organizationId],
+          );
+          const shipmentId = shipmentRow.rows[0]?.shipment_id;
+          if (shipmentId != null) {
+            await linkTicketToShipment({
+              orgId: ctx.organizationId,
+              zendeskTicketId: ticket.id,
+              shipmentId: Number(shipmentId),
+              staffId: ctx.staffId,
+            });
+          }
         } catch (linkErr) {
           console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
         }
@@ -288,9 +338,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // the line (or carton for package-level claims). Best-effort.
         try {
           if (lineId != null) {
-            await pool.query(`UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, lineId]);
+            await tenantQuery(ctx.organizationId, `UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, lineId, ctx.organizationId]);
           } else {
-            await pool.query(`UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, receivingId]);
+            await tenantQuery(ctx.organizationId, `UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, receivingId, ctx.organizationId]);
           }
         } catch (colErr) {
           console.warn('[POST /api/receiving/zendesk-claim] zendesk_ticket column update failed', colErr);
@@ -349,7 +399,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 body: `Photo share pack: ${sharePackUrl}`,
                 html_body: `<p>Photo share pack: <a href="${sharePackUrl}">${sharePackUrl}</a></p>`,
                 public: false,
-              });
+              }, {}, ctx.organizationId);
             } catch (commentErr) {
               console.warn('[zendesk-claim] share pack comment failed', commentErr);
             }

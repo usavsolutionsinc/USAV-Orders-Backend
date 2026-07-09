@@ -8,6 +8,8 @@ export type ClaimPriority = 'low' | 'normal' | 'high' | 'urgent';
 export interface ClaimPhotoInput {
   id: number;
   src: string;
+  /** Full-resolution URL when known (library browse). Falls back to `src`. */
+  displayUrl?: string | null;
   poRef?: string | null;
   caption?: string | null;
 }
@@ -27,6 +29,8 @@ export interface ClaimResult {
   mode: ClaimMode;
   attached: number;
 }
+
+export type ClaimWizardStep = 'pick' | 'compose';
 
 export interface ZendeskClaimModalProps {
   open: boolean;

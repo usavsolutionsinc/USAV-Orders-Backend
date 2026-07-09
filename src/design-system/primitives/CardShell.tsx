@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { useUIModeOptional } from '../providers/UIModeProvider';
 import {
@@ -21,9 +21,13 @@ type CardTone = 'emerald' | 'red' | 'orange' | 'purple' | 'teal' | 'gray';
  *   detaches from the row stack on selection.
  * - `linear`: Linear/Superhuman-style row. Left 3px accent on selection, subtle
  *   bg on hover, no ring or lift. Preserves vertical row rhythm; the selected
- *   card never visually jumps out of the stack. Used by the /tech Up Next list.
+ *   card never visually jumps out of the stack.
+ * - `rail`: recent-activity rail row. Flat row, `bg-blue-50 ring` selection (the
+ *   house selection treatment — always blue, ignores `tone`), `hover:bg-surface-hover`,
+ *   no border/lift. Matches `RailRow` so the /tech Up Next list reads as the same
+ *   primitive as the receiving/testing recent rail.
  */
-type CardShellVariant = 'stripe' | 'framed' | 'linear';
+type CardShellVariant = 'stripe' | 'framed' | 'linear' | 'rail';
 
 interface CardShellProps {
   children: ReactNode;
@@ -48,6 +52,9 @@ interface CardShellProps {
    */
   entrance?: 'self' | 'stagger';
   onClick?: () => void;
+  /** Hover passthrough — wired by callers that anchor a hover preview to the card. */
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
   className?: string;
 }
 
@@ -57,7 +64,7 @@ const TONE_BORDER: Record<CardTone, { idle: string; active: string }> = {
   orange:  { idle: 'border-orange-200',  active: 'border-orange-500' },
   purple:  { idle: 'border-purple-200',  active: 'border-purple-500' },
   teal:    { idle: 'border-teal-200',    active: 'border-teal-500' },
-  gray:    { idle: 'border-gray-200',    active: 'border-gray-400' },
+  gray:    { idle: 'border-border-soft',    active: 'border-border-emphasis' },
 };
 
 const TONE_SELECTED: Record<CardTone, { bg: string; accent: string; ring: string }> = {
@@ -66,10 +73,10 @@ const TONE_SELECTED: Record<CardTone, { bg: string; accent: string; ring: string
   orange:  { bg: 'bg-orange-50/70',   accent: 'before:bg-orange-500',  ring: 'ring-orange-300' },
   purple:  { bg: 'bg-purple-50/70',   accent: 'before:bg-purple-500',  ring: 'ring-purple-300' },
   teal:    { bg: 'bg-teal-50/70',     accent: 'before:bg-teal-500',    ring: 'ring-teal-300' },
-  gray:    { bg: 'bg-gray-50',        accent: 'before:bg-gray-400',    ring: 'ring-gray-300' },
+  gray:    { bg: 'bg-surface-canvas',        accent: 'before:bg-border-emphasis',    ring: 'ring-border-default' },
 };
 
-export function CardShell({
+export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(function CardShell({
   children,
   isExpanded = false,
   isSelected = false,
@@ -78,8 +85,10 @@ export function CardShell({
   variant = 'stripe',
   entrance = 'self',
   onClick,
+  onMouseEnter,
+  onMouseLeave,
   className = '',
-}: CardShellProps) {
+}, ref) {
   const { isMobile } = useUIModeOptional();
   const activeTone = isStock ? 'red' : tone;
   const border = TONE_BORDER[activeTone];
@@ -97,7 +106,7 @@ export function CardShell({
   const desktopStripeClasses = `border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
     isSelected
       ? `${selected.bg} ${selected.accent} before:absolute before:inset-y-0 before:left-0 before:w-[3px]`
-      : 'bg-white'
+      : 'bg-surface-card'
   } ${showActiveBorder ? border.active : `${border.idle} hover:${border.active}`}`;
 
   const desktopFramedClasses = isSelected
@@ -105,7 +114,7 @@ export function CardShell({
     // the ring doesn't get clipped by neighbouring rows' separators.
     ? `relative cursor-pointer rounded-xl px-0 py-3 my-1 transition-all ${selected.bg} ring-2 ring-inset ${selected.ring} shadow-[0_1px_2px_rgba(16,185,129,0.10),0_4px_12px_-4px_rgba(16,185,129,0.15)]`
     // Idle: continues to act as a row in the stack — bottom separator + hover.
-    : `relative cursor-pointer px-0 py-3 transition-colors bg-white border-b-2 ${border.idle} hover:${border.active}`;
+    : `relative cursor-pointer px-0 py-3 transition-colors bg-surface-card border-b-2 ${border.idle} hover:${border.active}`;
 
   // `linear`: row stays in the stack at all times. Selected = left 3px accent
   // bar + tinted bg, no ring, no lift, no rounding. Hover = subtle bg only,
@@ -113,26 +122,37 @@ export function CardShell({
   // children should reserve its own width so opacity reveals don't jump.
   const desktopLinearClasses = isSelected
     ? `relative cursor-pointer px-3 py-2.5 transition-colors ${selected.bg} ${selected.accent} before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r-full`
-    : `relative cursor-pointer px-3 py-2.5 transition-colors bg-white hover:bg-gray-50`;
+    : `relative cursor-pointer px-3 py-2.5 transition-colors bg-surface-card hover:bg-surface-hover`;
+
+  // `rail`: flat recent-activity rail row. Always-blue house selection
+  // (`bg-blue-50 ring-1 ring-inset ring-blue-400`), tone is ignored. Tighter
+  // padding than `linear` to match `RailRow`; hover is bg-only so neighbours
+  // never shift.
+  const desktopRailClasses = `relative cursor-pointer rounded-md px-2 py-1.5 transition-colors ${
+    isSelected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'bg-surface-card hover:bg-surface-hover'
+  }`;
 
   const desktopClasses =
     variant === 'framed'
       ? desktopFramedClasses
       : variant === 'linear'
       ? desktopLinearClasses
+      : variant === 'rail'
+      ? desktopRailClasses
       : desktopStripeClasses;
 
   const mobileClasses = `rounded-2xl border mb-2 px-0 py-3 transition-colors relative ${
     isSelected
       ? `${selected.bg} ring-2 ring-inset ${selected.ring}`
-      : 'bg-white'
+      : 'bg-surface-card'
   } ${showActiveBorder ? border.active : `${border.idle} active:${border.active}`}`;
 
   const presence = isMobile ? framerPresenceMobile.mobileCard : framerPresence.upNextRow;
   const transition = isMobile ? framerTransitionMobile.mobileCardMount : framerTransition.upNextRowMount;
-  // Linear variant intentionally suppresses the lift/scale hover gesture so
-  // rows don't jump and neighbours never shift. Hover state is bg-only.
-  const hoverGesture = !isMobile && variant === 'linear' ? undefined : framerGesture.cardHover;
+  // Linear + rail variants intentionally suppress the lift/scale hover gesture
+  // so rows don't jump and neighbours never shift. Hover state is bg-only.
+  const flatRow = variant === 'linear' || variant === 'rail';
+  const hoverGesture = !isMobile && flatRow ? undefined : framerGesture.cardHover;
 
   // `stagger`: omit own initial/animate/transition so the card inherits the
   // parent stagger-reveal container's hidden→show timeline (the scan-bar spring
@@ -144,14 +164,17 @@ export function CardShell({
 
   return (
     <motion.div
+      ref={ref}
       layout
       {...entranceProps}
       whileHover={hoverGesture}
       whileTap={framerGesture.tapPress}
       onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className={`group ${isMobile ? mobileClasses : desktopClasses} ${className}`}
     >
       {children}
     </motion.div>
   );
-}
+});

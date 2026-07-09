@@ -18,7 +18,7 @@ const TEST_TRACKING = process.env.PW_TEST_TRACKING || '1ZA8337B0325514010';
 test.describe('Zendesk claim — receiving workspace', () => {
   test('files a damage claim and posts to /api/receiving/zendesk-claim', async ({ page }) => {
     // ── Open the receiving workspace and scan a tracking number ──────────
-    await page.goto('/receiving');
+    await page.goto('/unbox');
     await page.getByPlaceholder(/Scan tracking/i).fill(TEST_TRACKING);
     await page.keyboard.press('Enter');
 

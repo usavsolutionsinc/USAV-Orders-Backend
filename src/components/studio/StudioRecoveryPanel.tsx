@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 
 interface StuckItem {
   serialUnitId: number;
@@ -79,26 +80,26 @@ export function StudioRecoveryPanel({ definitionId }: { definitionId: number }) 
 
   return (
     <section>
-      <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+      <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-text-faint">
         Stuck items{items ? ` · ${items.length}` : ''}
       </h3>
 
-      {error && <p className="mb-1.5 text-[11px] font-semibold text-rose-600">{error}</p>}
-      {items === null && <p className="text-xs text-slate-400">Checking…</p>}
+      {error && <p className="mb-1.5 text-caption font-semibold text-rose-600">{error}</p>}
+      {items === null && <p className="text-xs text-text-faint">Checking…</p>}
 
       <ul className="space-y-1.5">
         {(items ?? []).map((it) => (
           <li
             key={it.serialUnitId}
-            className="rounded-md border border-slate-100 bg-slate-50/60 px-2 py-1.5"
+            className="rounded-md border border-border-hairline bg-surface-canvas/60 px-2 py-1.5"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate font-mono text-[11px] font-semibold text-slate-700">
+              <span className="truncate font-mono text-caption font-semibold text-text-muted">
                 {it.serialNumber || `#${it.serialUnitId}`}
               </span>
               <span
                 className={[
-                  'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                  'shrink-0 rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wide',
                   it.status === 'error'
                     ? 'bg-rose-50 text-rose-600'
                     : 'bg-amber-50 text-amber-700',
@@ -107,24 +108,26 @@ export function StudioRecoveryPanel({ definitionId }: { definitionId: number }) 
                 {it.status}
               </span>
             </div>
-            <p className="mt-0.5 truncate text-[10px] text-slate-400">
+            <p className="mt-0.5 truncate text-micro text-text-faint">
               {it.sku ? `${it.sku} · ` : ''}
               {it.currentStatus ?? '—'}
               {it.nodeType ? ` · at ${it.nodeType}` : ''}
             </p>
             {it.lastError && (
-              <p className="mt-0.5 truncate text-[10px] text-rose-400" title={it.lastError}>
+              // ds-allow-title: truncation-only tooltip surfacing the full clipped error on a non-interactive line
+              <p className="mt-0.5 truncate text-micro text-rose-400" title={it.lastError}>
                 ↳ {it.lastError}
               </p>
             )}
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => void recover(it.serialUnitId)}
               disabled={recovering === it.serialUnitId}
-              className="mt-1 w-full rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+              className="mt-1 w-full border border-emerald-200 bg-emerald-50 text-emerald-700 ring-0 hover:bg-emerald-100"
             >
               {recovering === it.serialUnitId ? 'Recovering…' : 'Recover (unpark)'}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

@@ -1,93 +1,74 @@
 'use client';
 
 /**
- * Triage-mode sidebar body: a Found / Unfound toggle over two lists.
- *   • Found   → the recent received-carton rail (ReceivingRecentRail)
- *   • Unfound → cartons Zoho can't match yet (TriageUnfoundList)
+ * Triage-mode sidebar body: a Triage / Prioritize / Unfound toggle over three
+ * lists.
+ *   • Triage    → the combined working feed, newest-scanned first (default).
+ *                 Prioritize ∪ Unfound in ONE list (TriageCombinedList).
+ *   • Prioritize → the priority-sorted door rail, matched only (TriageRecentRail).
+ *   • Unfound   → cartons Zoho can't match yet (TriageUnfoundList).
  *
- * The toggle lives in the URL (`?triview=`) per the sidebar-mode contract, so a
- * deep-link / refresh preserves it. Default is Unfound — the actionable triage
- * list. Both lists drive the right pane via the shared `receiving-select-line`
- * event, so this component owns only the toggle + which list renders.
+ * Prioritize and Unfound are filtered SUBSETS of Triage: linking a PO moves a
+ * carton between those two subsets, but on the Triage tab it stays in the list
+ * (just re-sorted), so the operator never loses what they just scanned in.
+ *
+ * The toggle is pinned above the scroll body in {@link ReceivingSidebarPanel}
+ * via {@link TriageViewToggle}. This component owns only which list renders.
  */
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
-import { AlertTriangle, Flag } from '@/components/Icons';
-import {
-  HorizontalButtonSlider,
-  type HorizontalSliderItem,
-} from '@/components/ui/HorizontalButtonSlider';
-import { sidebarNavOverlayBandClass } from '@/components/layout/header-shell';
-import { ReceivingScannedRail } from './ReceivingScannedRail';
+import { isPendingTriageScanRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { TriageCombinedList } from './TriageCombinedList';
+import { TriageRecentRail } from './TriageRecentRail';
 import { TriageUnfoundList } from './TriageUnfoundList';
+import { TriageDoneList } from './TriageDoneList';
 
-export type TriageView = 'found' | 'unfound';
+export type TriageView = 'triage' | 'found' | 'unfound' | 'done';
 
 export function resolveTriageView(raw: string | null | undefined): TriageView {
-  return raw === 'found' ? 'found' : 'unfound';
+  if (raw === 'found') return 'found';
+  if (raw === 'unfound') return 'unfound';
+  if (raw === 'done') return 'done';
+  return 'triage';
 }
 
 export function TriageSidebarBody({
   selectedLineId,
   selectedRow,
+  leadingRow = null,
   filterText = '',
 }: {
   selectedLineId: number | null;
   selectedRow: ReceivingLineRow | null;
+  /** Pre-resolve scan stub (tracking # title) pinned at the top of the Triage tab. */
+  leadingRow?: ReceivingLineRow | null;
   /** Desktop search text from the sidebar SearchBar (filters both lists). */
   filterText?: string;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const view = resolveTriageView(searchParams.get('triview'));
 
-  const setView = (next: TriageView) => {
-    if (next === view) return;
-    // Different sub-list = different query; don't carry the prior selection.
-    // Clearing lets the new sub-list's rail auto-select its own top.
-    window.dispatchEvent(new CustomEvent('receiving-clear-line'));
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === 'unfound') params.delete('triview');
-    else params.set('triview', next);
-    router.replace(`/receiving?${params.toString()}`);
-  };
-
-  // Shared slider (variant="nav" — filled-active nav pills with icons, matching
-  // the inventory ledger tabs). URL value stays `triview=found`; the
-  // operator-facing label reads "Prioritize" since that rail is the
-  // priority-sorted work view.
-  const TABS: HorizontalSliderItem[] = [
-    { id: 'unfound', label: 'Unfound', icon: AlertTriangle },
-    { id: 'found', label: 'Prioritize', icon: Flag },
-  ];
-
-  return (
-    <div className="flex flex-col">
-      <div className={sidebarNavOverlayBandClass}>
-        <HorizontalButtonSlider
-          className="w-full"
-          items={TABS}
-          value={view}
-          onChange={(id) => setView(id as TriageView)}
-          variant="nav"
-          dense
-          overlay
-          aria-label="Triage view"
-        />
-      </div>
-      {view === 'unfound' ? (
-        <TriageUnfoundList key="rail-triage-unfound" selectedLineId={selectedLineId} filterText={filterText} />
-      ) : (
-        <ReceivingScannedRail
-          key="rail-triage-prioritize"
-          scope="triage"
-          selectedLineId={selectedLineId}
-          selectedRow={selectedRow}
-          filterText={filterText}
-        />
-      )}
-    </div>
+  return view === 'triage' ? (
+    <TriageCombinedList
+      key="rail-triage-combined"
+      selectedLineId={selectedLineId}
+      selectedRow={selectedRow}
+      leadingRow={leadingRow}
+      isRowDisabled={isPendingTriageScanRow}
+      filterText={filterText}
+    />
+  ) : view === 'unfound' ? (
+    <TriageUnfoundList key="rail-triage-unfound" selectedLineId={selectedLineId} filterText={filterText} />
+  ) : view === 'done' ? (
+    <TriageDoneList key="rail-triage-done" selectedLineId={selectedLineId} filterText={filterText} />
+  ) : (
+    <TriageRecentRail
+      key="rail-triage-prioritize"
+      selectedLineId={selectedLineId}
+      selectedRow={selectedRow}
+      filterText={filterText}
+    />
   );
 }
 

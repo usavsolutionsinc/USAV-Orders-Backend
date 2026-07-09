@@ -162,7 +162,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       staffFilterId: staffFilterIdEffective,
       missingTrackingOnly,
       shippedFilter,
-    });
+    }, ctx.organizationId);
 
     const payload = {
       shipped,
@@ -196,7 +196,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 /**
  * PATCH /api/shipped - Update status or fields
  */
-export const PATCH = withAuth(async (req: NextRequest) => {
+export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   const startedAt = Date.now();
   let ok = false;
   try {
@@ -212,7 +212,7 @@ export const PATCH = withAuth(async (req: NextRequest) => {
 
     // Update generic field if provided
     if (field && value !== undefined) {
-      await updateShippedOrderField(id, field, value);
+      await updateShippedOrderField(id, field, value, ctx.organizationId);
     }
 
     await invalidateCacheTags(['shipped', 'orders']);

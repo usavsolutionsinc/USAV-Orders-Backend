@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
-import { AlertTriangle, Loader2, RefreshCw } from '@/components/Icons';
+import { fieldLabel } from '@/design-system/tokens/typography/presets';
+import { Button } from '@/design-system/primitives';
+import { AlertTriangle, RefreshCw } from '@/components/Icons';
 
 type ReplenishTab = 'need' | 'fifo';
 
@@ -152,7 +153,7 @@ export function ReplenishSidebarPanel() {
 
   return (
     <SidebarShell
-      className="font-dm-sans bg-white"
+      className="font-dm-sans bg-surface-card"
       search={{
         value: localSearch,
         onChange: setLocalSearch,
@@ -177,23 +178,17 @@ export function ReplenishSidebarPanel() {
       bodyClassName="py-3"
     >
         {/* Refresh */}
-        <button
+        <Button
           type="button"
+          variant="brand"
+          size="lg"
           onClick={triggerSync}
-          disabled={syncing}
-          className={`h-10 w-full rounded-xl ${sectionLabel} transition-colors flex items-center justify-center gap-2 ${
-            syncing
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              : 'bg-gray-900 text-white hover:bg-black'
-          }`}
+          loading={syncing}
+          icon={<RefreshCw className="h-4 w-4" />}
+          className="w-full"
         >
-          {syncing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
           {syncing ? 'Syncing Zoho…' : 'Refresh Zoho Stock'}
-        </button>
+        </Button>
 
         {/* Urgent banner */}
         {urgentCount > 0 && (
@@ -226,13 +221,13 @@ export function ReplenishSidebarPanel() {
         />
 
         {/* Total */}
-        <div className="mt-4 px-3 py-3 rounded-xl bg-gray-50 border border-gray-100">
+        <div className="mt-4 px-3 py-3 rounded-xl bg-surface-canvas border border-border-hairline">
           <div className="flex items-center justify-between">
             <div>
-              <p className={`${fieldLabel} text-gray-500`}>Total Active</p>
-              <p className={`${fieldLabel} text-gray-400 mt-0.5`}>across all stages</p>
+              <p className={`${fieldLabel} text-text-soft`}>Total Active</p>
+              <p className={`${fieldLabel} text-text-faint mt-0.5`}>across all stages</p>
             </div>
-            <p className="text-2xl font-black text-gray-900 tabular-nums">
+            <p className="text-2xl font-black text-text-default tabular-nums">
               {counts.total_active}
             </p>
           </div>

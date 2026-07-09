@@ -12,6 +12,7 @@ import {
 import type { OrgId } from '@/lib/tenancy/constants';
 import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
 import { countPackerPhotos } from '@/lib/photos/queries/packer-list';
+import { countReceivingPhotos } from '@/lib/photos/queries/receiving-list';
 import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
@@ -89,6 +90,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           receivingId,
           receivingLineId: entityType === 'RECEIVING_LINE' ? entityId : null,
           photoId: result.id,
+          totalPhotoCount: await countReceivingPhotos(ctx.organizationId, receivingId),
           source: 'photos.upload',
         });
       }

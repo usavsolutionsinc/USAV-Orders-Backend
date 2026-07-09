@@ -70,7 +70,7 @@ export const PATCH = withAuth(async (request, ctx) => {
     route: 'PATCH /api/warranty/claims/[id]',
     bodyKey: idempotencyKey ?? null,
     produce: async () => {
-      const result = await updateClaimMeta(id, fields, ctx.staffId ?? null);
+      const result = await updateClaimMeta(id, fields, ctx.staffId ?? null, ctx.organizationId);
       if (!result.ok) return { status: result.status, body: { ok: false, error: result.error } };
       await recordAudit(pool, ctx, request, {
         source: 'warranty-logger',

@@ -5,9 +5,12 @@ import {
   resolveEntity,
   readJourneyEntity,
   readJourneyBrowse,
-  encodeCursor,
-  decodeCursor,
+  readSerialProvenance,
   clampLimit,
+  decodeCursor,
+  encodeCursor,
+  resolveBrowseSources,
+  redactAuditDiffs,
   JOURNEY_SOURCES,
   type JourneyDimension,
   type JourneyFilters,
@@ -15,13 +18,18 @@ import {
 } from '@/lib/operations/journey';
 
 /**
- * GET /api/operations/journey — the Master Operations Journey reader.
+ * GET /api/operations/journey — the Master Operations Journey reader. Two modes,
+ * dispatched by whether a specific record was named:
  *
- *   • ENTITY mode — pass `dim` + one of `order`/`serial`/`tracking`: returns that
- *     entity's complete cross-station journey (SAL + inventory + audit + carrier +
- *     warranty), org-gated. 404 if the entity isn't owned by the caller's org.
- *   • BROWSE mode — no entity: keyset-paginated recent activity, each row tagged
- *     with order/serial/tracking grouping keys so the client buckets journey bands.
+ * ENTITY (Trace) — pass `dim` + one of `order`/`serial`/`tracking` → THAT record's
+ * complete cross-station journey (SAL + inventory + audit + carrier + warranty),
+ * org-gated. 404 if the record isn't owned by the caller's org.
+ *
+ * BROWSE — no record number → the org-wide, filterable, keyset-paginated event
+ * feed (`readJourneyBrowse`), newest-first. Filters: from/until, stations, types,
+ * staffId, status, sources, q; `cursor` (opaque, base64url) paginates and the
+ * response carries the next `cursor`. The `audit` spine is admin-only in browse
+ * (`admin.view_logs`, plan Decision §3.2 Option B) — see `resolveBrowseSources`.
  *
  * Read-only; org-scoped via `withTenantTransaction`. Rows are bucketed by `source`
  * with a `raw` payload matching each source's existing timeline adapter input.
@@ -80,44 +88,61 @@ export const GET = withAuth(
         limit: clampLimit(Number(searchParams.get('limit'))),
       };
 
-      // ENTITY mode — a specific order/serial/tracking is in focus.
-      if (entityValue && entityValue.trim()) {
-        const result = await withTenantTransaction(orgId, async (client) => {
-          const anchors = await resolveEntity(client, orgId, dim, entityValue);
-          if (!anchors) return { notFound: true as const };
-          const events = await readJourneyEntity(client, orgId, anchors, filters);
-          return { notFound: false as const, anchors, events };
-        });
+      // Field-level audit diffs (before/after values) are admin-only (plan
+      // Decision §3.2 Option B). Computed once; drives both the browse-spine
+      // gate and the entity/browse diff redaction below.
+      const canViewAudit = ctx.permissions.has('admin.view_logs');
 
-        if (result.notFound) {
+      // BROWSE mode — no record number → serve the org-wide, filterable,
+      // keyset-paginated event feed instead of the legacy 400 (plan §3.1).
+      if (!entityValue || !entityValue.trim()) {
+        // Audit-spine gate (plan Decision §3.2 Option B): admin-only in browse.
+        const gate = resolveBrowseSources(filters.sources, canViewAudit);
+        if (gate.forbidden) {
           return NextResponse.json(
-            { success: false, error: 'Entity not found' },
-            { status: 404 },
+            {
+              success: false,
+              error: 'The audit spine requires the admin.view_logs permission',
+              code: 'AUDIT_SOURCE_FORBIDDEN',
+            },
+            { status: 403 },
           );
         }
 
+        const cursor = decodeCursor(searchParams.get('cursor'));
+        const { events, nextCursor } = await withTenantTransaction(orgId, (client) =>
+          readJourneyBrowse(client, orgId, { ...filters, sources: gate.sources }, cursor),
+        );
+
         return NextResponse.json({
           success: true,
-          mode: 'entity',
-          entity: result.anchors,
-          events: result.events,
-          nextCursor: null,
+          mode: 'browse',
+          events: redactAuditDiffs(events, canViewAudit),
+          nextCursor: nextCursor ? encodeCursor(nextCursor) : null,
           limit: filters.limit,
         });
       }
 
-      // BROWSE mode — recent activity, keyset-paginated.
-      const cursor = decodeCursor(searchParams.get('cursor'));
-      const { events, nextCursor } = await withTenantTransaction(orgId, (client) =>
-        readJourneyBrowse(client, orgId, filters, cursor),
-      );
+      const result = await withTenantTransaction(orgId, async (client) => {
+        const anchors = await resolveEntity(client, orgId, dim, entityValue);
+        if (!anchors) return { notFound: true as const };
+        const [events, serialProvenance] = await Promise.all([
+          readJourneyEntity(client, orgId, anchors, filters),
+          readSerialProvenance(client, orgId, anchors.serialUnitIds),
+        ]);
+        return { notFound: false as const, anchors: { ...anchors, serialProvenance }, events };
+      });
+
+      if (result.notFound) {
+        return NextResponse.json({ success: false, error: 'Record not found' }, { status: 404 });
+      }
 
       return NextResponse.json({
         success: true,
-        mode: 'browse',
-        entity: null,
-        events,
-        nextCursor: nextCursor ? encodeCursor(nextCursor) : null,
+        mode: 'entity',
+        entity: result.anchors,
+        events: redactAuditDiffs(result.events, canViewAudit),
+        nextCursor: null,
         limit: filters.limit,
       });
     } catch (error) {

@@ -30,7 +30,7 @@ const ACTION_CATALOG: Record<string, { label: string; icon: ReactNode; toneClass
   goals:        { label: 'Goals',        icon: <Flag className="h-3.5 w-3.5" />,           toneClassName: 'text-blue-600' },
   status:       { label: 'Status',       icon: <PackageCheck className="h-3.5 w-3.5" />,   toneClassName: 'text-emerald-600' },
   out_of_stock: { label: 'Out of stock', icon: <AlertTriangle className="h-3.5 w-3.5" />,  toneClassName: 'text-orange-600' },
-  notes:        { label: 'Notes',        icon: <FileText className="h-3.5 w-3.5" />,       toneClassName: 'text-gray-600' },
+  notes:        { label: 'Notes',        icon: <FileText className="h-3.5 w-3.5" />,       toneClassName: 'text-text-muted' },
 };
 
 const ENTITY_ACTION_KEYS: Record<PanelEntityType, string[]> = {

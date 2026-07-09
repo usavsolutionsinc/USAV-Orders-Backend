@@ -38,7 +38,7 @@ export async function resolveOperatorNasFolder(
   try {
     const [org, stations] = await Promise.all([
       getOrganization(organizationId),
-      getStaffStations(staffId),
+      getStaffStations(staffId, organizationId),
     ]);
     const primary = stations.find((s) => s.is_primary)?.station ?? stations[0]?.station;
     const map = (org?.settings.stationNasPhotoFolders ?? {}) as Record<string, string>;

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Link2, Loader2, Plus } from '@/components/Icons';
+import { Link2, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { TextField } from '@/design-system/primitives/TextField';
 import { platformStyle } from '../platform-style';
 import { manualAddPairing } from './sku-pair-api';
@@ -62,13 +63,15 @@ export function ChannelManualAdd({
 
   if (!open) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen(true)}
-        className="mt-1.5 inline-flex items-center gap-1 text-eyebrow font-bold uppercase tracking-wider text-gray-400 transition-colors hover:text-blue-600"
+        icon={<Plus className="h-3 w-3" />}
+        className="mt-1.5 h-auto gap-1 px-0 text-eyebrow font-bold uppercase tracking-wider text-text-faint hover:bg-transparent hover:text-blue-600"
       >
-        <Plus className="h-3 w-3" /> Add {platformStyle(platform).label} identifier
-      </button>
+        Add {platformStyle(platform).label} identifier
+      </Button>
     );
   }
 
@@ -79,22 +82,25 @@ export function ChannelManualAdd({
       <TextField label="Account (optional)" value={account} onChange={setAccount} />
       {error ? <p className="text-micro font-semibold text-red-600">{error}</p> : null}
       <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={close}
-          className="rounded-lg px-2.5 py-1.5 text-micro font-bold uppercase tracking-wider text-gray-500 transition-colors hover:bg-white"
+          className="text-micro font-bold uppercase tracking-wider text-text-soft hover:bg-surface-card"
         >
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => void submit()}
           disabled={saving || (!itemNumber.trim() && !sku.trim())}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-micro font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          loading={saving}
+          icon={<Link2 className="h-3.5 w-3.5" />}
+          className="text-micro font-bold uppercase tracking-wider"
         >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
           Add
-        </button>
+        </Button>
       </div>
     </div>
   );

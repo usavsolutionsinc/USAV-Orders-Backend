@@ -1,20 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { cn } from '@/utils/_cn';
+import { Button } from '@/design-system/primitives';
 import { useWarrantyDenialReasons, useWarrantyMutations } from '@/hooks/useWarrantyMutations';
 import type { WarrantyClaimDetail } from '@/lib/warranty/types';
 
 const REPAIR_OUTCOMES = ['FIXED', 'NOT_FIXABLE', 'PENDING_PARTS', 'RTV'] as const;
-
-function btn(variant: 'primary' | 'danger' | 'ghost' = 'ghost') {
-  return cn(
-    'rounded-md px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50',
-    variant === 'primary' && 'bg-blue-600 text-white hover:bg-blue-700',
-    variant === 'danger' && 'bg-rose-600 text-white hover:bg-rose-700',
-    variant === 'ghost' && 'border border-gray-200 text-gray-700 hover:bg-gray-50',
-  );
-}
 
 /**
  * Status-aware write actions for a warranty claim: lifecycle transitions, a deny
@@ -67,20 +58,20 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
   const canEbay = status === 'REPAIRED' || status === 'CLOSED';
 
   return (
-    <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-4">
+    <div className="border-t border-border-hairline bg-surface-canvas/60 px-5 py-4">
       {error && (
-        <p className="mb-2 text-xs text-rose-600">
+        <p className="mb-2 text-xs text-text-danger">
           {error instanceof Error ? error.message : 'Action failed.'}
         </p>
       )}
 
       {mode === 'deny' ? (
         <div className="space-y-2">
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Denial reason</label>
+          <label className="block text-caption font-medium uppercase tracking-wide text-text-faint">Denial reason</label>
           <select
             value={reasonCode}
             onChange={(e) => setReasonCode(e.target.value)}
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-sm"
           >
             <option value="">Select a reason…</option>
             {denialReasons.map((r) => (
@@ -94,15 +85,16 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
             onChange={(e) => setDenialNotes(e.target.value)}
             placeholder="Notes (optional)"
             rows={2}
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-sm"
           />
           <div className="flex justify-end gap-2">
-            <button type="button" className={btn('ghost')} onClick={reset} disabled={busy}>
+            <Button variant="secondary" size="sm" type="button" onClick={reset} disabled={busy}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
               type="button"
-              className={btn('danger')}
               disabled={busy || !reasonCode}
               onClick={() =>
                 deny.mutate(
@@ -112,23 +104,23 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
               }
             >
               Confirm denial
-            </button>
+            </Button>
           </div>
         </div>
       ) : mode === 'repair' ? (
         <div className="space-y-2">
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Repair attempt</label>
+          <label className="block text-caption font-medium uppercase tracking-wide text-text-faint">Repair attempt</label>
           <textarea
             value={diagnosis}
             onChange={(e) => setDiagnosis(e.target.value)}
             placeholder="Diagnosis"
             rows={2}
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-sm"
           />
           <select
             value={outcome}
             onChange={(e) => setOutcome(e.target.value as (typeof REPAIR_OUTCOMES)[number] | '')}
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-sm"
           >
             <option value="">Outcome (optional — leave blank for in-progress)</option>
             {REPAIR_OUTCOMES.map((o) => (
@@ -142,15 +134,16 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
             onChange={(e) => setRepairNotes(e.target.value)}
             placeholder="Notes (optional)"
             rows={2}
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-sm"
           />
           <div className="flex justify-end gap-2">
-            <button type="button" className={btn('ghost')} onClick={reset} disabled={busy}>
+            <Button variant="secondary" size="sm" type="button" onClick={reset} disabled={busy}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               type="button"
-              className={btn('primary')}
               disabled={busy}
               onClick={() =>
                 logRepair.mutate(
@@ -165,32 +158,33 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
               }
             >
               Log attempt
-            </button>
+            </Button>
           </div>
         </div>
       ) : mode === 'quote' ? (
         <div className="space-y-2">
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Paid-repair quote</label>
+          <label className="block text-caption font-medium uppercase tracking-wide text-text-faint">Paid-repair quote</label>
           <input
             value={quoteLabel}
             onChange={(e) => setQuoteLabel(e.target.value)}
             placeholder="Line item (e.g. Bench repair + parts)"
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-sm"
           />
           <input
             value={quoteAmount}
             onChange={(e) => setQuoteAmount(e.target.value)}
             placeholder="Amount (USD)"
             inputMode="decimal"
-            className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-soft px-2 py-1.5 text-sm"
           />
           <div className="flex justify-end gap-2">
-            <button type="button" className={btn('ghost')} onClick={reset} disabled={busy}>
+            <Button variant="secondary" size="sm" type="button" onClick={reset} disabled={busy}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               type="button"
-              className={btn('primary')}
               disabled={busy || !quoteLabel.trim() || !(Number(quoteAmount) > 0)}
               onClick={() =>
                 createQuote.mutate(
@@ -203,94 +197,99 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
               }
             >
               Create quote
-            </button>
+            </Button>
           </div>
         </div>
       ) : mode === 'ebay' ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-medium uppercase tracking-wide text-gray-400">eBay refurb draft</label>
-            <button type="button" className={btn('ghost')} onClick={reset}>Close</button>
+            <label className="text-caption font-medium uppercase tracking-wide text-text-faint">eBay refurb draft</label>
+            <Button variant="secondary" size="sm" type="button" onClick={reset}>Close</Button>
           </div>
           {ebayDraft.isPending ? (
-            <p className="text-sm text-gray-400">Generating…</p>
+            <p className="text-sm text-text-faint">Generating…</p>
           ) : draft ? (
             <div className="space-y-1">
-              {draft.warning && <p className="text-[11px] text-amber-600">{draft.warning}</p>}
-              <p className="text-sm font-medium text-gray-900">{draft.title}</p>
-              <p className="text-[11px] text-gray-500">Condition {draft.conditionId} · {draft.photoAttachmentIds.length} photo(s)</p>
+              {draft.warning && <p className="text-caption text-text-warning">{draft.warning}</p>}
+              <p className="text-sm font-medium text-text-default">{draft.title}</p>
+              <p className="text-caption text-text-soft">Condition {draft.conditionId} · {draft.photoAttachmentIds.length} photo(s)</p>
               <textarea
                 readOnly
                 value={draft.description}
                 rows={5}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-md border border-border-soft bg-surface-canvas px-2 py-1.5 text-label"
               />
             </div>
           ) : (
-            <p className="text-sm text-rose-600">No draft.</p>
+            <p className="text-sm text-text-danger">No draft.</p>
           )}
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           {canSubmit && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               type="button"
-              className={btn('primary')}
               disabled={busy}
               onClick={() => lifecycle.mutate({ id: claim.id, action: 'submit' })}
             >
               Submit
-            </button>
+            </Button>
           )}
           {canReview && (
             <>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 type="button"
-                className={btn('primary')}
                 disabled={busy}
                 onClick={() => lifecycle.mutate({ id: claim.id, action: 'approve' })}
               >
                 Approve
-              </button>
-              <button type="button" className={btn('danger')} disabled={busy} onClick={() => setMode('deny')}>
+              </Button>
+              <Button variant="danger" size="sm" type="button" disabled={busy} onClick={() => setMode('deny')}>
                 Deny
-              </button>
+              </Button>
             </>
           )}
           {canRepair && (
-            <button type="button" className={btn('primary')} disabled={busy} onClick={() => setMode('repair')}>
+            <Button variant="primary" size="sm" type="button" disabled={busy} onClick={() => setMode('repair')}>
               Log repair
-            </button>
+            </Button>
           )}
           {canHandoffRepair && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               type="button"
-              className={btn('ghost')}
               disabled={busy}
               onClick={() => repairHandoff.mutate({ id: claim.id, issue: claim.productTitle || undefined })}
             >
               Send to repair
-            </button>
+            </Button>
           )}
           {canIssueRma && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               type="button"
-              className={btn('ghost')}
               disabled={busy}
               onClick={() => issueRma.mutate({ id: claim.id })}
             >
               Issue RMA
-            </button>
+            </Button>
           )}
           {canQuote && (
-            <button type="button" className={btn('ghost')} disabled={busy} onClick={() => setMode('quote')}>
+            <Button variant="secondary" size="sm" type="button" disabled={busy} onClick={() => setMode('quote')}>
               Quote paid repair
-            </button>
+            </Button>
           )}
           {canEbay && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               type="button"
-              className={btn('ghost')}
               disabled={busy}
               onClick={() => {
                 setMode('ebay');
@@ -298,19 +297,20 @@ export function WarrantyClaimActions({ claim }: { claim: WarrantyClaimDetail }) 
               }}
             >
               eBay refurb draft
-            </button>
+            </Button>
           )}
           {canClose && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               type="button"
-              className={btn('ghost')}
               disabled={busy}
               onClick={() => lifecycle.mutate({ id: claim.id, action: 'close' })}
             >
               Close
-            </button>
+            </Button>
           )}
-          {status === 'CLOSED' && !canEbay && <span className="text-xs text-gray-400">Claim closed.</span>}
+          {status === 'CLOSED' && !canEbay && <span className="text-xs text-text-faint">Claim closed.</span>}
         </div>
       )}
     </div>

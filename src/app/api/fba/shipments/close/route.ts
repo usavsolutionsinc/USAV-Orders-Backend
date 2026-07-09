@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { AUDIT_ENTITY } from '@/lib/audit-logs';
@@ -142,6 +143,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaShipmentChanged({ action: 'closed', shipmentId: Number(shipment_id || 0), source: 'fba.shipments.close', organizationId: ctx.organizationId });
 
     return NextResponse.json({

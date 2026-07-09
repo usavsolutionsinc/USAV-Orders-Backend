@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { Button } from '@/design-system/primitives';
 
 type Preview =
   | { state: 'loading' }
@@ -19,8 +20,8 @@ type Preview =
   | { state: 'valid'; organizationName: string; email: string; role: string | null };
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
-  'placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+  'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2 text-sm text-text-default ' +
+  'placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
 
 export default function InviteAcceptPage() {
   const params = useParams<{ token: string }>();
@@ -84,19 +85,19 @@ export default function InviteAcceptPage() {
   }, [submitting, token, name, password]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-surface-canvas px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-border-soft bg-surface-card p-6 shadow-sm">
         {preview.state === 'loading' && (
-          <div className="flex flex-col items-center gap-3 py-8 text-gray-500">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-700" />
+          <div className="flex flex-col items-center gap-3 py-8 text-text-soft">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-soft border-t-text-muted" />
             <p className="text-sm">Loading invitation…</p>
           </div>
         )}
 
         {preview.state === 'invalid' && (
           <div className="space-y-2 py-6 text-center">
-            <h1 className="text-lg font-bold text-gray-900">Invitation unavailable</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-lg font-bold text-text-default">Invitation unavailable</h1>
+            <p className="text-sm text-text-soft">
               {preview.reason === 'expired' ? 'This invitation has expired.' :
                preview.reason === 'accepted' ? 'This invitation has already been used.' :
                'This invitation link is not valid.'}
@@ -113,11 +114,11 @@ export default function InviteAcceptPage() {
             className="space-y-4"
           >
             <header className="space-y-1">
-              <p className="text-eyebrow font-bold uppercase tracking-[0.14em] text-gray-400">
+              <p className="text-eyebrow font-bold uppercase tracking-[0.14em] text-text-faint">
                 You&rsquo;re invited to
               </p>
-              <h1 className="text-lg font-bold text-gray-900">{preview.organizationName}</h1>
-              <p className="text-sm text-gray-500">
+              <h1 className="text-lg font-bold text-text-default">{preview.organizationName}</h1>
+              <p className="text-sm text-text-soft">
                 {preview.email}{preview.role ? ` · ${preview.role.replace(/_/g, ' ')}` : ''}
               </p>
             </header>
@@ -125,26 +126,27 @@ export default function InviteAcceptPage() {
             {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-700">Your name</span>
+              <span className="mb-1 block text-xs font-medium text-text-muted">Your name</span>
               <input className={FIELD} value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="Jane Smith" autoComplete="name" required />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-700">Password</span>
+              <span className="mb-1 block text-xs font-medium text-text-muted">Password</span>
               <input className={FIELD} type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="At least 8 characters" autoComplete="current-password" minLength={8} required />
-              <span className="mt-1 block text-xs text-gray-400">
+              <span className="mt-1 block text-xs text-text-faint">
                 New here? This becomes your password. Already have an account with this email? Enter its password.
               </span>
             </label>
 
-            <button
+            <Button
               type="submit"
+              variant="brand"
               disabled={submitting || !name || password.length < 8}
-              className="w-full rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+              className="w-full"
             >
               {submitting ? 'Joining…' : `Join ${preview.organizationName}`}
-            </button>
+            </Button>
           </form>
         )}
       </div>

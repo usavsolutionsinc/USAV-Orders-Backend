@@ -55,20 +55,21 @@ export function AmazonConnectModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
-        <h2 className="text-[16px] font-semibold text-gray-900">Connect Amazon</h2>
-        <p className="mt-1 text-[12px] text-gray-500">
+      {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-scrim/40 backdrop-blur-sm" />
+      <div className="relative w-full max-w-md rounded-2xl border border-border-soft bg-surface-card p-5 shadow-2xl">
+        <h2 className="text-[16px] font-semibold text-text-default">Connect Amazon</h2>
+        <p className="mt-1 text-label text-text-soft">
           Choose the seller region, then authorize. Multi-tenant OAuth requires a published Selling-Partner app;
           until then, paste a self-authorized refresh token.
         </p>
 
         <label className="mt-4 block">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Region</span>
+          <span className="text-caption font-semibold uppercase tracking-wide text-text-soft">Region</span>
           <select
             value={region}
             onChange={(e) => setRegion(e.target.value as 'NA' | 'EU' | 'FE')}
-            className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className="mt-1 block w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-[13px] text-text-default focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
           >
             {REGIONS.map((r) => (
               <option key={r.value} value={r.value}>{r.label}</option>
@@ -82,8 +83,8 @@ export function AmazonConnectModal({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
 
-        <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-gray-400">
-          <span className="h-px flex-1 bg-gray-200" /> or paste a refresh token <span className="h-px flex-1 bg-gray-200" />
+        <div className="my-4 flex items-center gap-3 text-caption font-medium uppercase tracking-wide text-text-faint">
+          <span className="h-px flex-1 bg-surface-strong" /> or paste a refresh token <span className="h-px flex-1 bg-surface-strong" />
         </div>
 
         <div className="space-y-2">
@@ -91,18 +92,18 @@ export function AmazonConnectModal({ onClose }: { onClose: () => void }) {
             value={refreshToken}
             onChange={(e) => setRefreshToken(e.target.value)}
             placeholder="LWA refresh token (Atzr|…)"
-            className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] text-gray-900 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className="block w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2 font-mono text-label text-text-default focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
             spellCheck={false}
           />
           <input
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value)}
             placeholder="Seller ID (optional)"
-            className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-900 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className="block w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-label text-text-default focus:border-border-emphasis focus:outline-none focus:ring-2 focus:ring-border-soft"
           />
         </div>
 
-        {error && <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700">{error}</div>}
+        {error && <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-caption font-medium text-red-700">{error}</div>}
 
         <div className="mt-4 flex items-center justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>

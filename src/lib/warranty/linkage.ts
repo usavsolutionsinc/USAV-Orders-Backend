@@ -24,6 +24,7 @@ interface ClaimCore {
   orderId: number | null;
   customerId: number | null;
   serialNumber: string | null;
+  serialUnitId: number | null;
   sku: string | null;
   productTitle: string | null;
   sourceSystem: string | null;
@@ -46,6 +47,7 @@ async function loadClaimCore(
     order_id: number | null;
     customer_id: number | null;
     serial_number: string | null;
+    serial_unit_id: number | null;
     sku: string | null;
     product_title: string | null;
     source_system: string | null;
@@ -55,10 +57,10 @@ async function loadClaimCore(
     repair_service_id: number | null;
   }>(
     orgId
-      ? `SELECT id, status, order_id, customer_id, serial_number, sku, product_title,
+      ? `SELECT id, status, order_id, customer_id, serial_number, serial_unit_id, sku, product_title,
             source_system, source_order_id, source_tracking_number, rma_id, repair_service_id
        FROM warranty_claims WHERE id = $1 AND organization_id = $2 FOR UPDATE`
-      : `SELECT id, status, order_id, customer_id, serial_number, sku, product_title,
+      : `SELECT id, status, order_id, customer_id, serial_number, serial_unit_id, sku, product_title,
             source_system, source_order_id, source_tracking_number, rma_id, repair_service_id
        FROM warranty_claims WHERE id = $1 FOR UPDATE`,
     orgId ? [claimId, orgId] : [claimId],
@@ -71,6 +73,7 @@ async function loadClaimCore(
     orderId: r.order_id == null ? null : Number(r.order_id),
     customerId: r.customer_id == null ? null : Number(r.customer_id),
     serialNumber: r.serial_number,
+    serialUnitId: r.serial_unit_id == null ? null : Number(r.serial_unit_id),
     sku: r.sku,
     productTitle: r.product_title,
     sourceSystem: r.source_system,
@@ -79,6 +82,37 @@ async function loadClaimCore(
     rmaId: r.rma_id == null ? null : Number(r.rma_id),
     repairServiceId: r.repair_service_id == null ? null : Number(r.repair_service_id),
   };
+}
+
+/**
+ * Has the physical unit already come back through the inventory system (Path
+ * A `linkReturnedSerial` or Path C `recordDisposition`), independent of this
+ * claim's own paperwork? Checks the unit's CURRENT status against the
+ * "actively in returns triage" set — RETURNED (just scanned back in),
+ * TRIAGED, or RMA (mid-disposition). Deliberately excludes STOCKED: a unit
+ * back in general stock could equally be fresh inventory that never shipped,
+ * so on its own it isn't evidence of a return. Read-only / informational —
+ * this never changes whether issueRmaForClaim creates a new authorization,
+ * it only lets the caller show "this unit is already here" instead of
+ * treating RMA issuance as pure paperwork with zero inventory awareness
+ * (returns-unification plan §6 Gap #3 / §7.2).
+ */
+const ALREADY_RETURNED_STATUSES = new Set(['RETURNED', 'TRIAGED', 'RMA']);
+
+async function unitAlreadyReturned(
+  client: PoolClient,
+  serialUnitId: number | null,
+  orgId?: OrgId | null,
+): Promise<boolean> {
+  if (serialUnitId == null) return false;
+  const { rows } = await client.query<{ current_status: string }>(
+    orgId
+      ? `SELECT current_status::text AS current_status FROM serial_units WHERE id = $1 AND organization_id = $2`
+      : `SELECT current_status::text AS current_status FROM serial_units WHERE id = $1`,
+    orgId ? [serialUnitId, orgId] : [serialUnitId],
+  );
+  const status = rows[0]?.current_status;
+  return status != null && ALREADY_RETURNED_STATUSES.has(status);
 }
 
 async function insertEvent(
@@ -103,7 +137,13 @@ async function insertEvent(
 // ─── Issue / link an RMA ─────────────────────────────────────────────────────
 
 export type RmaLinkResult =
-  | { ok: true; claim: WarrantyClaimDetail; rma: RmaAuthorizationRow }
+  | {
+      ok: true;
+      claim: WarrantyClaimDetail;
+      rma: RmaAuthorizationRow;
+      /** True when the physical unit is already back (see unitAlreadyReturned). */
+      alreadyReturned: boolean;
+    }
   | { ok: false; status: 404 | 409 | 500; error: string };
 
 export async function issueRmaForClaim(
@@ -124,19 +164,22 @@ export async function issueRmaForClaim(
 ): Promise<RmaLinkResult> {
   const txOrg: OrgId = orgId ?? USAV_ORG_ID;
   let rma: RmaAuthorizationRow | null = null;
+  let alreadyReturned = false;
   try {
     // Phase 1: precheck the claim in its own transaction (mirrors the original
     // BEGIN…COMMIT that closed before createAuthorization opened its own conn).
     const pre = await withTenantTransaction(txOrg, async (client): Promise<
       | { ok: false; status: 404 | 409; error: string }
-      | { ok: true; orderId: number | null; customerId: number | null }
+      | { ok: true; orderId: number | null; customerId: number | null; alreadyReturned: boolean }
     > => {
       const claim = await loadClaimCore(client, claimId, orgId);
       if (!claim) return { ok: false, status: 404, error: 'claim not found' };
       if (claim.rmaId) return { ok: false, status: 409, error: 'claim already has an RMA' };
-      return { ok: true, orderId: claim.orderId, customerId: claim.customerId };
+      const alreadyReturned = await unitAlreadyReturned(client, claim.serialUnitId, orgId);
+      return { ok: true, orderId: claim.orderId, customerId: claim.customerId, alreadyReturned };
     });
     if (!pre.ok) return pre;
+    alreadyReturned = pre.alreadyReturned;
 
     // createAuthorization manages its own connection + per-year number; call it
     // outside the precheck transaction, then link the result in.
@@ -185,7 +228,7 @@ export async function issueRmaForClaim(
 
   const claim = await getClaim(claimId, orgId ?? undefined);
   if (!claim || !rma) return { ok: false, status: 500, error: 'claim vanished after RMA link' };
-  return { ok: true, claim, rma };
+  return { ok: true, claim, rma, alreadyReturned };
 }
 
 export async function linkRmaByNumber(
@@ -199,9 +242,10 @@ export async function linkRmaByNumber(
   if (!rma) return { ok: false, status: 404, error: 'RMA not found' };
 
   const txOrg: OrgId = orgId ?? USAV_ORG_ID;
+  let alreadyReturned = false;
   try {
     const linkResult = await withTenantTransaction(txOrg, async (client): Promise<
-      { ok: false; status: 404 | 409; error: string } | { ok: true }
+      { ok: false; status: 404 | 409; error: string } | { ok: true; alreadyReturned: boolean }
     > => {
       const claim = await loadClaimCore(client, claimId, orgId);
       if (!claim) return { ok: false, status: 404, error: 'claim not found' };
@@ -219,9 +263,10 @@ export async function linkRmaByNumber(
         { rmaId: rma.id, rmaNumber: rma.rmaNumber, issued: false },
         actorStaffId,
       );
-      return { ok: true };
+      return { ok: true, alreadyReturned: await unitAlreadyReturned(client, claim.serialUnitId, orgId) };
     });
     if (!linkResult.ok) return linkResult;
+    alreadyReturned = linkResult.alreadyReturned;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'link RMA failed';
     return { ok: false, status: 500, error: message };
@@ -229,7 +274,7 @@ export async function linkRmaByNumber(
 
   const claim = await getClaim(claimId, orgId ?? undefined);
   if (!claim) return { ok: false, status: 404, error: 'claim not found' };
-  return { ok: true, claim, rma };
+  return { ok: true, claim, rma, alreadyReturned };
 }
 
 // ─── Repair handoff ──────────────────────────────────────────────────────────

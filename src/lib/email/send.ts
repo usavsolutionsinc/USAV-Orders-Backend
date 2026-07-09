@@ -12,6 +12,8 @@
  * `send()` if a customer needs it (add the `nodemailer` dep back first).
  */
 
+import { PRODUCT_NAME } from '@/lib/branding/constants';
+
 export interface EmailMessage {
   to: string;
   subject: string;
@@ -31,7 +33,7 @@ export interface EmailSendResult {
 function defaultFrom(): string {
   return (
     process.env.EMAIL_FROM ||
-    'USAV Orders <onboarding@localhost>'
+    `${PRODUCT_NAME} <onboarding@localhost>`
   );
 }
 

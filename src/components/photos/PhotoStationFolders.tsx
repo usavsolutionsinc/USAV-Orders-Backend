@@ -1,96 +1,204 @@
 'use client';
 
+import { useState } from 'react';
 import {
-  Camera,
-  MessageSquare,
+  Folder,
+  Image as ImageIcon,
+  Loader2,
   Package,
   PackageOpen,
+  Plus,
   ShoppingCart,
+  Tag,
   Wrench,
+  ZendeskMark,
+  Truck,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
+import { useImageTypes } from '@/hooks/useImageTypes';
 import type {
-  PhotoLibraryFilterState,
+  OutboundDocumentTypeFilter,
+  OutboundMediaFilter,
   PhotoLibrarySourceScope,
 } from '@/lib/photos/library-filter-state';
-import type { LibraryPhoto } from './photo-library-types';
-import { PhotoDateTree, type PhotoDateSelection } from './PhotoDateTree';
+import { OutboundDocumentTypeFilters } from './OutboundDocumentTypeFilters';
+import { toast } from '@/lib/toast';
+
+/** A paired icon component (mirrors the Icons.tsx glyph signature). */
+type IconCmp = typeof Package;
 
 /**
- * Two-step contextual browse: first **pick the image type** (unboxing / packing /
- * …), then **drill one date tree** for that type. The type picker is a single
- * grouped control (not six individual expandable folders), and the date tree is a
- * single grouped section below it — so years/months/days stay scoped to one
- * stream instead of mixing every station. "All" is the flat, sorted overview.
+ * Image-type picker — the library's primary sidebar navigator. The five built-in
+ * types (Unboxing / Pickups / Packing / Repair / Claims) scope the grid by
+ * capture entity; operator-added custom types scope it by `photo_type` and route
+ * uploads to their own GCS path. Picking a type scopes the grid (and its date
+ * "folders"); the "+" adds a new custom type. Date navigation lives in the right
+ * panel, not here.
  */
-const TYPES: { id: PhotoLibrarySourceScope; label: string; icon: typeof Camera }[] = [
-  { id: 'all', label: 'All', icon: Camera },
-  { id: 'unboxing', label: 'Unboxing', icon: PackageOpen },
-  { id: 'local_pickup', label: 'Pickups', icon: ShoppingCart },
-  { id: 'packing', label: 'Packing', icon: Package },
-  { id: 'repair', label: 'Repair', icon: Wrench },
-  { id: 'claims', label: 'Claims', icon: MessageSquare },
-];
+const ICONS: Record<string, IconCmp> = {
+  PackageOpen,
+  ShoppingCart,
+  Package,
+  Wrench,
+  ZendeskMark,
+  Tag,
+  Folder,
+  Image: ImageIcon,
+  Truck,
+};
+
+/** Sidebar-only glyph overrides — preview Zendesk ticket mark for Claims without
+ *  changing the `image-types` string key used elsewhere yet. */
+const BUILTIN_ICON_OVERRIDE: Partial<Record<string, IconCmp>> = {
+  claims:   ZendeskMark,
+  Truck,
+  FileText: ImageIcon,
+};
 
 export function PhotoStationFolders({
   activeScope,
-  photos,
-  filters,
-  onSelectScope,
-  onSelectDate,
+  activeImageType,
+  activeDocumentType = 'all',
+  activeOutboundMedia = 'documents',
+  inferredScope = null,
+  onSelect,
+  onDocumentTypeSelect,
+  onPackPhotosSelect,
 }: {
   activeScope: PhotoLibrarySourceScope;
-  /** Loaded photos for the active type — feeds the date tree below. */
-  photos: LibraryPhoto[];
-  filters: PhotoLibraryFilterState;
-  onSelectScope: (scope: PhotoLibrarySourceScope) => void;
-  onSelectDate: (sel: PhotoDateSelection) => void;
+  /** Active custom image type key, or null when a built-in scope is active. */
+  activeImageType: string | null;
+  /** Outbound scope — document kind chip filter. */
+  activeDocumentType?: OutboundDocumentTypeFilter;
+  activeOutboundMedia?: OutboundMediaFilter;
+  /**
+   * Scope derived from the photos currently in view (their entity links), used to
+   * highlight the matching built-in row when no scope is explicitly picked — e.g.
+   * an unboxing PO folder lights up "Unboxing" under the "All photos" scope.
+   */
+  inferredScope?: PhotoLibrarySourceScope | null;
+  /** Built-in → `{ scope }`; custom → `{ imageType }`. */
+  onSelect: (sel: { scope?: PhotoLibrarySourceScope; imageType?: string }) => void;
+  onDocumentTypeSelect?: (documentType: OutboundDocumentTypeFilter) => void;
+  onPackPhotosSelect?: () => void;
 }) {
-  const activeType = TYPES.find((t) => t.id === activeScope) ?? TYPES[0];
-  const ActiveIcon = activeType.icon;
-  const showDates = activeScope !== 'all';
+  const { builtIn, custom, isLoading, createType } = useImageTypes();
+  const [adding, setAdding] = useState(false);
+  // The row to light up: an explicitly-picked scope wins; otherwise fall back to
+  // the scope inferred from the photos in view. A custom image type being active
+  // suppresses the built-in highlight entirely.
+  const highlightScope: PhotoLibrarySourceScope | null = activeImageType
+    ? null
+    : activeScope !== 'all'
+      ? activeScope
+      : inferredScope;
+
+  const addType = async () => {
+    const label = window.prompt('New media type name')?.trim();
+    if (!label) return;
+    setAdding(true);
+    try {
+      const created = await createType.mutateAsync({ label });
+      onSelect({ imageType: created.key });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create media type');
+    } finally {
+      setAdding(false);
+    }
+  };
 
   return (
-    <div className="space-y-3">
-      {/* Step 1 — pick the image type. */}
-      <div className="space-y-1.5">
-        <p className="px-1 text-micro font-black uppercase tracking-wider text-gray-400">Image type</p>
-        <div className="flex flex-wrap gap-1">
-          {TYPES.map((type) => {
-            const active = activeScope === type.id;
-            const Icon = type.icon;
-            return (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => onSelectScope(type.id)}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold transition',
-                  active ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                )}
-              >
-                <Icon className="h-3 w-3" />
-                {type.label}
-              </button>
-            );
-          })}
-        </div>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">Media type</p>
+        <HoverTooltip label="Add media type" asChild>
+          <IconButton
+            icon={adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            ariaLabel="Add media type"
+            onClick={addType}
+            disabled={adding}
+            className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-surface-sunken disabled:opacity-40"
+          />
+        </HoverTooltip>
       </div>
 
-      {/* Step 2 — drill the selected type's calendar (one grouped tree). */}
-      {showDates ? (
-        <div className="space-y-1.5 border-t border-gray-100 pt-3">
-          <p className="flex items-center gap-1 px-1 text-micro font-black uppercase tracking-wider text-gray-400">
-            <ActiveIcon className="h-3 w-3" /> {activeType.label} · by date
-          </p>
-          <PhotoDateTree photos={photos} filters={filters} onSelect={onSelectDate} embedded />
-        </div>
-      ) : (
-        <p className="border-t border-gray-100 px-1 pt-3 text-[11px] leading-relaxed text-gray-400">
-          Showing all photos, newest first. Pick a type above to browse it by date.
-        </p>
-      )}
+      <ul className="space-y-1">
+        {builtIn.map((type) => {
+          const active = highlightScope === type.key;
+          const Icon = BUILTIN_ICON_OVERRIDE[type.key] ?? ICONS[type.icon] ?? Folder;
+          return (
+            <TypeRow
+              key={type.key}
+              label={type.label}
+              Icon={Icon}
+              active={active}
+              onClick={() => onSelect({ scope: type.key })}
+            />
+          );
+        })}
+
+        {custom.map((type) => {
+          const active = activeImageType === type.key;
+          const Icon = (type.icon && ICONS[type.icon]) || Folder;
+          return (
+            <TypeRow
+              key={type.id}
+              label={type.label}
+              Icon={Icon}
+              active={active}
+              onClick={() => onSelect({ imageType: type.key })}
+            />
+          );
+        })}
+
+        {isLoading && custom.length === 0 ? (
+          <li className="flex items-center gap-2 px-3 py-2 text-caption text-text-faint">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </li>
+        ) : null}
+      </ul>
+
+      {activeScope === 'outbound' && onDocumentTypeSelect && onPackPhotosSelect ? (
+        <OutboundDocumentTypeFilters
+          documentType={activeDocumentType}
+          outboundMedia={activeOutboundMedia}
+          onSelectDocumentType={onDocumentTypeSelect}
+          onSelectPackPhotos={onPackPhotosSelect}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function TypeRow({
+  label,
+  Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  Icon: IconCmp;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cn(
+          'ds-raw-button flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition',
+          active
+            ? 'bg-blue-50 text-blue-900 ring-1 ring-inset ring-blue-400'
+            : 'text-text-muted hover:bg-surface-hover',
+        )}
+      >
+        <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-blue-600' : 'text-text-faint')} />
+        <span className="flex-1 truncate">{label}</span>
+      </button>
+    </li>
   );
 }

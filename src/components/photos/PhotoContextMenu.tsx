@@ -68,11 +68,11 @@ export function PhotoContextMenu({
       ref={ref}
       role="menu"
       style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: zIndex.panelPopover + 5 }}
-      className="min-w-[200px] overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl"
+      className="min-w-[200px] overflow-hidden rounded-xl border border-border-soft bg-surface-card p-1 shadow-xl"
     >
       {items.map((item) => (
         <div key={item.key}>
-          {item.separatorBefore ? <div className="my-1 border-t border-gray-100" /> : null}
+          {item.separatorBefore ? <div className="my-1 border-t border-border-hairline" /> : null}
           <button
             type="button"
             role="menuitem"
@@ -81,12 +81,12 @@ export function PhotoContextMenu({
               onClose();
             }}
             className={cn(
-              'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-semibold transition',
-              item.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-gray-700 hover:bg-gray-50',
+              'ds-raw-button flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-label font-semibold transition',
+              item.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-text-muted hover:bg-surface-hover',
             )}
           >
             {item.icon ? (
-              <span className={cn('shrink-0', item.danger ? 'text-rose-500' : 'text-gray-400')}>{item.icon}</span>
+              <span className={cn('shrink-0', item.danger ? 'text-rose-500' : 'text-text-faint')}>{item.icon}</span>
             ) : null}
             {item.label}
           </button>

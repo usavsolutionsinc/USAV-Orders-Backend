@@ -2,9 +2,9 @@
  * Smoke tests for the three workspace mode displays that were refactored to
  * share components as part of the mode-first architecture:
  *
- *   1. Unbox mode  (/receiving)              — LineEditPanel, Print · receive bar
- *   2. Triage mode (/receiving?mode=triage)  — LineEditPanel, Save for unbox button
- *   3. Testing mode (/tech?view=testing)     — TestingPanel (shared CartonContextCard
+ *   1. Unbox mode  (/unbox)                  — LineEditPanel, Receive bar
+ *   2. Triage mode (/triage)                 — LineEditPanel, Save for unbox button
+ *   3. Testing mode (/test?view=testing)     — TestingPanel (shared CartonContextCard
  *                                              + LineEditToolbar) + Pass · … action
  *
  * These tests guard against regressions where the shared LineEditToolbar /
@@ -34,10 +34,10 @@ test.use({ storageState: 'tests/.auth/admin.json' });
 
 test.describe('Receiving + Tech workspace mode smoke tests', () => {
   // ── 1. UNBOX MODE (/receiving) ────────────────────────────────────────────
-  test('unbox mode — page loads and right pane shows Print · receive bar when a line is present', async ({
+  test('unbox mode — page loads and right pane shows Receive bar when a line is present', async ({
     page,
   }) => {
-    await page.goto('/receiving');
+    await page.goto('/unbox');
 
     // The split pane's <aside role="complementary"> is always rendered; it is
     // the stable chrome anchor regardless of rail data. Wait for it to appear
@@ -79,15 +79,15 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
     // CartonContextCard Platform pill + the unbox terminal action.
     await expect(page.getByRole('button', { name: /Platform/i }).first()).toBeVisible({ timeout: PANEL_TIMEOUT });
     await expect(
-      page.getByRole('button', { name: /Print\s*[·•]\s*receive/i }),
+      page.getByRole('button', { name: /^Receive(\s+all)?$/i }),
     ).toBeVisible({ timeout: PANEL_TIMEOUT });
   });
 
-  // ── 2. TRIAGE MODE (/receiving?mode=triage) ───────────────────────────────
+  // ── 2. TRIAGE MODE (/triage) ──────────────────────────────────────────────
   test('triage mode — page loads and right pane shows Save for unbox button when a line is present', async ({
     page,
   }) => {
-    await page.goto('/receiving?mode=triage');
+    await page.goto('/triage');
 
     const aside = page.getByRole('complementary');
     await expect(aside).toBeVisible({ timeout: BOOT_TIMEOUT });
@@ -114,17 +114,17 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
       page.getByRole('button', { name: /Save for unbox/i }),
     ).toBeVisible({ timeout: PANEL_TIMEOUT });
 
-    // …and the unbox-only "Print · receive" action bar must be ABSENT in triage.
+    // …and the unbox-only Receive action bar must be ABSENT in triage.
     await expect(
-      page.getByRole('button', { name: /Print\s*[·•]\s*receive/i }),
+      page.getByRole('button', { name: /^Receive(\s+all)?$/i }),
     ).toHaveCount(0);
   });
 
-  // ── 3. TESTING MODE (/tech?view=testing) ─────────────────────────────────
+  // ── 3. TESTING MODE (/test?view=testing) ─────────────────────────────────
   test('testing mode — page loads, toolbar shows audit/pair actions, and Pass · button is present when a line is open', async ({
     page,
   }) => {
-    await page.goto('/tech?view=testing');
+    await page.goto('/test?view=testing');
 
     // The DashboardSidebar wraps TechSidebarPanel — it renders an <aside> for
     // the left rail on desktop. Wait for any aside to appear.
@@ -178,7 +178,7 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
     request,
   }) => {
     // Authed by the same storageState (the request fixture carries the cookie).
-    const res = await request.get('/api/receiving-lines?view=testing&limit=1');
+    const res = await request.get('/api/testing/receiving-lines?view=testing&limit=1');
     const data = await res.json().catch(() => ({}));
     const line = (data.receiving_lines || [])[0];
     test.skip(!line || line.receiving_id == null, 'no openable testing line in this environment');
@@ -192,7 +192,7 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
       }
     }, line.id);
 
-    await page.goto('/tech?view=testing');
+    await page.goto('/test?view=testing');
 
     await expect(page.locator('#__next-error-overlay, [data-nextjs-error]')).toHaveCount(0);
 

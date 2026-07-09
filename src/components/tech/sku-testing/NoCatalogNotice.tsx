@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Loader2 } from '@/components/Icons';
 import { toast } from '@/lib/toast';
+import { Button } from '@/design-system/primitives';
 import { ensureCatalog } from './sku-testing-api';
 
 /** Amber prompt to create a SKU catalog entry when the line has none. */
@@ -31,14 +31,15 @@ export function NoCatalogNotice({
       <span className="text-caption font-medium text-amber-800">
         No catalog entry for {sku || 'this SKU'} yet.
       </span>
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="sm"
+        loading={busy}
         onClick={() => void create()}
-        disabled={busy}
-        className="shrink-0 rounded-md bg-amber-600 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-white hover:bg-amber-700 disabled:opacity-50"
+        className="shrink-0 bg-amber-600 text-white hover:bg-amber-700"
       >
-        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Create entry'}
-      </button>
+        Create entry
+      </Button>
     </div>
   );
 }

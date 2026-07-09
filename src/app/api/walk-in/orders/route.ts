@@ -87,4 +87,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'walk_in.intake' });
+}, { permission: 'walk_in.intake', feature: 'walkIn' });

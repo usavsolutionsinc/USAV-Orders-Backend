@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,10 +143,10 @@ export default async function HoldsAdminPage({
   const held = await loadHeldUnits();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-canvas">
       <PageHeader backHref="/admin/inventory" title="Holds" maxWidth="6xl" />
       <div className="mx-auto max-w-6xl space-y-6 p-8">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-text-muted">
           Quarantine units mid-flow. Held units keep their previous lifecycle state in the HELD event payload so a release rolls back automatically.
         </p>
 
@@ -157,52 +159,49 @@ export default async function HoldsAdminPage({
         ) : null}
 
         {/* Hold form */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-3">
-            <h2 className="text-base font-medium text-gray-900">Place a unit on hold</h2>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="border-b border-border-hairline px-6 py-3">
+            <h2 className="text-base font-medium text-text-default">Place a unit on hold</h2>
           </header>
           <form action={holdAction} className="grid grid-cols-1 gap-3 px-6 py-4 md:grid-cols-[1fr_2fr_auto]">
             <div>
-              <label htmlFor="ref" className="block text-xs font-medium text-gray-600">Unit id or serial</label>
+              <label htmlFor="ref" className="block text-xs font-medium text-text-muted">Unit id or serial</label>
               <input
                 id="ref"
                 name="ref"
                 placeholder="42 or IPH13-2026-000142"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 font-mono text-xs"
+                className="mt-1 block w-full rounded-md border border-border-default px-3 py-1.5 font-mono text-xs"
               />
             </div>
             <div>
-              <label htmlFor="reason" className="block text-xs font-medium text-gray-600">Reason</label>
+              <label htmlFor="reason" className="block text-xs font-medium text-text-muted">Reason</label>
               <input
                 id="reason"
                 name="reason"
                 placeholder="e.g. damaged in handling, customer dispute"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                className="mt-1 block w-full rounded-md border border-border-default px-3 py-1.5 text-sm"
               />
             </div>
             <div className="flex items-end">
-              <button
-                type="submit"
-                className="rounded-md bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-              >
+              <Button variant="danger" size="sm" type="submit">
                 Place on hold
-              </button>
+              </Button>
             </div>
           </form>
         </section>
 
         {/* Held units */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
-            <h2 className="text-lg font-medium text-gray-900">Units on hold</h2>
-            <span className="text-xs text-gray-500">{held.length} held</span>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-3">
+            <h2 className="text-lg font-medium text-text-default">Units on hold</h2>
+            <span className="text-xs text-text-soft">{held.length} held</span>
           </header>
           {held.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">No units currently on hold.</p>
+            <p className="px-6 py-8 text-sm text-text-muted">No units currently on hold.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <table className="min-w-full divide-y divide-border-hairline text-sm">
+                <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium">Unit</th>
                     <th className="px-4 py-2 text-left font-medium">SKU</th>
@@ -213,7 +212,7 @@ export default async function HoldsAdminPage({
                     <th className="px-4 py-2 text-right font-medium">Release</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border-hairline">
                   {held.map((h) => (
                     <tr key={h.id}>
                       <td className="px-4 py-2 font-mono text-xs">
@@ -222,23 +221,26 @@ export default async function HoldsAdminPage({
                         </Link>
                       </td>
                       <td className="px-4 py-2 font-mono text-xs">{h.sku ?? '—'}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600">{h.restore_status ?? 'STOCKED'}</td>
-                      <td className="px-4 py-2 text-xs text-gray-700">{h.hold_reason ?? '—'}</td>
-                      <td className="px-4 py-2 text-xs text-gray-500">{h.held_at ? new Date(h.held_at).toLocaleString() : '—'}</td>
-                      <td className="px-4 py-2 text-xs text-gray-600">{h.held_by_name ?? 'system'}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-text-muted">{h.restore_status ?? 'STOCKED'}</td>
+                      <td className="px-4 py-2 text-xs text-text-muted">{h.hold_reason ?? '—'}</td>
+                      <td className="px-4 py-2 text-xs text-text-soft">{h.held_at ? new Date(h.held_at).toLocaleString() : '—'}</td>
+                      <td className="px-4 py-2 text-xs text-text-muted">{h.held_by_name ?? 'system'}</td>
                       <td className="px-4 py-2 text-right">
                         <form action={releaseAction} className="flex items-center justify-end gap-2">
                           <input type="hidden" name="serialUnitId" value={h.id} />
-                          <select
-                            name="forceStatus"
-                            defaultValue=""
-                            className="rounded border border-gray-300 px-2 py-1 text-xs"
-                            title="Override the auto-recovered restore status (blank = auto)"
-                          >
-                            {RESTORE_OPTIONS.map((s) => (
-                              <option key={s || 'auto'} value={s}>{s || 'auto'}</option>
-                            ))}
-                          </select>
+                          <HoverTooltip label="Override the auto-recovered restore status (blank = auto)" asChild>
+                            <select
+                              name="forceStatus"
+                              defaultValue=""
+                              aria-label="Override the auto-recovered restore status (blank = auto)"
+                              className="rounded border border-border-default px-2 py-1 text-xs"
+                            >
+                              {RESTORE_OPTIONS.map((s) => (
+                                <option key={s || 'auto'} value={s}>{s || 'auto'}</option>
+                              ))}
+                            </select>
+                          </HoverTooltip>
+                          {/* ds-raw-button: solid-green success CTA — no success variant in Button */}
                           <button
                             type="submit"
                             className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
@@ -255,10 +257,10 @@ export default async function HoldsAdminPage({
           )}
         </section>
 
-        <footer className="text-xs text-gray-500">
+        <footer className="text-xs text-text-soft">
           Hold + release run through{' '}
-          <code className="rounded bg-gray-100 px-1 py-0.5">src/lib/inventory/hold.ts</code>
-          {' '}— same code path as <code className="rounded bg-gray-100 px-1 py-0.5">POST /api/serial-units/[id]/&#123;hold,release&#125;</code>.
+          <code className="rounded bg-surface-sunken px-1 py-0.5">src/lib/inventory/hold.ts</code>
+          {' '}— same code path as <code className="rounded bg-surface-sunken px-1 py-0.5">POST /api/serial-units/[id]/&#123;hold,release&#125;</code>.
         </footer>
       </div>
     </div>

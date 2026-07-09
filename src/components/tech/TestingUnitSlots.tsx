@@ -255,7 +255,7 @@ const VERDICT_BADGE: Record<TestingVerdict, { label: string; tone: string }> = {
 function VerdictBadge({ verdict }: { verdict: TestingVerdict | null }) {
   if (!verdict) {
     return (
-      <span className="text-micro font-bold uppercase tracking-widest text-gray-400">
+      <span className="text-micro font-bold uppercase tracking-widest text-text-faint">
         untested
       </span>
     );

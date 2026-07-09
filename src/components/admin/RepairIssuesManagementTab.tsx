@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { Edit, Plus, Trash2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { toast } from '@/lib/toast';
 import { sectionLabel, fieldLabel, tableHeader, tableCell } from '@/design-system/tokens/typography/presets';
@@ -34,7 +36,7 @@ const DEFAULT_FORM_STATE: IssueFormState = {
 };
 
 const inputClass =
-  'h-10 w-full border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-gray-400';
+  'h-10 w-full border border-border-soft bg-surface-card px-3 text-sm font-semibold text-text-default outline-none transition-colors focus:border-border-emphasis';
 
 /**
  * Manage GLOBAL repair issue templates (favorite_sku_id IS NULL) — the default
@@ -179,7 +181,7 @@ export function RepairIssuesManagementTab() {
     <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#ffffff_0%,#f5f7fa_100%)]">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-4`}>
-          <p className={`${sectionLabel} truncate text-gray-900`}>Repair Issues</p>
+          <p className={`${sectionLabel} truncate text-text-default`}>Repair Issues</p>
           <div className={`${sectionLabel} flex flex-wrap items-center gap-4`}>
             <span>Total {rows.length}</span>
             <input
@@ -187,25 +189,20 @@ export function RepairIssuesManagementTab() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter label / category"
-              className="h-8 w-64 border border-gray-200 bg-white px-3 text-xs font-medium text-gray-900 outline-none focus:border-gray-400"
+              className="h-8 w-64 border border-border-soft bg-surface-card px-3 text-xs font-medium text-text-default outline-none focus:border-border-emphasis"
             />
-            <button
-              type="button"
-              onClick={openAdd}
-              className={`${sectionLabel} inline-flex items-center gap-2 border border-gray-300 px-3 py-1.5 text-gray-800 transition-colors hover:bg-gray-50`}
-            >
-              <Plus className="h-3 w-3" />
+            <Button variant="secondary" size="sm" onClick={openAdd} icon={<Plus />}>
               Add Issue
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-gray-200 bg-white">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-border-soft bg-surface-card">
           <div className="min-h-0 flex-1 overflow-auto">
             <div className="min-w-[760px]">
-              <div className={`${tableGridClass} ${tableHeader} border-b border-gray-200 px-4 py-3`}>
+              <div className={`${tableGridClass} ${tableHeader} border-b border-border-soft px-4 py-3`}>
                 <p>Label</p>
                 <p>Category</p>
                 <p>Sort</p>
@@ -214,43 +211,42 @@ export function RepairIssuesManagementTab() {
               </div>
 
               {isLoading ? (
-                <div className="px-6 py-10 text-sm font-medium text-gray-500">Loading issue templates...</div>
+                <div className="px-6 py-10 text-sm font-medium text-text-soft">Loading issue templates...</div>
               ) : filtered.length === 0 ? (
                 <div className="px-6 py-10 text-center">
                   <p className={sectionLabel}>No Issue Templates</p>
-                  <p className="mt-2 text-sm font-medium text-gray-500">
+                  <p className="mt-2 text-sm font-medium text-text-soft">
                     {rows.length === 0 ? 'Add the first global repair issue template.' : 'No templates match your filter.'}
                   </p>
                 </div>
               ) : (
                 filtered.map((row) => (
-                  <div key={row.id} className={`${tableGridClass} items-center border-b border-gray-100 px-4 py-3 text-sm last:border-b-0`}>
+                  <div key={row.id} className={`${tableGridClass} items-center border-b border-border-hairline px-4 py-3 text-sm last:border-b-0`}>
+                    {/* ds-allow-title: truncation-only title on a non-interactive <p> */}
                     <p className={`${tableCell} truncate`} title={row.label}>{row.label}</p>
-                    <p className={`${tableCell} truncate uppercase tracking-[0.16em] text-gray-600`}>{row.category || '-'}</p>
-                    <p className={`${tableCell} text-gray-600`}>{row.sort_order}</p>
-                    <p className={`${tableHeader} ${row.active ? 'text-emerald-700' : 'text-gray-400'}`}>
+                    <p className={`${tableCell} truncate uppercase tracking-[0.16em] text-text-muted`}>{row.category || '-'}</p>
+                    <p className={`${tableCell} text-text-muted`}>{row.sort_order}</p>
+                    <p className={`${tableHeader} ${row.active ? 'text-emerald-700' : 'text-text-faint'}`}>
                       {row.active ? 'Active' : 'Hidden'}
                     </p>
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-                        title="Edit issue template"
-                        aria-label={`Edit ${row.label}`}
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(row)}
-                        disabled={deleteMutation.isPending}
-                        className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
-                        title="Delete issue template"
-                        aria-label={`Delete ${row.label}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverTooltip label="Edit issue template" asChild>
+                        <IconButton
+                          onClick={() => openEdit(row)}
+                          className="inline-flex h-8 w-8 items-center justify-center border border-border-soft text-text-muted hover:bg-surface-hover hover:text-text-default"
+                          ariaLabel={`Edit ${row.label}`}
+                          icon={<Edit className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
+                      <HoverTooltip label="Delete issue template" asChild>
+                        <IconButton
+                          onClick={() => handleDelete(row)}
+                          disabled={deleteMutation.isPending}
+                          className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 hover:bg-rose-50"
+                          ariaLabel={`Delete ${row.label}`}
+                          icon={<Trash2 className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
                     </div>
                   </div>
                 ))
@@ -262,25 +258,25 @@ export function RepairIssuesManagementTab() {
 
       {isFormOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
-          <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close issue form" />
-          <div className="relative flex w-full max-w-xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          {/* ds-raw-button: full-screen scrim overlay, not a button control */}
+          <button type="button" className="absolute inset-0 bg-scrim/30" onClick={closeForm} aria-label="Close issue form" />
+          <div className="relative flex w-full max-w-xl flex-col overflow-hidden border border-border-soft bg-surface-card shadow-xl">
+            <div className="flex items-center justify-between border-b border-border-soft px-5 py-4">
               <div>
                 <p className={sectionLabel}>{editingId != null ? 'Edit Issue Template' : 'New Issue Template'}</p>
-                <h3 className="mt-1 text-base font-semibold text-gray-900">
+                <h3 className="mt-1 text-base font-semibold text-text-default">
                   {editingId != null ? `Update ${form.label}` : 'Add a global repair issue'}
                 </h3>
               </div>
-              <button
-                type="button"
+              <IconButton
                 onClick={closeForm}
-                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
-              >
-                <X className="h-4 w-4" />
-              </button>
+                ariaLabel="Close"
+                className="inline-flex h-9 w-9 items-center justify-center border border-border-soft text-text-soft hover:bg-surface-hover hover:text-text-default"
+                icon={<X className="h-4 w-4" />}
+              />
             </div>
 
-            <div className="grid gap-4 border-b border-gray-200 px-5 py-5 md:grid-cols-2">
+            <div className="grid gap-4 border-b border-border-soft px-5 py-5 md:grid-cols-2">
               <label className="space-y-1 md:col-span-2">
                 <span className={`block ${sectionLabel}`}>Label</span>
                 <input
@@ -315,37 +311,28 @@ export function RepairIssuesManagementTab() {
               </label>
 
               {editingId != null && (
-                <label className="flex items-center gap-3 border border-gray-200 px-3 py-3 md:col-span-2">
+                <label className="flex items-center gap-3 border border-border-soft px-3 py-3 md:col-span-2">
                   <input
                     type="checkbox"
                     checked={form.active}
                     onChange={(e) => setForm((c) => ({ ...c, active: e.target.checked }))}
-                    className="h-4 w-4 border-gray-300 text-gray-900 focus:ring-gray-300"
+                    className="h-4 w-4 border-border-default text-text-default focus:ring-border-default"
                   />
-                  <span className={`${sectionLabel} text-gray-700`}>Active (shown in repair checklists)</span>
+                  <span className={`${sectionLabel} text-text-muted`}>Active (shown in repair checklists)</span>
                 </label>
               )}
               {editingId == null && (
-                <p className={`md:col-span-2 ${fieldLabel} text-gray-400`}>New templates are active by default.</p>
+                <p className={`md:col-span-2 ${fieldLabel} text-text-faint`}>New templates are active by default.</p>
               )}
             </div>
 
             <div className="flex items-center justify-end gap-2 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeForm}
-                className={`${sectionLabel} border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50`}
-              >
+              <Button variant="secondary" size="md" onClick={closeForm}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSaving}
-                className={`${sectionLabel} border border-gray-900 bg-gray-900 px-4 py-2 text-white transition-colors hover:bg-gray-800 disabled:opacity-50`}
-              >
+              </Button>
+              <Button variant="brand" size="md" onClick={handleSubmit} disabled={isSaving}>
                 {isSaving ? 'Saving...' : editingId != null ? 'Save Changes' : 'Create Issue'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

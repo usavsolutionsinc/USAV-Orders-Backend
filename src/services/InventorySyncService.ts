@@ -121,7 +121,7 @@ export class InventorySyncService {
     await itemRepository.upsertMany(rows.map((row) => ({ organizationId: this.organizationId, ...mapZohoItemToLocal(row) })));
 
     const locationInputs = rows.flatMap(extractLocationStock);
-    await itemRepository.upsertLocations(locationInputs.map((row) => ({
+    await itemRepository.upsertLocations(this.organizationId, locationInputs.map((row) => ({
       organizationId: this.organizationId,
       zohoLocationId: row.zohoLocationId,
       name: row.name,
@@ -129,6 +129,7 @@ export class InventorySyncService {
 
     const existingItems = await Promise.all(rows.map((row) => itemRepository.findByZohoId(row.item_id)));
     const locations = await itemRepository.findLocationsByZohoIds(
+      this.organizationId,
       Array.from(new Set(locationInputs.map((row) => row.zohoLocationId)))
     );
     const itemIdByZohoId = new Map(
@@ -162,7 +163,7 @@ export class InventorySyncService {
     for await (const page of zohoClient.paginateWarehouses()) {
       pages.push(...page);
     }
-    await itemRepository.upsertLocations(pages.map((warehouse) => ({
+    await itemRepository.upsertLocations(this.organizationId, pages.map((warehouse) => ({
       organizationId: this.organizationId,
       zohoLocationId: warehouse.warehouse_id,
       name: warehouse.warehouse_name,

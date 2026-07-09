@@ -4,12 +4,13 @@ import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   createTicket,
-  isZendeskConfigured,
+  isZendeskConfiguredForOrg,
   listTickets,
   searchTickets,
   ZendeskApiError,
   ZendeskNotConfiguredError,
 } from '@/lib/zendesk';
+import { getIntegrationCredentials } from '@/lib/integrations/credentials';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 
 export const dynamic = 'force-dynamic';
@@ -51,10 +52,10 @@ const ListQuery = z.object({
 });
 
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     const context = 'GET /api/zendesk/tickets';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
 
       const sp = req.nextUrl.searchParams;
       const parsed = ListQuery.parse({
@@ -65,13 +66,14 @@ export const GET = withAuth(
         sortOrder: sp.get('sortOrder') ?? sp.get('sort_order') ?? undefined,
       });
 
-      const subdomain = process.env.ZENDESK_SUBDOMAIN || 'usav';
+      const creds = await getIntegrationCredentials<{ subdomain?: string | null }>(ctx.organizationId, 'zendesk');
+      const subdomain = creds?.subdomain ?? process.env.ZENDESK_SUBDOMAIN ?? 'usav';
 
       if (parsed.query) {
         const { results, count, next_page } = await searchTickets(parsed.query, {
           page: parsed.page,
           perPage: parsed.perPage,
-        });
+        }, ctx.organizationId);
         // Normalize the Search API shape (`results`) to the list shape (`tickets`)
         // the client reads. Without this, every status filter (which runs in
         // search mode) renders empty while only "All" (list mode) works.
@@ -91,7 +93,7 @@ export const GET = withAuth(
         perPage: parsed.perPage,
         sortBy: parsed.sortBy,
         sortOrder: parsed.sortOrder,
-      });
+      }, ctx.organizationId);
       return NextResponse.json({ success: true, mode: 'list', subdomain, ...result });
     } catch (err) {
       return mapZendeskError(err, context);
@@ -125,7 +127,7 @@ export const POST = withAuth(
   async (req: NextRequest, ctx) => {
     const context = 'POST /api/zendesk/tickets';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
 
       const json = await req.json().catch(() => null);
       if (!json) throw ApiError.badRequest('Missing JSON body');
@@ -148,7 +150,7 @@ export const POST = withAuth(
         assignee_id: input.assignee_id,
         group_id: input.group_id,
         external_id: externalId,
-      });
+      }, {}, ctx.organizationId);
 
       // Best-effort link — never fail ticket creation if the mapping write fails.
       if (input.entity && ticket?.id) {

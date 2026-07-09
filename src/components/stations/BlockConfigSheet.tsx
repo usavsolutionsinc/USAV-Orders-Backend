@@ -25,8 +25,8 @@ interface BlockConfigSheetProps {
 }
 
 const selectClass =
-  'h-8 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white px-2 text-caption font-semibold text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
-const labelClass = 'mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500';
+  'h-8 w-full cursor-pointer appearance-none rounded-md border border-border-soft bg-surface-card px-2 text-caption font-semibold text-text-default focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+const labelClass = 'mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft';
 
 /** Pre-fill role→field mapping by kind match, falling back to the first field. */
 function autoMapping(blockType: string, source: DataSourceMeta): Record<string, string> {
@@ -121,13 +121,13 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
 
   return (
     <RightPaneOverlay open={open} onClose={onClose} align="right" width={340} aria-label="Block configuration">
-      <div className="flex h-full flex-col bg-white">
-        <div className="border-b border-gray-200 px-3 py-2.5">
+      <div className="flex h-full flex-col bg-surface-card">
+        <div className="border-b border-border-soft px-3 py-2.5">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-100 text-gray-600">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-surface-sunken text-text-muted">
               <StationIcon name={block.icon} className="h-4 w-4" />
             </span>
-            <h2 className="text-label font-black uppercase tracking-wider text-gray-700">{block.label}</h2>
+            <h2 className="text-label font-black uppercase tracking-wider text-text-muted">{block.label}</h2>
           </div>
           <div className="mt-2 flex gap-1">
             {tabs.map((t) => (
@@ -135,8 +135,8 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={`rounded-md px-2.5 py-1 text-caption font-bold capitalize transition-colors ${
-                  tab === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                className={`ds-raw-button rounded-md px-2.5 py-1 text-caption font-bold capitalize transition-colors ${
+                  tab === t ? 'bg-surface-inverse text-white' : 'bg-surface-sunken text-text-muted hover:bg-surface-strong'
                 }`}
               >
                 {t}
@@ -179,7 +179,7 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
                       const value = work.source?.filters?.[f.key] ?? f.default;
                       if (f.kind === 'boolean') {
                         return (
-                          <label key={f.key} className="flex items-center justify-between gap-2 text-caption font-semibold text-gray-700">
+                          <label key={f.key} className="flex items-center justify-between gap-2 text-caption font-semibold text-text-muted">
                             {f.label}
                             <input
                               type="checkbox"
@@ -229,7 +229,7 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
                   <div className="space-y-2">
                     {block.roles.map((role) => (
                       <label key={role.key} className="block">
-                        <span className="mb-0.5 block text-mini font-bold text-gray-500">
+                        <span className="mb-0.5 block text-mini font-bold text-text-soft">
                           {role.label}
                           {role.required ? ' *' : ''}
                         </span>
@@ -256,13 +256,13 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
           {tab === 'display' ? (
             <div className="space-y-3">
               {block.configSchema.length === 0 ? (
-                <p className="text-caption font-semibold text-gray-400">This block has no display options.</p>
+                <p className="text-caption font-semibold text-text-faint">This block has no display options.</p>
               ) : (
                 block.configSchema.map((field) => {
                   const value = work.display?.[field.key] ?? field.default;
                   if (field.kind === 'toggle') {
                     return (
-                      <label key={field.key} className="flex items-center justify-between gap-2 text-caption font-semibold text-gray-700">
+                      <label key={field.key} className="flex items-center justify-between gap-2 text-caption font-semibold text-text-muted">
                         {field.label}
                         <input
                           type="checkbox"
@@ -309,9 +309,9 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
           {tab === 'actions' ? (
             <div className="space-y-3">
               {!sourceMeta ? (
-                <p className="text-caption font-semibold text-gray-400">Bind a data source first.</p>
+                <p className="text-caption font-semibold text-text-faint">Bind a data source first.</p>
               ) : compatibleActions.length === 0 ? (
-                <p className="text-caption font-semibold text-gray-400">No registered actions match this source.</p>
+                <p className="text-caption font-semibold text-text-faint">No registered actions match this source.</p>
               ) : (
                 <>
                   <div className="space-y-1.5">
@@ -321,7 +321,7 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
                       return (
                         <label
                           key={a.id}
-                          className="flex items-start gap-2 rounded-lg border border-gray-200 px-2.5 py-2"
+                          className="flex items-start gap-2 rounded-lg border border-border-soft px-2.5 py-2"
                         >
                           <input
                             type="checkbox"
@@ -330,8 +330,8 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
                             className="mt-0.5 h-4 w-4 accent-blue-600"
                           />
                           <span className="min-w-0 flex-1">
-                            <span className="block text-label font-bold text-gray-800">{a.label}</span>
-                            <span className="mt-0.5 inline-flex rounded bg-gray-50 px-1 py-px font-mono text-mini font-bold text-gray-500 ring-1 ring-inset ring-gray-200">
+                            <span className="block text-label font-bold text-text-default">{a.label}</span>
+                            <span className="mt-0.5 inline-flex rounded bg-surface-canvas px-1 py-px font-mono text-mini font-bold text-text-soft ring-1 ring-inset ring-border-soft">
                               {a.permission}
                             </span>
                             {!permitted ? (
@@ -368,7 +368,7 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-3 py-2.5">
+        <div className="flex items-center justify-end gap-2 border-t border-border-soft px-3 py-2.5">
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>

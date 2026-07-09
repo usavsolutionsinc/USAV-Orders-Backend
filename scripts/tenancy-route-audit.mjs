@@ -71,7 +71,13 @@ for (const file of files) {
   const withAuth = /withAuth\s*\(/.test(src);
   const permMatch = src.match(/permission:\s*['"]([^'"]+)['"]/);
   const orgIdRef = /organizationId/.test(src);
-  const tenantWrapped = /\b(tenantQuery|withTenantConnection|withTenantTransaction)\b/.test(src);
+  // GUC wrappers that set `app.current_org` for a SINGLE org. `withTenantDrizzle`
+  // delegates to `withTenantConnection` (src/lib/drizzle/tenant-db.ts), binding a
+  // Drizzle instance to the same GUC-bearing client — so a route using it is just
+  // as tenant-scoped as one calling `tenantQuery`. NOTE: the cron fan-out helpers
+  // (`forEachActiveOrg`/`forEachOrg`) are deliberately NOT here — they sweep ALL
+  // orgs, so they are cross-org-by-design, not single-org GUC-wrapped.
+  const tenantWrapped = /\b(tenantQuery|withTenantConnection|withTenantTransaction|withTenantDrizzle)\b/.test(src);
   const rawPool = /from\s+['"]@\/lib\/db['"]/.test(src);
   const drizzle = /from\s+['"]@\/lib\/drizzle|neon-http/.test(src);
   const transitional = /\b(USAV_ORG_ID|transitionalUsavOrgId)\b/.test(src);

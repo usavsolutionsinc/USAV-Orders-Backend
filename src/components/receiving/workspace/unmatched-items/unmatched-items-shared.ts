@@ -44,6 +44,15 @@ export interface UnmatchedItemsSectionProps {
    */
   onActiveConditionChange?: (condition: string) => void;
   /**
+   * No-serial waiver state, owned by the unbox controller (whose receive runs the
+   * carton commit). Threaded so an unfound carton can be received with an explicit
+   * "no serial" reason instead of a blank serial.
+   */
+  serialAbsent?: boolean;
+  serialAbsentReason?: string | null;
+  requireSerialConfirmation?: boolean;
+  onSerialAbsentChange?: (next: { absent: boolean; reason: string | null }) => void;
+  /**
    * Optional render override for the per-line action area (replaces the
    * default `ConditionPills` + serial card). Use this from the testing
    * workspace to drop in `TestingStatusPills` + `InlineSerialAdder` per line so
@@ -58,11 +67,82 @@ export interface UnmatchedItemsSectionProps {
    * link `/receiving?recvId=…`). Omitted in the unbox workspace itself.
    */
   onOpenInUnbox?: () => void;
+  /**
+   * Render bare (no own WorkspaceCard chrome, no add pencil) — used when
+   * composed inside the unified {@link POUnboxingSection} wrapper, which
+   * supplies the single shared card + edit pencil. Defaults to the standalone
+   * card so the testing display and any other caller are unaffected.
+   */
+  embedded?: boolean;
+  /**
+   * Embedded-only: node rendered at the right of the "PO items · N" header row
+   * (e.g. the wrapper's shared edit pencil), so the unified wrapper can place
+   * its single control on the same row as the item count.
+   */
+  headerRight?: React.ReactNode;
+  /** Hide the embedded "PO items · N" eyebrow — the tab slider owns the label. */
+  suppressHeader?: boolean;
+  /**
+   * Fired after an Ecwid/repair pairing flips the carton off the Unfound queue.
+   * The host (which owns the selected `row`) uses it to update the open
+   * LineEditPanel IMMEDIATELY from the server's returned row — no refetch wait:
+   *   • `carton` → the recomputed PO#/source/platform for the carton header.
+   *   • `line`   → the full new receiving_line. When the host was on an unfound
+   *     STUB (synthetic negative id, no real line), it re-selects this real line
+   *     so the detail pane upgrades from "Unfound PO" → the actual item (title,
+   *     SKU, qty, listing) in one paint, then reconciles via invalidate.
+   */
+  onLinked?: (result: {
+    carton: {
+      zoho_purchaseorder_number: string | null;
+      source: string | null;
+      source_platform: string | null;
+      intake_type?: string | null;
+    };
+    line?: {
+      id: number;
+      sku: string | null;
+      item_name: string | null;
+      quantity_expected: number | null;
+      quantity_received: number;
+      condition_grade: string | null;
+      listing_url: string | null;
+      source_platform_pill: string | null;
+    } | null;
+  }) => void;
+  /**
+   * Fired after a full order/PO unpair — host clears header chips immediately.
+   */
+  onUnlinked?: () => void;
+  /**
+   * Seed linkage display before GET /api/receiving/:id returns (workspace row).
+   */
+  linkedOrderHint?: {
+    source: string | null;
+    zoho_purchaseorder_id: string | null;
+    zoho_purchaseorder_number: string | null;
+  };
+  /** Workspace row id for optimistic patch after unpair. */
+  activeLineId?: number;
 }
 
 export interface CartonResponse {
   success: boolean;
   lines?: UnfoundLine[];
+  /**
+   * Carton header — used to seed the door-classification pill row from the
+   * stored intake columns (GET /api/receiving/[id] returns this). The
+   * intake_type column maps onto `columnsToClassification`'s `receiving_type`.
+   */
+  receiving?: {
+    source?: string | null;
+    zoho_purchaseorder_id?: string | null;
+    zoho_purchaseorder_number?: string | null;
+    is_return?: boolean | null;
+    return_platform?: string | null;
+    source_platform?: string | null;
+    intake_type?: string | null;
+  } | null;
   error?: string;
 }
 

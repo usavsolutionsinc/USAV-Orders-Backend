@@ -37,6 +37,14 @@ export interface HermesToolCallInput {
   temperature?: number;
   /** Defaults to 1024. */
   maxTokens?: number;
+  /**
+   * Optional provider override (AI search Phase 1): pass the resolved config
+   * from `resolveAiConfig('chat')` (src/lib/ai/provider.ts) to route this
+   * call through the capability-keyed provider layer (Vercel AI Gateway in
+   * prod) instead of the legacy Hermes env vars. Same OpenAI wire format
+   * either way — this stays the one forced-tool-call implementation.
+   */
+  provider?: { baseURL: string; apiKey?: string; model?: string };
 }
 
 export interface HermesToolCallResult<T> {
@@ -77,11 +85,11 @@ interface OpenAiChatResponse {
 export async function hermesToolCall<T = unknown>(
   input: HermesToolCallInput,
 ): Promise<HermesToolCallResult<T>> {
-  const baseUrl = getHermesApiUrl();
+  const baseUrl = input.provider?.baseURL?.replace(/\/$/, '') || getHermesApiUrl();
   if (!baseUrl) {
     throw new Error('HERMES_API_URL is not set; cannot reach the local AI gateway');
   }
-  const model = getHermesModel(DEFAULT_AI_MODEL);
+  const model = input.provider?.model || getHermesModel(DEFAULT_AI_MODEL);
 
   const requestBody = {
     model,
@@ -110,11 +118,17 @@ export async function hermesToolCall<T = unknown>(
     tool_choice: 'required',
   };
 
+  const headers: HeadersInit = input.provider
+    ? {
+        'content-type': 'application/json',
+        ...(input.provider.apiKey ? { Authorization: `Bearer ${input.provider.apiKey}` } : {}),
+      }
+    : getHermesHeaders({
+        'content-type': 'application/json',
+      });
   const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
-    headers: getHermesHeaders({
-      'content-type': 'application/json',
-    }),
+    headers,
     body: JSON.stringify(requestBody),
   });
   if (!res.ok) {

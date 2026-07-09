@@ -4,6 +4,7 @@ import { parseUPSTrackingPayload } from '@/lib/shipping/providers/ups';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // UPS authenticates callbacks via the credential we registered on the
 // subscription, echoed back in a header. Header name has varied; check the
@@ -135,17 +136,24 @@ export async function POST(req: NextRequest) {
       sourceSystem: 'ups_webhook',
     }, orgId);
 
+    // Pin every downstream write to the SHIPMENT ROW's real owner, not the
+    // hardcoded transitional org. When two tenants share a tracking number this
+    // is what stops org A's webhook from clobbering org B's row under the wrong
+    // GUC. Falls back to the lookup orgId for as-yet-unstamped (NULL-org) rows,
+    // so single-tenant USAV behavior is unchanged.
+    const shipmentOrgId = (shipment.organization_id as OrgId | null) ?? orgId;
+
     await upsertTrackingEvents(
       shipment.id,
       'UPS',
       result.trackingNumberNormalized,
       result.events,
-      orgId
+      shipmentOrgId
     );
-    await updateShipmentSummary(shipment.id, result, orgId);
+    await updateShipmentSummary(shipment.id, result, shipmentOrgId);
     // Pass trackingNumber=null to preserve the pre-migration published payload
     // shape (it was undefined before); only orgId scoping is added here.
-    await publishShipmentStatusChange(shipment.id, 'ups-webhook', null, orgId);
+    await publishShipmentStatusChange(shipment.id, 'ups-webhook', null, shipmentOrgId);
 
     processed += 1;
     trackingNumbers.push(result.trackingNumberNormalized);

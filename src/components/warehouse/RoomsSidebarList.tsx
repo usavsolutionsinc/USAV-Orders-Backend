@@ -15,6 +15,8 @@ import { useLocations } from '@/hooks/useLocations';
 import { useBinsOverview } from '@/hooks/useBinsOverview';
 import { useRoomFinder } from './roomFinderContext';
 import { Check, GripVertical, Pencil, Plus, Trash2, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface RoomSummary {
   key: string;
@@ -234,46 +236,52 @@ export function RoomsSidebarList() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* ── Header band: title + edit/add controls ─────────────────────── */}
-      <div className="border-b border-gray-100 bg-gradient-to-b from-white to-gray-50/50 px-4 pt-4 pb-3">
+      <div className="border-b border-border-hairline bg-gradient-to-b from-white to-gray-50/50 px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold tracking-tight text-gray-900">Rooms</h2>
-            <p className="mt-0.5 text-caption font-medium text-gray-500">
+            <h2 className="text-lg font-bold tracking-tight text-text-default">Rooms</h2>
+            <p className="mt-0.5 text-caption font-medium text-text-soft">
               {loading
                 ? 'Loading…'
                 : `${orderedSummaries.length} room${orderedSummaries.length === 1 ? '' : 's'} · ${totals.bins} bin${totals.bins === 1 ? '' : 's'} · ${totals.qty} unit${totals.qty === 1 ? '' : 's'}`}
             </p>
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => startCreate()}
-              className={`flex h-9 items-center gap-1 rounded-full px-3 text-label font-semibold transition-all active:scale-[0.97] ${
-                creating
-                  ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
-                  : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-              title="Add a new room"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (editMode) exitEdit();
-                else setEditMode(true);
-              }}
-              aria-pressed={editMode}
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-95 ${
-                editMode
-                  ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
-                  : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-              title={editMode ? 'Finish editing' : 'Edit rooms'}
-            >
-              {editMode ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-            </button>
+            <HoverTooltip label="Add a new room" asChild>
+              {/* ds-raw-button: conditional active-fill (creating) gradient toggle — no DS variant models the two-state fill */}
+              <button
+                type="button"
+                onClick={() => startCreate()}
+                aria-label="Add a new room"
+                className={`flex h-9 items-center gap-1 rounded-full px-3 text-label font-semibold transition-all active:scale-[0.97] ${
+                  creating
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
+                    : 'border border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover'
+                }`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            </HoverTooltip>
+            <HoverTooltip label={editMode ? 'Finish editing' : 'Edit rooms'} asChild>
+              {/* ds-raw-button: two-state edit toggle (aria-pressed) with conditional gradient fill + icon swap */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (editMode) exitEdit();
+                  else setEditMode(true);
+                }}
+                aria-pressed={editMode}
+                aria-label={editMode ? 'Finish editing' : 'Edit rooms'}
+                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-95 ${
+                  editMode
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
+                    : 'border border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover'
+                }`}
+              >
+                {editMode ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+              </button>
+            </HoverTooltip>
           </div>
         </div>
 
@@ -357,22 +365,23 @@ function RoomRow({ summary, selected, editMode, mutating, onSelect, onDelete }: 
     <motion.div
       layout={!reduceMotion}
       transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-      className={`relative overflow-hidden rounded-2xl bg-white shadow-sm transition-all ${
+      className={`relative overflow-hidden rounded-2xl bg-surface-card shadow-sm transition-all ${
         selected
           ? 'ring-2 ring-blue-500 shadow-blue-600/10'
-          : 'ring-1 ring-gray-200/70 hover:ring-blue-200'
+          : 'ring-1 ring-border-soft/70 hover:ring-blue-200'
       }`}
     >
       <div className="flex items-stretch gap-2 p-3">
         {editMode && (
           <div
             aria-hidden
-            className="flex w-5 shrink-0 cursor-grab items-center justify-center text-gray-300 active:cursor-grabbing"
+            className="flex w-5 shrink-0 cursor-grab items-center justify-center text-text-faint active:cursor-grabbing"
           >
             <GripVertical className="h-4 w-4" />
           </div>
         )}
 
+        {/* ds-raw-button: master-detail list row (zone tile + multi-line title/meta), text-left — not a standard action button */}
         <button
           type="button"
           onClick={onSelect}
@@ -380,10 +389,10 @@ function RoomRow({ summary, selected, editMode, mutating, onSelect, onDelete }: 
         >
           <ZoneTile letter={summary.letter} active={selected} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13.5px] font-semibold leading-snug tracking-tight text-gray-900">
+            <p className="truncate text-[13.5px] font-semibold leading-snug tracking-tight text-text-default">
               {summary.room}
             </p>
-            <p className="mt-0.5 truncate text-[10.5px] font-medium text-gray-500">
+            <p className="mt-0.5 truncate text-[10.5px] font-medium text-text-soft">
               {summary.binCount} bin{summary.binCount === 1 ? '' : 's'} · {summary.totalQty} unit{summary.totalQty === 1 ? '' : 's'}
               {summary.alerts > 0 ? (
                 <span className="ml-1 font-semibold text-amber-600">· {summary.alerts} alert{summary.alerts === 1 ? '' : 's'}</span>
@@ -393,15 +402,13 @@ function RoomRow({ summary, selected, editMode, mutating, onSelect, onDelete }: 
         </button>
 
         {editMode && (
-          <button
-            type="button"
+          <IconButton
             onClick={onDelete}
             disabled={mutating}
-            aria-label={`Delete ${summary.room}`}
-            className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100 active:scale-95 disabled:opacity-50"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+            ariaLabel={`Delete ${summary.room}`}
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+            className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50"
+          />
         )}
       </div>
     </motion.div>
@@ -423,12 +430,11 @@ function ZoneTile({ letter, active }: { letter: string | null; active: boolean }
     );
   }
   return (
-    <div
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-mono text-sm font-semibold text-amber-700 ring-1 ring-amber-200"
-      title="No zone letter assigned"
-    >
-      ?
-    </div>
+    <HoverTooltip label="No zone letter assigned" asChild focusable={false}>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-mono text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
+        ?
+      </div>
+    </HoverTooltip>
   );
 }
 
@@ -449,11 +455,11 @@ function EmptyState({ query, onAdd }: { query: string; onAdd: () => void }) {
   if (query.trim()) {
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50 ring-1 ring-gray-200">
-          <X className="h-5 w-5 text-gray-400" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-canvas ring-1 ring-border-soft">
+          <X className="h-5 w-5 text-text-faint" />
         </div>
-        <p className="text-[12.5px] font-semibold text-gray-700">No rooms match “{query}”</p>
-        <p className="max-w-[240px] text-caption text-gray-500">
+        <p className="text-[12.5px] font-semibold text-text-muted">No rooms match “{query}”</p>
+        <p className="max-w-[240px] text-caption text-text-soft">
           Try a different name or zone letter.
         </p>
       </div>
@@ -464,19 +470,20 @@ function EmptyState({ query, onAdd }: { query: string; onAdd: () => void }) {
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 ring-1 ring-blue-200">
         <Plus className="h-5 w-5 text-blue-500" />
       </div>
-      <p className="text-[12.5px] font-semibold text-gray-700">No rooms yet</p>
-      <p className="max-w-[240px] text-caption text-gray-500">
+      <p className="text-[12.5px] font-semibold text-text-muted">No rooms yet</p>
+      <p className="max-w-[240px] text-caption text-text-soft">
         Add your first room. Each room gets a zone letter that prints on every
         label.
       </p>
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="sm"
         onClick={onAdd}
-        className="mt-1 inline-flex h-9 items-center gap-1 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-3 text-label font-semibold text-white shadow-md shadow-blue-600/30"
+        icon={<Plus className="h-3.5 w-3.5" />}
+        className="mt-1 h-9 rounded-full px-3 shadow-md shadow-blue-600/30"
       >
-        <Plus className="h-3.5 w-3.5" />
         Add a room
-      </button>
+      </Button>
     </div>
   );
 }

@@ -61,12 +61,12 @@ export function ScanOutModeBody() {
       }
       bodyClassName="flex min-h-0 flex-1 flex-col"
       footer={
-        <div className={`${SIDEBAR_GUTTER} border-t border-gray-100 bg-white pb-4 pt-3`}>
+        <div className={`${SIDEBAR_GUTTER} border-t border-border-hairline bg-surface-card pb-4 pt-3`}>
           <ScanOutStationBar autoFocus />
         </div>
       }
     >
-      <div className={`${SIDEBAR_GUTTER} text-sm text-gray-500`}>
+      <div className={`${SIDEBAR_GUTTER} text-sm text-text-soft`}>
         Scan a label below or pick a staged package from the queue.
       </div>
     </SidebarShell>

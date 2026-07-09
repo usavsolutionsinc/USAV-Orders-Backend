@@ -15,7 +15,8 @@ import { ChipColumns, CHIP_COL } from '@/components/ui/ChipColumns';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { CarrierStatusIcon } from '@/components/shipping/ShipmentStatusBadge';
 import { getOrderDisplayValues } from '@/utils/order-display';
-import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import { isSkuSourceRecord } from '@/utils/source-dot';
 import { getStaffName } from '@/utils/staff';
@@ -62,13 +63,14 @@ export function ShippedRecordRow({
   onRowClick,
   onToggle,
 }: ShippedRecordRowProps) {
+  const orderChannelLabel = useOrderChannelLabel();
   const displayValues = getOrderDisplayValues({ sku: record.sku, condition: record.condition, trackingNumber: record.shipping_tracking_number });
   const rowIsFba = isFbaPackerRecord(record);
   const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
   const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
   const techDisplay = normalizePersonName(String((record as any).tested_by_name || (record as any).tester_name || getStaffName(techStaffId)));
   const packerDisplay = normalizePersonName(String((record as any).packed_by_name || (record as any).packer_name || getStaffName(packerStaffId)));
-  const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+  const platformLabel = orderChannelLabel(record.order_id || '', record.account_source);
   const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
   const productPageUrl = getExternalUrlByItemNumber(String(record.item_number || '').trim() || skuScanPrefixBeforeColon(String(record.scan_ref || record.shipping_tracking_number || '').trim()));
   const hideOrderIdChip = isSkuSourceRecord({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: String(record.scan_ref || record.shipping_tracking_number || '').trim() });
@@ -83,8 +85,8 @@ export function ShippedRecordRow({
       tabIndex={0}
       aria-checked={selectMode ? checked : undefined}
       aria-pressed={selectMode ? undefined : selected}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
-        (selectMode ? checked : selected) ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-border-hairline px-4 py-2 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+        (selectMode ? checked : selected) ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-surface-canvas/40' : 'bg-surface-card'
       }`}
     >
       <div className="flex flex-col min-w-0">
@@ -93,7 +95,7 @@ export function ShippedRecordRow({
             selectMode ? (
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                  checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                  checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-border-default bg-surface-card'
                 }`}
               >
                 {checked && <Check className="h-3 w-3" />}
@@ -103,12 +105,16 @@ export function ShippedRecordRow({
           dot={OUTBOUND_STATE_META[record.outboundState].dot}
           dotTitle={`${OUTBOUND_STATE_META[record.outboundState].label} — ${OUTBOUND_STATE_META[record.outboundState].description}`}
           dotTooltip
-          title={record.product_title || record.item_number || record.sku || 'Unknown Product'}
+          title={
+            <HoverTooltip label={record.product_title || record.item_number || record.sku || 'Unknown Product'}>
+              <span>{record.product_title || record.item_number || record.sku || 'Unknown Product'}</span>
+            </HoverTooltip>
+          }
         />
         <RowMetaColumns
           indent={selectMode ? `calc(${META_COL.indent} + 1.5rem)` : undefined}
-          qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
-          condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>{displayValues.condition || 'N/A'}</span>}
+          qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-text-soft'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
+          condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-text-faint'}>{displayValues.condition || 'N/A'}</span>}
           rest={<div className="flex items-center gap-2">
             {techDisplay !== '---' ? <HoverTooltip label={`Tested by ${techDisplay}`}><StaffInitials staffId={techStaffId} name={techDisplay} /></HoverTooltip> : <StaffInitials staffId={techStaffId} name={techDisplay} />}
             {packerDisplay !== '---' ? <HoverTooltip label={`Packed by ${packerDisplay}`}><StaffInitials staffId={packerStaffId} name={packerDisplay} /></HoverTooltip> : <StaffInitials staffId={packerStaffId} name={packerDisplay} />}
@@ -121,7 +127,7 @@ export function ShippedRecordRow({
           <PlatformChip
             label={platformLabel}
             underlineClass={getOrderPlatformBorderColor(platformLabel)}
-            iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'}
+            iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-text-soft'}
             onClick={() => {
               if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
             }}

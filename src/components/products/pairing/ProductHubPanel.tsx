@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { AlertCircle, Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { PRODUCT_HUB_PLATFORMS } from './platform-style';
 import { useProductHub } from './useProductHub';
 import { ListingResizePanel } from '@/components/listing/ListingResizePanel';
@@ -48,7 +49,7 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false, headerT
 
   if (hub.loading && !snapshot) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-400">
+      <div className="flex h-full items-center justify-center text-text-faint">
         <Loader2 className="h-5 w-5 animate-spin" />
         <span className="ml-2 text-xs font-semibold">Loading suggestions…</span>
       </div>
@@ -62,13 +63,15 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false, headerT
           <AlertCircle className="mr-1 inline h-4 w-4" />
           {hub.error || 'Could not load suggestions'}
         </div>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={hub.refresh}
-          className="mt-3 rounded border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          className="mt-3"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -79,7 +82,7 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false, headerT
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {allowManualPair ? <ManualPairForm skuCatalogId={skuCatalogId} onAdded={hub.refresh} /> : null}
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-border-hairline">
           {PRODUCT_HUB_PLATFORMS.map((platform) => (
             <ChannelSection
               key={platform}

@@ -14,6 +14,7 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { useDebounce } from '@/hooks';
 import { formatDateTimePST } from '@/utils/date';
@@ -26,18 +27,19 @@ import {
     type ShippedSearchField,
 } from '@/lib/shipped-search';
 import { useShippedFilterRefinements, ShippedFilterDropdown } from '@/components/shipping/ShippedFilterToolbar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { ShippedActionsButton } from '@/components/shipped/ShippedActionsButton';
 import { OutboundStatusLegend } from '@/components/shipped/OutboundStatusLegend';
-import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
+import { FirstScanOnboardingCard } from '@/components/dashboard/FirstScanOnboardingCard';
+import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
+import { useAiQuickJump } from '@/hooks/useAiQuickJump';
+import { AiQuickJumpResults } from '@/components/search/AiQuickJumpResults';
 
 interface SearchHistory {
     query: string;
     timestamp: Date;
     resultCount?: number;
 }
-
-/** Params that define a Shipped saved view (type + status-dot filter, not search). */
-const SHIPPED_VIEW_PARAMS = ['shippedFilter', 'shippedSearchField', 'ostatus'] as const;
 
 type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
@@ -105,6 +107,13 @@ export default function ShippedSidebar({
         searchField: shippedSearchField,
     });
     const results: ShippedOrder[] = searchResult.data?.records ?? [];
+
+    // AI quick-jump (AI search Phase 2): cross-entity hybrid hits ride along
+    // the same input. Flag-gated inside the hook — off/no-permission/failed
+    // means zero hits and this sidebar is byte-identical to the classic
+    // shipped search. pageContext soft-boosts ORDER hits; no hard scope, so
+    // a serial/tracking typed here can still jump to a unit or carton.
+    const aiQuickJump = useAiQuickJump(trimmedQuery, { pageContext: pathname, limit: 5 });
     const isSearching = searchResult.isFetching;
     const hasSearched = trimmedQuery.length > 0;
 
@@ -290,7 +299,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     {filterControl ? <motion.div variants={itemVariants} className="relative z-20">{filterControl}</motion.div> : null}
                     {!hideSectionHeader ? (
                         <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
-                            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+                            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-text-default">
                                 Shipped Orders
                             </h2>
                             <p className={`${microBadge} text-blue-600 mt-1`}>
@@ -308,20 +317,19 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                 variant: 'blue',
                 autoFocus: Boolean(embedded && autoFocusSearch),
                 rightElement: (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const params = new URLSearchParams(searchParams.toString());
-                            params.set('new', 'true');
-                            const nextSearch = params.toString();
-                            router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
-                        }}
-                        className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-                        title="New Order Entry"
-                        aria-label="Open new order entry form"
-                    >
-                        <Plus className="h-5 w-5" />
-                    </button>
+                    <HoverTooltip label="New Order Entry" asChild>
+                        <IconButton
+                            onClick={() => {
+                                const params = new URLSearchParams(searchParams.toString());
+                                params.set('new', 'true');
+                                const nextSearch = params.toString();
+                                router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
+                            }}
+                            className="rounded-xl bg-emerald-500 p-2.5 transition-colors hover:bg-emerald-600 disabled:bg-surface-strong"
+                            ariaLabel="Open new order entry form"
+                            icon={<Plus className="h-5 w-5 text-white" />}
+                        />
+                    </HoverTooltip>
                 ),
             }}
             // Filters bar stays pinned at the top of the sidebar (above the body).
@@ -341,10 +349,8 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             // it explains the shipped table's outbound status dots.
             headerBelow={
                 <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
-                    <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
-                        <SavedViewsControl storageKey="shipped_saved_views" paramKeys={SHIPPED_VIEW_PARAMS} />
-                    </div>
+                    {/* Saved views moved to the table ⋮ menu (station-table-unification §3.2). */}
+                    <span className="text-micro font-semibold uppercase tracking-wide text-text-faint">Click a dot to filter</span>
                     <OutboundStatusLegend />
                 </div>
             }
@@ -353,14 +359,28 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                 <motion.div variants={itemVariants} className="space-y-4">
                         {/* Combined Zoho sync + daily pickup report (tabbed) */}
                         <ShippedActionsButton />
+                        <div className="space-y-3 border-t border-border-hairline pt-3">
+                            <FirstScanOnboardingCard variant="sidebar" />
+                            <ThroughputRoiCard variant="sidebar" />
+                        </div>
+
+                        {/* AI quick-jump — cross-entity hybrid hits for the same
+                            query (renders nothing when the flag is off or empty) */}
+                        {aiQuickJump.hits.length > 0 && (
+                            <AiQuickJumpResults
+                                hits={aiQuickJump.hits}
+                                className="rounded-xl border border-border-hairline bg-surface-card"
+                            />
+                        )}
 
                         {/* Search Results */}
                         {results.length > 0 && (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <p className={`${microBadge} text-gray-500`}>
+                                    <p className={`${microBadge} text-text-soft`}>
                                         {results.length} Result{results.length !== 1 ? 's' : ''}
                                     </p>
+                                    {/* ds-raw-button: inline text link (microBadge + hover:underline, no chrome) — Button would add height/padding */}
                                     <button
                                         onClick={() => setInputValue('')}
                                         className={`${microBadge} text-blue-600 hover:underline`}
@@ -372,40 +392,43 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
                                     {results.map((result) => (
                                         <div key={result.id} className="relative group/card">
+                                            {/* ds-raw-button: multi-line text-left master-detail result row (order id + product + tracking) — not a Button shape */}
                                             <button
                                                 onClick={() => openDetails(result)}
-                                                className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                                                className="w-full text-left p-3 bg-surface-canvas border border-border-soft rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
                                             >
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center justify-between">
-                                                        <span className={`${sectionLabel} text-gray-900 group-hover:text-blue-600 truncate pr-8`}>
+                                                        <span className={`${sectionLabel} text-text-default group-hover:text-blue-600 truncate pr-8`}>
                                                             {result.order_id}
                                                         </span>
                                                         <span className={`${microBadge} px-1.5 py-0.5 rounded ${result.is_shipped ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                             {result.is_shipped ? 'Shipped' : 'Pending'}
                                                         </span>
                                                     </div>
-                                                    <p className="text-eyebrow text-gray-500 font-semibold truncate">{result.product_title}</p>
-                                                    <p className={`${microBadge} font-mono text-gray-500 truncate`}>{result.shipping_tracking_number}</p>
+                                                    <p className="text-eyebrow text-text-soft font-semibold truncate">{result.product_title}</p>
+                                                    <p className={`${microBadge} font-mono text-text-soft truncate`}>{result.shipping_tracking_number}</p>
                                                 </div>
                                             </button>
                                             
                                             {/* Copy All Button - Top Left of the card area */}
-                                            <button
-                                                onClick={(e) => handleCopyAll(e, result)}
-                                                className={`absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 ${
-                                                    copiedId === result.id
-                                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                                                        : 'bg-white border-gray-100 text-gray-400 hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm'
-                                                }`}
-                                                title="Copy all details"
-                                            >
-                                                {copiedId === result.id ? (
-                                                    <Check className="w-3 h-3" />
-                                                ) : (
-                                                    <Copy className="w-3 h-3" />
-                                                )}
-                                            </button>
+                                            <HoverTooltip label="Copy all details" asChild>
+                                                <IconButton
+                                                    tone="accent"
+                                                    onClick={(e) => handleCopyAll(e, result)}
+                                                    className={`absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 ${
+                                                        copiedId === result.id
+                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                                                            : 'bg-surface-card border-border-hairline text-text-faint hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm'
+                                                    }`}
+                                                    ariaLabel="Copy all details"
+                                                    icon={copiedId === result.id ? (
+                                                        <Check className="w-3 h-3 text-emerald-600" />
+                                                    ) : (
+                                                        <Copy className="w-3 h-3" />
+                                                    )}
+                                                />
+                                            </HoverTooltip>
                                         </div>
                                     ))}
                                 </div>
@@ -423,23 +446,24 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 </p>
                                 <div className="mt-4 flex items-center justify-center gap-3">
                                     {shippedSearchField !== 'all' && onShippedSearchFieldChange ? (
-                                        <button
-                                            type="button"
+                                        <Button
+                                            variant="primary"
+                                            size="md"
                                             onClick={() => {
                                                 onShippedSearchFieldChange('all');
                                             }}
-                                            className={`rounded-xl bg-blue-600 px-4 py-2 text-white ${sectionLabel} shadow-sm transition-colors hover:bg-blue-700`}
                                         >
                                             Change To All
-                                        </button>
+                                        </Button>
                                     ) : null}
-                                    <button
-                                        type="button"
+                                    <Button
+                                        variant="secondary"
+                                        size="md"
                                         onClick={() => setInputValue('')}
-                                        className={`rounded-xl border border-blue-200 bg-white px-4 py-2 text-blue-700 ${sectionLabel} transition-colors hover:border-blue-300 hover:bg-blue-100`}
+                                        className="border border-blue-200 bg-surface-card text-blue-700 hover:border-blue-300 hover:bg-blue-100"
                                     >
                                         Clear Search
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         )}
@@ -472,7 +496,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
     const sidebarShell = embedded ? (
         panelContent
     ) : (
-        <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[300px]">
+        <aside className="bg-surface-card text-text-default flex-shrink-0 h-full overflow-hidden border-r border-border-soft relative group w-[300px]">
             {panelContent}
         </aside>
     );

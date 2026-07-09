@@ -31,11 +31,10 @@ export function MasterNavHeader({
       type="button"
       onClick={onClick}
       aria-expanded={open}
-      title="Click to switch page or mode"
       className={cn(
         // Exactly 40px — same grid as every other sidebar band (no bulky chip,
         // so the header reads as a lean 40px bar, not a taller block).
-        'flex h-[40px] w-full min-w-0 items-center gap-2.5 px-3 text-left transition-colors hover:bg-surface-canvas',
+        'ds-raw-button flex h-[40px] w-full min-w-0 items-center gap-2.5 px-3 text-left transition-colors hover:bg-surface-canvas',
         className,
       )}
     >

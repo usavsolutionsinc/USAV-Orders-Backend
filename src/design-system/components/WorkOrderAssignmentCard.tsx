@@ -39,17 +39,17 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
         type="button"
         disabled={!hasPrev}
         onClick={() => navigate('prev')}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-text-soft transition-colors hover:bg-surface-sunken hover:text-text-muted disabled:opacity-20"
         aria-label="Previous"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
 
       <div className="min-w-0 text-center leading-tight">
-        <p className="text-eyebrow font-black uppercase tracking-[0.22em] text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-[0.22em] text-text-soft">
           {remaining} remaining
         </p>
-        <p className="mt-0.5 text-mini font-black uppercase tracking-[0.16em] text-gray-500">
+        <p className="mt-0.5 text-mini font-black uppercase tracking-[0.16em] text-text-soft">
           {todayUnassignedCount} unassigned · {todayTotalCount} total today
         </p>
       </div>
@@ -58,7 +58,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
         type="button"
         disabled={!hasNext}
         onClick={() => navigate('next')}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-text-soft transition-colors hover:bg-surface-sunken hover:text-text-muted disabled:opacity-20"
         aria-label="Next"
       >
         <ChevronRight className="h-4 w-4" />
@@ -69,7 +69,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
   const headerEyebrow = (
     <div className="flex w-full min-w-0 items-center justify-between gap-3">
       <div className="flex min-h-[26px] min-w-0 flex-1 items-center">
-        <span className="truncate text-sm font-black uppercase tracking-[0.08em] leading-none text-gray-500">
+        <span className="truncate text-sm font-black uppercase tracking-[0.08em] leading-none text-text-soft">
           {assignmentHeaderContextText(row)}
         </span>
       </div>
@@ -104,7 +104,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="break-words text-2xl font-black leading-tight tracking-tight text-gray-950 [overflow-wrap:anywhere]"
+              className="break-words text-2xl font-black leading-tight tracking-tight text-text-default [overflow-wrap:anywhere]"
               style={{
                 height: '100%',
                 overflowY: 'auto',
@@ -117,7 +117,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
           </AnimatePresence>
         </div>
 
-        <div className="shrink-0 space-y-4 border-t border-gray-100 px-5 pb-5 pt-2.5">
+        <div className="shrink-0 space-y-4 border-t border-border-hairline px-5 pb-5 pt-2.5">
           <div>
             <StaffButtonGrid
               label="Technician"
@@ -127,7 +127,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
               emptyMessage="No technicians"
             />
             {staffContext && (staffContext.techniciansOff?.length || staffContext.techniciansInactive?.length) ? (
-              <p className="mt-1.5 text-eyebrow font-bold text-gray-400">
+              <p className="mt-1.5 text-eyebrow font-bold text-text-faint">
                 Unavailable: {[
                   ...(staffContext.techniciansOff || []).map((m) => `${m.name} (Off today)`),
                   ...(staffContext.techniciansInactive || []).map((m) => `${m.name} (Inactive)`),
@@ -146,7 +146,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
               emptyMessage="No packers"
             />
             {staffContext && (staffContext.packersOff?.length || staffContext.packersInactive?.length) ? (
-              <p className="mt-1.5 text-eyebrow font-bold text-gray-400">
+              <p className="mt-1.5 text-eyebrow font-bold text-text-faint">
                 Unavailable: {[
                   ...(staffContext.packersOff || []).map((m) => `${m.name} (Off today)`),
                   ...(staffContext.packersInactive || []).map((m) => `${m.name} (Inactive)`),
@@ -155,8 +155,8 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-            <span className="text-eyebrow font-black uppercase tracking-[0.22em] text-gray-500">
+          <div className="flex items-center justify-between gap-3 border-t border-border-hairline pt-3">
+            <span className="text-eyebrow font-black uppercase tracking-[0.22em] text-text-soft">
               Deadline
             </span>
             <input
@@ -167,7 +167,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
                 setDeadline(next);
                 updateCurrentDraft({ deadline: next });
               }}
-              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-micro font-bold text-gray-800 outline-none transition-colors focus:border-gray-400 tabular-nums"
+              className="rounded-md border border-border-soft bg-surface-card px-2 py-1 text-micro font-bold text-text-default outline-none transition-colors focus:border-border-emphasis tabular-nums"
             />
           </div>
 
@@ -175,7 +175,7 @@ export function WorkOrderAssignmentCard(props: WorkOrderAssignmentCardProps) {
             <button
               type="button"
               onClick={handleMarkDone}
-              className="h-8 rounded-lg border border-gray-200 bg-gray-50 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-100"
+              className="h-8 rounded-lg border border-border-soft bg-surface-canvas text-eyebrow font-black uppercase tracking-[0.18em] text-text-muted transition-colors hover:border-border-default hover:bg-surface-sunken"
             >
               Mark as Done
             </button>

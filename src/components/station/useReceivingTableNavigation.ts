@@ -21,6 +21,12 @@ interface UseReceivingTableNavigationArgs {
   selectModeRef: React.MutableRefObject<boolean>;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   selectedId: number | null;
+  /**
+   * When false, skip the `receiving-navigate-table` line stepper. Unbox/Triage
+   * keep the history table mounted (cache) but route chevrons to the sidebar
+   * rail — both surfaces share the same event name, so the table must yield.
+   */
+  tableNavEnabled?: boolean;
 }
 
 export function useReceivingTableNavigation({
@@ -30,9 +36,11 @@ export function useReceivingTableNavigation({
   selectModeRef,
   scrollRef,
   selectedId,
+  tableNavEnabled = true,
 }: UseReceivingTableNavigationArgs): void {
-  // Sidebar chevrons / arrow keys → move the line selection.
+  // Sidebar chevrons / arrow keys → move the line selection (History/Incoming only).
   useEffect(() => {
+    if (!tableNavEnabled) return;
     const handler = (event: Event) => {
       const direction = (event as CustomEvent<'prev' | 'next'>).detail;
       if (direction !== 'prev' && direction !== 'next') return;
@@ -49,7 +57,7 @@ export function useReceivingTableNavigation({
     };
     window.addEventListener('receiving-navigate-table', handler);
     return () => window.removeEventListener('receiving-navigate-table', handler);
-  }, [handleSelectRow, orderedVisibleRows, selectedIdRef, selectModeRef]);
+  }, [handleSelectRow, orderedVisibleRows, selectedIdRef, selectModeRef, tableNavEnabled]);
 
   // Detail-overlay prev/next: step through unique `receiving_id`s in the visible
   // history list and re-open the overlay for the next one.

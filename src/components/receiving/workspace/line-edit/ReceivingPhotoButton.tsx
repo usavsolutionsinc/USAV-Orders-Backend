@@ -3,20 +3,25 @@
 /**
  * Compact carton-photos control for the condensed CartonContextCard row.
  *
- * When there are no photos yet, the button acts as the send-to-phone trigger
- * for starting capture. Once photos exist, hovering reveals the gallery toolbar.
+ * One pill: camera + (×N when photos exist) + "+". Click sends a capture
+ * request to the paired phone. When photos exist, hovering the pill reveals
+ * the read/delete gallery toolbar — the wrapper owns hover (with a short leave
+ * delay) so the cursor can cross the gap to the popover without it collapsing.
  */
 
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
-import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { receivingPhotosQueryKey, refreshReceivingPhotos } from '@/lib/queries/receiving-queries';
 import { Camera, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
 import { toast } from '@/lib/toast';
+import { unboxingPhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 
 interface PhotoRow {
   id: number;
@@ -33,6 +38,8 @@ interface PhotosPayload {
   initialNasFolder?: string | null;
 }
 
+const HOVER_LEAVE_MS = 140;
+
 export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   receivingId,
   staffId,
@@ -44,7 +51,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const queryClient = useQueryClient();
-  const queryKey = ['receiving-photos', receivingId];
+  const queryKey = receivingPhotosQueryKey(receivingId);
 
   const { data } = useQuery<PhotosPayload>({
     queryKey,
@@ -59,10 +66,12 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     staleTime: 10_000,
   });
 
-  const refresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
-    invalidateReceivingFeeds(queryClient);
-  }, [queryClient, queryKey]);
+  const refresh = useCallback(
+    (deletedPhotoId?: number) => {
+      refreshReceivingPhotos(queryClient, receivingId, deletedPhotoId);
+    },
+    [queryClient, receivingId],
+  );
 
   useReceivingPhotosRealtimeRefresh(receivingId, staffId, refresh, staffId > 0 && !!orgId);
 
@@ -81,60 +90,98 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     () =>
       (data?.photos ?? [])
         .filter((p) => !!p.photoUrl?.trim())
-        .map((p) => ({ id: p.id, url: p.photoUrl })),
+        .map((p) => ({
+          id: p.id,
+          url: p.photoUrl,
+          meta: unboxingPhotoMeta({ caption: p.caption, createdAt: p.createdAt }),
+        })),
     [data],
   );
 
   const count = photos.length;
+  const hasGallery = count > 0;
+  const [galleryHover, setGalleryHover] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  const btnBase =
-    'inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-lg px-2.5 text-caption font-black tabular-nums shadow-sm transition-colors';
+  const openGallery = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (count > 0) setGalleryHover(true);
+  }, [count]);
 
-  // Empty state — camera + "+", display only. Capture now happens on mobile.
-  if (count === 0) {
-    return (
-      <button
-        type="button"
-        onClick={handleRequestOnPhone}
-        title="Send to phone to take photos"
-        aria-label="Send to phone to take photos"
-        className={`${btnBase} border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100`}
-      >
-        <Camera className="h-4 w-4" />
-        <Plus className="h-3 w-3" />
-      </button>
-    );
-  }
+  const scheduleCloseGallery = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setGalleryHover(false), HOVER_LEAVE_MS);
+  }, []);
 
-  // With photos — camera + ×N; hovering reveals the gallery toolbar.
+  useEffect(() => () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+  }, []);
+
+  // One consistent resting state across every PO — a calm blue-tinted pill.
+  // (Previously an `emphasized` variant added a ring/darker fill on the
+  // photos-step-with-zero-photos case, which read as an inconsistent highlight.)
+  const btnClass =
+    'h-8 shrink-0 gap-1 self-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-caption font-black tabular-nums text-blue-700 shadow-sm hover:bg-blue-100 hover:text-blue-700';
+
+  const title = hasGallery
+    ? `${count} photo${count === 1 ? '' : 's'} — click to send to phone, hover for gallery`
+    : 'Send to phone to take photos';
+
+  const ariaLabel = hasGallery
+    ? `${count} carton photo${count === 1 ? '' : 's'}; send to phone or hover for gallery`
+    : 'Send to phone to take photos';
+
   return (
-    <div className="group/photos relative shrink-0">
-      <button
-        type="button"
-        aria-haspopup="true"
-        title={`${count} photo${count === 1 ? '' : 's'} — hover for options`}
-        className={`${btnBase} border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100`}
-      >
-        <Camera className="h-4 w-4" />
-        ×{count}
-      </button>
-      {/* Hover popover. `pt-1.5` is inside the group so the gap between button
-          and card doesn't drop the hover. Only rendered when photos exist. */}
-      <div className="invisible absolute right-0 top-full z-30 pt-1.5 opacity-0 transition-opacity duration-100 group-hover/photos:visible group-hover/photos:opacity-100">
-        <div className="w-fit max-w-[80vw] rounded-xl border border-gray-200 bg-white p-1 shadow-xl">
-          <PhotoGallery
-            photos={photos}
-            orderId={`RCV-${receivingId}`}
-            launcherLayout="toolbar"
-            onAddPhotos={handleRequestOnPhone}
-            showCopyLinks={false}
-            toolbarShowLabel={false}
-            compact
-            libraryHref={`/ops/photos?receivingId=${receivingId}`}
-            onPhotoDeleted={refresh}
-          />
+    <div
+      className="relative shrink-0"
+      onMouseEnter={hasGallery ? openGallery : undefined}
+      onMouseLeave={hasGallery ? scheduleCloseGallery : undefined}
+      onFocusCapture={hasGallery ? openGallery : undefined}
+      onBlurCapture={
+        hasGallery
+          ? (e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleCloseGallery();
+            }
+          : undefined
+      }
+    >
+      <HoverTooltip label={title} asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleRequestOnPhone}
+          ariaLabel={ariaLabel}
+          aria-expanded={hasGallery ? galleryHover : undefined}
+          icon={<Camera className="h-4 w-4" />}
+          iconRight={<Plus className="h-3 w-3" />}
+          className={btnClass}
+        >
+          {count > 0 ? <>{count}</> : null}
+        </Button>
+      </HoverTooltip>
+
+      {hasGallery && galleryHover ? (
+        // `pt-1.5` bridges the gap so the pointer stays inside the hover target
+        // while moving from the pill to the gallery card.
+        <div className="absolute right-0 top-full z-30 pt-1.5">
+          <div className="w-fit max-w-[80vw] rounded-xl border border-border-soft bg-surface-card p-1 shadow-xl">
+            <PhotoGallery
+              photos={photos}
+              orderId={`RCV-${receivingId}`}
+              receivingId={receivingId}
+              allowReassign
+              launcherLayout="toolbar"
+              toolbarShowLabel={false}
+              compact
+              libraryHref={`/ops/photos?receivingId=${receivingId}`}
+              onPhotoDeleted={(photoId) => refresh(photoId)}
+              onPhotoReassigned={(photoId) => refresh(photoId)}
+              onPhotoUploaded={(photoId) => refresh(photoId)}
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 });

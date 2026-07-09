@@ -23,7 +23,7 @@
 import { useCallback } from 'react';
 import { toast } from '@/lib/toast';
 import { icons } from 'lucide-react';
-import { Button } from '@/design-system/primitives';
+import { Button, IconButton } from '@/design-system/primitives';
 import { GripVertical, Plus, Settings, X } from '@/components/Icons';
 import {
   DndContext,
@@ -43,6 +43,7 @@ import { BlockConfigSheet } from '@/components/stations/BlockConfigSheet';
 import { StationIcon } from '@/components/stations/station-icons';
 import { useStationEditor } from '@/components/stations/useStationEditor';
 import type { StudioGraphNode, StudioStationView } from './studio-types';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 const EDIT_SLOT = 'queue' as const;
 
@@ -67,37 +68,35 @@ function SortableBlockRow({
     zIndex: isDragging ? 1 : undefined,
   };
   return (
-    <div ref={setNodeRef} style={style} className="rounded-md bg-white ring-1 ring-slate-200">
-      <div className="flex items-center gap-1.5 border-b border-slate-100 px-2 py-1">
-        <button
-          type="button"
+    <div ref={setNodeRef} style={style} className="rounded-md bg-surface-card ring-1 ring-border-soft">
+      <div className="flex items-center gap-1.5 border-b border-border-hairline px-2 py-1">
+        <IconButton
           {...attributes}
           {...listeners}
-          aria-label="Drag to reorder"
-          className="flex-shrink-0 cursor-grab text-slate-300 transition hover:text-slate-500 active:cursor-grabbing"
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
-        <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-slate-400" />
-        <span className="flex-1 truncate text-mini font-bold text-slate-600">
+          ariaLabel="Drag to reorder"
+          className="flex-shrink-0 cursor-grab text-text-faint hover:text-text-soft active:cursor-grabbing"
+          icon={<GripVertical className="h-3.5 w-3.5" />}
+        />
+        <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-text-faint" />
+        <span className="flex-1 truncate text-mini font-bold text-text-muted">
           {blockDef?.label ?? inst.block}
         </span>
-        <button
-          type="button"
-          onClick={() => onConfigure(inst)}
-          title="Configure source, display & actions"
-          className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-        >
-          <Settings className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onRemove(inst.id)}
-          title="Remove block"
-          className="rounded p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <HoverTooltip label="Configure source, display & actions" asChild>
+          <IconButton
+            onClick={() => onConfigure(inst)}
+            ariaLabel="Configure source, display & actions"
+            className="rounded p-0.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+            icon={<Settings className="h-3.5 w-3.5" />}
+          />
+        </HoverTooltip>
+        <HoverTooltip label="Remove block" asChild>
+          <IconButton
+            onClick={() => onRemove(inst.id)}
+            ariaLabel="Remove block"
+            className="rounded p-0.5 text-text-faint hover:bg-rose-50 hover:text-rose-600"
+            icon={<X className="h-3.5 w-3.5" />}
+          />
+        </HoverTooltip>
       </div>
       <BlockRenderer instance={inst} />
     </div>
@@ -167,35 +166,41 @@ export function StudioNodeStationEditor({
   });
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-50">
+    <div className="flex h-full min-h-0 flex-col bg-surface-canvas">
       {/* Sub-header: back + context + edit toggle */}
-      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
-        <button
+      <div className="flex items-center gap-3 border-b border-border-soft bg-surface-card px-4 py-2">
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onBack}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
+          className="text-text-muted hover:bg-surface-sunken"
+          icon={<icons.ArrowLeft />}
         >
-          <icons.ArrowLeft className="h-4 w-4" /> Flow
-        </button>
-        <span className="text-slate-300">/</span>
+          Flow
+        </Button>
+        <span className="text-text-faint">/</span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-slate-900">
+          <p className="truncate text-sm font-bold text-text-default">
             {station?.label ?? `${nodeLabel} · station`}
           </p>
-          <p className="truncate text-[11px] text-slate-400">
+          <p className="truncate text-caption text-text-faint">
             {station
               ? `${station.pageKey} · ${station.modeKey} · v${station.version}`
               : `binds to “${nodeLabel}”`}
           </p>
         </div>
         {!e.editing ? (
-          <button
+          <Button
+            variant="brand"
+            size="sm"
             onClick={e.enterEdit}
-            className="ml-auto flex items-center gap-1 rounded-md bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-slate-700"
+            className="ml-auto"
+            icon={<icons.Pencil />}
           >
-            <icons.Pencil className="h-3.5 w-3.5" /> {station ? 'Edit station' : 'Bind a station'}
-          </button>
+            {station ? 'Edit station' : 'Bind a station'}
+          </Button>
         ) : (
-          <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+          <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-amber-700">
             Editing draft
           </span>
         )}
@@ -209,23 +214,23 @@ export function StudioNodeStationEditor({
             }
           >
             <div className="mb-1.5 flex items-center justify-between px-1">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <h3 className="text-micro font-bold uppercase tracking-wider text-text-faint">
                 Queue{e.editing ? ' · editing' : ''}
               </h3>
               {e.editing ? (
-                <button
-                  type="button"
-                  onClick={e.exitEdit}
-                  title="Exit edit mode"
-                  className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <HoverTooltip label="Exit edit mode" asChild>
+                  <IconButton
+                    onClick={e.exitEdit}
+                    ariaLabel="Exit edit mode"
+                    className="rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+                    icon={<X className="h-3.5 w-3.5" />}
+                  />
+                </HoverTooltip>
               ) : null}
             </div>
 
             {e.instances.length === 0 && !e.editing ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-500">
+              <div className="rounded-xl border border-dashed border-border-soft bg-surface-card px-4 py-6 text-center text-xs text-text-soft">
                 No blocks in this station yet. Click “{station ? 'Edit station' : 'Bind a station'}” to compose it.
               </div>
             ) : (
@@ -245,20 +250,22 @@ export function StudioNodeStationEditor({
                   </DndContext>
                 ) : (
                   e.instances.map((inst) => (
-                    <div key={inst.id} className="rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                    <div key={inst.id} className="rounded-xl border border-border-soft bg-surface-card p-1 shadow-sm">
                       <BlockRenderer instance={inst} />
                     </div>
                   ))
                 )}
 
                 {e.editing ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={e.openPalette}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 bg-white px-2 py-2 text-xs font-bold text-slate-500 transition-colors hover:border-blue-400 hover:text-blue-600"
+                    className="w-full border border-dashed border-border-default bg-surface-card text-text-soft hover:border-blue-400 hover:text-blue-600"
+                    icon={<Plus />}
                   >
-                    <Plus className="h-3.5 w-3.5" /> Add block
-                  </button>
+                    Add block
+                  </Button>
                 ) : null}
               </div>
             )}
@@ -271,7 +278,7 @@ export function StudioNodeStationEditor({
               {station.slots
                 .filter((s) => s.slot !== EDIT_SLOT)
                 .map((s) => (
-                  <p key={s.slot} className="text-[11px] text-slate-400">
+                  <p key={s.slot} className="text-caption text-text-faint">
                     {s.slot}: {s.blocks.map((b) => b.blockLabel).join(', ')} (read-only)
                   </p>
                 ))}
@@ -281,7 +288,7 @@ export function StudioNodeStationEditor({
       </div>
 
       {e.editing ? (
-        <div className="flex items-center justify-end gap-2 border-t border-dashed border-blue-200 bg-white px-4 py-2">
+        <div className="flex items-center justify-end gap-2 border-t border-dashed border-blue-200 bg-surface-card px-4 py-2">
           <Button
             variant="secondary"
             size="sm"

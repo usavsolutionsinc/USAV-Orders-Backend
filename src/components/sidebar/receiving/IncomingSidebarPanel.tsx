@@ -1,15 +1,20 @@
 'use client';
 
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { cn } from '@/utils/_cn';
 import { CarrierSyncDialog } from '@/components/sidebar/receiving/CarrierSyncDialog';
 import { IncomingSyncDialog } from '@/components/sidebar/receiving/IncomingSyncDialog';
 import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
-import { IncomingTodoList } from '@/components/sidebar/receiving/IncomingTodoList';
+import { IncomingViewBand } from '@/components/receiving/IncomingViewBand';
+import { OrdersSyncPopover } from '@/components/unshipped/OrdersSyncPopover';
 import { useIncomingFilters } from './incoming/useIncomingFilters';
 import { useIncomingSummary } from './incoming/useIncomingSummary';
 import { useIncomingSyncActions } from './incoming/useIncomingSyncActions';
 import { IncomingFilterDropdown } from './incoming/IncomingFilterDropdown';
 import { IncomingSyncButtons } from './incoming/IncomingSyncButtons';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { useQueryClient } from '@tanstack/react-query';
 
 export type {
   IncomingDeliveryState,
@@ -26,6 +31,7 @@ export type {
  * Thin composition layer — state/logic live under `./incoming/`.
  */
 export function IncomingSidebarPanel() {
+  const queryClient = useQueryClient();
   const filters = useIncomingFilters();
   const summary = useIncomingSummary();
   const sync = useIncomingSyncActions();
@@ -33,8 +39,7 @@ export function IncomingSidebarPanel() {
   return (
     <>
       <SidebarShell
-        className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white"
-        bodyClassName="flex h-full min-h-0 flex-1 flex-col overflow-hidden pt-0"
+        className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-card"
         search={{ value: filters.search, onChange: filters.setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
         filter={{
           label: 'Filters',
@@ -44,16 +49,30 @@ export function IncomingSidebarPanel() {
           renderDropdown: () => <IncomingFilterDropdown filters={filters} summary={summary} />,
         }}
         headerBelow={
-          <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white pb-2">
-            <IncomingSyncButtons sync={sync} />
-            <div className="flex flex-col">
-              <IncomingAttachTrackingPopover />
+          <>
+            <div className={cn(sidebarHeaderPillRowClass, 'h-auto min-h-[40px] items-start pt-1 pb-2.5')}>
+              <IncomingViewBand />
             </div>
-          </div>
+            <div className="shrink-0 space-y-2 border-b border-border-soft bg-surface-card pb-2 pt-2.5">
+              {/* Sales orders (Google Sheets + Ecwid + exceptions) — same pipeline as
+                  Unshipped → Sync Orders → Import Latest Orders; scoped to ctx org. */}
+              <div className="px-1.5">
+                <OrdersSyncPopover
+                  onRefresh={() => {
+                    invalidateReceivingFeeds(queryClient);
+                    window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+                    window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                  }}
+                />
+              </div>
+              <IncomingSyncButtons sync={sync} />
+              <div className="flex flex-col">
+                <IncomingAttachTrackingPopover />
+              </div>
+            </div>
+          </>
         }
-      >
-        <IncomingTodoList />
-      </SidebarShell>
+      />
       <CarrierSyncDialog
         open={sync.syncDialogOpen}
         onClose={() => sync.setSyncDialogOpen(false)}

@@ -19,22 +19,32 @@ import {
   type PlatformRow,
   type TypeRow,
 } from '@/lib/neon/catalog-queries';
+import { getOrSet, invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
 }
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const REDIS_TTL_S = 300;
 
 const platformCache = new Map<string, CacheEntry<PlatformRow[]>>();
 const typeCache = new Map<string, CacheEntry<TypeRow[]>>();
 const accountCache = new Map<string, CacheEntry<PlatformAccountRow[]>>();
 
+// Two-tier: L1 per-instance Map (existing 5-min TTL) in front of an L2 shared
+// Redis cache (via getOrSet) so a cold instance offloads to Redis instead of
+// Neon. Revocation semantics are unchanged from the L1-only design — the L1 TTL
+// still bounds cross-instance staleness; invalidateCatalogCache clears both.
+
 /** Active platforms for the org (sorted), cached 5 min. */
 export async function getOrgPlatforms(orgId: string): Promise<PlatformRow[]> {
   const hit = platformCache.get(orgId);
   if (hit && hit.expiresAt > Date.now()) return hit.value;
-  const rows = await listPlatforms(orgId);
+  const rows = await getOrSet(CACHE_NS.catalog, orgId, 'platforms', REDIS_TTL_S, [CACHE_TAGS.catalog], () =>
+    listPlatforms(orgId),
+  );
   platformCache.set(orgId, { value: rows, expiresAt: Date.now() + CACHE_TTL_MS });
   return rows;
 }
@@ -43,7 +53,9 @@ export async function getOrgPlatforms(orgId: string): Promise<PlatformRow[]> {
 export async function getOrgTypes(orgId: string): Promise<TypeRow[]> {
   const hit = typeCache.get(orgId);
   if (hit && hit.expiresAt > Date.now()) return hit.value;
-  const rows = await listTypes(orgId);
+  const rows = await getOrSet(CACHE_NS.catalog, orgId, 'types', REDIS_TTL_S, [CACHE_TAGS.catalog], () =>
+    listTypes(orgId),
+  );
   typeCache.set(orgId, { value: rows, expiresAt: Date.now() + CACHE_TTL_MS });
   return rows;
 }
@@ -52,7 +64,9 @@ export async function getOrgTypes(orgId: string): Promise<TypeRow[]> {
 export async function getOrgPlatformAccounts(orgId: string): Promise<PlatformAccountRow[]> {
   const hit = accountCache.get(orgId);
   if (hit && hit.expiresAt > Date.now()) return hit.value;
-  const rows = await listPlatformAccounts(orgId);
+  const rows = await getOrSet(CACHE_NS.catalog, orgId, 'accounts', REDIS_TTL_S, [CACHE_TAGS.catalog], () =>
+    listPlatformAccounts(orgId),
+  );
   accountCache.set(orgId, { value: rows, expiresAt: Date.now() + CACHE_TTL_MS });
   return rows;
 }
@@ -149,7 +163,9 @@ export async function resolveOrderChannel(orgId: string, accountSource: string |
   return { platform, account, label: platform?.label ?? account?.label ?? null };
 }
 
-/** Drop cached lists for one org (or all when omitted). Call on any CRUD write. */
+/** Drop cached lists for one org (or all when omitted). Call on any CRUD write.
+ *  Clears the L1 Map (this instance) and fires an org-scoped L2 Redis bust so a
+ *  cold instance rebuilds fresh; other instances' L1 clears on their own TTL. */
 export function invalidateCatalogCache(orgId?: string): void {
   if (!orgId) {
     platformCache.clear();
@@ -160,4 +176,6 @@ export function invalidateCatalogCache(orgId?: string): void {
   platformCache.delete(orgId);
   typeCache.delete(orgId);
   accountCache.delete(orgId);
+  // Fire-and-forget the L2 clear (this is a sync API; never block a write on it).
+  void invalidateCacheTags(orgId, [CACHE_TAGS.catalog]);
 }

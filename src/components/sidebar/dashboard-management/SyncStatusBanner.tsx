@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import { AlertTriangle, Check, Database, ShieldCheck, X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import { PANEL_STATUS_BANNER_SPRING, PANEL_STATUS_ICON_SPRING, type ImportStatus } from './dashboard-management-shared';
 
@@ -28,9 +29,13 @@ export function SyncStatusBanner({ status, onDismiss }: { status: ImportStatus |
               <p className={sectionLabel}>{status.type === 'success' ? 'Sync Complete' : 'Sync Failed'}</p>
               <p className="text-eyebrow font-medium leading-relaxed opacity-80">{status.message}</p>
             </div>
-            <button type="button" onClick={onDismiss} className="shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors" aria-label="Dismiss">
-              <X className="w-3 h-3 opacity-50" />
-            </button>
+            <IconButton
+              type="button"
+              onClick={onDismiss}
+              ariaLabel="Dismiss"
+              className="shrink-0 p-1 rounded-lg hover:bg-scrim/5"
+              icon={<X className={`w-3 h-3 opacity-50 ${status.type === 'success' ? 'text-emerald-700' : 'text-red-700'}`} />}
+            />
           </div>
 
           {status.type === 'success' && status.details ? (
@@ -64,7 +69,7 @@ export function SyncStatusBanner({ status, onDismiss }: { status: ImportStatus |
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.25 + i * 0.05 }}
-                      className="text-center rounded-xl bg-white/60 border border-emerald-100/60 py-1.5"
+                      className="text-center rounded-xl bg-surface-card/60 border border-emerald-100/60 py-1.5"
                     >
                       <p className="text-sm font-black text-emerald-700 tabular-nums">{stat.value}</p>
                       <p className={`${microBadge} text-emerald-500`}>{stat.label}</p>

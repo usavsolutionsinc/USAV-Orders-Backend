@@ -1,3 +1,5 @@
+'use client';
+
 import type React from 'react';
 import { LocationDataMatrix } from '../LocationDataMatrix';
 import {
@@ -8,6 +10,8 @@ import {
   pad2,
   type LocationSegments,
 } from '@/lib/barcode-routing';
+import { useAuth } from '@/contexts/AuthContext';
+import { orgWarehouseLabel } from '@/lib/branding/letterhead';
 
 interface PrintLabelProps {
   segments: LocationSegments;
@@ -20,12 +24,13 @@ interface PrintLabelProps {
  * Sized to fill the @page declaration in globals.css.
  */
 export function PrintLabel({ segments, roomName, gln }: PrintLabelProps) {
+  const { user } = useAuth();
   const code = locationCode(segments);
   const ai = gs1LocationAi(segments, { gln });
   return (
     <div className="label-print-card" style={labelCardStyle}>
       <div style={labelLeftStyle}>
-        <div style={labelEyebrowStyle}>USAV Warehouse Location</div>
+        <div style={labelEyebrowStyle}>{orgWarehouseLabel(user?.organizationName || 'Workspace', 'Location')}</div>
         <div style={labelCodeStyle}>{code}</div>
         {roomName && <div style={labelRoomStyle}>{roomName}</div>}
         <div style={labelHumanStyle}>

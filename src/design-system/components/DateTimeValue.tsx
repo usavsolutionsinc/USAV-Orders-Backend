@@ -27,7 +27,7 @@ export function DateTimeValue({ value, fallback = 'N/A', className = '' }: DateT
   if (formatted === 'N/A') {
     return (
       <span
-        className={`block w-56 shrink-0 whitespace-nowrap text-left text-sm font-bold tabular-nums text-gray-400 ${className}`}
+        className={`block w-56 shrink-0 whitespace-nowrap text-left text-sm font-bold tabular-nums text-text-faint ${className}`}
       >
         {fallback}
       </span>
@@ -41,7 +41,7 @@ export function DateTimeValue({ value, fallback = 'N/A', className = '' }: DateT
 
   return (
     <span
-      className={`flex w-56 shrink-0 items-baseline gap-2 whitespace-nowrap text-sm font-bold tabular-nums text-gray-900 ${className}`}
+      className={`flex w-56 shrink-0 items-baseline gap-2 whitespace-nowrap text-sm font-bold tabular-nums text-text-default ${className}`}
     >
       <span>{date}</span>
       {time ? <span className="flex-1 text-right">{time}</span> : null}

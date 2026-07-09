@@ -1,30 +1,13 @@
 /**
- * Client mirror of RECEIVING_PRIORITY_RANK_SQL in
- * src/app/api/receiving-lines/route.ts. Lower rank = higher priority. Kept in
- * lockstep with the server CASE so the badge shows the same order the
- * "Prioritize" sort uses: an explicit priority flag (pending-order match or
- * manual toggle) leads at rank 0, then unfound/untagged, then amazon → ebay →
- * goodwill, everything else trails. Platform half derived at read time.
+ * Receiving priority badge — display tones for the platform-derived rank.
+ *
+ * The rank itself is single-sourced in src/lib/receiving/display/precedence.ts
+ * (the rules-as-data SoT the server SQL `RECEIVING_PRIORITY_RANK_SQL` also
+ * derives from, via priorityRankSql). Re-exported here as `receivingPriorityRank`
+ * so existing badge importers keep their import path while the logic lives in one
+ * place. Lower rank = higher priority.
  */
-export function receivingPriorityRank(
-  isUnmatched: boolean,
-  sourcePlatform: string | null | undefined,
-  isPriority?: boolean | null,
-): number {
-  if (isPriority) return 0;
-  const platform = (sourcePlatform ?? '').trim();
-  if (isUnmatched || platform === '') return 1;
-  switch (platform.toLowerCase()) {
-    case 'amazon':
-      return 2;
-    case 'ebay':
-      return 3;
-    case 'goodwill':
-      return 4;
-    default:
-      return 9;
-  }
-}
+export { platformPriorityRank as receivingPriorityRank } from '@/lib/receiving/display/precedence';
 
 interface PriorityTone {
   /** Short label rendered in the badge (fixed-width, mirrors the Claim pill). */
@@ -82,6 +65,7 @@ export function receivingPriorityTone(rank: number): PriorityTone {
       return {
         label: 'Other',
         title: 'Lowest priority — other platform',
+        // ds-allow-raw-neutral: identity tone — neutral member of the colored filled-pill family
         className: 'bg-slate-400 text-white',
       };
   }

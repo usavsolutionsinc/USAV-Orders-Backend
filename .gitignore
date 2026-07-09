@@ -36,6 +36,8 @@ snapshot*.txt
 .env*.tmp
 .env.nango
 receiving_lines_cleanup_backup_*.json
+.printers.tmp.txt
+.tmp/*.png
 
 # vercel
 .vercel
@@ -89,3 +91,6 @@ scripts/_fix-*
 # Build installers (large artifacts; do not commit)
 context/*.exe
 *.exe
+
+# reversible snapshot for mark-board-shipped-test.ts (contains live tracking state)
+scripts/.shipped-test-snapshot.json

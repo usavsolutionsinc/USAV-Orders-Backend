@@ -3,7 +3,7 @@ import { tenantQuery, withTenantConnection, withTenantTransaction } from '@/lib/
 import type { OrgId } from '@/lib/tenancy/constants';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
+import { resolveCurrentReceivingLineIds, type SerialUnitRow } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { withAuth } from '@/lib/auth/withAuth';
 import { sortSerialUnitToParts } from '@/lib/inventory/parts-sort';
@@ -15,10 +15,40 @@ import {
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
+import { isTestingApiView } from '@/lib/surface-isolation';
 import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
 import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE, SHIPMENT_SCANNED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { isIncomingUniversal } from '@/lib/feature-flags';
+import { notInboundMirrorTerminalPredicate } from '@/lib/inbound/mirror';
 import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
+import { UNBOX_OPENED_PREDICATE_SQL } from '@/lib/receiving/unbox-scan-opened';
+import { priorityRankSql, laneRankSql } from '@/lib/receiving/display/precedence';
+
+/**
+ * A serial (aliased `alias`) whose CURRENT receiving line — its most recent
+ * inventory_events touch, falling back to the frozen origin — is `rl.id`.
+ * NOT a plain `alias.origin_receiving_line_id = rl.id` join: that column
+ * COALESCE-freezes to the FIRST-ever line, so a returned-then-re-received
+ * serial would only ever "find" the PO it originally shipped under, never the
+ * one it's actually on now. Mirrors `resolveCurrentReceivingLineIds`
+ * (src/lib/neon/serial-units-queries.ts) — same logic, inlined because it
+ * composes into a larger dynamic WHERE string rather than running standalone.
+ */
+function currentLineIsMatchSql(alias: string): string {
+  // Phase 3: the frozen-origin fallback is the RECEIVING_LINE provenance edge
+  // (correlated subquery, since this composes into a dynamic WHERE string).
+  return `COALESCE(
+    (SELECT ie.receiving_line_id FROM inventory_events ie
+      WHERE ie.serial_unit_id = ${alias}.id AND ie.receiving_line_id IS NOT NULL
+        AND ie.organization_id = ${alias}.organization_id
+      ORDER BY ie.occurred_at DESC, ie.id DESC LIMIT 1),
+    (SELECT p.origin_id FROM serial_unit_provenance p
+      WHERE p.serial_unit_id = ${alias}.id AND p.origin_type = 'RECEIVING_LINE'
+        AND p.origin_id IS NOT NULL AND p.organization_id = ${alias}.organization_id
+      ORDER BY p.occurred_at ASC, p.id ASC LIMIT 1)
+  ) = rl.id`;
+}
 
 type LineSerial = {
   id: number;
@@ -27,28 +57,58 @@ type LineSerial = {
   sku_catalog_id: number | null;
   condition_grade: string | null;
   created_at: string;
+  /** Handling-unit (H-#### tote) this unit currently sits in, if any. */
+  handling_unit_id: number | null;
+  /** Minted unit identity; presence = this unit has been labeled at least once. */
+  unit_uid: string | null;
 };
 
 async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Map<number, LineSerial[]>> {
   const grouped = new Map<number, LineSerial[]>();
   if (lineIds.length === 0) return grouped;
 
-  // serial_units is org-owned; org-scope so a cross-tenant line id (or future
-  // RLS under app_tenant) can never surface another tenant's serials.
-  const result = await tenantQuery<SerialUnitRow>(
+  // Candidate serials: anything EVER touched by one of these lines — either
+  // its frozen origin, or a later inventory_events attach (a return re-
+  // received under a different PO moves a serial onto a NEW line without
+  // ever updating origin_receiving_line_id). serial_units is org-owned;
+  // org-scope so a cross-tenant line id can never surface another tenant's
+  // serials.
+  const result = await tenantQuery<
+    SerialUnitRow & { origin_receiving_line_id: number | null; handling_unit_id: number | null }
+  >(
     orgId,
-    `SELECT id, serial_number, current_status, sku_catalog_id, condition_grade,
-            origin_receiving_line_id, created_at
-     FROM serial_units
-     WHERE origin_receiving_line_id = ANY($1::int[])
-       AND organization_id = $2
-     ORDER BY created_at ASC, id ASC`,
+    // Phase 3: frozen-origin candidate set via provenance; origin value via view.
+    `SELECT DISTINCT su.id, su.serial_number, su.current_status, su.sku_catalog_id,
+            su.condition_grade, su.handling_unit_id, su.unit_uid,
+            vo.origin_receiving_line_id, su.created_at
+       FROM serial_units su
+       JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+      WHERE su.organization_id = $2
+        AND (su.id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                        WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = ANY($1::int[])
+                          AND p.organization_id = $2)
+             OR EXISTS (
+               SELECT 1 FROM inventory_events ie
+                WHERE ie.serial_unit_id = su.id
+                  AND ie.receiving_line_id = ANY($1::int[])
+                  AND ie.organization_id = $2
+             ))
+      ORDER BY su.created_at ASC, su.id ASC`,
     [lineIds, orgId],
+  );
+  if (result.rows.length === 0) return grouped;
+
+  // Resolve each candidate's CURRENT line (most recent inventory_events touch,
+  // falling back to the frozen origin) — never group by origin_receiving_line_id
+  // directly, or a re-received serial keeps showing on its first-ever line.
+  const currentLines = await resolveCurrentReceivingLineIds(
+    result.rows.map((row) => Number(row.id)),
+    orgId,
   );
 
   for (const row of result.rows) {
-    const lineId = row.origin_receiving_line_id;
-    if (lineId == null) continue;
+    const lineId = currentLines.get(Number(row.id)) ?? row.origin_receiving_line_id;
+    if (lineId == null || !lineIds.includes(lineId)) continue;
     const slim: LineSerial = {
       id: Number(row.id),
       serial_number: row.serial_number,
@@ -56,6 +116,8 @@ async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Ma
       sku_catalog_id: row.sku_catalog_id,
       condition_grade: row.condition_grade,
       created_at: row.created_at,
+      handling_unit_id: row.handling_unit_id ?? null,
+      unit_uid: row.unit_uid ?? null,
     };
     const bucket = grouped.get(lineId);
     if (bucket) bucket.push(slim);
@@ -84,15 +146,24 @@ const CONDITIONS   = new Set(['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 
 // every list query below).
 // A manual priority_tier override (0..3) wins outright via COALESCE; falls back
 // to the legacy is_priority boolean (rank 0), then the platform-derived rank.
-const RECEIVING_PRIORITY_RANK_SQL = `
-  COALESCE(r.priority_tier, CASE
-    WHEN COALESCE(r.is_priority, false) THEN 0
-    WHEN r.source = 'unmatched' OR r.source_platform IS NULL THEN 1
-    WHEN lower(r.source_platform) = 'amazon'   THEN 2
-    WHEN lower(r.source_platform) = 'ebay'     THEN 3
-    WHEN lower(r.source_platform) = 'goodwill' THEN 4
-    ELSE 9
-  END)`;
+// Derived from the rules-as-data SoT (src/lib/receiving/display/precedence.ts)
+// so the server sort and the client badge (receivingPriorityRank) can never
+// drift — semantically identical to the former hand-written CASE (§7 Step E).
+const RECEIVING_PRIORITY_RANK_SQL = priorityRankSql({
+  tier: 'r.priority_tier',
+  isPriority: 'r.is_priority',
+  source: 'r.source',
+  sourcePlatform: 'r.source_platform',
+});
+
+// Triage priority-lane tier (docs/receiving-triage-redesign-plan.md §4.2) —
+// composes with RECEIVING_PRIORITY_RANK_SQL as a SECONDARY tie-breaker, never
+// a replacement: `priority_lane` is NULL on every carton that predates Phase 2
+// (and on any carton the operator hasn't staged yet), so putting it ahead of
+// the primary rank would silently reshuffle the entire live Prioritize tab the
+// moment this shipped. Mirrors receivingTriageLanePolicy's lane values
+// (src/lib/receiving/triage-lane-policy.ts) — keep in sync if that list changes.
+const RECEIVING_LANE_RANK_SQL = laneRankSql('r.priority_lane');
 
 function parsePositiveTechId(value: unknown): number | null {
   const parsed = Number(value);
@@ -103,7 +174,17 @@ function parsePositiveTechId(value: unknown): number | null {
 // ?id=<n>              → single row
 // ?receiving_id=<n>    → all lines for a package
 // ?limit&offset&search → paginated list (omit receiving_id to get all)
-export const GET = withAuth(async (request: NextRequest, ctx) => {
+//
+// Testing feeds (`view=testing`, `view=needs-test`) are served exclusively by
+// GET /api/testing/receiving-lines — never here — so package-pairing / QC scans
+// cannot pollute Unbox/Receiving list semantics.
+export type ReceivingLinesGetSurface = 'receiving' | 'testing';
+
+export async function handleReceivingLinesGet(
+  request: NextRequest,
+  ctx: { organizationId: string; staffId?: number | null },
+  surface: ReceivingLinesGetSurface = 'receiving',
+) {
   try {
     const { searchParams } = new URL(request.url);
     const id          = Number(searchParams.get('id'));
@@ -178,6 +259,32 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     // the supported view set can't drift between the two ends. `null` = no/
     // unknown view → fall back to week-range scoping below.
     const view = parseReceivingView(viewRaw);
+
+    if (surface === 'receiving' && isTestingApiView(viewRaw)) {
+      console.warn('[receiving-lines] blocked testing view on receiving endpoint', {
+        view: viewRaw,
+        orgId: ctx.organizationId,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'TESTING_VIEW_NOT_ALLOWED',
+          message: 'Use GET /api/testing/receiving-lines for testing feeds.',
+        },
+        { status: 403 },
+      );
+    }
+    if (surface === 'testing' && !isTestingApiView(viewRaw)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'INVALID_TESTING_VIEW',
+          message: 'Testing endpoint requires view=testing or view=needs-test.',
+        },
+        { status: 400 },
+      );
+    }
+
     // view=viewed only: the requesting operator, whose recently-opened lines
     // (receiving_line_views) this feed returns. `viewedParamIdx` is the $N of the
     // staff_id param once pushed, reused by the WHERE / ORDER BY / SELECT below.
@@ -200,20 +307,34 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
 
     const orgId = ctx.organizationId as OrgId;
 
+    // Universal Incoming (flag-gated, plan §6): when ON, view=incoming also shows
+    // eBay-buyer lines and the ?inbound facet filters by primary source. OFF (the
+    // default) = byte-identical Zoho-only path — no eBay rows, no new-column refs.
+    const inboundSourceParam = String(searchParams.get('inbound') || '').trim().toLowerCase();
+    const incomingLinkParam = String(searchParams.get('link') || '').trim().toLowerCase();
+    const universalIncoming = view === 'incoming' ? await isIncomingUniversal(orgId) : false;
+
     // Single row
     if (Number.isFinite(id) && id > 0) {
       const one = await tenantQuery(
         orgId,
         `SELECT rl.*,
-                r.receiving_tracking_number,
+                stn.tracking_number_raw AS receiving_tracking_number,
                 r.carrier,
                 r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
                 r.intake_type                AS receiving_intake_type,
                 COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
+                r.triage_complete,
+                r.triage_completed_at::text    AS triage_completed_at,
+                r.unbox_only_intake,
+                r.staging_location_id,
+                r.priority_lane,
+                r.pairing_state,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
+                r.zoho_notes                 AS receiving_zoho_notes,
                 r.listing_url                AS receiving_listing_url,
                 r.received_at::text          AS receiving_received_at,
                 r.unboxed_at::text           AS receiving_unboxed_at,
@@ -221,14 +342,14 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 r.unboxed_by                 AS receiving_unboxed_by,
                 staff_rb.name                AS received_by_name,
                 staff_ub.name                AS unboxed_by_name,
-                scan_first.scanned_at::text  AS first_scanned_at,
+                COALESCE(ops_scan.first_scanned_at, scan_first.scanned_at)::text  AS first_scanned_at,
                 scan_first.scanned_by        AS first_scanned_by,
                 staff_sb.name                AS scanned_by_name,
                 -- Last physical scan against this carton. Must match the list
                 -- view (view=activity) so the single-line refresh dispatched on
                 -- every line-select doesn't clobber the rail's scan-based
                 -- "last touched" time with rl.created_at (the import date).
-                rs_agg.last_scan::text       AS last_scan_at,
+                COALESCE(ops_scan.last_scanned_at, rs_agg.last_scan)::text       AS last_scan_at,
                 stn.tracking_number_raw      AS shipment_tracking_number,
                 stn.carrier                  AS shipment_carrier,
                 stn.latest_status_category   AS shipment_status_category,
@@ -281,6 +402,16 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
            ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
            LIMIT 1
          ) scan_first ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT
+             MIN(oe.occurred_at) AS first_scanned_at,
+             MAX(oe.occurred_at) AS last_scanned_at
+           FROM ops_events oe
+           WHERE oe.organization_id = rl.organization_id
+             AND oe.entity_type = 'receiving'
+             AND oe.entity_id = r.id
+             AND oe.event_type = 'TRACKING_SCANNED'
+         ) ops_scan ON TRUE
          LEFT JOIN staff staff_sb                ON staff_sb.id = scan_first.scanned_by
          -- sku_catalog join is on the SKU STRING, which collides across tenants;
          -- pin to the line's org so a same-SKU row in another tenant can't leak.
@@ -318,7 +449,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       const [rows, pkgRes] = await withTenantConnection(orgId, (client) => Promise.all([
         client.query(
           `SELECT rl.*,
-                  r.receiving_tracking_number,
+                  stn.tracking_number_raw AS receiving_tracking_number,
                   r.carrier,
                   r.source                     AS receiving_source,
                   r.source_platform            AS receiving_source_platform,
@@ -327,8 +458,21 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 r.priority_tier                AS priority_tier,
                   r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                   r.support_notes              AS receiving_support_notes,
+                  r.zoho_notes                 AS receiving_zoho_notes,
                   r.listing_url                AS receiving_listing_url,
+                  r.triage_complete,
+                  r.triage_completed_at::text    AS triage_completed_at,
+                  r.unbox_only_intake,
                   r.received_at::text          AS receiving_received_at,
+                  -- Carton unbox stamp — REQUIRED. normalizeRow maps row.unboxed_at
+                  -- ONLY from receiving_unboxed_at, so omitting it here returned
+                  -- unboxed_at:null for every line on this path. The post-receive
+                  -- sibling refresh (useReceiveAction) dispatches these rows into
+                  -- the unbox rail, whose {...existing, ...updated} merge then
+                  -- clobbered the good unboxed_at with null → getUnboxActivityAt
+                  -- collapsed → the just-received carton sank below the top-N and
+                  -- DISAPPEARED. Mirror the other SELECT branches (view=activity).
+                  r.unboxed_at::text           AS receiving_unboxed_at,
                   -- Scan-based "last touched" time, matching view=activity so
                   -- package-sibling refreshes merged into the rail keep the
                   -- correct timestamp (see single-row branch above).
@@ -432,7 +576,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
           break;
         case 'tracking':
           conditions.push(
-            `(COALESCE(r.receiving_tracking_number, '') ILIKE $${idx}
+            `(COALESCE(stn.tracking_number_raw, '') ILIKE $${idx}
              OR COALESCE(stn.tracking_number_raw, '') ILIKE $${idx}
              OR COALESCE(stn.tracking_number_normalized, '') ILIKE $${idx})`,
           );
@@ -456,9 +600,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
           conditions.push(
             `EXISTS (
                SELECT 1 FROM serial_units su_hist
-               WHERE su_hist.origin_receiving_line_id = rl.id
-                 AND su_hist.organization_id = rl.organization_id
+               WHERE su_hist.organization_id = rl.organization_id
                  AND COALESCE(su_hist.serial_number, '') ILIKE $${idx}
+                 AND ${currentLineIsMatchSql('su_hist')}
              )`,
           );
           values.push(p);
@@ -474,14 +618,14 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             `COALESCE(rl.source_order_id, '') ILIKE $${patternIdx}`,
             `COALESCE(rl.zoho_item_id, '') ILIKE $${patternIdx}`,
             `COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${patternIdx}`,
-            `COALESCE(r.receiving_tracking_number, '') ILIKE $${patternIdx}`,
+            `COALESCE(stn.tracking_number_raw, '') ILIKE $${patternIdx}`,
             `COALESCE(stn.tracking_number_raw, '') ILIKE $${patternIdx}`,
             `COALESCE(stn.tracking_number_normalized, '') ILIKE $${patternIdx}`,
             `EXISTS (
                SELECT 1 FROM serial_units su_all
-               WHERE su_all.origin_receiving_line_id = rl.id
-                 AND su_all.organization_id = rl.organization_id
+               WHERE su_all.organization_id = rl.organization_id
                  AND COALESCE(su_all.serial_number, '') ILIKE $${patternIdx}
+                 AND ${currentLineIsMatchSql('su_all')}
              )`,
           ];
           values.push(p);
@@ -524,15 +668,22 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const staffFilterRaw = String(searchParams.get('staff') || '').trim();
     const staffFilterId = Number(staffFilterRaw);
     if (staffFilterRaw && Number.isFinite(staffFilterId) && staffFilterId > 0) {
-      // Alias-independent: the COUNT query has no `scan_first` LATERAL, so the
-      // scanned-by term is expressed as a correlated EXISTS over receiving_scans
-      // (matching the LATERAL's `rs.receiving_id = r.id` correlation) — valid in
-      // both the main SELECT and the COUNT query.
+      const unboxActorClause =
+        view === 'unbox_opened'
+          ? ` OR r.unbox_opened_by = $${idx} OR EXISTS (
+               SELECT 1 FROM ops_events oe_ub
+                WHERE oe_ub.organization_id = r.organization_id
+                  AND oe_ub.entity_type = 'receiving'
+                  AND oe_ub.entity_id = r.id
+                  AND oe_ub.event_type = 'UNBOX_SCAN_OPENED'
+                  AND oe_ub.actor_staff_id = $${idx}
+             )`
+          : '';
       conditions.push(
         `(r.received_by = $${idx} OR r.unboxed_by = $${idx} OR EXISTS (
            SELECT 1 FROM receiving_scans rs_staff
            WHERE rs_staff.receiving_id = r.id AND rs_staff.scanned_by = $${idx}
-         ))`,
+         )${unboxActorClause})`,
       );
       values.push(staffFilterId);
       idx++;
@@ -595,6 +746,16 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         `(r.received_at IS NOT NULL
           OR EXISTS (SELECT 1 FROM receiving_scans rs_scanned WHERE rs_scanned.receiving_id = r.id))
          AND r.unboxed_at IS NULL
+         -- Ops event spine: a carton that's been unboxed must never leak back
+         -- into the triage "to unbox" queue even if legacy stamps (unboxed_at /
+         -- qty_received / workflow_status) failed to roll up.
+         AND NOT EXISTS (
+           SELECT 1 FROM ops_events oe_unbox
+            WHERE oe_unbox.organization_id = rl.organization_id
+              AND oe_unbox.entity_type = 'receiving'
+              AND oe_unbox.entity_id = r.id
+              AND oe_unbox.event_type = 'UNBOX_CONFIRMED'
+         )
          AND COALESCE(rl.quantity_received, 0) = 0
          AND (rl.workflow_status IS NULL
               OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED'))
@@ -606,9 +767,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          -- queue. Origin-line existence is the authoritative "this was opened"
          -- signal, so exclude it here.
          AND NOT EXISTS (
-           SELECT 1 FROM serial_units su_unboxed
-            WHERE su_unboxed.origin_receiving_line_id = rl.id
-         )`,
+           SELECT 1 FROM serial_unit_provenance p
+            WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = rl.id
+              AND p.organization_id = rl.organization_id
+         )
+         -- Unbox-surface scans belong in view=unbox_opened only — never triage.
+         AND NOT ${UNBOX_OPENED_PREDICATE_SQL}`,
       );
       // Phase 2: only hide Zoho-received POs when the physical-state-first flag
       // is off OR the operator opted in via the "Hide Zoho-received" toggle
@@ -617,6 +781,10 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       if (applyScannedZohoExclusion) {
         conditions.push(NOT_ZOHO_RECEIVED_PREDICATE);
       }
+    } else if (view === 'unbox_opened') {
+      // Unbox sidebar work queue: every carton the operator scanned on the Unbox
+      // surface (ops_events UNBOX_SCAN_OPENED), found or unfound, unboxed or not.
+      conditions.push(UNBOX_OPENED_PREDICATE_SQL);
     } else if (view === 'testing') {
       // "Testing" = the recently-tested feed, backed by the testing_results
       // log. A line qualifies once it has at least one recorded verdict; when
@@ -681,22 +849,52 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       // or marks-received against it (workflow advances past EXPECTED OR
       // quantity_received goes positive). Unmatched cartons stay in their
       // own pill — this view is strictly Zoho-sourced expected work.
-      conditions.push(
-        `rl.workflow_status = 'EXPECTED'
-         AND COALESCE(rl.quantity_received, 0) = 0
-         AND rl.zoho_purchaseorder_id IS NOT NULL
-         -- Hide POs Zoho now reports received/closed/cancelled (mirror status),
-         -- so a received order drops off Incoming after a Refresh-Zoho sync.
-         AND ${NOT_ZOHO_RECEIVED_PREDICATE}
-         -- Honor this view's contract: a row drops off "the instant the operator
-         -- scans". A door scan writes receiving_scans against the carton's
-         -- receiving row but never advances this Zoho-PO line's workflow_status /
-         -- quantity_received (the line's receiving_id is often NULL), so without
-         -- this guard a scanned/unboxed box stays stuck in Incoming and renders
-         -- as delivery_state='UNKNOWN'. Shipment-anchored so it agrees with the
-         -- delivered-unscanned tile count (count === rows).
-         AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
-      );
+      if (!universalIncoming) {
+        // Legacy Zoho-only Incoming (unchanged): on a Zoho PO, EXPECTED, untouched.
+        conditions.push(
+          `rl.workflow_status = 'EXPECTED'
+           AND COALESCE(rl.quantity_received, 0) = 0
+           AND rl.zoho_purchaseorder_id IS NOT NULL
+           -- Hide POs Zoho now reports received/closed/cancelled (mirror status),
+           -- so a received order drops off Incoming after a Refresh-Zoho sync.
+           AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+           -- Honor this view's contract: a row drops off "the instant the operator
+           -- scans". A door scan writes receiving_scans against the carton's
+           -- receiving row but never advances this Zoho-PO line's workflow_status /
+           -- quantity_received (the line's receiving_id is often NULL), so without
+           -- this guard a scanned/unboxed box stays stuck in Incoming and renders
+           -- as delivery_state='UNKNOWN'. Shipment-anchored so it agrees with the
+           -- delivered-unscanned tile count (count === rows).
+           AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
+        );
+      } else {
+        // Universal Incoming (plan §6.1): a line qualifies if it's a Zoho PO not
+        // yet received (this INCLUDES eBay→Zoho merged lines, which carry the zoho
+        // PO id and are governed by the Zoho mirror), OR an eBay-only buyer line
+        // (no zoho PO, governed by the eBay mirror). Same SHIPMENT_SCANNED drop-off.
+        conditions.push(
+          `rl.workflow_status = 'EXPECTED'
+           AND COALESCE(rl.quantity_received, 0) = 0
+           AND (
+             (rl.zoho_purchaseorder_id IS NOT NULL AND ${NOT_ZOHO_RECEIVED_PREDICATE})
+             OR
+             (rl.zoho_purchaseorder_id IS NULL
+              AND rl.inbound_source_type = 'ebay'
+              AND ${notInboundMirrorTerminalPredicate('ebay')})
+           )
+           AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
+        );
+        // ?inbound facet — filter by PRIMARY source (merged lines read as 'ebay').
+        if (inboundSourceParam === 'ebay') {
+          conditions.push(`rl.inbound_source_type = 'ebay'`);
+        } else if (inboundSourceParam === 'zoho') {
+          conditions.push(`rl.inbound_source_type IS DISTINCT FROM 'ebay'`);
+        }
+        // ?link=zoho_pending — eBay lines still awaiting their Zoho PO.
+        if (incomingLinkParam === 'zoho_pending') {
+          conditions.push(`rl.zoho_purchaseorder_id IS NULL`);
+        }
+      }
 
       // Optional delivery_state facet filter. Each bucket is the exact same
       // predicate the CASE expression in the SELECT below uses so the chip
@@ -828,11 +1026,14 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 // rows with neither.
                 ? `ORDER BY COALESCE(GREATEST(r.unboxed_at, rl.updated_at)::text, rl.created_at::text) DESC NULLS LAST, rl.id DESC`
               : historySort === 'scanned_oldest'
-                ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) ASC, rl.id ASC`
-                : `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`)
+                ? `ORDER BY COALESCE(scan_first.scanned_at::text, r.received_at::text, rl.created_at::text) ASC, rl.id ASC`
+                : `ORDER BY COALESCE(scan_first.scanned_at::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`)
           : view === 'scanned'
             // Newest door-scan first — the triage to-do reads like an inbox.
             ? `ORDER BY r.received_at::text DESC NULLS LAST, rl.id DESC`
+          : view === 'unbox_opened'
+            // Newest Unbox-surface scan first — matches the Unboxed sidebar sort.
+            ? `ORDER BY COALESCE(r.unbox_opened_at::text, unbox_open.unbox_opened_at::text, scan_first.scanned_at::text, r.received_at::text, rl.created_at::text) DESC NULLS LAST, rl.id DESC`
           : view === 'testing'
             // Sort the "tested" feed by the SAME verdict time the rail renders
             // (tr_agg.tested_at) so the timeline reads monotonically. Ordering by
@@ -861,16 +1062,32 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     // skips both, so the SQL order is the final order. rs_agg isn't joined for
     // scanned, so the recency tiebreak uses received_at.
     if (wantsPrioritySort && view === 'scanned') {
-      orderBy = `ORDER BY ${RECEIVING_PRIORITY_RANK_SQL} ASC, r.received_at::text DESC NULLS LAST, rl.id DESC`;
+      orderBy = `ORDER BY ${RECEIVING_PRIORITY_RANK_SQL} ASC, ${RECEIVING_LANE_RANK_SQL} ASC, r.received_at::text DESC NULLS LAST, rl.id DESC`;
     }
     // The lateral aggregate is needed for view=recent and view=all so the
     // most recently paired cartons bubble up. Cheap at this scale.
-    const recentScansJoin = view === 'recent' || view === 'all' || view === 'activity'
+    const recentScansJoin = view === 'recent' || view === 'all' || view === 'activity' || view === 'unbox_opened'
       ? `LEFT JOIN LATERAL (
             SELECT MAX(rs.scanned_at) AS last_scan
             FROM receiving_scans rs
             WHERE rs.receiving_id = r.id
          ) rs_agg ON TRUE`
+      : '';
+    const unboxOpenedJoin = view === 'unbox_opened'
+      ? `LEFT JOIN LATERAL (
+            SELECT MAX(oe_uo.occurred_at) AS unbox_opened_at
+            FROM ops_events oe_uo
+            WHERE oe_uo.organization_id = r.organization_id
+              AND oe_uo.entity_type = 'receiving'
+              AND oe_uo.entity_id = r.id
+              AND oe_uo.event_type = 'UNBOX_SCAN_OPENED'
+         ) unbox_open ON TRUE`
+      : '';
+    // First-class "opened for unbox" axis for the unbox rail (label + sort). Only
+    // joined for view=unbox_opened (see unboxOpenedJoin); the column is the query
+    // SoT, the ops_event the legacy fallback — same COALESCE the Overview uses.
+    const unboxOpenedSelect = view === 'unbox_opened'
+      ? `, COALESCE(r.unbox_opened_at, unbox_open.unbox_opened_at)::text AS unbox_opened_at`
       : '';
 
     // Fetch extra line rows when `view=all` so merged Zoho-less placeholders
@@ -978,11 +1195,25 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const incomingExtrasJoin = needsZohoMirror
       ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
       : '';
+    // Universal Incoming: resolve the buyer/storefront account's human label for
+    // the source chip (plan §6.3). rl.platform_account_id is stamped by
+    // ingestPurchase on an eBay purchase line; join the org catalog 1:1 to turn
+    // it into a display label. Incoming-only; NULL for plain Zoho lines.
+    const platformAccountJoin =
+      view === 'incoming'
+        ? `LEFT JOIN platform_accounts pa_inbound
+             ON pa_inbound.id = rl.platform_account_id
+            AND pa_inbound.organization_id = rl.organization_id`
+        : '';
+    const platformAccountSelect =
+      view === 'incoming'
+        ? `, COALESCE(pa_inbound.label, pa_inbound.integration_scope) AS platform_account_label`
+        : '';
 
     const [rowsRes, countRes] = await withTenantConnection(orgId, (client) => Promise.all([
       client.query(
         `SELECT rl.*,
-                r.receiving_tracking_number,
+                stn.tracking_number_raw AS receiving_tracking_number,
                 r.carrier,
                 r.received_at::text          AS receiving_received_at,
                 r.unboxed_at::text           AS receiving_unboxed_at,
@@ -990,7 +1221,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 r.unboxed_by                 AS receiving_unboxed_by,
                 staff_rb.name                AS received_by_name,
                 staff_ub.name                AS unboxed_by_name,
-                scan_first.scanned_at::text  AS first_scanned_at,
+                ${view === 'unbox_opened'
+                  ? `COALESCE(r.unbox_opened_at, unbox_open.unbox_opened_at, ops_scan.first_scanned_at, scan_first.scanned_at)::text`
+                  : `COALESCE(ops_scan.first_scanned_at, scan_first.scanned_at)::text`}  AS first_scanned_at,
                 scan_first.scanned_by        AS first_scanned_by,
                 staff_sb.name                AS scanned_by_name,
                 r.source                     AS receiving_source,
@@ -998,8 +1231,15 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 r.intake_type                AS receiving_intake_type,
                 COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
+                r.triage_complete,
+                r.triage_completed_at::text    AS triage_completed_at,
+                r.unbox_only_intake,
+                r.staging_location_id,
+                r.priority_lane,
+                r.pairing_state,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
+                r.zoho_notes                 AS receiving_zoho_notes,
                 r.listing_url                AS receiving_listing_url,
                 stn.tracking_number_raw      AS shipment_tracking_number,
                 stn.carrier                  AS shipment_carrier,
@@ -1021,7 +1261,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 ${needsTestSelect}
                 ${incomingExtrasSelect}
                 ${zohoStatusSelect}
+                ${platformAccountSelect}
                 ${viewedAtSelect}
+                ${unboxOpenedSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
          -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
@@ -1061,10 +1303,22 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
            ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
            LIMIT 1
          ) scan_first ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT
+             MIN(oe.occurred_at) AS first_scanned_at,
+             MAX(oe.occurred_at) AS last_scanned_at
+           FROM ops_events oe
+           WHERE oe.organization_id = rl.organization_id
+             AND oe.entity_type = 'receiving'
+             AND oe.entity_id = r.id
+             AND oe.event_type = 'TRACKING_SCANNED'
+         ) ops_scan ON TRUE
          LEFT JOIN staff staff_sb                ON staff_sb.id = scan_first.scanned_by
          ${recentScansJoin}
+         ${unboxOpenedJoin}
          ${testedAggJoin}
          ${incomingExtrasJoin}
+         ${platformAccountJoin}
          ${where}
          ${orderBy}
          LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -1128,13 +1382,13 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             ` AND COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2`;
         } else if (searchField === 'tracking') {
           unmatchedSearchSql = ` AND (
-               COALESCE(r.receiving_tracking_number, '') ILIKE $2
+               COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
           )`;
         } else {
           unmatchedSearchSql = ` AND (
-               COALESCE(r.receiving_tracking_number, '') ILIKE $2
+               COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
             OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2
@@ -1144,12 +1398,13 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       const [unmatchedPkgsRes, unmatchedCntRes] = await withTenantConnection(orgId, (client) => Promise.all([
         client.query(
           `SELECT r.id,
-                  r.receiving_tracking_number,
+                  stn.tracking_number_raw AS receiving_tracking_number,
                   r.carrier,
                   r.received_at::text          AS receiving_received_at,
                   r.unboxed_at::text           AS receiving_unboxed_at,
                   r.created_at::text           AS created_at,
                   r.support_notes              AS receiving_support_notes,
+                  r.zoho_notes                 AS receiving_zoho_notes,
                   r.listing_url                AS receiving_listing_url,
                   r.source_platform            AS receiving_source_platform,
                 r.intake_type                AS receiving_intake_type,
@@ -1162,15 +1417,42 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   stn.latest_status_category   AS shipment_status_category,
                   stn.is_delivered             AS shipment_is_delivered,
                   stn.delivered_at::text       AS shipment_delivered_at,
-                  rs_agg.last_scan::text       AS last_scan_at,
+                  COALESCE(ops_scan.first_scanned_at, scan_first.scanned_at)::text  AS first_scanned_at,
+                  COALESCE(ops_scan.last_scanned_at, rs_agg.last_scan)::text       AS last_scan_at,
+                  COALESCE(r.unbox_opened_at::text, unbox_open.unbox_opened_at::text) AS unbox_opened_at,
                 ${sqlReceivingPhotoCount('r.id', 'r.organization_id')} AS photo_count
            FROM receiving r
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+           LEFT JOIN LATERAL (
+               SELECT rs.scanned_at, rs.scanned_by
+               FROM receiving_scans rs
+               WHERE rs.receiving_id = r.id
+               ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
+               LIMIT 1
+           ) scan_first ON TRUE
+           LEFT JOIN LATERAL (
+               SELECT
+                 MIN(oe.occurred_at) AS first_scanned_at,
+                 MAX(oe.occurred_at) AS last_scanned_at
+               FROM ops_events oe
+               WHERE oe.organization_id = r.organization_id
+                 AND oe.entity_type = 'receiving'
+                 AND oe.entity_id = r.id
+                 AND oe.event_type = 'TRACKING_SCANNED'
+           ) ops_scan ON TRUE
            LEFT JOIN LATERAL (
                SELECT MAX(rs.scanned_at) AS last_scan
                FROM receiving_scans rs
                WHERE rs.receiving_id = r.id
             ) rs_agg ON TRUE
+           LEFT JOIN LATERAL (
+               SELECT MAX(oe_uo.occurred_at) AS unbox_opened_at
+               FROM ops_events oe_uo
+               WHERE oe_uo.organization_id = r.organization_id
+                 AND oe_uo.entity_type = 'receiving'
+                 AND oe_uo.entity_id = r.id
+                 AND oe_uo.event_type = 'UNBOX_SCAN_OPENED'
+           ) unbox_open ON TRUE
            WHERE r.organization_id = $1
              AND r.source IN ('unmatched', 'local_pickup')
              AND NOT EXISTS (
@@ -1215,9 +1497,172 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
           ? compareReceivingRowsByUnboxedAt(a, b)
           : historySort === 'unbox_activity'
             ? compareReceivingRowsByUnboxActivity(a, b)
-            : compareReceivingRowsByRecentActivity(a, b),
+            : compareReceivingRowsByScannedAt(a, b),
       );
-      normalizedList = normalizedList.slice(offset, offset + limit);
+      const windowed = normalizedList.slice(offset, offset + limit);
+      // Lineless unfound placeholders sort last on unboxed_newest and were
+      // silently dropped when the main query already filled the page window.
+      if (view === 'activity' && placeholderNorm.length > 0) {
+        const windowRcvIds = new Set(
+          windowed
+            .map((r) => r.receiving_id)
+            .filter((id): id is number => id != null && Number.isFinite(id)),
+        );
+        const missingPlaceholders = placeholderNorm.filter(
+          (p) =>
+            p.id < 0
+            && p.receiving_id != null
+            && !windowRcvIds.has(p.receiving_id),
+        );
+        normalizedList =
+          missingPlaceholders.length > 0
+            ? [...windowed, ...missingPlaceholders.slice(0, 50)]
+            : windowed;
+      } else {
+        normalizedList = windowed;
+      }
+    }
+
+    // Lineless cartons opened on the Unbox surface (any source — incl. ghost
+    // zoho_po rows after the operator typed a PO#) never appear in the lines
+    // query above; append them as placeholders keyed on UNBOX_SCAN_OPENED.
+    const includeUnboxOpenedPlaceholders =
+      view === 'unbox_opened' &&
+      searchScope !== 'zoho_po' &&
+      !receivingHistorySkipsUnmatchedPlaceholders(searchField);
+
+    if (includeUnboxOpenedPlaceholders) {
+      const unboxSearchVals: unknown[] = [orgId];
+      let unboxSearchSql = '';
+      if (search) {
+        unboxSearchVals.push(`%${search}%`);
+        if (searchField === 'po') {
+          unboxSearchSql = ` AND COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2`;
+        } else if (searchField === 'tracking') {
+          unboxSearchSql = ` AND (
+               COALESCE(stn.tracking_number_raw, '') ILIKE $2
+            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
+          )`;
+        } else {
+          unboxSearchSql = ` AND (
+               COALESCE(stn.tracking_number_raw, '') ILIKE $2
+            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
+            OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2
+          )`;
+        }
+      }
+      const [unboxPkgsRes, unboxCntRes] = await withTenantConnection(orgId, (client) => Promise.all([
+        client.query(
+          `SELECT r.id,
+                  stn.tracking_number_raw AS receiving_tracking_number,
+                  r.carrier,
+                  r.received_at::text          AS receiving_received_at,
+                  r.unboxed_at::text           AS receiving_unboxed_at,
+                  r.created_at::text           AS created_at,
+                  r.support_notes              AS receiving_support_notes,
+                  r.zoho_notes                 AS receiving_zoho_notes,
+                  r.listing_url                AS receiving_listing_url,
+                  r.source_platform            AS receiving_source_platform,
+                  r.intake_type                AS receiving_intake_type,
+                  r.source                     AS receiving_source,
+                  COALESCE(r.is_priority, false) AS is_priority,
+                  r.priority_tier                AS priority_tier,
+                  r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                  stn.tracking_number_raw      AS shipment_tracking_number,
+                  stn.carrier                  AS shipment_carrier,
+                  stn.latest_status_category   AS shipment_status_category,
+                  stn.is_delivered             AS shipment_is_delivered,
+                  stn.delivered_at::text       AS shipment_delivered_at,
+                  COALESCE(ops_scan.first_scanned_at, scan_first.scanned_at)::text  AS first_scanned_at,
+                  COALESCE(r.unbox_opened_at::text, unbox_open.unbox_opened_at::text) AS unbox_opened_at,
+                  ${sqlReceivingPhotoCount('r.id', 'r.organization_id')} AS photo_count
+           FROM receiving r
+           LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+           LEFT JOIN LATERAL (
+               SELECT rs.scanned_at, rs.scanned_by
+               FROM receiving_scans rs
+               WHERE rs.receiving_id = r.id
+               ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
+               LIMIT 1
+           ) scan_first ON TRUE
+           LEFT JOIN LATERAL (
+               SELECT
+                 MIN(oe.occurred_at) AS first_scanned_at,
+                 MAX(oe.occurred_at) AS last_scanned_at
+               FROM ops_events oe
+               WHERE oe.organization_id = r.organization_id
+                 AND oe.entity_type = 'receiving'
+                 AND oe.entity_id = r.id
+                 AND oe.event_type = 'TRACKING_SCANNED'
+           ) ops_scan ON TRUE
+           LEFT JOIN LATERAL (
+               SELECT MAX(oe_uo.occurred_at) AS unbox_opened_at
+               FROM ops_events oe_uo
+               WHERE oe_uo.organization_id = r.organization_id
+                 AND oe_uo.entity_type = 'receiving'
+                 AND oe_uo.entity_id = r.id
+                 AND oe_uo.event_type = 'UNBOX_SCAN_OPENED'
+           ) unbox_open ON TRUE
+           WHERE r.organization_id = $1
+             AND ${UNBOX_OPENED_PREDICATE_SQL}
+             AND NOT EXISTS (
+               SELECT 1 FROM receiving_lines rl
+                WHERE rl.receiving_id = r.id
+                  AND rl.organization_id = r.organization_id
+             )
+             ${unboxSearchSql}
+           ORDER BY COALESCE(r.unbox_opened_at::text, unbox_open.unbox_opened_at::text, scan_first.scanned_at::text, r.received_at::text, r.created_at::text) DESC NULLS LAST,
+                    r.id DESC
+           LIMIT 150`,
+          unboxSearchVals,
+        ),
+        client.query(
+          `SELECT COUNT(*)::bigint AS n
+             FROM receiving r
+             LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+            WHERE r.organization_id = $1
+              AND ${UNBOX_OPENED_PREDICATE_SQL}
+              AND NOT EXISTS (
+                SELECT 1 FROM receiving_lines rl
+                 WHERE rl.receiving_id = r.id
+                   AND rl.organization_id = r.organization_id
+              )
+              ${unboxSearchSql}`,
+          unboxSearchVals,
+        ),
+      ]));
+      total += Number(unboxCntRes.rows[0]?.n ?? 0);
+      const unboxPlaceholderNorm = unboxPkgsRes.rows.map((pkg) =>
+        normalizeRow(buildUnmatchedEmptyReceivingLine(pkg as Record<string, unknown>)),
+      );
+      for (const row of unboxPlaceholderNorm) {
+        if (includeSerials) (row as Record<string, unknown>).serials = [];
+      }
+      normalizedList = [...normalizedList, ...unboxPlaceholderNorm].sort((a, b) =>
+        compareReceivingRowsByUnboxOpenedAt(a, b),
+      );
+      const windowed = normalizedList.slice(offset, offset + limit);
+      // Lineless unfound opened on the Unbox surface sort after lined rows and
+      // were silently dropped when the main query already filled the page window.
+      if (unboxPlaceholderNorm.length > 0) {
+        const windowRcvIds = new Set(
+          windowed
+            .map((r) => r.receiving_id)
+            .filter((id): id is number => id != null && Number.isFinite(id)),
+        );
+        const missingPlaceholders = unboxPlaceholderNorm.filter(
+          (p) =>
+            p.id < 0
+            && p.receiving_id != null
+            && !windowRcvIds.has(p.receiving_id),
+        );
+        normalizedList =
+          missingPlaceholders.length > 0
+            ? [...windowed, ...missingPlaceholders.slice(0, 50)]
+            : windowed;
+      } else {
+        normalizedList = windowed;
+      }
     }
 
     return NextResponse.json({
@@ -1232,7 +1677,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     console.error('receiving-lines GET failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}, { permission: 'receiving.view' });
+}
+
+export const GET = withAuth(
+  (request: NextRequest, ctx) => handleReceivingLinesGet(request, ctx, 'receiving'),
+  { permission: 'receiving.view' },
+);
 
 // ─── POST ─────────────────────────────────────────────────────────────────────
 export const POST = withAuth(async (request: NextRequest, ctx) => {
@@ -1486,7 +1936,11 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
       try {
         const serials = await tenantQuery<{ id: number }>(
           orgId,
-          `SELECT id FROM serial_units WHERE origin_receiving_line_id = $1 AND organization_id = $2`,
+          // Phase 3: filter-by-origin via indexed provenance reverse lookup.
+          `SELECT id FROM serial_units
+            WHERE id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1 AND p.organization_id = $2)
+              AND organization_id = $2`,
           [id, orgId],
         );
         for (const s of serials.rows) {
@@ -1543,7 +1997,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     const fresh = await tenantQuery(
       orgId,
       `SELECT rl.*,
-              r.receiving_tracking_number,
+              stn.tracking_number_raw AS receiving_tracking_number,
               r.carrier,
               r.source                     AS receiving_source,
               r.source_platform            AS receiving_source_platform,
@@ -1552,6 +2006,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
                 r.priority_tier                AS priority_tier,
               r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
               r.support_notes              AS receiving_support_notes,
+              r.zoho_notes                 AS receiving_zoho_notes,
               r.listing_url                AS receiving_listing_url,
               r.received_at::text          AS receiving_received_at,
               -- Scan-based "last touched" time, matching view=activity so the
@@ -1777,7 +2232,7 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
   // local-receive path in mark-received-po, which is purely local for unfound
   // POs since there is no Zoho PO to reconcile). unboxed → DONE ("RECEIVED"),
   // otherwise ARRIVED ("SCANNED"). See workflow-stages.ts / workflowStatusTableLabel.
-  const unboxedAt = pkg.receiving_unboxed_at ?? null;
+  const unboxedAt = pkg.receiving_unboxed_at ?? pkg.unbox_opened_at ?? null;
   return {
     id: -rid,
     receiving_id: rid,
@@ -1786,6 +2241,7 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     receiving_received_at: pkg.receiving_received_at,
     receiving_unboxed_at: unboxedAt,
     receiving_support_notes: pkg.receiving_support_notes ?? null,
+    receiving_zoho_notes: pkg.receiving_zoho_notes ?? null,
     receiving_listing_url: pkg.receiving_listing_url ?? null,
     receiving_source: source,
     receiving_source_platform: pkg.receiving_source_platform,
@@ -1807,13 +2263,8 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     quantity_received: 0,
     quantity_expected: null,
     qa_status: 'PENDING',
-    // An unfound carton was physically scanned at the dock — it just couldn't be
-    // matched to a known PO. That is exactly the ARRIVED stage ("scanned in at
-    // the receiving station, not yet matched to a PO"), NOT EXPECTED ("on a PO,
-    // not yet scanned"). ARRIVED surfaces as the "SCANNED" chip; EXPECTED read as
-    // "incoming/not here yet", which was wrong for a box already on the floor.
-    // Once unboxed at the dock it advances to DONE ("RECEIVED").
-    // Local-pickup placeholders are likewise a scanned, in-hand carton.
+    // Unfound cartons opened on the Unbox surface (unbox_opened_at) or physically
+    // unboxed at the dock (unboxed_at) read as DONE ("RECEIVED") locally.
     workflow_status: unboxedAt ? 'DONE' : 'ARRIVED',
     disposition_code: 'HOLD',
     condition_grade: 'BRAND_NEW',
@@ -1826,13 +2277,44 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     zoho_last_modified_time: null,
     zoho_synced_at: null,
     notes: null,
+    zoho_notes: null,
+    unit_price: null,
     receiving_type: 'PO',
     created_at: pkg.created_at,
+    first_scanned_at: pkg.unbox_opened_at ?? pkg.first_scanned_at,
+    unbox_opened_at: pkg.unbox_opened_at ?? null,
     last_scan_at: pkg.last_scan_at,
     image_url: null,
     photo_count: pkg.photo_count,
     zoho_reference_number: null,
   };
+}
+
+function receivingRowScannedTs(row: {
+  scanned_at?: string | null;
+  received_at?: string | null;
+  created_at?: string | null;
+}) {
+  const raw = row.scanned_at ?? row.received_at ?? row.created_at ?? null;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function compareReceivingRowsByScannedAt(
+  a: { scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+  b: { scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+) {
+  const d = receivingRowScannedTs(b) - receivingRowScannedTs(a);
+  return d !== 0 ? d : b.id - a.id;
+}
+
+/** `view=unbox_opened` placeholder merge — newest Unbox-surface scan first. */
+function compareReceivingRowsByUnboxOpenedAt(
+  a: { scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+  b: { scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+) {
+  return compareReceivingRowsByScannedAt(a, b);
 }
 
 function receivingRowActivityTs(row: {
@@ -1866,11 +2348,11 @@ function receivingRowUnboxedTs(row: { unboxed_at?: string | null }) {
 }
 
 function compareReceivingRowsByUnboxedAt(
-  a: { unboxed_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
-  b: { unboxed_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
+  a: { unboxed_at?: string | null; scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+  b: { unboxed_at?: string | null; scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
 ) {
   const d = receivingRowUnboxedTs(b) - receivingRowUnboxedTs(a);
-  return d !== 0 ? d : compareReceivingRowsByRecentActivity(a, b);
+  return d !== 0 ? d : compareReceivingRowsByScannedAt(a, b);
 }
 
 /**
@@ -1959,6 +2441,7 @@ function normalizeRow(row: Record<string, unknown>) {
     workflow_status:          (row.workflow_status as string | null) ?? null,
     disposition_code:         (row.disposition_code as string) ?? 'HOLD',
     condition_grade:          (row.condition_grade as string) ?? 'USED_A',
+    condition_set_at:         (row.condition_set_at as string | null) ?? null,
     disposition_audit:        (row.disposition_audit as unknown[]) ?? [],
     needs_test:               !!row.needs_test,
     is_priority:              !!row.is_priority,
@@ -1968,13 +2451,24 @@ function normalizeRow(row: Record<string, unknown>) {
     zoho_last_modified_time:  (row.zoho_last_modified_time as string | null) ?? null,
     zoho_synced_at:           (row.zoho_synced_at as string | null) ?? null,
     notes:                    (row.notes as string | null) ?? null,
+    zoho_notes:               (row.zoho_notes as string | null) ?? null,
+    unit_price:               (row.unit_price as string | null) ?? null,
     receiving_support_notes:  (row.receiving_support_notes as string | null) ?? null,
+    receiving_zoho_notes:     (row.receiving_zoho_notes as string | null) ?? null,
     receiving_listing_url:    (row.receiving_listing_url as string | null) ?? null,
     // Incoming-view only; null on other views (SELECT omits the columns).
     delivery_state:           (row.delivery_state as string | null) ?? null,
     po_date:                  (row.po_date as string | null) ?? null,
     expected_delivery_date:   (row.expected_delivery_date as string | null) ?? null,
     vendor_name:              (row.vendor_name as string | null) ?? null,
+    // Universal Incoming purchase identity (spine cache cols via rl.*, plan §6.3).
+    // inbound_source_type badges the row's source ('zoho' | 'ebay' | …);
+    // source_order_id is the external order id (the eBay order#) when there's no
+    // Zoho PO; platform_account_* name the buyer account it was purchased on.
+    inbound_source_type:      (row.inbound_source_type as string | null) ?? null,
+    source_order_id:          (row.source_order_id as string | null) ?? null,
+    platform_account_id:      row.platform_account_id != null ? Number(row.platform_account_id) : null,
+    platform_account_label:   (row.platform_account_label as string | null) ?? null,
     shipment_has_exception:   row.shipment_has_exception == null ? null : !!row.shipment_has_exception,
     shipment_latest_event_at: (row.shipment_latest_event_at as string | null) ?? null,
     shipment_is_terminal:     row.shipment_is_terminal == null ? null : !!row.shipment_is_terminal,
@@ -1997,6 +2491,16 @@ function normalizeRow(row: Record<string, unknown>) {
     unboxed_by_name:          (row.unboxed_by_name as string | null) ?? null,
     scanned_at:               (row.first_scanned_at as string | null) ?? null,
     scanned_by_name:          (row.scanned_by_name as string | null) ?? null,
+    // First-class "opened for unbox" time (receiving.unbox_opened_at / UNBOX_SCAN_OPENED).
+    // The unbox rail reads THIS for its label + sort — same axis as the Overview —
+    // instead of inferring it from the overloaded scanned_at. Null on non-unbox views.
+    unbox_opened_at:          (row.unbox_opened_at as string | null) ?? null,
+    unbox_only_intake:        row.unbox_only_intake === true,
+    triage_complete:          row.triage_complete === true,
+    triage_completed_at:      (row.triage_completed_at as string | null) ?? null,
+    staging_location_id:      row.staging_location_id != null ? Number(row.staging_location_id) : null,
+    priority_lane:            (row.priority_lane as string | null) ?? null,
+    pairing_state:            (row.pairing_state as string | null) ?? null,
     created_at:               (row.created_at as string | null) ?? null,
     // Last write to the line itself (qty bump, condition, notes, …). Drives
     // the unbox_activity sort's tiebreak in the placeholder merge.

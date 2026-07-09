@@ -10,7 +10,9 @@
  *   2. Shipment — if the PO's receiving row has a linked shipment, re-poll
  *      the carrier (syncShipment) so the tracking status is current.
  *
- * Body: { po_id: string }  (zoho_purchaseorder_id)
+ * Body (one of):
+ *   • { po_id: string } — Zoho PO (zoho_purchaseorder_id)
+ *   • { inbound_source, inbound_order_id, account_label? } — marketplace row
  * Gated `receiving.view` to match the Incoming toolbar siblings.
  */
 
@@ -20,6 +22,7 @@ import { tenantQuery } from '@/lib/tenancy/db';
 import { errorResponse } from '@/lib/api';
 import { syncOnePoMirror } from '@/lib/zoho/po-mirror-sync';
 import { syncShipment } from '@/lib/shipping/sync-shipment';
+import { syncOneInboundPurchase } from '@/lib/inbound/sync-one-inbound';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export const dynamic = 'force-dynamic';
@@ -28,10 +31,45 @@ export const maxDuration = 60;
 export const POST = withAuth(async (req: NextRequest, ctx) => {
   const startedAt = Date.now();
   try {
-    const body = (await req.json().catch(() => ({}))) as { po_id?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      po_id?: string;
+      inbound_source?: string;
+      inbound_order_id?: string;
+      account_label?: string;
+    };
     const poId = String(body?.po_id || '').trim();
+    const inboundSource = String(body?.inbound_source || '').trim();
+    const inboundOrderId = String(body?.inbound_order_id || '').trim();
+
+    // Marketplace inbound row — re-pull from linked buyer accounts + re-poll shipment.
+    if (!poId && inboundSource && inboundOrderId) {
+      const inbound = await syncOneInboundPurchase(ctx.organizationId, {
+        sourceType: inboundSource,
+        sourceOrderId: inboundOrderId,
+        accountLabel: body?.account_label ?? null,
+      });
+      if (!inbound.ok && inbound.error) {
+        // `...inbound` already carries `error` (and `ok`); spread it rather than
+        // repeating the key (TS2783 — the explicit `error:` would be overwritten).
+        return NextResponse.json({ success: false, ...inbound }, { status: 400 });
+      }
+      try {
+        await invalidateCacheTags(['receiving-lines', 'receiving-logs']);
+      } catch (err) {
+        console.warn('incoming/sync-one: cache invalidate failed (non-fatal)', err);
+      }
+      return NextResponse.json({
+        success: true,
+        inbound,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+
     if (!poId) {
-      return NextResponse.json({ success: false, error: 'po_id is required' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'po_id or (inbound_source + inbound_order_id) is required' },
+        { status: 400 },
+      );
     }
 
     // 1. PO mirror refresh (header + status).

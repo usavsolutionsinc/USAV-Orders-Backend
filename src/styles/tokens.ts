@@ -110,11 +110,9 @@ export const designTokenCssVariables: Record<string, TokenValue> = {
   '--ds-motion-fast': motionDurations.fast,
   '--ds-motion-normal': motionDurations.normal,
   '--ds-ease-standard': motionEasings.standard,
-  '--ds-color-text-primary': 'var(--color-neutral-900)',
-  '--ds-color-text-secondary': 'var(--color-neutral-700)',
-  '--ds-color-background-canvas': 'var(--color-neutral-50)',
-  '--ds-color-background-surface': '#ffffff',
-  '--ds-color-border-subtle': 'var(--color-neutral-200)',
+  // Theme-varying --ds-color-* variables (text-primary, background-surface, …)
+  // are OWNED by the theme registry (src/design-system/themes/registry.ts),
+  // injected as <style id="app-theme-palettes"> — never redeclare them here.
   '--ds-font-sans': 'var(--font-sans)',
   '--ds-font-mono': 'var(--font-mono)',
 };

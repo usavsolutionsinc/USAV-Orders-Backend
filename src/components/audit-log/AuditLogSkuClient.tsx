@@ -58,7 +58,7 @@ const STATION_META = {
   },
   other: {
     label: 'Other',
-    tone: 'bg-slate-100 text-slate-700 ring-slate-200',
+    tone: 'bg-surface-sunken text-text-muted ring-border-soft',
     Icon: FileText,
   },
 } as const;
@@ -111,14 +111,14 @@ export function AuditLogSkuClient() {
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <div className="border-b border-border-soft bg-surface-card px-6 py-4">
         <p className="text-micro font-bold uppercase tracking-widest text-emerald-700">
           SKU audit
         </p>
-        <h2 className="mt-0.5 font-mono text-base font-bold text-gray-900">{detail.sku}</h2>
+        <h2 className="mt-0.5 font-mono text-base font-bold text-text-default">{detail.sku}</h2>
         {detail.item_name && (
-          <p className="mt-1 text-label text-gray-500">{detail.item_name}</p>
+          <p className="mt-1 text-label text-text-soft">{detail.item_name}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-1.5">
           {(['receiving', 'packing', 'tech'] as const).map((s) => {
@@ -154,7 +154,7 @@ export function AuditLogSkuClient() {
 function EventRow({ event }: { event: SkuEvent }) {
   const meta = STATION_META[event.station];
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3">
+    <div className="rounded-xl border border-border-soft bg-surface-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -164,11 +164,11 @@ function EventRow({ event }: { event: SkuEvent }) {
               <meta.Icon className="h-3 w-3" />
               {meta.label}
             </span>
-            <span className="text-caption font-semibold text-gray-800">
+            <span className="text-caption font-semibold text-text-default">
               {kindLabel(event.kind)}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-gray-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-text-soft">
             <span className="inline-flex items-center gap-1">
               <UserIcon className="h-3 w-3" />
               {event.actor_name ?? (event.actor_staff_id ? `#${event.actor_staff_id}` : 'System')}
@@ -183,10 +183,10 @@ function EventRow({ event }: { event: SkuEvent }) {
             )}
           </div>
         </div>
-        <div className="shrink-0 text-micro text-gray-400">{fmtTime(event.occurred_at)}</div>
+        <div className="shrink-0 text-micro text-text-faint">{fmtTime(event.occurred_at)}</div>
       </div>
       {event.notes && (
-        <p className="mt-2 whitespace-pre-wrap break-words text-label text-gray-700">
+        <p className="mt-2 whitespace-pre-wrap break-words text-label text-text-muted">
           {event.notes}
         </p>
       )}
@@ -205,7 +205,7 @@ function CenterMessage({
     <div className="flex h-full items-center justify-center p-6">
       <p
         className={`text-center text-label ${
-          tone === 'error' ? 'text-rose-600' : 'text-gray-400'
+          tone === 'error' ? 'text-rose-600' : 'text-text-faint'
         }`}
       >
         {label}

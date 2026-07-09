@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import type {
   ClaimMode,
+  ClaimPhotoInput,
   ClaimPriority,
   ClaimResult,
+  ClaimWizardStep,
   PickedTicket,
   ZendeskClaimModalProps,
 } from './claim-types';
@@ -27,7 +29,7 @@ let addedSeq = 0;
 export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   const { open, onClose, photos, defaultMode, defaultTicketId, defaultTicketSubject, onDone } = props;
 
-  const [mode, setMode] = useState<ClaimMode>(defaultMode ?? 'create');
+  const [mode, setMode] = useState<ClaimMode>(defaultMode ?? 'update');
 
   // ── Create fields ──────────────────────────────────────────────────────────
   const [subject, setSubject] = useState('');
@@ -44,6 +46,9 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   const [comment, setComment] = useState('');
   const [replyPublic, setReplyPublic] = useState(false);
 
+  const [wizardStep, setWizardStep] = useState<ClaimWizardStep>('pick');
+  const [libraryPhotos, setLibraryPhotos] = useState<ClaimPhotoInput[]>([]);
+
   // ── Attachments: library photos (toggleable) + ad-hoc dropped files ──────────
   const [excluded, setExcluded] = useState<Set<number>>(new Set());
   const [added, setAdded] = useState<AddedFile[]>([]);
@@ -58,7 +63,11 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   useEffect(() => {
     if (open && !booted.current) {
       booted.current = true;
-      setMode(defaultMode ?? (defaultTicketId ? 'update' : 'create'));
+      // Photos already chosen in the library (bulk attach) → land on compose.
+      // Pick step is only for adding more via Back.
+      setWizardStep(photos.length > 0 ? 'compose' : 'pick');
+      setLibraryPhotos(photos);
+      setMode(defaultMode ?? 'update');
       setTicket(
         defaultTicketId
           ? { id: defaultTicketId, subject: defaultTicketSubject ?? null, status: 'open', priority: null }
@@ -77,7 +86,9 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
     }
     if (!open && booted.current) {
       booted.current = false;
-      setMode(defaultMode ?? 'create');
+      setWizardStep('pick');
+      setLibraryPhotos([]);
+      setMode(defaultMode ?? 'update');
       setSubject('');
       setDescription('');
       setPriority('normal');
@@ -100,8 +111,8 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   }, [open, defaultMode, defaultTicketId, defaultTicketSubject, photos]);
 
   const includedPhotoIds = useMemo(
-    () => photos.filter((p) => !excluded.has(p.id)).map((p) => p.id),
-    [photos, excluded],
+    () => libraryPhotos.filter((p) => !excluded.has(p.id)).map((p) => p.id),
+    [libraryPhotos, excluded],
   );
 
   const togglePhoto = useCallback((id: number) => {
@@ -133,6 +144,24 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   }, []);
 
   const totalAttach = includedPhotoIds.length + added.length;
+
+  const canContinuePick = libraryPhotos.length > 0 && !submitting;
+
+  const continueFromPick = useCallback(() => {
+    if (libraryPhotos.length === 0) return;
+    const refs = Array.from(
+      new Set(libraryPhotos.map((p) => p.poRef?.trim()).filter((v): v is string => Boolean(v))),
+    );
+    const poPart = refs.length === 1 ? ` — PO ${refs[0]}` : '';
+    setSubject(`Photo evidence${poPart}`);
+    setDescription(
+      `Attaching ${libraryPhotos.length} photo${libraryPhotos.length === 1 ? '' : 's'} from the library` +
+        (refs.length ? ` for ${refs.map((r) => `PO ${r}`).join(', ')}` : '') +
+        '.',
+    );
+    setExcluded(new Set());
+    setWizardStep('compose');
+  }, [libraryPhotos]);
 
   const canSubmit = useMemo(() => {
     if (submitting) return false;
@@ -216,7 +245,13 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   return {
     open,
     onClose,
-    photos,
+    photos: libraryPhotos,
+    wizardStep,
+    setWizardStep,
+    libraryPhotos,
+    setLibraryPhotos,
+    canContinuePick,
+    continueFromPick,
     mode,
     setMode,
     // create

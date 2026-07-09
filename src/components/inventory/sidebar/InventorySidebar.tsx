@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { usePathname } from 'next/navigation';
 import { useDebounce } from '@/hooks';
+import { useAiQuickJump } from '@/hooks/useAiQuickJump';
+import { AiQuickJumpResults } from '@/components/search/AiQuickJumpResults';
 import { useInventorySearch, type InventoryResultRow } from '@/hooks/useInventorySearch';
 import { useInventoryCrossTabCounts } from '@/hooks/useInventoryCrossTabCounts';
 import { useInventoryRecentSearches } from '@/hooks/useInventoryRecentSearches';
@@ -107,6 +110,14 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
         field,
         buckets,
     });
+
+    // AI quick-jump (AI search Phase 2): cross-entity hybrid hits alongside
+    // the tab search. Flag-gated in the hook — off/no-permission/failed means
+    // zero hits and this sidebar is byte-identical to the classic path.
+    // pageContext ('/inventory…') soft-boosts SERIAL_UNIT + SKU hits without
+    // hiding cross-entity matches (an order id typed here still jumps).
+    const pathname = usePathname();
+    const aiQuickJump = useAiQuickJump(trimmedQuery, { pageContext: pathname, limit: 5 });
 
     const crossTab = useInventoryCrossTabCounts({
         query: trimmedQuery,
@@ -267,6 +278,11 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
                         onBucketsChange={handleBucketsChange}
                         counts={search.counts}
                         onClose={onClose}
+                        // AI-search rollout (plan §8.3 Phase 2): the per-tab
+                        // "Search By" grid collapses behind an Advanced
+                        // disclosure — 'all' is the default and searches every
+                        // field, so nothing is lost. Flag off = grid as-is.
+                        collapseFieldSelector={aiQuickJump.aiEnabled}
                     />
                 ),
             }}
@@ -280,9 +296,16 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
         >
             {/* Scroll area: helper text + cross-tab + results + recent + footer */}
             <motion.div variants={itemVariants} initial="hidden" animate="visible" className="contents">
-                <p className={`${microBadge} text-gray-500 px-1`}>
+                <p className={`${microBadge} text-text-soft px-1`}>
                     {getInventorySearchHelperText(tab, field)}
                 </p>
+                {/* AI quick-jump — cross-entity hybrid hits (nothing when flag off/empty) */}
+                {aiQuickJump.hits.length > 0 && (
+                    <AiQuickJumpResults
+                        hits={aiQuickJump.hits}
+                        className="rounded-xl border border-border-hairline bg-surface-card"
+                    />
+                )}
                 {trimmedQuery.length > 0 ? (
                     <InventoryCrossTabHandoffCard
                         currentTab={tab}
@@ -305,8 +328,8 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
                     }
                     emptyPlaceholder={
                         tab === 'alerts' || tab === 'counts' ? (
-                            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
-                                <p className={`${microBadge} text-gray-500`}>
+                            <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center">
+                                <p className={`${microBadge} text-text-soft`}>
                                     {tab === 'alerts'
                                         ? 'No open alerts — pick a bucket above to view resolved ones'
                                         : 'No cycle count campaigns yet'}
@@ -328,7 +351,7 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
     if (embedded) return panelContent;
 
     return (
-        <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 w-[300px]">
+        <aside className="bg-surface-card text-text-default flex-shrink-0 h-full overflow-hidden border-r border-border-soft w-[300px]">
             {panelContent}
         </aside>
     );

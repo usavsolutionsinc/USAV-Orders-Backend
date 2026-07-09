@@ -17,6 +17,31 @@ const BrandSchema = z.object({
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
+// Tenant letterhead — drives the company block on printed repair paper and
+// walk-in receipts (src/lib/branding/letterhead.ts), distinct from the
+// platform-fixed Cycle Forge branding in src/lib/branding/constants.ts.
+const LetterheadSchema = z.object({
+  addressLine1: z.string().max(120).default(''),
+  addressLine2: z.string().max(120).default(''),
+  phone: z.string().max(40).default(''),
+  email: z.string().email().or(z.literal('')).default(''),
+});
+
+// Structured warehouse origin for outbound shipping labels (ship_from). Lives
+// in the settings jsonb bag (no DDL); env SHIPSTATION_SHIP_FROM_* is the
+// fallback. A rate/label needs a complete origin (line1 + city + state + zip).
+const ShipFromSchema = z.object({
+  name: z.string().max(80).default(''),
+  company: z.string().max(80).default(''),
+  phone: z.string().max(40).default(''),
+  addressLine1: z.string().max(120).default(''),
+  addressLine2: z.string().max(120).default(''),
+  city: z.string().max(80).default(''),
+  state: z.string().max(40).default(''),
+  postalCode: z.string().max(20).default(''),
+  country: z.string().max(2).default('US'),
+});
+
 const NasStorageTargetSchema = z.object({
   root: z.string().default(''),
   folder: z.string().default(''),
@@ -42,6 +67,10 @@ export const OrgSettingsSchema = z.object({
   currency: z.string().length(3).default('USD'),
   locale: z.string().default('en-US'),
   brand: BrandSchema.default({}),
+  letterhead: LetterheadSchema.default({ addressLine1: '', addressLine2: '', phone: '', email: '' }),
+  // Warehouse origin for outbound shipping labels (ShipStation ship_from).
+  // Optional — falls back to SHIPSTATION_SHIP_FROM_* env when unset.
+  shipFrom: ShipFromSchema.optional(),
   // Toggle to require email-then-PIN signin instead of tap-your-name. Off
   // by default to preserve the existing USAV station UX.
   emailFirstSignin: z.boolean().default(false),
@@ -122,6 +151,67 @@ export const OrgSettingsSchema = z.object({
       localVisionBaseUrl: z.string().default(''),
     })
     .default({ localVisionBaseUrl: '' }),
+  // Per-org fulfillment substitution policy — the ordered-vs-fulfilled deviation
+  // flow (release the original allocation + allocate a substitute unit, recorded
+  // in order_unit_amendments). Mirrors `packing` above.
+  // substitutionEnforcement:
+  //   'advisory' (default) — the substitution re-allocates immediately and the
+  //     order can ship; the amendment is recorded APPLIED. Matches the repo's
+  //     "never block the floor" philosophy.
+  //   'block_until_approved' — the substitution is recorded PENDING and the
+  //     order cannot pack/ship until a supervisor approves it (gate read by
+  //     /api/pack/ship).
+  // substitutionAllowedNodes: which station may RAISE a substitution. Default
+  //   ['pick'] mirrors industry WMS (pick-exception); a tenant opens 'test' /
+  //   'pack' from /studio. The route refuses a raise from a node not listed here.
+  fulfillment: z
+    .object({
+      substitutionEnforcement: z.enum(['advisory', 'block_until_approved']).default('advisory'),
+      substitutionAllowedNodes: z.array(z.enum(['pick', 'test', 'pack'])).default(['pick']),
+    })
+    .default({ substitutionEnforcement: 'advisory', substitutionAllowedNodes: ['pick'] }),
+  // Per-org workflow-engine overrides (flag-gated, default empty). `verdictStatus`
+  // maps a test verdict to the unit status + inventory-event it produces,
+  // overriding the hardcoded VERDICT_TO_STATUS (src/lib/tech/recordTestVerdict.ts).
+  // Read ONLY when UNIFIED_ENGINE_VERDICT_CONFIG is on; an unset verdict falls back
+  // to the built-in. Values are constrained to the existing serial states / event
+  // types so an override can never write an out-of-range status.
+  workflow: z
+    .object({
+      verdictStatus: z
+        .record(
+          z.enum(['PASS', 'TEST_AGAIN', 'TESTING_FAILED']),
+          z.object({
+            nextStatus: z.enum(['TESTED', 'IN_TEST', 'ON_HOLD']),
+            eventType: z.enum(['TEST_PASS', 'TEST_FAIL', 'TEST_START']),
+          }),
+        )
+        .optional(),
+    })
+    .default({}),
+  // Per-org Universal Incoming policy (docs/incoming-universal-purchase-orders-plan.md §9.6).
+  // Tenant-tunable without code: which badge wins after an eBay↔Zoho merge, which
+  // Zoho PO fields carry the eBay order# (Zoho layout varies per tenant), which
+  // signals may auto-merge, whether a fuzzy SKU match needs staff review, and which
+  // inbound sources are enabled (a subset of the source registry — the Studio
+  // publish gate validates bound sources ⊆ this list). Read only when the
+  // `incoming_universal` flag is on; the merge helper's built-in defaults match
+  // these, so an org with no `inbound` block behaves identically.
+  inbound: z
+    .object({
+      displaySourceAfterMerge: z.enum(['ebay', 'zoho', 'both']).default('ebay'),
+      zohoOrderNumberFields: z.array(z.string()).default(['reference_number', 'notes']),
+      autoMergeSignals: z.array(z.enum(['tracking', 'order_number'])).default(['tracking', 'order_number']),
+      fuzzyMergeRequiresReview: z.boolean().default(true),
+      enabledSources: z.array(z.string()).default(['zoho', 'ebay']),
+    })
+    .default({
+      displaySourceAfterMerge: 'ebay',
+      zohoOrderNumberFields: ['reference_number', 'notes'],
+      autoMergeSignals: ['tracking', 'order_number'],
+      fuzzyMergeRequiresReview: true,
+      enabledSources: ['zoho', 'ebay'],
+    }),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
@@ -170,6 +260,33 @@ export type PhotoAnalysisSettings = OrgSettings['photoAnalysis'];
 
 export function getPhotoAnalysisSettings(settings: OrgSettings): PhotoAnalysisSettings {
   return settings.photoAnalysis ?? { localVisionBaseUrl: '' };
+}
+
+/** Fulfillment-substitution policy for this org. See OrgSettingsSchema.fulfillment. */
+export type SubstitutionEnforcement = OrgSettings['fulfillment']['substitutionEnforcement'];
+export type SubstitutionNode = OrgSettings['fulfillment']['substitutionAllowedNodes'][number];
+
+export function getSubstitutionEnforcement(settings: OrgSettings): SubstitutionEnforcement {
+  return settings.fulfillment?.substitutionEnforcement ?? 'advisory';
+}
+
+export function getSubstitutionAllowedNodes(settings: OrgSettings): SubstitutionNode[] {
+  return settings.fulfillment?.substitutionAllowedNodes ?? ['pick'];
+}
+
+/** Per-org Universal Incoming policy. See OrgSettingsSchema.inbound + plan §9.6. */
+export type InboundOrgSettings = OrgSettings['inbound'];
+
+const DEFAULT_INBOUND_SETTINGS: InboundOrgSettings = {
+  displaySourceAfterMerge: 'ebay',
+  zohoOrderNumberFields: ['reference_number', 'notes'],
+  autoMergeSignals: ['tracking', 'order_number'],
+  fuzzyMergeRequiresReview: true,
+  enabledSources: ['zoho', 'ebay'],
+};
+
+export function getInboundSettings(settings: OrgSettings): InboundOrgSettings {
+  return settings.inbound ?? DEFAULT_INBOUND_SETTINGS;
 }
 
 export type NasStorageTargetKey = keyof typeof DEFAULT_NAS_STORAGE_TARGETS;

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   History,
   Barcode,
   ShoppingCart,
   PackageOpen,
-  Packer,
+  Box,
+  ClipboardList,
   Lock,
   Wrench,
   MapPin,
@@ -16,6 +17,7 @@ import {
   X,
 } from '@/components/Icons';
 import { TOKENS } from './DesignSystem';
+import { IconButton } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -57,40 +59,61 @@ type GroupItem = {
 
 type NavItem = LeafItem | GroupItem;
 
-// Single source of truth for the drawer's destinations. Order matches the old
-// bottom bar (Recent · Picks · Scan · Unbox · Packing) with Unbox promoted to a
-// "Receiving" group that drills into its photo-capable modes.
+// Single source of truth for the drawer's destinations. Scan is pinned to the
+// very top (the headline action). Receiving is a drill-down group into its
+// photo-capable modes. Icons mirror the desktop nav: Receiving = ClipboardList,
+// Packing = Box.
 const NAV_ITEMS: NavItem[] = [
+  { kind: 'leaf', id: 'scan', label: 'Scan', icon: Barcode, href: '/m/scan' },
   { kind: 'leaf', id: 'home', label: 'Recent', icon: History, href: '/m/home' },
   { kind: 'leaf', id: 'picks', label: 'Picks', icon: ShoppingCart, href: '/m/pick' },
-  { kind: 'leaf', id: 'scan', label: 'Scan', icon: Barcode, href: '/m/scan' },
   {
     kind: 'group',
     id: 'receiving',
     label: 'Receiving',
-    icon: PackageOpen,
-    matchPrefixes: ['/m/receiving', '/m/receive', '/m/r/'],
+    icon: ClipboardList,
+    matchPrefixes: ['/m/receiving', '/m/receive', '/m/triage', '/m/unbox', '/m/r/'],
     children: [
-      { kind: 'leaf', id: 'unboxing', label: 'Unboxing', icon: PackageOpen, href: '/m/receiving' },
+      { kind: 'leaf', id: 'triage', label: 'Triage', icon: ClipboardList, href: '/m/triage' },
+      { kind: 'leaf', id: 'unboxing', label: 'Unbox', icon: PackageOpen, href: '/m/unbox' },
+      { kind: 'leaf', id: 'photos', label: 'Photo feed', icon: PackageOpen, href: '/m/receiving' },
       { kind: 'leaf', id: 'local-pickup', label: 'Local Pickup', icon: MapPin, href: '/m/receiving?mode=local-pickup' },
       { kind: 'leaf', id: 'repair', label: 'Repair Service', icon: Wrench, href: '/m/receiving?mode=repair' },
     ],
   },
-  { kind: 'leaf', id: 'packing', label: 'Packing', icon: Packer, href: '/m/pack' },
+  { kind: 'leaf', id: 'packing', label: 'Packing', icon: Box, href: '/m/pack' },
 ];
 
 const isLeafActive = (pathname: string | null, href: string) => {
   if (!pathname) return false;
   const base = href.split('?')[0];
   if (base === '/m/home') return pathname === base;
-  // For query-param modes, exact-match isn't possible from pathname alone, so the
-  // bare receiving paths only mark "Unboxing" active — the sub-modes light up via
-  // their own pages once those exist. Keep prefix-match for nested detail routes.
+  // Top-level (mode-less) leaves: exact match, plus prefix-match for nested
+  // detail routes. Receiving sub-modes use isChildActive (query-aware) instead.
   return pathname === base || pathname.startsWith(`${base}/`);
 };
 
 const isGroupActive = (pathname: string | null, prefixes: string[]) =>
   !!pathname && prefixes.some((p) => pathname === p || pathname.startsWith(p));
+
+/** The `?mode=` a child href encodes (null for the bare Unboxing path). */
+const hrefMode = (href: string): string | null => {
+  const q = href.split('?')[1];
+  return q ? new URLSearchParams(q).get('mode') : null;
+};
+
+/**
+ * A receiving sub-mode child is active only when BOTH its base path AND its
+ * `?mode=` match the current location — so on /m/receiving (no mode) ONLY
+ * "Unboxing" lights up, not Local Pickup / Repair (which share the base path).
+ * This is the fix for all three rows appearing selected at once.
+ */
+const isChildActive = (pathname: string | null, currentMode: string | null, href: string) => {
+  if (!pathname) return false;
+  const base = href.split('?')[0];
+  if (pathname !== base && !pathname.startsWith(`${base}/`)) return false;
+  return hrefMode(href) === currentMode;
+};
 
 export const MobileSidebarDrawer = ({
   open,
@@ -101,10 +124,18 @@ export const MobileSidebarDrawer = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentMode = searchParams?.get('mode') ?? null;
   const { user, signOut } = useAuth();
 
   // Auto-expand the Receiving group when the user is somewhere inside it.
-  const receivingActive = isGroupActive(pathname, ['/m/receiving', '/m/receive', '/m/r/']);
+  const receivingActive = isGroupActive(pathname, [
+    '/m/receiving',
+    '/m/receive',
+    '/m/triage',
+    '/m/unbox',
+    '/m/r/',
+  ]);
   const [expanded, setExpanded] = useState<string | null>(receivingActive ? 'receiving' : null);
 
   // Close on route change so a tap that navigates also dismisses the drawer.
@@ -148,6 +179,7 @@ export const MobileSidebarDrawer = ({
       {open && user && (
         <>
           {/* Scrim */}
+          {/* ds-raw-button: full-bleed animated dismiss scrim (motion.button), not a DS action control */}
           <motion.button
             type="button"
             aria-label="Close menu"
@@ -156,7 +188,7 @@ export const MobileSidebarDrawer = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-panelBackdrop bg-slate-900/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-panelBackdrop bg-scrim/40 backdrop-blur-[2px]"
           />
 
           {/* Panel */}
@@ -174,20 +206,19 @@ export const MobileSidebarDrawer = ({
             onDragEnd={(_, info) => {
               if (info.offset.x < -80 || info.velocity.x < -500) onClose();
             }}
-            className="fixed inset-y-0 left-0 z-panel flex h-[100dvh] w-[82%] max-w-[320px] flex-col border-r border-slate-200 bg-white shadow-[12px_0_48px_-16px_rgba(15,23,42,0.35)]"
+            className="fixed inset-y-0 left-0 z-panel flex h-[100dvh] w-[82%] max-w-[320px] flex-col border-r border-border-soft bg-surface-card shadow-[12px_0_48px_-16px_rgba(15,23,42,0.35)]"
           >
             {/* Header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-400">
+            <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+              <span className="text-caption font-black uppercase tracking-[0.2em] text-blue-400">
                 Menu
               </span>
-              <button
+              <IconButton
+                icon={<X className="h-5 w-5" />}
                 onClick={onClose}
-                aria-label="Close menu"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all active:scale-90"
-              >
-                <X className="h-5 w-5" />
-              </button>
+                ariaLabel="Close menu"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-border-soft bg-surface-card text-text-soft shadow-sm transition-all active:scale-90"
+              />
             </div>
 
             {/* Nav list */}
@@ -199,15 +230,16 @@ export const MobileSidebarDrawer = ({
                     const Icon = item.icon;
                     return (
                       <li key={item.id}>
+                        {/* ds-raw-button: text-left nav row (icon + label + active ring/fill), not a standard action button */}
                         <button
                           onClick={() => navigate(item.href)}
                           className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors active:scale-[0.98] ${
                             active
                               ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
-                              : 'text-slate-600 hover:bg-slate-50'
+                              : 'text-text-muted hover:bg-surface-hover'
                           }`}
                         >
-                          <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
+                          <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-blue-600' : 'text-text-faint'}`} />
                           <span className="text-[15px] font-bold tracking-tight">{item.label}</span>
                         </button>
                       </li>
@@ -220,19 +252,20 @@ export const MobileSidebarDrawer = ({
                   const groupActive = isGroupActive(pathname, item.matchPrefixes);
                   return (
                     <li key={item.id}>
+                      {/* ds-raw-button: text-left drill-down group row (icon + label + chevron + active ring/fill), not a standard action button */}
                       <button
                         onClick={() => setExpanded((cur) => (cur === item.id ? null : item.id))}
                         aria-expanded={isOpen}
                         className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors active:scale-[0.98] ${
                           groupActive
                             ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
-                            : 'text-slate-600 hover:bg-slate-50'
+                            : 'text-text-muted hover:bg-surface-hover'
                         }`}
                       >
-                        <Icon className={`h-5 w-5 shrink-0 ${groupActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                        <Icon className={`h-5 w-5 shrink-0 ${groupActive ? 'text-blue-600' : 'text-text-faint'}`} />
                         <span className="flex-1 text-[15px] font-bold tracking-tight">{item.label}</span>
                         <motion.span animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                          <ChevronDown className={`h-4 w-4 ${groupActive ? 'text-blue-400' : 'text-slate-300'}`} />
+                          <ChevronDown className={`h-4 w-4 ${groupActive ? 'text-blue-400' : 'text-text-faint'}`} />
                         </motion.span>
                       </button>
 
@@ -245,21 +278,22 @@ export const MobileSidebarDrawer = ({
                             transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
                             className="overflow-hidden pl-3"
                           >
-                            <div className="ml-2 space-y-1 border-l border-slate-100 pl-2 pt-1">
+                            <div className="ml-2 space-y-1 border-l border-border-hairline pl-2 pt-1">
                               {item.children.map((child) => {
                                 const ChildIcon = child.icon;
-                                const childActive = isLeafActive(pathname, child.href);
+                                const childActive = isChildActive(pathname, currentMode, child.href);
                                 return (
                                   <li key={child.id}>
+                                    {/* ds-raw-button: text-left sub-mode nav row (icon + label + active fill), not a standard action button */}
                                     <button
                                       onClick={() => navigate(child.href)}
                                       className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.98] ${
                                         childActive
                                           ? 'bg-blue-50 text-blue-700'
-                                          : 'text-slate-500 hover:bg-slate-50'
+                                          : 'text-text-soft hover:bg-surface-hover'
                                       }`}
                                     >
-                                      <ChildIcon className={`h-4 w-4 shrink-0 ${childActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                                      <ChildIcon className={`h-4 w-4 shrink-0 ${childActive ? 'text-blue-600' : 'text-text-faint'}`} />
                                       <span className="text-[13.5px] font-semibold">{child.label}</span>
                                     </button>
                                   </li>
@@ -277,12 +311,13 @@ export const MobileSidebarDrawer = ({
 
             {/* Footer — low-frequency actions pinned to the very bottom, away from
                 the primary nav so they can't be accidentally pressed. */}
-            <div className="shrink-0 border-t border-slate-100 px-2 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+            <div className="shrink-0 border-t border-border-hairline px-2 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+              {/* ds-raw-button: text-left full-width sign-out row (icon + label), not a standard action button */}
               <button
                 onClick={handleSignOut}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-slate-500 transition-colors hover:bg-rose-50 active:scale-[0.98]"
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-text-soft transition-colors hover:bg-rose-50 active:scale-[0.98]"
               >
-                <Lock className="h-5 w-5 shrink-0 text-slate-400" />
+                <Lock className="h-5 w-5 shrink-0 text-text-faint" />
                 <span className="text-[15px] font-bold tracking-tight">Sign out</span>
               </button>
             </div>

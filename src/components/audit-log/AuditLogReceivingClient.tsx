@@ -19,7 +19,7 @@ export function AuditLogReceivingClient() {
       ) : !selectedPo ? (
         <EmptyState />
       ) : detailLoading ? (
-        <div className="flex h-full w-full items-center justify-center text-sm text-slate-500">Loading PO timeline…</div>
+        <div className="flex h-full w-full items-center justify-center text-sm text-text-soft">Loading PO timeline…</div>
       ) : detail ? (
         <div className="w-full">
           <PODetailView detail={detail} />

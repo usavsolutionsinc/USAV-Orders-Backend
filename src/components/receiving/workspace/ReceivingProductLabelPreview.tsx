@@ -45,21 +45,22 @@ export function ReceivingProductLabelPreview({ sku, title, serialNumber, embedde
   if (!sku.trim()) return null;
 
   const innerShell = embedded
-    ? 'flex w-full flex-nowrap items-start justify-between gap-3 bg-white'
-    : 'flex flex-nowrap items-start justify-between gap-3 rounded-lg border border-gray-200/80 bg-white px-3 py-3 shadow-sm';
+    ? 'flex w-full flex-nowrap items-start justify-between gap-3 bg-surface-card'
+    : 'flex flex-nowrap items-start justify-between gap-3 rounded-lg border border-border-soft/80 bg-surface-card px-3 py-3 shadow-sm';
   const inner = (
     <div className={innerShell}>
       <div className="min-w-0 flex-1">
-        <p className="font-mono text-base font-black tracking-tight text-gray-900">{sku.trim()}</p>
+        <p className="font-mono text-base font-black tracking-tight text-text-default">{sku.trim()}</p>
         {title.trim() ? (
-          <p className="mt-1 line-clamp-3 text-caption text-gray-500 leading-snug">{title}</p>
+          <p className="mt-1 line-clamp-3 text-caption text-text-soft leading-snug">{title}</p>
         ) : null}
         {serialNumber.trim() ? (
-          <p className="mt-1 text-micro font-mono text-gray-500">SN: {serialNumber.trim()}</p>
+          <p className="mt-1 text-micro font-mono text-text-soft">SN: {serialNumber.trim()}</p>
         ) : null}
       </div>
       <div className="shrink-0 self-center">
-        <canvas ref={canvasRef} className="max-w-[min(100%,9rem)]" />
+        {/* label-preview-matrix → inverted to light bars in a dark scheme (globals.css). */}
+        <canvas ref={canvasRef} className="label-preview-matrix max-w-[min(100%,9rem)]" />
       </div>
     </div>
   );
@@ -67,10 +68,10 @@ export function ReceivingProductLabelPreview({ sku, title, serialNumber, embedde
     return inner;
   }
   return (
-    <div className="border-t border-gray-200 bg-gray-50">
+    <div className="border-t border-border-soft bg-surface-canvas">
       <div className="flex items-center gap-3 px-3 pt-3 pb-2">
-        <span className="text-eyebrow font-black tabular-nums text-gray-500 tracking-widest">03</span>
-        <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-600">
+        <span className="text-eyebrow font-black tabular-nums text-text-soft tracking-widest">03</span>
+        <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-muted">
           Review & print
         </span>
       </div>

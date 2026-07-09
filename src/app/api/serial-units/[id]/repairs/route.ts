@@ -65,7 +65,7 @@ export const POST = withAuth(async (request, ctx) => {
       extra: { serial_unit_id: serialUnitId, failure_mode_ids: parsed.failureModeIds ?? [] },
     });
 
-    await recomputeUnitQualitySafe(serialUnitId);
+    await recomputeUnitQualitySafe(serialUnitId, ctx.organizationId);
     return NextResponse.json({ ok: true, repair }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to open repair';

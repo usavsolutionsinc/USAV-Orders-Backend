@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { LinkedTicketsPanel } from '@/components/linkage/LinkedTicketsPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getLast4 } from '../ui/CopyChip';
@@ -11,17 +12,16 @@ import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
-import { InlineNotice } from '@/design-system/components';
-import { PackChecklist, type PackKitPart } from './PackChecklist';
+import { OrderPackChecklist } from '@/components/packing/OrderPackChecklist';
 import { usePackingPolicy } from '@/hooks/usePackingPolicy';
-
-interface SkuQcFlag {
-  id: number;
-  label: string;
-  category: string | null;
-}
+import { useOrderPackChecklist } from '@/hooks/useOrderPackChecklist';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { useAssistantContext } from '@/hooks/useAssistantContext';
+import { STATION_SKILL } from '@/lib/assistant/page-skills';
+import { dispatchPackActiveOrder } from '@/components/packer/usePackerOrderPane';
 
 interface ActivePackingOrder {
+  orderRowId: number | null;
   orderId: string;
   productTitle: string;
   qty: number;
@@ -70,39 +70,40 @@ export default function StationPacking({
   embedded = false,
   packMode = 'standard',
 }: StationPackingProps) {
+  // Global-assistant context: station Q&A skill fragment (plan §-2.2).
+  useAssistantContext({ page: 'packing-station', station: 'PACKING', skill: STATION_SKILL });
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeOrder, setActiveOrder] = useState<ActivePackingOrder | null>(null);
   const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
-  const [skuPackNotes, setSkuPackNotes] = useState<string | null>(null);
-  const [skuQcFlags, setSkuQcFlags] = useState<SkuQcFlag[]>([]);
-  const [skuKitParts, setSkuKitParts] = useState<PackKitPart[]>([]);
   const { data: packingPolicy } = usePackingPolicy();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch per-SKU pack notes + QA flags + kit-parts BOM whenever the active
-  // order's SKU changes. All three are surfaced to the packer BEFORE the pack is
-  // confirmed (P1-PCK-02 notes/flags; P1-PCK-03 the kit-parts checklist). The
-  // BOM is condition-gated by the order's condition.
+  const { data: packChecklist, isLoading: checklistLoading } = useOrderPackChecklist({
+    orderRowId: activeOrder?.orderRowId ?? null,
+    sku: activeOrder?.sku,
+    condition: activeOrder?.condition,
+    productTitle: activeOrder?.productTitle,
+    enabled: Boolean(activeOrder),
+  });
+
   useEffect(() => {
-    const sku = activeOrder?.sku?.trim();
-    if (!sku) { setSkuPackNotes(null); setSkuQcFlags([]); setSkuKitParts([]); return; }
-    const condition = activeOrder?.condition?.trim();
-    let cancelled = false;
-    const qs = new URLSearchParams({ sku });
-    if (condition && condition !== 'N/A') qs.set('condition', condition);
-    fetch(`/api/get-title-by-sku?${qs.toString()}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        setSkuPackNotes(data?.packNotes || null);
-        setSkuQcFlags(Array.isArray(data?.qcFlags) ? data.qcFlags : []);
-        setSkuKitParts(Array.isArray(data?.kitParts) ? data.kitParts : []);
-      })
-      .catch(() => { if (!cancelled) { setSkuPackNotes(null); setSkuQcFlags([]); setSkuKitParts([]); } });
-    return () => { cancelled = true; };
-  }, [activeOrder?.sku, activeOrder?.condition]);
+    if (!activeOrder || activeFba) {
+      dispatchPackActiveOrder(null);
+      return;
+    }
+    dispatchPackActiveOrder({
+      orderRowId: activeOrder.orderRowId,
+      orderId: activeOrder.orderId,
+      productTitle: activeOrder.productTitle,
+      qty: activeOrder.qty,
+      condition: activeOrder.condition,
+      tracking: activeOrder.tracking,
+      sku: activeOrder.sku,
+      scanType: activeOrder.scanType,
+    });
+  }, [activeOrder, activeFba]);
 
   const { theme: themeColor, colors: themeColors, inputBorder, inputTheme: activeColor } = useStationTheme({ staffId });
   const { normalizeTrackingQuery, normalizeTracking } = useLast8TrackingSearch();
@@ -215,7 +216,9 @@ export default function StationPacking({
           // card the order path uses — but show the SKU in place of TRK#.
           const isSku = resolvedScanType === 'SKU';
           const skuValue = String(data?.sku || '').trim();
+          const orderRowIdRaw = Number(data?.orderRowId);
           setActiveOrder({
+            orderRowId: Number.isFinite(orderRowIdRaw) && orderRowIdRaw > 0 ? orderRowIdRaw : null,
             orderId: String(data?.orderId || '').trim(),
             productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
             qty: Math.max(1, Number(data?.qty ?? data?.quantity ?? data?.orderQty ?? 1) || 1),
@@ -242,7 +245,7 @@ export default function StationPacking({
   };
 
   return (
-    <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
+    <div className={`flex flex-col h-full bg-surface-card overflow-hidden ${embedded ? '' : 'border-r border-border-hairline'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className={`${SIDEBAR_GUTTER} ${embedded ? 'pt-2 pb-1' : 'pt-4 pb-2'} space-y-4`}>
           {/* Welcome header + goal bar — chrome for the standalone station page only.
@@ -252,7 +255,7 @@ export default function StationPacking({
             <>
               <div className="space-y-0.5">
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
+                  <h2 className="text-xl font-black text-text-default tracking-tighter">Welcome, {userName}</h2>
                   <div className={`p-3 ${themeColors.bg} text-white rounded-2xl shadow-lg ${themeColors.shadow}`}>
                     <Package className="w-4 h-4" />
                   </div>
@@ -300,7 +303,7 @@ export default function StationPacking({
           </motion.div>
 
           {!embedded && (
-            <p className="text-micro font-bold text-gray-400 px-1">
+            <p className="text-micro font-bold text-text-faint px-1">
               Supports tracking, FNSKU/ASIN (10 chars: <code className="font-mono">X00</code> or <code className="font-mono">B0</code> prefix), FBA, and{' '}
               <code className="font-mono">SKU:VALUE</code> scans.
             </p>
@@ -331,7 +334,7 @@ export default function StationPacking({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="p-4 bg-white rounded-2xl border border-purple-200 shadow-sm"
+                className="p-4 bg-surface-card rounded-2xl border border-purple-200 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <div className="flex items-center gap-2">
@@ -346,21 +349,23 @@ export default function StationPacking({
                     <span className="text-micro font-mono font-black text-purple-700">{activeFba.shipmentRef}</span>
                   )}
                 </div>
-                <h3 className="text-base font-black text-gray-900 leading-tight">{activeFba.productTitle}</h3>
+                <h3 className="text-base font-black text-text-default leading-tight">{activeFba.productTitle}</h3>
                 <div className="mt-3 flex items-stretch justify-between gap-3 rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2.5">
-                  <div className="min-w-0 flex-1" title={activeFba.fnsku}>
-                    <p className="text-mini font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
-                    <p className="text-sm font-mono font-black text-gray-900 tabular-nums">{getLast4(activeFba.fnsku)}</p>
-                  </div>
+                  <HoverTooltip label={activeFba.fnsku} asChild>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-mini font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
+                      <p className="text-sm font-mono font-black text-text-default tabular-nums">{getLast4(activeFba.fnsku)}</p>
+                    </div>
+                  </HoverTooltip>
                   <div className="flex-1 text-center border-x border-purple-100/80 px-2">
-                    <p className="text-mini font-black text-gray-400 uppercase tracking-wider">Planned</p>
-                    <p className="text-sm font-black text-gray-900 tabular-nums">
+                    <p className="text-mini font-black text-text-faint uppercase tracking-wider">Planned</p>
+                    <p className="text-sm font-black text-text-default tabular-nums">
                       {activeFba.plannedQty > 0 ? activeFba.plannedQty : '—'}
                     </p>
                   </div>
                   <div className="min-w-0 flex-1 text-right">
-                    <p className="text-mini font-black text-gray-400 uppercase tracking-wider">Scanned</p>
-                    <p className="text-sm font-black text-gray-900 tabular-nums">
+                    <p className="text-mini font-black text-text-faint uppercase tracking-wider">Scanned</p>
+                    <p className="text-sm font-black text-text-default tabular-nums">
                       {activeFba.combinedPackScannedQty}
                     </p>
                   </div>
@@ -369,7 +374,8 @@ export default function StationPacking({
             )}
           </AnimatePresence>
 
-          {/* Regular order scan result */}
+          {/* Regular order scan result — embedded sidebar stays compact; full
+              checklist crossfades in the right pane (see ActivePackerWorkspace). */}
           <AnimatePresence mode="wait">
             {activeOrder && !activeFba && (
               <motion.div
@@ -377,33 +383,33 @@ export default function StationPacking({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm"
+                className="p-4 bg-surface-card rounded-2xl border border-border-soft shadow-sm"
               >
                 <div className="flex items-center justify-between gap-3 mb-2">
-                  <p className="text-micro font-black text-gray-500 uppercase tracking-widest">
+                  <p className="text-micro font-black text-text-soft uppercase tracking-widest">
                     {activeOrder.scanType === 'SKU' ? 'Active SKU' : 'Active Order'}
                   </p>
-                  <span className="text-micro font-mono font-black text-gray-700">
+                  <span className="text-micro font-mono font-black text-text-muted">
                     {activeOrder.scanType === 'SKU'
                       ? (activeOrder.sku || activeOrder.tracking || 'N/A')
                       : (activeOrder.orderId || 'N/A')}
                   </span>
                 </div>
-                <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
+                <h3 className="text-base font-black text-text-default leading-tight">{activeOrder.productTitle}</h3>
                 <div className="mt-3 grid grid-cols-3 gap-3">
-                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-eyebrow font-black text-gray-400 uppercase tracking-wider mb-1">Qty</p>
-                    <p className="text-xs font-bold text-gray-800">{activeOrder.qty}</p>
+                  <div className="bg-surface-canvas rounded-xl px-3 py-2 border border-border-hairline">
+                    <p className="text-eyebrow font-black text-text-faint uppercase tracking-wider mb-1">Qty</p>
+                    <p className="text-xs font-bold text-text-default">{activeOrder.qty}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-eyebrow font-black text-gray-400 uppercase tracking-wider mb-1">Condition</p>
-                    <p className="text-xs font-bold text-gray-800">{activeOrder.condition}</p>
+                  <div className="bg-surface-canvas rounded-xl px-3 py-2 border border-border-hairline">
+                    <p className="text-eyebrow font-black text-text-faint uppercase tracking-wider mb-1">Condition</p>
+                    <p className="text-xs font-bold text-text-default">{activeOrder.condition}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-eyebrow font-black text-gray-400 uppercase tracking-wider mb-1">
+                  <div className="bg-surface-canvas rounded-xl px-3 py-2 border border-border-hairline">
+                    <p className="text-eyebrow font-black text-text-faint uppercase tracking-wider mb-1">
                       {activeOrder.scanType === 'SKU' ? 'SKU' : 'TRK #'}
                     </p>
-                    <p className="text-xs font-mono font-bold text-gray-800">
+                    <p className="text-xs font-mono font-bold text-text-default">
                       {activeOrder.scanType === 'SKU'
                         ? (activeOrder.sku || activeOrder.tracking || '—')
                         : (normalizeTrackingQuery(activeOrder.tracking) || '—')}
@@ -411,27 +417,33 @@ export default function StationPacking({
                   </div>
                 </div>
 
-                {/* Per-SKU pack instructions from sku_catalog.notes (P1-PCK-02 §A) */}
-                {skuPackNotes ? (
-                  <InlineNotice
-                    tone="info"
-                    size="sm"
-                    title="How to pack this product"
-                    className="mt-3 whitespace-pre-wrap"
-                  >
-                    {skuPackNotes}
-                  </InlineNotice>
-                ) : null}
-
-                {/* Per-SKU pack checklist: kit-parts BOM ("in the box") + QA
-                    verify steps, ticked off as the packer confirms each
-                    (P1-PCK-03). Advisory in Phase 1 — never blocks completion. */}
-                <PackChecklist
-                  kitParts={skuKitParts}
-                  checks={skuQcFlags}
-                  resetKey={activeOrder.sku}
-                  enforcement={packingPolicy?.enforcement ?? 'advisory'}
-                />
+                {embedded ? (
+                  <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-caption font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                    Checklist open in the history pane — verify each line item before sealing.
+                  </p>
+                ) : (
+                  <>
+                    <OrderPackChecklist
+                      lines={packChecklist?.lines ?? []}
+                      enforcement={packingPolicy?.enforcement ?? packChecklist?.enforcement ?? 'advisory'}
+                      resetKey={
+                        activeOrder.orderRowId
+                          ? `row-${activeOrder.orderRowId}`
+                          : activeOrder.sku || activeOrder.tracking
+                      }
+                      isLoading={checklistLoading}
+                      variant="station"
+                      className="mt-3"
+                    />
+                    <div className="mt-3 border-t border-border-hairline pt-3">
+                      <LinkedTicketsPanel
+                        order={activeOrder.orderId || undefined}
+                        tracking={activeOrder.tracking || undefined}
+                        dense
+                      />
+                    </div>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

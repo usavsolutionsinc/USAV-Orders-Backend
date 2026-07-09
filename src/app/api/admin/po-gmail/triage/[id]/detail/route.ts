@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { ApiError, errorResponse } from '@/lib/api';
 import { fetchMessage } from '@/lib/po-gmail/messages';
@@ -63,15 +64,17 @@ export async function GET(
     const { id } = await params;
     if (!id) throw ApiError.badRequest('id is required');
 
-    const { rows } = await pool.query<TriageRowRecord>(
+    const { rows } = await tenantQuery<TriageRowRecord>(
+      organizationId,
       `SELECT id, gmail_msg_id, gmail_thread_id, po_numbers, po_numbers_norm,
               email_subject, email_from, email_received, scanned_at,
               pile, status, notes, assigned_to,
               zoho_uploaded_po_number, zoho_uploaded_at,
               triage_state, resolved_at
          FROM email_missing_purchase_orders
-        WHERE id = $1`,
-      [id],
+        WHERE id = $1
+          AND organization_id = $2`,
+      [id, organizationId],
     );
 
     if (rows.length === 0) {

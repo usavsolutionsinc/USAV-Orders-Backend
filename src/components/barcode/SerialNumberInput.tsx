@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { Button } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 import { LocationSelector } from './LocationSelector';
 import type { BarcodeDensity } from './BarcodePreview';
 
@@ -90,28 +91,33 @@ export function SerialNumberInput({
         <div className={`transition-opacity duration-200 ${!isActive ? 'opacity-15 pointer-events-none' : ''}`}>
             {/* Step label */}
             <div className={`flex items-center gap-3 ${comfy ? 'px-7 pt-7 pb-3' : 'px-5 pt-5 pb-3'}`}>
-                <span className={`font-black tabular-nums text-gray-500 tracking-widest ${comfy ? 'text-micro' : 'text-eyebrow'}`}>02</span>
-                <span className={`font-black uppercase text-gray-600 ${comfy ? 'text-caption tracking-[0.16em]' : 'text-eyebrow tracking-[0.18em]'}`}>
+                <span className={`font-black tabular-nums text-text-soft tracking-widest ${comfy ? 'text-micro' : 'text-eyebrow'}`}>02</span>
+                <span className={`font-black uppercase text-text-muted ${comfy ? 'text-caption tracking-[0.16em]' : 'text-eyebrow tracking-[0.18em]'}`}>
                     Details & Serial Numbers
                 </span>
                 {showChangeSku && onChangeSku && (
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={onChangeSku}
-                        className={`ml-auto font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors ${comfy ? 'text-micro' : 'text-eyebrow'}`}
+                        className={cn(
+                            'ml-auto h-auto px-0 font-black uppercase tracking-widest text-blue-600 hover:bg-transparent hover:text-blue-800',
+                            comfy ? 'text-micro' : 'text-eyebrow',
+                        )}
                     >
                         ← Change SKU
-                    </button>
+                    </Button>
                 )}
             </div>
 
             {/* Product info card */}
-            <div className={`border-t border-gray-200 ${comfy ? 'px-7 py-5' : 'px-5 py-4'}`}>
+            <div className={`border-t border-border-soft ${comfy ? 'px-7 py-5' : 'px-5 py-4'}`}>
                 <div className="flex justify-between items-start gap-4">
                     {/* Thumbnail (comfortable density only — sidebar stays text-only) */}
                     {comfy && (imageUrl || isLoadingTitle) && (
-                        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-200">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-canvas ring-1 ring-border-soft">
                             {isLoadingTitle ? (
-                                <div className="h-full w-full animate-pulse bg-gray-200" />
+                                <div className="h-full w-full animate-pulse bg-surface-strong" />
                             ) : imageUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -127,23 +133,23 @@ export function SerialNumberInput({
                     )}
 
                     <div className="flex-1 min-w-0">
-                        <p className={`font-black uppercase tracking-widest text-gray-500 ${comfy ? 'text-micro mb-1.5' : 'text-eyebrow mb-1'}`}>Product</p>
+                        <p className={`font-black uppercase tracking-widest text-text-soft ${comfy ? 'text-micro mb-1.5' : 'text-eyebrow mb-1'}`}>Product</p>
                         {isLoadingTitle ? (
-                            <div className={`animate-pulse rounded bg-gray-200 ${comfy ? 'h-5 w-3/4' : 'h-4 w-2/3'}`} />
+                            <div className={`animate-pulse rounded bg-surface-strong ${comfy ? 'h-5 w-3/4' : 'h-4 w-2/3'}`} />
                         ) : (
-                            <p className={`font-semibold text-gray-900 leading-snug break-words ${comfy ? 'text-base' : 'text-sm'}`}>
-                                {title || <span className="text-gray-500 italic font-normal">—</span>}
+                            <p className={`font-semibold text-text-default leading-snug break-words ${comfy ? 'text-base' : 'text-sm'}`}>
+                                {title || <span className="text-text-soft italic font-normal">—</span>}
                             </p>
                         )}
                         {comfy && currentLocation && (
-                            <p className="mt-2 text-caption font-mono text-gray-500">
-                                <span className="text-gray-400">LAST LOC </span>
+                            <p className="mt-2 text-caption font-mono text-text-soft">
+                                <span className="text-text-faint">LAST LOC </span>
                                 <span className="font-bold text-orange-600">{currentLocation}</span>
                             </p>
                         )}
                     </div>
                     <div className="text-right flex-shrink-0">
-                        <p className={`font-black uppercase tracking-widest text-gray-500 ${comfy ? 'text-micro mb-1.5' : 'text-eyebrow mb-1'}`}>Stock</p>
+                        <p className={`font-black uppercase tracking-widest text-text-soft ${comfy ? 'text-micro mb-1.5' : 'text-eyebrow mb-1'}`}>Stock</p>
                         <span className={`font-black ${
                             comfy ? 'text-base px-2.5 py-1' : 'text-xs px-2 py-0.5'
                         } ${
@@ -158,22 +164,22 @@ export function SerialNumberInput({
             </div>
 
             {/* Inputs */}
-            <div className="border-t border-gray-200">
+            <div className="border-t border-border-soft">
                 {/* Scan field — Enter adds to list */}
-                <div className="flex border-b border-gray-200">
+                <div className="flex border-b border-border-soft">
                     <input
                         ref={snInputRef}
                         value={scanValue}
                         onChange={handleScanChange}
                         onKeyDown={handleScanKeyDown}
-                        className={`flex-1 bg-white focus:outline-none font-mono placeholder:text-gray-500 text-gray-900 ${comfy ? 'px-7 py-5 text-base' : 'px-5 py-4 text-sm'}`}
+                        className={`flex-1 bg-surface-card focus:outline-none font-mono placeholder:text-text-soft text-text-default ${comfy ? 'px-7 py-5 text-base' : 'px-5 py-4 text-sm'}`}
                         placeholder="Scan SN → Enter to add…"
                         autoComplete="off"
                         spellCheck={false}
                     />
                     {/* SN count badge */}
                     {serialNumbers.length > 0 && (
-                        <div className={`flex items-center bg-blue-50 border-l border-gray-200 ${comfy ? 'px-5' : 'px-4'}`}>
+                        <div className={`flex items-center bg-blue-50 border-l border-border-soft ${comfy ? 'px-5' : 'px-4'}`}>
                             <span className={`font-black text-blue-700 tabular-nums ${comfy ? 'text-xs' : 'text-caption'}`}>
                                 {serialNumbers.length} SN{serialNumbers.length !== 1 ? 's' : ''}
                             </span>
@@ -183,8 +189,8 @@ export function SerialNumberInput({
 
                 {/* Accumulated SN list */}
                 {serialNumbers.length > 0 && (
-                    <div className={`bg-gray-50 border-b border-gray-200 ${comfy ? 'px-7 py-3' : 'px-5 py-2.5'}`}>
-                        <p className={`font-mono text-gray-600 break-all leading-relaxed ${comfy ? 'text-caption' : 'text-micro'}`}>
+                    <div className={`bg-surface-canvas border-b border-border-soft ${comfy ? 'px-7 py-3' : 'px-5 py-2.5'}`}>
+                        <p className={`font-mono text-text-muted break-all leading-relaxed ${comfy ? 'text-caption' : 'text-micro'}`}>
                             {serialNumbers.join(', ')}
                         </p>
                     </div>
@@ -199,29 +205,30 @@ export function SerialNumberInput({
             </div>
 
             {/* CTA */}
-            <button
+            <Button
+                variant="primary"
                 onClick={() => {
                     const pending = scanValue.trim() || undefined;
                     if (pending) setScanValue('');
                     onNext(pending);
                 }}
                 disabled={isPosting}
-                className={`w-full ${comfy ? 'py-5' : 'py-4'} bg-blue-600 hover:bg-blue-700 text-white ${sectionLabel} transition-colors disabled:opacity-40`}
+                className={cn('w-full justify-center rounded-none h-auto', comfy ? 'py-5' : 'py-4')}
             >
                 {isPosting ? (
                     <span className="flex items-center justify-center gap-2">
-                        <span className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                        <span className="h-3 w-3 border-2 border-glass/30 border-t-white rounded-full animate-spin inline-block" />
                         Processing…
                     </span>
                 ) : (
                     <span className="flex items-center justify-center gap-2.5">
                         Continue →
                         {comfy && (
-                            <kbd className="rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-eyebrow font-mono font-bold tracking-tighter">⏎</kbd>
+                            <kbd className="rounded border border-glass/30 bg-glass/10 px-1.5 py-0.5 text-eyebrow font-mono font-bold tracking-tighter">⏎</kbd>
                         )}
                     </span>
                 )}
-            </button>
+            </Button>
         </div>
     );
 }

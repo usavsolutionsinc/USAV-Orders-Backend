@@ -35,8 +35,10 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { StatPill } from './access/StatPill';
 import { AddStaffDialog } from './access/AddStaffDialog';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface StaffRow {
   id: number;
@@ -160,9 +162,9 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
   }, [rows]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-card">
       {/* Search */}
-      <div className="flex-shrink-0 border-b border-gray-200 px-3 py-3">
+      <div className="flex-shrink-0 border-b border-border-soft px-3 py-3">
         <div className="relative">
           <input
             value={search}
@@ -171,9 +173,9 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
               if (v) p.set('search', v); else p.delete('search');
             })}
             placeholder="Search name, code, or id…"
-            className="h-9 w-full rounded-xl border border-gray-200 bg-white pl-8 pr-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+            className="h-9 w-full rounded-xl border border-border-soft bg-surface-card pl-8 pr-2.5 text-sm text-text-default outline-none transition placeholder:text-text-faint focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
           />
-          <svg className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-faint" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
@@ -181,8 +183,9 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
       </div>
 
       {/* Status filter chips */}
-      <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2">
+      <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-border-soft px-3 py-2">
         {(['all', 'active', 'invited', 'disabled'] as const).map((s) => (
+          // ds-raw-button: two-state segmented filter toggle with custom active fill (blue-600)
           <button
             key={s}
             type="button"
@@ -190,7 +193,7 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
               if (s === 'all') p.delete('accessStatus'); else p.set('accessStatus', s);
             })}
             className={`flex-1 rounded-lg px-2 py-1 text-micro font-bold uppercase tracking-wider transition ${
-              statusFilter === s ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              statusFilter === s ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' : 'bg-surface-sunken text-text-muted hover:bg-surface-strong'
             }`}
           >
             {s}
@@ -199,7 +202,7 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
       </div>
 
       {/* Stats strip */}
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-b border-gray-200 px-3 py-2">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-b border-border-soft px-3 py-2">
         <StatPill label="Total"   value={stats.total} />
         <StatPill label="Active"  value={stats.active}     tone="green" />
         <StatPill label="PIN"     value={stats.withPin}    tone="blue" />
@@ -207,25 +210,26 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
       </div>
 
       {/* Add staff button */}
-      <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2.5">
-        <button
-          type="button"
+      <div className="flex-shrink-0 border-b border-border-soft px-3 py-2.5">
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setAddOpen(true)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>}
+          className="w-full border border-dashed border-border-default ring-0 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           Add staff
-        </button>
+        </Button>
       </div>
 
       {/* Staff list */}
       <div className="flex-1 overflow-y-auto px-3 py-2">
         {loading ? (
-          <div className="px-2 py-6 text-center text-xs text-gray-400">Loading staff…</div>
+          <div className="px-2 py-6 text-center text-xs text-text-faint">Loading staff…</div>
         ) : err ? (
           <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>
         ) : filtered.length === 0 ? (
-          <div className="px-2 py-6 text-center text-xs text-gray-400">No matches.</div>
+          <div className="px-2 py-6 text-center text-xs text-text-faint">No matches.</div>
         ) : reorderEnabled ? (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
@@ -278,7 +282,7 @@ const STATUS_DOT: Record<string, string> = {
   active:    'bg-green-500',
   invited:   'bg-amber-500',
   suspended: 'bg-orange-500',
-  disabled:  'bg-gray-400',
+  disabled:  'bg-border-emphasis',
 };
 
 function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
@@ -288,6 +292,7 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
 
   return (
     <li>
+      {/* ds-raw-button: text-left multi-line master-detail picker row (avatar + name + meta + status dot) */}
       <button
         type="button"
         onClick={onPick}
@@ -295,7 +300,7 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
         className={`group flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-all ${
           selected
             ? 'border-blue-200 bg-blue-50 ring-1 ring-blue-500/30 shadow-sm shadow-blue-200/40'
-            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+            : 'border-border-soft bg-surface-card hover:border-border-default hover:bg-surface-hover'
         }`}
       >
         <div className="relative flex-shrink-0">
@@ -303,23 +308,27 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
             {initials(row.name)}
           </div>
           {isAdmin && (
-            <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white" title="Admin · All Access">
-              <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-              </svg>
-            </span>
+            <HoverTooltip label="Admin · All Access" asChild focusable={false}>
+              <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white">
+                <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </span>
+            </HoverTooltip>
           )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-semibold text-gray-900">{row.name}</span>
-            <span className="text-eyebrow text-gray-400">#{row.id}</span>
+            <span className="truncate text-sm font-semibold text-text-default">{row.name}</span>
+            <span className="text-eyebrow text-text-faint">#{row.id}</span>
           </div>
-          <div className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
+          <div className="truncate text-micro font-medium uppercase tracking-wider text-text-soft">
             {row.role.replace(/_/g, ' ')}
           </div>
         </div>
-        <span title={row.status} className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+        <HoverTooltip label={row.status} asChild focusable={false}>
+          <span className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+        </HoverTooltip>
       </button>
     </li>
   );
@@ -345,21 +354,22 @@ function SortableStaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps
       <div className={`group flex w-full items-center gap-2 rounded-xl border px-2 py-2 transition-all ${
         selected
           ? 'border-blue-200 bg-blue-50 ring-1 ring-blue-500/30 shadow-sm shadow-blue-200/40'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+          : 'border-border-soft bg-surface-card hover:border-border-default hover:bg-surface-hover'
       }`}>
-        <button
-          type="button"
+        <IconButton
           {...attributes}
           {...listeners}
-          aria-label="Drag to reorder"
-          className="flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
-        >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <circle cx="9"  cy="6"  r="1.5"/><circle cx="15" cy="6"  r="1.5"/>
-            <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-            <circle cx="9"  cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
-          </svg>
-        </button>
+          icon={
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <circle cx="9"  cy="6"  r="1.5"/><circle cx="15" cy="6"  r="1.5"/>
+              <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+              <circle cx="9"  cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
+            </svg>
+          }
+          ariaLabel="Drag to reorder"
+          className="flex-shrink-0 cursor-grab text-text-faint hover:text-text-soft active:cursor-grabbing"
+        />
+        {/* ds-raw-button: text-left multi-line master-detail picker row (avatar + name + meta + status dot) */}
         <button
           type="button"
           onClick={onPick}
@@ -371,23 +381,27 @@ function SortableStaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps
               {initials(row.name)}
             </div>
             {isAdmin && (
-              <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white" title="Admin · All Access">
-                <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-              </span>
+              <HoverTooltip label="Admin · All Access" asChild focusable={false}>
+                <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white">
+                  <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                </span>
+              </HoverTooltip>
             )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-semibold text-gray-900">{row.name}</span>
-              <span className="text-eyebrow text-gray-400">#{row.id}</span>
+              <span className="truncate text-sm font-semibold text-text-default">{row.name}</span>
+              <span className="text-eyebrow text-text-faint">#{row.id}</span>
             </div>
-            <div className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
+            <div className="truncate text-micro font-medium uppercase tracking-wider text-text-soft">
               {row.role.replace(/_/g, ' ')}
             </div>
           </div>
-          <span title={row.status} className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+          <HoverTooltip label={row.status} asChild focusable={false}>
+            <span className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+          </HoverTooltip>
         </button>
       </div>
     </li>

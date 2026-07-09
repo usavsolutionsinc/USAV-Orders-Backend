@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { StaffPreferences } from '@/lib/neon/staff-preferences-queries';
 import type { StaffPreferencesPutBody } from '@/lib/schemas/staff-preferences';
 
-const QUERY_KEY = ['staff-preferences'] as const;
+export const STAFF_PREFERENCES_QUERY_KEY = ['staff-preferences'] as const;
+const QUERY_KEY = STAFF_PREFERENCES_QUERY_KEY;
 
 /**
  * The logged-in staffer's UI preferences (server-backed, cross-device).

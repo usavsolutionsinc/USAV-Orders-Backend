@@ -12,10 +12,10 @@ export function ModeButton({ active, onClick, label }: ModeButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`${microBadge} rounded px-2 py-1 transition-colors ${
+      className={`ds-raw-button ${microBadge} rounded px-2 py-1 transition-colors ${
         active
           ? 'bg-blue-100 text-blue-700'
-          : 'text-gray-500 hover:bg-gray-100'
+          : 'text-text-soft hover:bg-surface-sunken'
       }`}
     >
       {label}
@@ -41,10 +41,10 @@ export function ResultRow({ item, showOrderMeta, isSubmitting, disabled, onSelec
         type="button"
         disabled={disabled || isSubmitting}
         onClick={() => onSelect(item)}
-        className="flex w-full items-center gap-3 border-b border-gray-50 px-3 py-2 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="ds-raw-button flex w-full items-center gap-3 border-b border-border-hairline px-3 py-2 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {/* Thumbnail */}
-        <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-gray-100 bg-gray-50">
+        <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-border-hairline bg-surface-canvas">
           {item.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -54,7 +54,7 @@ export function ResultRow({ item, showOrderMeta, isSubmitting, disabled, onSelec
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-micro text-gray-300">
+            <div className="flex h-full w-full items-center justify-center text-micro text-text-faint">
               —
             </div>
           )}
@@ -62,11 +62,11 @@ export function ResultRow({ item, showOrderMeta, isSubmitting, disabled, onSelec
 
         {/* Title + SKU + platform chips */}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-gray-900">
+          <div className="truncate text-sm font-semibold text-text-default">
             {item.product_title}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1">
-            <span className="font-mono text-micro tracking-wide text-gray-500">
+            <span className="font-mono text-micro tracking-wide text-text-soft">
               {displaySku}
             </span>
             {showOrderMeta && item.order_id ? (
@@ -74,14 +74,15 @@ export function ResultRow({ item, showOrderMeta, isSubmitting, disabled, onSelec
                 Order #{item.order_id}
               </span>
             ) : null}
-            {platforms.slice(0, 4).map((p, i) => (
-              <span
-                key={`${p.platform}-${i}`}
-                className={`${microBadge} rounded bg-gray-100 px-1.5 py-0.5 text-gray-600`}
-              >
-                {p.platform}
-              </span>
-            ))}
+            {!showOrderMeta &&
+              platforms.slice(0, 4).map((p, i) => (
+                <span
+                  key={`${p.platform}-${i}`}
+                  className={`${microBadge} rounded bg-surface-sunken px-1.5 py-0.5 text-text-muted`}
+                >
+                  {p.platform}
+                </span>
+              ))}
           </div>
         </div>
 

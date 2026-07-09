@@ -45,7 +45,7 @@ export const POST = withAuth(async (request, ctx) => {
         tax: parsed.data.tax ?? 0,
         validUntil: parsed.data.validUntil ?? null,
         createdByStaffId: ctx.staffId,
-      });
+      }, ctx.organizationId);
       if (!result.ok) return { status: result.status, body: { ok: false, error: result.error } };
       await recordAudit(pool, ctx, request, {
         source: 'warranty-logger',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 
@@ -116,6 +117,7 @@ export const POST = withAuth(async (_req, ctx) => {
     }
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaShipmentChanged({ action: 'duplicated', shipmentId: Number(outcome.todayId || 0), source: 'fba.shipments.duplicate', organizationId: ctx.organizationId });
 
     return NextResponse.json({

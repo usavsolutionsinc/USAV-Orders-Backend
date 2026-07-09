@@ -69,10 +69,14 @@ const UNTESTED_STATUSES = new Set(['UNKNOWN', 'RECEIVED']);
 const HU_COLS = `id, code, status, location_id, created_by,
                  created_at::text AS created_at, closed_at::text AS closed_at, notes`;
 
-const MEMBER_COLS = `id, serial_number, unit_uid, sku, sku_catalog_id,
-                     current_status::text AS current_status, current_location,
-                     condition_grade::text AS condition_grade,
-                     origin_receiving_line_id`;
+// Phase 3: origin_receiving_line_id comes from the reconstruction view (bounded
+// to the box's members, so the view's per-row subqueries stay cheap).
+const MEMBER_COLS = `su.id, su.serial_number, su.unit_uid, su.sku, su.sku_catalog_id,
+                     su.current_status::text AS current_status, su.current_location,
+                     su.condition_grade::text AS condition_grade,
+                     vo.origin_receiving_line_id`;
+const MEMBER_FROM = `FROM serial_units su
+          JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id`;
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
@@ -152,9 +156,9 @@ export async function listMembers(
       await executor.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
       const r = await executor.query<HandlingUnitMember>(
         `SELECT ${MEMBER_COLS}
-           FROM serial_units
-          WHERE handling_unit_id = $1 AND organization_id = $2
-          ORDER BY created_at ASC, id ASC`,
+           ${MEMBER_FROM}
+          WHERE su.handling_unit_id = $1 AND su.organization_id = $2
+          ORDER BY su.created_at ASC, su.id ASC`,
         [handlingUnitId, orgId],
       );
       return r.rows;
@@ -162,18 +166,18 @@ export async function listMembers(
     const r = await tenantQuery<HandlingUnitMember>(
       orgId,
       `SELECT ${MEMBER_COLS}
-         FROM serial_units
-        WHERE handling_unit_id = $1 AND organization_id = $2
-        ORDER BY created_at ASC, id ASC`,
+         ${MEMBER_FROM}
+        WHERE su.handling_unit_id = $1 AND su.organization_id = $2
+        ORDER BY su.created_at ASC, su.id ASC`,
       [handlingUnitId, orgId],
     );
     return r.rows;
   }
   const r = await executor.query<HandlingUnitMember>(
     `SELECT ${MEMBER_COLS}
-       FROM serial_units
-      WHERE handling_unit_id = $1
-      ORDER BY created_at ASC, id ASC`,
+       ${MEMBER_FROM}
+      WHERE su.handling_unit_id = $1
+      ORDER BY su.created_at ASC, su.id ASC`,
     [handlingUnitId],
   );
   return r.rows;

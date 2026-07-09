@@ -68,6 +68,9 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
     ctx?: { organizationId?: string },
   ): Promise<NextResponse> {
     try {
+      // Tenant-scope every cache key. Without org in the key, org B's request
+      // with the same params/id gets a HIT on org A's cached payload.
+      const orgKey = ctx?.organizationId ?? 'noorg';
       const { searchParams } = new URL(req.url);
       const idParam = searchParams.get('id');
 
@@ -77,7 +80,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
 
         // Check cache for single row
         if (cacheNamespace) {
-          const cached = await getCachedJson<TRow>(cacheNamespace, `id:${id}`);
+          const cached = await getCachedJson<TRow>(cacheNamespace, `org:${orgKey}:id:${id}`);
           if (cached) return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
         }
 
@@ -85,7 +88,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
         if (!row) throw ApiError.notFound(name, id);
 
         if (cacheNamespace) {
-          await setCachedJson(cacheNamespace, `id:${id}`, row, cacheTTL, cacheTags);
+          await setCachedJson(cacheNamespace, `org:${orgKey}:id:${id}`, row, cacheTTL, cacheTags);
         }
         return NextResponse.json(row, { headers: { 'x-cache': 'MISS' } });
       }
@@ -96,6 +99,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
       // Build cache key from all query params
       if (cacheNamespace) {
         const cacheKey = createCacheLookupKey({
+          org: orgKey,
           q: params.search,
           page: params.page,
           limit: params.limit,
@@ -128,6 +132,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
 
       if (cacheNamespace) {
         const cacheKey = createCacheLookupKey({
+          org: orgKey,
           q: params.search,
           page: params.page,
           limit: params.limit,

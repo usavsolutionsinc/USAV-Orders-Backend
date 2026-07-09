@@ -20,19 +20,22 @@
  * at /design-demo/photo-peek.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import { useEscapeClose } from '@/design-system/hooks';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
-import type { PhotoGalleryInput } from '@/components/shipped/PhotoGallery';
+import type { PhotoGalleryInput, PhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 import SocialCards, { type CardItem } from '@/components/ui/card-fan-carousel';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import { MobileSwipePhotoViewer, type SwipePhotoSlide } from '@/components/mobile/station/MobileSwipePhotoViewer';
 
-export type PeekCard = { id: string; imgUrl: string; alt: string };
+export type PeekCard = { id: string; imgUrl: string; alt: string; meta?: PhotoMeta };
 
 const PEEK_COUNT = 4; // cards in the corner/fan
 
@@ -64,17 +67,20 @@ const peekCardVariants: Variants = {
 };
 
 const CTRL_BTN =
-  'grid place-items-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/65 disabled:opacity-30';
+  'grid place-items-center rounded-full bg-scrim/40 text-white backdrop-blur-md transition-colors hover:bg-scrim/65 disabled:opacity-30';
 
 // ── Peek + fan ────────────────────────────────────────────────────────────────
 
 export function PhotoPeekFan({
   cards,
   holdMs = 480,
+  receivingId,
   onPhotoDeleted,
 }: {
   cards: PeekCard[];
   holdMs?: number;
+  /** Scopes delete broadcasts to this carton (desktop camera ×N + mobile feed). */
+  receivingId?: number;
   /** Wired so the viewer's delete affordance can refresh the source list. */
   onPhotoDeleted?: (photoId: number) => void;
 }) {
@@ -95,14 +101,22 @@ export function PhotoPeekFan({
     () =>
       chronoCards.map((c) => {
         const idNum = Number(c.id);
-        return Number.isFinite(idNum) ? { id: idNum, url: c.imgUrl } : { url: c.imgUrl };
+        const base = Number.isFinite(idNum) ? { id: idNum, url: c.imgUrl } : { url: c.imgUrl };
+        return c.meta ? { ...base, meta: c.meta } : base;
       }),
     [chronoCards],
   );
 
   // Reuse the shared gallery's fullscreen viewer (zoom/pan/nav/filmstrip + delete)
   // instead of a bespoke lightbox.
-  const gallery = usePhotoGallery({ photos: chronoPhotos, showCopyLinks: false, onPhotoDeleted });
+  const gallery = usePhotoGallery({
+    photos: chronoPhotos,
+    receivingId,
+    allowReassign: !!receivingId,
+    libraryHref: receivingId ? `/ops/photos?receivingId=${receivingId}` : undefined,
+    onPhotoDeleted,
+    onPhotoReassigned: onPhotoDeleted,
+  });
   const { viewerOpen, openViewer } = gallery;
 
   const [peekState, setPeekState] = useState<'rest' | 'fan'>('rest');
@@ -164,6 +178,26 @@ export function PhotoPeekFan({
 
   useEffect(() => () => clearHold(), []);
 
+  const { isMobile } = useUIModeOptional();
+
+  const swipeSlides = useMemo<SwipePhotoSlide[]>(
+    () =>
+      gallery.photoItems.map((p, idx) => ({
+        id: String(p.id ?? idx),
+        previewUrl: p.url,
+        deletable: typeof p.id === 'number' && Number.isFinite(p.id),
+      })),
+    [gallery.photoItems],
+  );
+
+  const handleDelete = useCallback(
+    async (slide: SwipePhotoSlide, index: number) => {
+      gallery.setCurrentIndex(index);
+      await gallery.deletePhotoDirect();
+    },
+    [gallery],
+  );
+
   if (count === 0) return null;
 
   return (
@@ -203,8 +237,8 @@ export function PhotoPeekFan({
                 <img src={card.imgUrl} alt={card.alt} loading="lazy" className="h-full w-full object-cover" />
                 {/* Count badge rides the FRONT card's visible corner. */}
                 {i === 0 && count > 1 ? (
-                  <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-black leading-none text-white tabular-nums backdrop-blur-sm">
-                    ×{count}
+                  <span className="absolute left-1.5 top-1.5 rounded-full bg-scrim/60 px-1.5 py-0.5 text-micro font-black leading-none text-white tabular-nums backdrop-blur-sm">
+                    {count}
                   </span>
                 ) : null}
               </motion.div>
@@ -224,25 +258,23 @@ export function PhotoPeekFan({
                 <motion.div
                   key="photo-fan-expanded"
                   data-testid="photo-peek-expanded"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  initial={{ opacity: 0, pointerEvents: 'auto' }}
+                  animate={{ opacity: 1, pointerEvents: 'auto' }}
+                  exit={{ opacity: 0, pointerEvents: 'none' }}
                   transition={{ duration: 0.2, ease: motionBezier.easeOut }}
-                  onClick={close}
+                  onClick={viewerOpen ? undefined : close}
                   style={{ backgroundColor: FAN_BG, zIndex: zLayer.modalBackdrop }}
-                  className="fixed inset-0 flex items-center justify-center overflow-hidden backdrop-blur-sm"
+                  className={`fixed inset-0 flex items-center justify-center overflow-hidden backdrop-blur-sm ${viewerOpen ? 'pointer-events-none' : ''}`}
                 >
                   {/* Fan's own close — hidden while the fullscreen viewer is open so
                       its button doesn't stack a second X above the viewer. */}
                   {!viewerOpen ? (
-                    <button
-                      type="button"
+                    <IconButton
                       onClick={(e) => { e.stopPropagation(); close(); }}
-                      aria-label="Close"
+                      ariaLabel="Close"
+                      icon={<X className="h-4 w-4 text-white" />}
                       className={`${CTRL_BTN} absolute right-3 top-3 z-50 h-9 w-9`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    />
                   ) : null}
 
                   {/* Fan stage — the shared GSAP card-fan carousel (hover to spread,
@@ -267,14 +299,24 @@ export function PhotoPeekFan({
       {/* Shared fullscreen viewer — portaled to <body>, opened from a fan card
           or Space. X / Esc / backdrop close it (usePhotoGallery), returning to
           the fan underneath. */}
-      {gallery.mounted && typeof document !== 'undefined'
-        ? createPortal(
-            <AnimatePresence mode="wait">
-              {viewerOpen ? <PhotoViewerModal g={gallery} /> : null}
-            </AnimatePresence>,
-            document.body,
-          )
-        : null}
+      {isMobile ? (
+        <MobileSwipePhotoViewer
+          open={viewerOpen}
+          initialIndex={gallery.currentIndex}
+          slides={swipeSlides}
+          onClose={gallery.closeViewer}
+          onDelete={handleDelete}
+        />
+      ) : (
+        gallery.mounted && typeof document !== 'undefined'
+          ? createPortal(
+              <AnimatePresence mode="wait">
+                {viewerOpen ? <PhotoViewerModal g={gallery} /> : null}
+              </AnimatePresence>,
+              document.body,
+            )
+          : null
+      )}
     </>
   );
 }

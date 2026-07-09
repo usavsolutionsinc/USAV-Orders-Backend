@@ -3,6 +3,8 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import { Check, Copy, ExternalLink } from '@/components/Icons';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 interface CopyableValueFieldBlockProps {
   label: string;
@@ -52,37 +54,36 @@ export function CopyableValueFieldBlock({
   const rowActions = (
     <div className="flex items-center gap-1.5">
       {externalUrl && (
-        <button
-          type="button"
-          onClick={handleExternalClick}
-          className={`transition-all text-gray-400 hover:text-blue-600 ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-white hover:shadow-sm'}`}
-          title={externalLabel || 'Open in external tab'}
-          aria-label={externalLabel || 'Open in external tab'}
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </button>
+        <HoverTooltip label={externalLabel || 'Open in external tab'} asChild focusable={false}>
+          <IconButton
+            onClick={handleExternalClick}
+            ariaLabel={externalLabel || 'Open in external tab'}
+            tone="accent"
+            icon={<ExternalLink className="w-3.5 h-3.5" />}
+            className={`transition-all text-text-faint ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-surface-card hover:shadow-sm'}`}
+          />
+        </HoverTooltip>
       )}
       {trailingActions}
       {!isEmpty && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleCopy();
-          }}
-          className={`transition-all ${copied ? 'opacity-100' : isFlat ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'} ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-white hover:shadow-sm'}`}
-          title={`Copy ${label}`}
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? (
-            <div className="flex items-center gap-1">
-              <span className="text-micro font-black text-emerald-600 uppercase">Copied!</span>
-              <Check className="w-3.5 h-3.5 text-emerald-600" />
-            </div>
-          ) : (
-            <Copy className="w-3.5 h-3.5 text-gray-400" />
-          )}
-        </button>
+        <HoverTooltip label={`Copy ${label}`} asChild focusable={false}>
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
+            ariaLabel={`Copy ${label}`}
+            className={`transition-all ${copied ? 'opacity-100' : isFlat ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'} ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-surface-card hover:shadow-sm'}`}
+            icon={copied ? (
+              <div className="flex items-center gap-1">
+                <span className="text-micro font-black text-emerald-600 uppercase">Copied!</span>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+              </div>
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-text-faint" />
+            )}
+          />
+        </HoverTooltip>
       )}
     </div>
   );
@@ -106,10 +107,10 @@ export function CopyableValueFieldBlock({
           tabIndex={isEmpty ? -1 : 0}
           role="button"
           aria-label={`Copy ${label}: ${value}`}
-          className={`group/field flex items-center justify-between gap-3 px-0 py-0 transition-all ${!isEmpty ? 'cursor-pointer hover:text-gray-700' : 'cursor-default'}`}
+          className={`group/field flex items-center justify-between gap-3 px-0 py-0 transition-all ${!isEmpty ? 'cursor-pointer hover:text-text-muted' : 'cursor-default'}`}
         >
           <p
-            className={`flex-1 text-sm font-bold text-gray-900 ${noTruncate ? 'whitespace-normal break-words leading-snug' : twoLineValue ? 'break-all leading-4' : 'truncate'} ${valueClassName || 'font-mono'}`}
+            className={`flex-1 text-sm font-bold text-text-default ${noTruncate ? 'whitespace-normal break-words leading-snug' : twoLineValue ? 'break-all leading-4' : 'truncate'} ${valueClassName || 'font-mono'}`}
             style={
               !noTruncate && twoLineValue
                 ? {
@@ -132,7 +133,7 @@ export function CopyableValueFieldBlock({
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-micro text-gray-400 font-black uppercase tracking-widest">{label}</span>
+          <span className="text-micro text-text-faint font-black uppercase tracking-widest">{label}</span>
           {headerAccessory}
         </div>
       </div>
@@ -147,10 +148,10 @@ export function CopyableValueFieldBlock({
         tabIndex={isEmpty ? -1 : 0}
         role="button"
         aria-label={`Copy ${label}: ${value}`}
-        className={`group/field flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5 transition-all ${!isEmpty ? 'cursor-pointer hover:bg-gray-100 active:scale-[0.98]' : 'cursor-default'}`}
+        className={`group/field flex items-center justify-between gap-3 rounded-xl border border-border-hairline bg-surface-canvas px-4 py-2.5 transition-all ${!isEmpty ? 'cursor-pointer hover:bg-surface-sunken active:scale-[0.98]' : 'cursor-default'}`}
       >
         <p
-          className={`flex-1 text-sm font-bold text-gray-900 ${twoLineValue ? 'break-all leading-4' : 'truncate'} ${valueClassName || 'font-mono'}`}
+          className={`flex-1 text-sm font-bold text-text-default ${twoLineValue ? 'break-all leading-4' : 'truncate'} ${valueClassName || 'font-mono'}`}
           style={
             twoLineValue
               ? {

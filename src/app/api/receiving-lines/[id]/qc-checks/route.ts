@@ -14,6 +14,8 @@ import {
 import { parseBody } from '@/lib/schemas/parse';
 import { QcCheckCreateBody, QcCheckUpdateBody, QcCheckDeleteBody } from '@/lib/schemas/qc-checks';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 
 /**
  * Tech-facing checklist step editing, scoped to a receiving line.
@@ -91,6 +93,7 @@ export const POST = withAuth(async (request, ctx) => {
       passMax: parsed.passMax ?? null,
       failureModeId: parsed.failureModeId ?? null,
     }, ctx.organizationId);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.qcChecks]);
     return NextResponse.json({ ok: true, skuCatalogId: resolved.skuCatalogId, check });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to create step';
@@ -145,6 +148,7 @@ export const PUT = withAuth(async (request, ctx) => {
     if (!updated) {
       return NextResponse.json({ ok: false, error: 'no changes or not found' }, { status: 404 });
     }
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.qcChecks]);
     return NextResponse.json({ ok: true, check: updated });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to update step';
@@ -185,6 +189,7 @@ export const DELETE = withAuth(async (request, ctx) => {
     // Thread orgId so the qc_check_templates DELETE carries an explicit
     // organization_id predicate (defense-in-depth alongside the gate above).
     const deleted = await deleteQcCheck(checkId, ctx.organizationId);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.qcChecks]);
     return NextResponse.json({ ok: true, deleted });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to delete step';

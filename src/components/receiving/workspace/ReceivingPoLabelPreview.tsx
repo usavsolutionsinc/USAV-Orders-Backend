@@ -21,10 +21,10 @@ export function ReceivingPoLabelPreview({
     return <LabelFacePreview model={face} embedded />;
   }
   return (
-    <div className="border-t border-gray-200 bg-gray-50">
+    <div className="border-t border-border-soft bg-surface-canvas">
       <div className="flex items-center gap-3 px-3 pt-3 pb-2">
-        <span className="text-eyebrow font-black tabular-nums text-gray-500 tracking-widest">03</span>
-        <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-600">
+        <span className="text-eyebrow font-black tabular-nums text-text-soft tracking-widest">03</span>
+        <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-muted">
           Review &amp; print
         </span>
       </div>

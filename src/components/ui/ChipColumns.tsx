@@ -1,7 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { cn } from '@/utils/_cn';
+import { useIsColumnHidden } from '@/components/ui/table-column-config/TableColumnConfig';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 
 /**
  * Fixed column widths for a table row's identity-chip grid. Each chip type gets
@@ -32,7 +36,7 @@ export interface ChipColumn {
   key: string;
   /** Tailwind width utility (use a CHIP_COL value) — fixed so the column aligns row-to-row. */
   width: string;
-  /** The chip to render, or null to reserve an empty column so later columns stay aligned. */
+  /** The chip to render, or null to reserve an empty column (FBA etc.). */
   node: ReactNode;
 }
 
@@ -42,10 +46,8 @@ export interface ChipColumn {
  * flush with the day-group count (the `-mr-1.5` cancels the trailing chip's
  * 6px `px-1.5` gutter, matching the count's `pr-1` inset).
  *
- * Pass a `null` node to reserve a column's width (keeps the columns to its right
- * aligned when a row lacks that chip — e.g. an order with no platform or no
- * order-id). Omit the column entirely only when no row in the table has it
- * (e.g. the orders queue never has a serial column).
+ * Staff-hidden columns are removed from layout so visible chips slide flush-right;
+ * Framer `layout` animates sibling reflow when toggling in Configure columns.
  */
 export function ChipColumns({
   columns,
@@ -54,13 +56,43 @@ export function ChipColumns({
   columns: ChipColumn[];
   className?: string;
 }) {
+  const isHidden = useIsColumnHidden();
+  const layoutTransition = useMotionTransition(framerTransition.chipColumnLayout);
+  const presenceTransition = useMotionTransition(framerTransition.dropdownOpen);
+
   return (
-    <div className={cn('flex shrink-0 items-center justify-end gap-0.5 pr-1 -mr-1.5', className)}>
-      {columns.map((c) => (
-        <div key={c.key} className={cn('flex items-center justify-end', c.width)}>
-          {c.node}
-        </div>
-      ))}
-    </div>
+    <LayoutGroup>
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-end gap-0.5 pr-1 -mr-1.5',
+          className,
+        )}
+      >
+        <AnimatePresence initial={false} mode="popLayout">
+          {columns.map((c) => {
+            if (isHidden(c.key)) return null;
+            return (
+              <motion.div
+                key={c.key}
+                layout
+                layoutScroll
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{
+                  layout: layoutTransition,
+                  opacity: presenceTransition,
+                  x: presenceTransition,
+                }}
+                data-col={c.key}
+                className={cn('flex items-center justify-end', c.width)}
+              >
+                {c.node}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </LayoutGroup>
   );
 }

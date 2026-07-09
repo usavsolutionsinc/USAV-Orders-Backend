@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import type { UnitListResponse, UnitListRow } from './types';
 import { inventoryStatusBadgeClass } from './status-classes';
 
@@ -91,7 +92,7 @@ export function ByFilterResultList({ states, conditions }: ByFilterResultListPro
 
     if (loading && rows.length === 0) {
         return (
-            <div className="flex items-center justify-center py-16 text-gray-400">
+            <div className="flex items-center justify-center py-16 text-text-faint">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="ml-2 text-sm">Loading units…</span>
             </div>
@@ -110,10 +111,10 @@ export function ByFilterResultList({ states, conditions }: ByFilterResultListPro
         <section>
             <header className="flex items-center justify-between px-4 py-2 sm:px-6">
                 <div>
-                    <h2 className="text-sm font-semibold text-gray-900">
+                    <h2 className="text-sm font-semibold text-text-default">
                         Filtered units
                     </h2>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-text-soft">
                         {total !== null
                             ? `${rows.length.toLocaleString()} of ${total.toLocaleString()}`
                             : `${rows.length.toLocaleString()}`}{' '}
@@ -123,7 +124,7 @@ export function ByFilterResultList({ states, conditions }: ByFilterResultListPro
             </header>
 
             {rows.length === 0 ? (
-                <div className="px-4 py-12 text-center text-sm text-gray-400 sm:px-6">
+                <div className="px-4 py-12 text-center text-sm text-text-faint sm:px-6">
                     No units match these filters.
                 </div>
             ) : (
@@ -136,18 +137,18 @@ export function ByFilterResultList({ states, conditions }: ByFilterResultListPro
 
             {hasMore ? (
                 <div className="flex justify-center py-4">
-                    <button
-                        type="button"
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={loadingMore}
                         onClick={() => fetchPage(rows.length, true)}
-                        disabled={loadingMore}
-                        className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+                        className="disabled:cursor-wait"
                     >
-                        {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         Load more
-                    </button>
+                    </Button>
                 </div>
             ) : rows.length > 0 ? (
-                <div className="py-4 text-center text-xs text-gray-400">End of results</div>
+                <div className="py-4 text-center text-xs text-text-faint">End of results</div>
             ) : null}
         </section>
     );
@@ -162,29 +163,29 @@ function UnitRow({ row }: { row: UnitListRow }) {
     const statusTone = inventoryStatusBadgeClass(row.current_status);
 
     return (
-        <li className="flex items-start gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
+        <li className="flex items-start gap-3 border-b border-border-hairline px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
             <Link
                 href={unitHref}
                 className="min-w-0 flex-1"
             >
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="font-mono text-xs text-gray-500">#{row.id}</span>
-                    <span className="font-mono text-xs text-gray-900">{row.serial_number}</span>
+                    <span className="font-mono text-xs text-text-soft">#{row.id}</span>
+                    <span className="font-mono text-xs text-text-default">{row.serial_number}</span>
                     <span className={`rounded px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide ${statusTone}`}>
                         {row.current_status}
                     </span>
                     {row.condition_grade ? (
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-gray-700">
+                        <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-text-muted">
                             {row.condition_grade.replace('_', ' ')}
                         </span>
                     ) : null}
                 </div>
-                <div className="mt-0.5 truncate text-sm text-gray-900">
+                <div className="mt-0.5 truncate text-sm text-text-default">
                     {row.product_title || row.sku || '—'}
                 </div>
             </Link>
 
-            <div className="flex shrink-0 flex-col items-end gap-0.5 text-caption text-gray-500">
+            <div className="flex shrink-0 flex-col items-end gap-0.5 text-caption text-text-soft">
                 {skuHref ? (
                     <Link
                         href={skuHref}
@@ -203,7 +204,7 @@ function UnitRow({ row }: { row: UnitListRow }) {
                         {row.current_location}
                     </Link>
                 ) : (
-                    <span className="text-gray-300">no location</span>
+                    <span className="text-text-faint">no location</span>
                 )}
                 <span>{relativeTime(row.updated_at)}</span>
             </div>

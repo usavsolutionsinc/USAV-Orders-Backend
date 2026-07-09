@@ -51,13 +51,13 @@ export function RecentAuditCard() {
       wide
     >
       {entries && entries.length > 0 && (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-border-hairline">
           {entries.map((e) => (
             <li key={e.id} className="flex items-baseline gap-3 py-2 text-sm">
-              <span className="w-16 flex-shrink-0 text-xs text-slate-500">{timeAgo(e.created_at)}</span>
+              <span className="w-16 flex-shrink-0 text-xs text-text-soft">{timeAgo(e.created_at)}</span>
               <span className="min-w-0 flex-1 truncate">
-                <span className="font-medium text-slate-900">{e.event}</span>
-                {e.staff_name && <span className="text-slate-500"> · {e.staff_name}</span>}
+                <span className="font-medium text-text-default">{e.event}</span>
+                {e.staff_name && <span className="text-text-soft"> · {e.staff_name}</span>}
                 {e.result && e.result !== 'ok' && (
                   <span className="ml-2 rounded bg-rose-50 px-1.5 py-0.5 text-xs text-rose-700">{e.result}</span>
                 )}

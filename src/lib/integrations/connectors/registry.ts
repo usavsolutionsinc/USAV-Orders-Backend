@@ -44,6 +44,19 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     authKind: 'vault',
     capabilities: ['orders'],
   },
+  // Storage backup — tenant connects their own Google Drive (Sign in with
+  // Google, scope drive.file) so photo originals back up to / offload onto
+  // storage they own. No ingestion capability; validate()/refresh() are
+  // lazy-imported so the connection reader never pulls the Drive client.
+  google_drive: {
+    provider: 'google_drive',
+    authKind: 'oauth',
+    capabilities: [],
+    authorizeStartPath: '/api/integrations/google-drive/connect',
+    healthPath: '/api/integrations/google-drive/health',
+    validate: (orgId) => import('@/lib/photos/drive/client').then((m) => m.validateDriveConnection(orgId)),
+    refresh: (orgId) => import('@/lib/photos/drive/client').then((m) => m.refreshDriveToken(orgId)),
+  },
   // Storefronts & POS
   square: {
     provider: 'square',
@@ -64,6 +77,14 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     capabilities: ['payments'],
   },
   // Shipping carriers — hand-built forever (Nango doesn't cover carriers).
+  // ShipStation is the label ENGINE (rate-shop + buy/void via v2) AND an order
+  // source (pull via legacy v1). Lazy sync import so the reader never bundles it.
+  shipstation: {
+    provider: 'shipstation',
+    authKind: 'vault',
+    capabilities: ['orders', 'tracking'],
+    sync: (orgId) => import('./shipstation').then((m) => m.shipstationSync(orgId)),
+  },
   ups: { provider: 'ups', authKind: 'vault', capabilities: ['tracking'] },
   fedex: { provider: 'fedex', authKind: 'vault', capabilities: ['tracking'] },
   usps: { provider: 'usps', authKind: 'vault', capabilities: ['tracking'] },
@@ -71,6 +92,22 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
   zendesk: { provider: 'zendesk', authKind: 'vault', capabilities: [] },
   ably: { provider: 'ably', authKind: 'vault', capabilities: [] },
   ollama: { provider: 'ollama', authKind: 'vault', capabilities: [] },
+  // AI search providers (BYOK, OpenAI wire format) — resolved per request by
+  // src/lib/ai/org-provider.ts; 'ollama' doubles as the self-hosted slot.
+  ai_gateway: { provider: 'ai_gateway', authKind: 'vault', capabilities: [] },
+  openai: { provider: 'openai', authKind: 'vault', capabilities: [] },
+  anthropic: { provider: 'anthropic', authKind: 'vault', capabilities: [] },
+  // Voice — business phone (call log + voicemail follow-ups + click-to-call).
+  // authKind is confirmed in the Phase 0 spike; vault is the default. sync() is
+  // the catch-up poll (webhooks are the realtime path) — lazy-imported so the
+  // connection reader never pulls the Nextiva client.
+  nextiva: {
+    provider: 'nextiva',
+    authKind: 'vault',
+    capabilities: ['voice'],
+    healthPath: '/api/integrations/nextiva/health',
+    sync: (orgId) => import('./nextiva').then((m) => m.nextivaSync(orgId)),
+  },
 };
 
 /** Connector for a provider, or undefined for an unknown/legacy provider

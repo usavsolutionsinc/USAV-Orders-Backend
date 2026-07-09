@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from '@/lib/toast';
-import type { EcwidProductPopoverMode } from '@/components/receiving/unfound/EcwidProductSearchPopover';
 import type { AssignedBox } from '@/components/receiving/workspace/CartonAddPopover';
 import type {
   SerialMatchedOrder,
@@ -14,6 +13,13 @@ import {
   type UnfoundLine,
   type UnmatchedItemsSectionProps,
 } from './unmatched-items-shared';
+import { useReceivingCartonUnlink } from './useReceivingCartonUnlink';
+import { isSalesOrderDerivedCarton } from '@/lib/receiving/intake-items-routing';
+import {
+  classificationToColumns,
+  columnsToClassification,
+  type IntakeClassification,
+} from '@/lib/receiving/intake-classification';
 
 /**
  * Owns an unmatched (no-Zoho-PO) carton's items section: fetching the carton's
@@ -30,10 +36,15 @@ export function useUnmatchedItems({
   receivingTypeHint = 'PO',
   listingUrlHint,
   onActiveConditionChange,
+  onLinked,
+  onUnlinked,
+  linkedOrderHint,
+  activeLineId,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
-  /** null = closed; 'repair_service' = the Link-repair-service Ecwid popover. */
-  const [popoverMode, setPopoverMode] = useState<EcwidProductPopoverMode | null>(null);
+  const [cartonHeader, setCartonHeader] = useState(linkedOrderHint ?? null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const { unlinkCarton, unlinking } = useReceivingCartonUnlink();
   /** Unified add popover (Item · Web · Box). */
   const [addOpen, setAddOpen] = useState(false);
   /** Box this carton's units last landed in — shows as a chip in the header. */
@@ -51,29 +62,146 @@ export function useUnmatchedItems({
   // a regular unbox serial card uses. Applied to the line the scan creates.
   const [cartonScanCondition, setCartonScanCondition] = useState('USED_A');
 
+  // Door classification ("Receiving as") for this carton — desktop parity with
+  // the mobile /m/receive selector. Seeds from the carton's stored intake
+  // columns; saving maps the pick back onto those columns via the SoT.
+  const [classification, setClassification] = useState<IntakeClassification>('UNKNOWN');
+
   const refreshLines = useCallback(async () => {
+    // Guard: never hit the API for a non-materialized carton (optimistic open
+    // stub id, or no selection). A bad id only ever 404s "Package not found".
+    if (!Number.isFinite(receivingId) || receivingId <= 0) {
+      setLines([]);
+      return;
+    }
     try {
       const res = await fetch(`/api/receiving/${receivingId}`, {
         cache: 'no-store',
       });
-      const body = (await res.json()) as CartonResponse;
-      if (!res.ok || !body.success) {
-        throw new Error(body.error ?? `fetch failed (${res.status})`);
+      const body = (await res.json().catch(() => null)) as CartonResponse | null;
+      if (!res.ok || !body?.success) {
+        // Carton not visible yet — an optimistic/just-promoted open, a mid-create
+        // race, or a stale unfound-queue stub. Degrade silently to an empty card;
+        // the reconciling feed refresh re-runs this once the row lands. NEVER
+        // toast a raw "Package not found" at the operator (degrade-not-fail).
+        setLines([]);
+        return;
       }
       setLines(body.lines ?? []);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load lines');
+      if (body.receiving) {
+        setCartonHeader({
+          source: body.receiving.source ?? null,
+          zoho_purchaseorder_id: body.receiving.zoho_purchaseorder_id ?? null,
+          zoho_purchaseorder_number: body.receiving.zoho_purchaseorder_number ?? null,
+        });
+        // intake_type maps onto the SoT's `receiving_type` slot.
+        setClassification(
+          columnsToClassification({
+            is_return: body.receiving.is_return,
+            return_platform: body.receiving.return_platform,
+            source_platform: body.receiving.source_platform,
+            receiving_type: body.receiving.intake_type,
+          }),
+        );
+      }
+    } catch {
+      // Network/parse failure on a background auto-load — degrade to an empty
+      // card, no toast. A real refresh re-runs on the next feed event.
+      setLines([]);
     }
   }, [receivingId]);
+
+  // Persist a door-classification pick: map it to the carton columns and PATCH,
+  // then broadcast the same `receiving-package-updated` event the platform/type
+  // pills fire so the sibling carton-context surfaces stay in sync. intake_type
+  // only accepts PO|RETURN|TRADE_IN at the carton level (PICKUP is a carton
+  // source, not an intake_type), so it is skipped for LOCAL_PICKUP to avoid a
+  // 400 that would roll back the return columns.
+  const saveClassification = useCallback(
+    async (next: IntakeClassification) => {
+      setClassification(next);
+      const cols = classificationToColumns(next);
+      const intakeType =
+        cols.receiving_type && cols.receiving_type !== 'PICKUP' ? cols.receiving_type : null;
+      const payload: Record<string, unknown> = {
+        is_return: cols.is_return,
+        return_platform: cols.return_platform,
+        source_platform: cols.source_platform,
+        ...(intakeType ? { intake_type: intakeType } : {}),
+      };
+      try {
+        const res = await fetch(`/api/receiving/${receivingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const b = await res.json().catch(() => ({}));
+          toast.error(b?.error ?? `Could not set the receiving type (${res.status})`);
+          return;
+        }
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        window.dispatchEvent(
+          new CustomEvent('receiving-package-updated', {
+            detail: { receiving_id: receivingId, ...payload },
+          }),
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not set the receiving type');
+      }
+    },
+    [receivingId],
+  );
 
   useEffect(() => {
     void refreshLines();
   }, [onActiveConditionChange, refreshLines]);
 
+  useEffect(() => {
+    if (linkedOrderHint) setCartonHeader(linkedOrderHint);
+  }, [
+    linkedOrderHint?.source,
+    linkedOrderHint?.zoho_purchaseorder_id,
+    linkedOrderHint?.zoho_purchaseorder_number,
+  ]);
+
   // Serial-unit ids across the carton's lines — the atoms the Box tab groups.
   const cartonUnitIds = useMemo(
     () => lines.flatMap((l) => (l.serials ?? []).map((s) => s.id)),
     [lines],
+  );
+
+  const orderLinked = useMemo(() => {
+    if (!cartonHeader) return false;
+    if (isSalesOrderDerivedCarton(cartonHeader)) return true;
+    const poNum = (cartonHeader.zoho_purchaseorder_number || '').trim();
+    return cartonHeader.source === 'zoho_po' && Boolean(poNum);
+  }, [cartonHeader]);
+
+  const linkedOrderNumber = (cartonHeader?.zoho_purchaseorder_number || '').trim() || null;
+
+  const showUnlinkPrompt =
+    orderLinked && (lines.length === 0 || Boolean(linkError));
+
+  const handleUnlinkOrder = useCallback(
+    async () => {
+      const ok = await unlinkCarton({
+        receivingId,
+        lineId: activeLineId,
+        onSuccess: () => {
+          setLinkError(null);
+          setLines([]);
+          setCartonHeader({
+            source: 'unmatched',
+            zoho_purchaseorder_id: null,
+            zoho_purchaseorder_number: null,
+          });
+          onUnlinked?.();
+        },
+      });
+      return ok;
+    },
+    [activeLineId, onUnlinked, receivingId, unlinkCarton],
   );
 
   // Scan a returned serial against the whole carton. Looks the serial up; on a
@@ -85,6 +213,7 @@ export function useUnmatchedItems({
       const serial = rawSerial.trim();
       if (!serial || returnScanBusy) return;
       setReturnScanBusy(true);
+      setLinkError(null);
       try {
         const res = await fetch(
           `/api/serial-units/lookup?serial=${encodeURIComponent(serial)}`,
@@ -100,9 +229,10 @@ export function useUnmatchedItems({
           return;
         }
 
-        // Create the return line, populated from the matched sales order.
         const itemName = matchedOrder?.product_title || `Returned serial ${serial}`;
         const clientEventId = `unfound-return-${receivingId}-${serial}`;
+        const orderNo = (matchedOrder?.order_id || '').trim();
+
         const addRes = await fetch('/api/receiving/add-unmatched-line', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Idempotency-Key': clientEventId },
@@ -111,6 +241,7 @@ export function useUnmatchedItems({
             item_name: itemName,
             sku: matchedOrder?.sku || unit?.sku || undefined,
             intake_type: 'return',
+            source_order_id: orderNo || undefined,
             // The grade the operator picked on the scan card — without it the
             // line lands on the server default instead of the selected pill.
             condition_grade: cartonScanCondition || undefined,
@@ -119,7 +250,9 @@ export function useUnmatchedItems({
         });
         const addBody = await addRes.json().catch(() => ({}));
         if (!addRes.ok || !addBody?.success || !addBody?.line?.id) {
-          toast.error(addBody?.error || 'Could not create the return line');
+          const msg = addBody?.error || 'Could not create the return line';
+          setLinkError(msg);
+          toast.error(msg);
           return;
         }
 
@@ -140,13 +273,8 @@ export function useUnmatchedItems({
           toast.error(scanBody?.error || 'Line created, but the serial scan failed');
         }
 
-        // Graduate the carton off the Unfound queue: bind the matched order #
-        // as the PO# and tag the platform inferred from the order-number
-        // shape. Same two-PATCH mechanism the repair-service link uses (the
-        // PO# write must not roll back if the platform write fails), and the
-        // same auto-flip: /api/receiving/[id] turns source 'unmatched' →
-        // 'zoho_po' once a PO#/order# is bound.
-        const orderNo = (matchedOrder?.order_id || '').trim();
+        // Graduate the carton off the Unfound queue: bind the matched order #,
+        // classify as RETURN, and tag the platform inferred from the order shape.
         const platform = orderNo ? inferPlatformFromOrderId(orderNo) : null;
         if (orderNo) {
           let poApplied = false;
@@ -154,22 +282,16 @@ export function useUnmatchedItems({
             const r1 = await fetch(`/api/receiving/${receivingId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ zoho_purchaseorder_number: orderNo }),
+              body: JSON.stringify({
+                zoho_purchaseorder_number: orderNo,
+                intake_type: 'RETURN',
+                is_return: true,
+                ...(platform ? { source_platform: platform } : {}),
+              }),
             });
             poApplied = r1.ok;
           } catch {
             /* non-fatal — carton stays unfound; operator can bind manually */
-          }
-          if (platform) {
-            try {
-              await fetch(`/api/receiving/${receivingId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ source_platform: platform }),
-              });
-            } catch {
-              /* non-fatal — platform pill stays as-is */
-            }
           }
           // Mirror onto every surface holding this carton (workspace header
           // chips, rails, unfound queue) — same events the repair-service
@@ -184,9 +306,37 @@ export function useUnmatchedItems({
               },
             }),
           );
+          // Update the open panel immediately — carton header + the new return
+          // line (re-selected off the stub by the host).
+          if (poApplied) {
+            onLinked?.({
+              carton: {
+                zoho_purchaseorder_number: orderNo,
+                source: 'zoho_po',
+                source_platform: platform,
+                intake_type: 'RETURN',
+              },
+              line: addBody.line ?? null,
+            });
+          }
         }
 
         await refreshLines();
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        if (addBody.line?.id) {
+          window.dispatchEvent(
+            new CustomEvent('receiving-line-updated', {
+              detail: {
+                id: addBody.line.id,
+                receiving_type: 'RETURN',
+                carton_intake_type: 'RETURN',
+                receiving_source: orderNo ? 'zoho_po' : undefined,
+                zoho_purchaseorder_number: orderNo || null,
+                source_platform: platform,
+              },
+            }),
+          );
+        }
         toast.success(
           matchedOrder?.product_title
             ? `Matched return: ${matchedOrder.product_title}`
@@ -198,20 +348,23 @@ export function useUnmatchedItems({
         setReturnScanBusy(false);
       }
     },
-    [cartonScanCondition, receivingId, refreshLines, returnScanBusy, staffId],
+    [cartonScanCondition, onLinked, receivingId, refreshLines, returnScanBusy, staffId],
   );
 
   const handleAddLine = useCallback(
-    async (selection: {
-      sku_platform_id_row: number | null;
-      sku_catalog_id: number | null;
-      sku: string;
-      item_name: string;
-      image_url: string | null;
-      is_repair_service?: boolean;
-      ecwid_order_id?: string;
-      ecwid_product_url?: string | null;
-    }) => {
+    async (
+      selection: {
+        sku_platform_id_row: number | null;
+        sku_catalog_id: number | null;
+        sku: string;
+        item_name: string;
+        image_url: string | null;
+        is_repair_service?: boolean;
+        ecwid_order_id?: string;
+        ecwid_product_url?: string | null;
+      },
+      opts?: { allowOffPo?: boolean },
+    ) => {
       const clientEventId = `add-line-${receivingId}-${Date.now()}`;
       // For repair-service links we prefer the Ecwid product URL as the
       // line's listing URL so the operator can click straight to the
@@ -235,7 +388,11 @@ export function useUnmatchedItems({
         },
         body: JSON.stringify({
           receiving_id: receivingId,
-          ...(selection.sku_platform_id_row != null
+          ...(opts?.allowOffPo ? { allow_off_po: true } : {}),
+          // Only send a POSITIVE platform-row id — an Ecwid line with no catalog
+          // platform row carries 0, which the server rejects ("must be a positive
+          // integer"). Omit it (→ null) instead so the add still succeeds.
+          ...(selection.sku_platform_id_row != null && selection.sku_platform_id_row > 0
             ? { sku_platform_id_row: selection.sku_platform_id_row }
             : {}),
           sku_catalog_id: selection.sku_catalog_id,
@@ -262,7 +419,6 @@ export function useUnmatchedItems({
         ...prev,
         { ...body.line, image_url: selection.image_url },
       ]);
-      setPopoverMode(null);
       setAddOpen(false);
 
       // The server (add-unmatched-line → recomputeCartonSourceLink) now OWNS the
@@ -273,7 +429,7 @@ export function useUnmatchedItems({
       // multi-order box's representative isn't clobbered by the latest add.
       if (selection.is_repair_service || selection.ecwid_order_id) {
         const carton = body.carton as
-          | { zoho_purchaseorder_number: string | null; source_platform: string | null }
+          | { zoho_purchaseorder_number: string | null; source: string | null; source_platform: string | null }
           | null
           | undefined;
         window.dispatchEvent(new CustomEvent('usav-refresh-data'));
@@ -287,12 +443,42 @@ export function useUnmatchedItems({
           }),
         );
         const repId = carton?.zoho_purchaseorder_number || selection.ecwid_order_id;
+        // Update the open LineEditPanel immediately from the server's returned
+        // row — carton header + the full new line (so the host can re-select the
+        // real line off an unfound stub instead of waiting for the refetch).
+        onLinked?.({
+          carton: {
+            zoho_purchaseorder_number: carton?.zoho_purchaseorder_number ?? repId ?? null,
+            source: carton?.source ?? 'zoho_po',
+            source_platform: carton?.source_platform ?? 'ecwid',
+          },
+          line: body.line ?? null,
+        });
         toast.success(repId ? `Linked Ecwid order #${repId}` : 'Repair service linked');
       } else {
-        toast.success('Item added');
+        const label = selection.item_name || selection.sku || 'item';
+        toast.success(
+          opts?.allowOffPo ? `Added off-PO · ${label}` : `Acknowledged · ${label}`,
+        );
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        // Upgrade an unfound stub / refresh the open panel — carton stays unmatched
+        // unless the server promoted it (no source_order_id on catalog-only adds).
+        onLinked?.({
+          carton: {
+            zoho_purchaseorder_number:
+              (body.carton as { zoho_purchaseorder_number?: string | null } | null)
+                ?.zoho_purchaseorder_number ?? null,
+            source:
+              (body.carton as { source?: string | null } | null)?.source ?? 'unmatched',
+            source_platform:
+              (body.carton as { source_platform?: string | null } | null)?.source_platform ??
+              null,
+          },
+          line: body.line ?? null,
+        });
       }
     },
-    [listingUrlHint, receivingId, receivingTypeHint, sourcePlatformHint],
+    [listingUrlHint, onLinked, receivingId, receivingTypeHint, sourcePlatformHint],
   );
 
   const handleRemoveLine = useCallback(
@@ -358,17 +544,23 @@ export function useUnmatchedItems({
 
   return {
     lines,
-    popoverMode, setPopoverMode,
     addOpen, setAddOpen,
     assignedBox, setAssignedBox,
     returnScanBusy,
     cartonScanCondition, setCartonScanCondition,
+    classification, saveClassification,
     refreshLines,
     cartonUnitIds,
     handleReturnSerialScan,
     handleAddLine,
     handleRemoveLine,
     handleConditionChange,
+    orderLinked,
+    linkedOrderNumber,
+    showUnlinkPrompt,
+    linkError,
+    unlinking,
+    handleUnlinkOrder,
   };
 }
 

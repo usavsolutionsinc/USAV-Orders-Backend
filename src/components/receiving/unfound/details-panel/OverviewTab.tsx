@@ -51,16 +51,16 @@ export function OverviewTab({
             )}
           />
           {row.kind === 'station_exception' && (
-            <p className="mt-1 text-micro text-gray-500">{row.context}</p>
+            <p className="mt-1 text-micro text-text-soft">{row.context}</p>
           )}
         </Section>
       )}
 
       {subjectPrefix && row.kind === 'email_po' && (
         <Section title="Subject">
-          <p className="text-label text-gray-700">{subjectPrefix}</p>
+          <p className="text-label text-text-muted">{subjectPrefix}</p>
           {detail?.row.email_from && (
-            <p className="mt-0.5 text-micro text-gray-500">
+            <p className="mt-0.5 text-micro text-text-soft">
               {detail.row.email_from}
             </p>
           )}
@@ -69,7 +69,7 @@ export function OverviewTab({
 
       {row.product_title && row.kind !== 'email_po' && (
         <Section title="Product">
-          <p className="text-label font-semibold text-gray-900">
+          <p className="text-label font-semibold text-text-default">
             {row.product_title}
           </p>
         </Section>
@@ -97,7 +97,7 @@ export function OverviewTab({
               );
             })()}
             {row.zendesk_synced_at && (
-              <p className="text-micro text-gray-500">
+              <p className="text-micro text-text-soft">
                 synced {formatDateTimePST(row.zendesk_synced_at)}
               </p>
             )}
@@ -111,20 +111,20 @@ export function OverviewTab({
         <Section title="Team notes">
           {row.usa_team_note && (
             <div className="mb-2">
-              <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
+              <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
                 USA
               </p>
-              <p className="whitespace-pre-wrap text-label text-gray-700">
+              <p className="whitespace-pre-wrap text-label text-text-muted">
                 {row.usa_team_note}
               </p>
             </div>
           )}
           {row.vietnam_team_note && (
             <div>
-              <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
+              <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
                 Vietnam
               </p>
-              <p className="whitespace-pre-wrap text-label text-gray-700">
+              <p className="whitespace-pre-wrap text-label text-text-muted">
                 {row.vietnam_team_note}
               </p>
             </div>

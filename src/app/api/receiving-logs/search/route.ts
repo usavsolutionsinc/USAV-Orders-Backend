@@ -27,18 +27,18 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             ctx.organizationId,
             `SELECT r.id,
                     r.${dateColumn} AS timestamp,
-                    COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+                    stn.tracking_number_raw AS tracking,
                     COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS status,
                     ${countExpr} AS count
              FROM receiving r
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
              WHERE r.organization_id = $3
                AND (
-                    RIGHT(COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)::text, 8) = $1
-                 OR COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)::text ILIKE $2
+                    RIGHT(stn.tracking_number_raw::text, 8) = $1
+                 OR stn.tracking_number_raw::text ILIKE $2
                )
-               AND COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) IS NOT NULL
-               AND COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) <> ''
+               AND stn.tracking_number_raw IS NOT NULL
+               AND stn.tracking_number_raw <> ''
              ORDER BY r.id DESC`,
             [last8, `%${query}%`, ctx.organizationId]
         );

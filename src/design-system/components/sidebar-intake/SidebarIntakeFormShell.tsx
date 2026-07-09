@@ -32,8 +32,8 @@ export function SidebarIntakeFormShell({
   footer,
 }: SidebarIntakeFormShellProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-gray-200 bg-white p-4">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
+      <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-border-soft bg-surface-card p-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -45,22 +45,22 @@ export function SidebarIntakeFormShell({
             className={SIDEBAR_INTAKE_CLOSE_BUTTON_CLASS}
             aria-label="Close form"
           >
-            <X className="h-4 w-4 text-gray-600" />
+            <X className="h-4 w-4 text-text-muted" />
           </button>
           <div>
-            <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">{title}</h2>
+            <h2 className="text-sm font-black uppercase tracking-tight text-text-default">{title}</h2>
             <p className={SIDEBAR_INTAKE_SUBTITLE_ACCENT[subtitleAccent]}>{subtitle}</p>
           </div>
         </div>
       </div>
 
       {bandBelowHeader ? (
-        <div className="border-b border-gray-100 bg-white px-4 pt-4">{bandBelowHeader}</div>
+        <div className="border-b border-border-hairline bg-surface-card px-4 pt-4">{bandBelowHeader}</div>
       ) : null}
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white p-4 scrollbar-hide">{children}</div>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-surface-card p-4 scrollbar-hide">{children}</div>
 
-      <div className="border-t border-gray-200 bg-white p-4">{footer}</div>
+      <div className="border-t border-border-soft bg-surface-card p-4">{footer}</div>
     </div>
   );
 }

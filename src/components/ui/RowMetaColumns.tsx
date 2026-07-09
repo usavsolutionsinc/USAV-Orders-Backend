@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/utils/_cn';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { useIsColumnHidden } from '@/components/ui/table-column-config/TableColumnConfig';
 
 /**
  * Dashboard / queue / receiving order-row title + meta subrow.
@@ -25,8 +26,8 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
  *     never drift the way a content-width flow does.
  *
  * Typography matches the /design-demo "good example":
- *     title → text-[13px] font-bold text-gray-900   (text-[12px] when `small`)
- *     meta  → text-[9px] font-bold uppercase tracking-widest text-gray-500
+ *     title → text-[13px] font-bold text-text-default   (text-[12px] when `small`)
+ *     meta  → text-[9px] font-bold uppercase tracking-widest text-text-soft
  *
  * INVARIANTS:
  *   • RowMetaColumns `indent` MUST equal the RowTitle `dotTrack` width
@@ -34,6 +35,9 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
  *   • A wide qty count ("0/1"…"100/100", receiving) needs the wider `qtyCol`
  *     (`qtyColWide`) so it doesn't clip — pair it with `indentWide`/`dotTrackWide`.
  *   Keep META_COL the single source for these paired widths.
+ *
+ * (Meta fields are low visual weight; chip reflow when toggling Configure columns
+ * is animated in ChipColumns.)
  */
 export const META_COL = {
   /** Default dot-track width AND meta indent — single-token counts (orders/shipped/tech/packer). */
@@ -48,6 +52,31 @@ export const META_COL = {
   qtyColWide: '2.15rem',
   /** Fixed condition-column track — NEW / USED / N/A. */
   condCol: '2.5rem',
+  /**
+   * PO line accordion — fixed condition-column track sized to the LONGEST
+   * `ConditionGradeChip` table label ("PARTS" / "L-NEW", both ~57.7px measured
+   * dense). Fixed (not `max-content`) so the chip starts at the same x on every
+   * row and the columns don't drift; 3.75rem (60px) fits the widest label with a
+   * sub-pixel safety margin. Wider than the shared 2.5rem `condCol` (which clips
+   * "PARTS" → "PAR"), so it stays a separate PoLineMetaGrid-only token. */
+  poCondCol: '3.75rem',
+  /**
+   * PO line accordion — SKU last-4 chip column. Content-width, NOT a fixed
+   * 2.75rem: `SkuScanRefChip` truncates itself inside a fixed track, so the
+   * 4-char last-4 was clipping to "0…". `max-content` sizes the track to the
+   * full last-4 (mono → consistent across rows). Only PoLineMetaGrid uses this.
+   */
+  skuCol: 'max-content',
+  /** PO line accordion — serial chip column (the flex track that absorbs slack). */
+  serialCol: 'minmax(2.5rem, 1fr)',
+  /**
+   * PO line accordion — unit price (tabular, right-aligned). Content-width, NOT a
+   * fixed 2.75rem: the price chip is intentionally non-shrinking (fitDisplayWidth),
+   * so a fixed track clipped any amount wider than "$8.88" off the card's right
+   * edge. `max-content` sizes the track to the full amount ($1,299.00) and the
+   * serial column (1fr) gives up the slack.
+   */
+  priceCol: 'max-content',
 } as const;
 
 export function RowTitle({
@@ -86,13 +115,14 @@ export function RowTitle({
             <span className={cn('h-2 w-2 rounded-full', dot)} />
           </HoverTooltip>
         ) : (
+          /* ds-allow-title */
           <span className={cn('h-2 w-2 rounded-full', dot)} title={dotTitle} />
         )}
       </span>
       <div
         className={cn(
-          'truncate font-bold text-gray-900',
-          small ? 'text-[12px]' : 'text-[13px]',
+          'truncate font-bold text-text-default',
+          small ? 'text-label' : 'text-[13px]',
           titleClassName,
         )}
       >
@@ -123,22 +153,33 @@ export function RowMetaColumns({
   condCol?: string;
   className?: string;
 }) {
+  // Per-staff hidden slots (no-op outside a TableColumnConfigProvider). A hidden
+  // slot drops its grid track + cell; chip side uses the same drop + layout animation.
+  const isHidden = useIsColumnHidden();
+  const showQty = !isHidden('qty');
+  const showCondition = !isHidden('condition');
+  const showRest = rest != null && !isHidden('rest');
+
+  // Build the virtual-column template from only the visible slots.
+  const tracks: string[] = [];
+  if (showQty) tracks.push(qtyCol);
+  if (showCondition) tracks.push(condCol);
+  if (showRest) tracks.push('minmax(0,auto)');
+
+  if (tracks.length === 0) return null;
+
   return (
     <div
       className={cn(
-        'mt-0.5 grid min-w-0 items-center gap-x-1 text-[9px] font-bold uppercase tracking-widest text-gray-500',
+        'mt-0.5 grid min-w-0 items-center gap-x-1 text-eyebrow font-bold uppercase tracking-widest text-text-soft',
         className,
       )}
-      // Fixed virtual columns: qty | condition | rest(auto). The qty/condition
-      // tracks are a known width, so condition (and the rest slot after it) starts
-      // at the same x on every row — the columns lock instead of drifting with the
-      // qty value's width.
-      style={{ paddingLeft: indent, gridTemplateColumns: `${qtyCol} ${condCol} minmax(0,auto)` }}
+      style={{ paddingLeft: indent, gridTemplateColumns: tracks.join(' ') }}
     >
-      <span className="truncate">{qty}</span>
-      <span className="truncate">{condition}</span>
-      {rest != null ? (
-        <span className="flex min-w-0 items-center gap-2 truncate">{rest}</span>
+      {showQty ? <span data-col="qty" className="truncate">{qty}</span> : null}
+      {showCondition ? <span data-col="condition" className="truncate">{condition}</span> : null}
+      {showRest ? (
+        <span data-col="rest" className="flex min-w-0 items-center gap-2 truncate">{rest}</span>
       ) : null}
     </div>
   );

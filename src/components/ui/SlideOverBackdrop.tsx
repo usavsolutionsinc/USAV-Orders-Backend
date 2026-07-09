@@ -21,7 +21,7 @@ export function SlideOverBackdrop({ onClose }: SlideOverBackdropProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={TRANSITION}
-      className="fixed inset-0 z-panelBackdrop bg-gray-950/35"
+      className="fixed inset-0 z-panelBackdrop bg-scrim/35"
       onClick={onClose}
     />
   );

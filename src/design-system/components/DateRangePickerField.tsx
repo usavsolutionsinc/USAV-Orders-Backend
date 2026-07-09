@@ -114,12 +114,12 @@ export function DateRangePickerField({
           type="button"
           disabled={disabled}
           className={cn(
-            'inline-flex h-9 w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-left text-caption font-semibold text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50',
-            hasValue ? 'text-slate-900' : 'text-slate-400',
+            'inline-flex h-9 w-full items-center gap-2 rounded-lg border border-border-soft bg-surface-card px-2.5 text-left text-caption font-semibold text-text-muted transition-colors hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50',
+            hasValue ? 'text-text-default' : 'text-text-faint',
             className,
           )}
         >
-          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-text-faint" />
           <span className="flex-1 truncate">{label}</span>
           {hasValue ? (
             <button
@@ -131,7 +131,7 @@ export function DateRangePickerField({
                 setDraft(undefined);
               }}
               aria-label="Clear date range"
-              className="-mr-1 inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="-mr-1 inline-flex h-5 w-5 items-center justify-center rounded text-text-faint hover:bg-surface-sunken hover:text-text-muted"
             >
               <X className="h-3 w-3" />
             </button>
@@ -143,10 +143,10 @@ export function DateRangePickerField({
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-dropdown rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+          className="z-dropdown rounded-xl border border-border-soft bg-surface-card shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
           {presets.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 p-2">
+            <div className="flex flex-wrap items-center gap-1 border-b border-border-hairline p-2">
               {presets.map((p) => (
                 <button
                   key={p.label}
@@ -157,7 +157,7 @@ export function DateRangePickerField({
                     onChange(r);
                     setOpen(false);
                   }}
-                  className="rounded-md px-2 py-1 text-eyebrow font-black uppercase tracking-wider text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  className="rounded-md px-2 py-1 text-eyebrow font-black uppercase tracking-wider text-text-muted hover:bg-surface-sunken hover:text-text-default"
                 >
                   {p.label}
                 </button>
@@ -178,7 +178,7 @@ export function DateRangePickerField({
             }
           />
 
-          <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
+          <div className="flex items-center justify-between border-t border-border-hairline px-3 py-2">
             <button
               type="button"
               onClick={() => {
@@ -186,7 +186,7 @@ export function DateRangePickerField({
                 onChange(undefined);
                 setOpen(false);
               }}
-              className="text-eyebrow font-black uppercase tracking-wider text-slate-500 hover:text-slate-900"
+              className="text-eyebrow font-black uppercase tracking-wider text-text-soft hover:text-text-default"
             >
               Clear
             </button>
@@ -197,7 +197,7 @@ export function DateRangePickerField({
                 setOpen(false);
               }}
               disabled={!draft?.from}
-              className="rounded-md bg-blue-600 px-3 py-1 text-caption font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              className="rounded-md bg-blue-600 px-3 py-1 text-caption font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-surface-strong"
             >
               Apply
             </button>

@@ -7,83 +7,32 @@
  * item, link a PO#). Rows auto-drop once Zoho syncs the PO or the operator links
  * one manually.
  *
- * Renders with the EXACT same components as the Found rail — it's a thin
- * RecentActivityRailBase wrapper. The unfound-queue rows are mapped to stub
- * ReceivingLineRows (titled "Unfound PO", qty 0/?), so the rail shows the same
- * row shape + selection highlight, and the hover preview shows the order# and
- * tracking number as last-4 copy chips (CopyChip) like every other rail.
+ * Pure composition: the rail is a thin binding over {@link ReceivingFeedRail}
+ * (feed `triageUnfound`), and the two triage-specific affordances are behavior
+ * hooks wired into the rail's optional popover slots:
+ *   • B3 — read-only Zoho-sync exception dot + tooltip ({@link useTriageUnfoundExceptions}).
+ *   • B2 — a "Claim" action opening `ReceivingClaimModal` ({@link useReceivingClaimModal}),
+ *     filed at the carton level (the unfound row is a synthetic stub with no real
+ *     receiving_line).
+ *   • Phase 4 — an on-demand "Retry pair" action (§7 Q4) re-running the same
+ *     tracking search the (previously untriggered) cron sweep does, via
+ *     `POST /api/receiving/unfound-queue/retry-pair`.
  */
 
-import { useMemo } from 'react';
-import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
-import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
-import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRecentRail';
-
-interface UnfoundQueueRow {
-  kind: string;
-  source_id: string;
-  product_title: string | null;
-  serial_numbers: string | null;
-  context: string | null;
-  created_at: string;
-}
-
-/** Map an unfound-queue row to the stub ReceivingLineRow the rail renders. */
-function toStubRow(r: UnfoundQueueRow): ReceivingLineRow {
-  const receivingId = Number(r.source_id);
-  return {
-    id: -receivingId,
-    receiving_id: receivingId,
-    tracking_number: r.context,
-    carrier: null,
-    zoho_item_id: null,
-    zoho_line_item_id: null,
-    zoho_purchase_receive_id: null,
-    zoho_purchaseorder_id: null,
-    zoho_purchaseorder_number: null,
-    // Title shown in the rail row — "Unfound PO" (falls back to any product
-    // title the queue captured).
-    item_name: r.product_title || 'Unfound PO',
-    sku: null,
-    quantity_received: 0,
-    quantity_expected: null,
-    qa_status: 'PENDING',
-    // Unfound = scanned at the dock but not matched to a PO → ARRIVED ("SCANNED"
-    // chip), mirroring buildUnmatchedEmptyReceivingLine on the server. null here
-    // fell back to the gray "EXPECTED" chip in the rail popover, which read as
-    // "not here yet" for a carton that is physically in hand.
-    workflow_status: 'ARRIVED',
-    disposition_code: 'HOLD',
-    condition_grade: '',
-    disposition_audit: [],
-    needs_test: true,
-    assigned_tech_id: null,
-    zoho_sync_source: null,
-    zoho_last_modified_time: null,
-    zoho_synced_at: null,
-    receiving_type: 'PO',
-    notes: null,
-    created_at: r.created_at,
-    last_activity_at: r.created_at,
-    image_url: null,
-    source_platform: null,
-    receiving_source: 'unmatched',
-    serials: r.serial_numbers
-      ? r.serial_numbers
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .map((serial_number, i) => ({ id: -(receivingId * 100 + i), serial_number }))
-      : [],
-  };
-}
-
-function matchesQuery(r: UnfoundQueueRow, q: string): boolean {
-  if (!q) return true;
-  return [r.context, r.product_title, r.serial_numbers].some((x) =>
-    (x || '').toLowerCase().includes(q),
-  );
-}
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
+import { Flag, RotateCcw } from '@/components/Icons';
+import { toast } from '@/lib/toast';
+import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingClaimModal';
+import { exceptionDotClass, exceptionTooltipLabel } from '@/lib/receiving/triage-exception-context';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { ReceivingFeedRail } from './ReceivingFeedRail';
+import { useTriageUnfoundExceptions } from './useTriageUnfoundExceptions';
+import { useReceivingClaimModal } from './useReceivingClaimModal';
+import { useTriageStagingMap } from './useTriageStagingMap';
+import { TriageStagingChips } from './TriageStagingChips';
 
 export function TriageUnfoundList({
   selectedLineId,
@@ -92,48 +41,114 @@ export function TriageUnfoundList({
   selectedLineId: number | null;
   filterText?: string;
 }) {
-  const q = filterText.trim().toLowerCase();
-  const queryKey = useMemo(() => ['receiving', 'triage', 'unfound-list', q] as const, [q]);
+  const exceptionMap = useTriageUnfoundExceptions();
+  const stagingMap = useTriageStagingMap();
+  const { claimRow, openClaim, closeClaim, onTicketCreated } = useReceivingClaimModal();
+  const queryClient = useQueryClient();
+  const [retryingId, setRetryingId] = useState<number | null>(null);
 
-  const fetchFn = async (): Promise<ApiResponse> => {
-    const res = await fetch(
-      '/api/receiving/unfound-queue?kind=unmatched_receiving&checked=false&limit=200',
-      { cache: 'no-store' },
-    );
-    if (!res.ok) throw new Error('unfound queue fetch failed');
-    const data = (await res.json()) as { rows?: UnfoundQueueRow[] };
-    const rows = (data.rows ?? [])
-      .filter((r) => Number.isFinite(Number(r.source_id)))
-      .filter((r) => matchesQuery(r, q))
-      .map(toStubRow);
-    return { success: true, receiving_lines: rows, total: rows.length };
+  const retryPair = async (receivingId: number) => {
+    if (retryingId != null) return;
+    setRetryingId(receivingId);
+    try {
+      const res = await fetch('/api/receiving/unfound-queue/retry-pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receiving_id: receivingId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Retry failed');
+        return;
+      }
+      if (data.promoted) {
+        toast.success(`Matched to PO ${data.zoho_purchaseorder_id ?? ''}`.trim());
+        invalidateReceivingFeeds(queryClient);
+      } else {
+        toast('Still no Zoho match', { description: 'Try again later, or link a PO manually.' });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Retry failed');
+    } finally {
+      setRetryingId(null);
+    }
   };
 
   return (
-    <RecentActivityRailBase
-      selectedLineId={selectedLineId}
-      selectedRow={null}
-      limit={200}
-      queryKey={queryKey}
-      fetchFn={fetchFn}
-      updateEvent="receiving-line-updated"
-      deleteEvent="receiving-line-deleted"
-      deleteGroupEvent="receiving-entry-deleted"
-      refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
-      eyebrowTitle="Unfound"
-      autoSelectFirstWhenEmpty
-      getStatusDot={getReceivingStatusDot}
-      getStatusDotLabel={getReceivingStatusDotLabel}
-      renderQuantity={(row) => (
-        <span className="text-gray-600">
-          {row.quantity_received}/{row.quantity_expected ?? '?'}
-        </span>
-      )}
-      previewQtyLabel="Received"
-      getPreviewQty={(row) => ({
-        current: row.quantity_received,
-        total: row.quantity_expected,
-      })}
-    />
+    <>
+      <ReceivingFeedRail
+        feed="triageUnfound"
+        selectedLineId={selectedLineId}
+        filterText={filterText}
+        renderPopoverContext={(row) => {
+          // B3: open Zoho-sync exception state for this carton (read-only).
+          const ctx = row.receiving_id != null ? exceptionMap?.get(row.receiving_id) : undefined;
+          const staging = row.receiving_id != null ? stagingMap.get(row.receiving_id) : undefined;
+          if (!ctx && !staging) return null;
+          return (
+            <>
+              {ctx ? (
+                <div className="flex items-center gap-2 border-t border-border-hairline pt-2.5">
+                  <HoverTooltip label={exceptionTooltipLabel(ctx)} asChild>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${exceptionDotClass(ctx)}`} />
+                      <span className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
+                        Zoho sync pending · {ctx.retryCount}×
+                      </span>
+                    </span>
+                  </HoverTooltip>
+                </div>
+              ) : null}
+              <TriageStagingChips ctx={staging} />
+            </>
+          );
+        }}
+        renderPopoverActions={(row, { dismiss }) => (
+          <div className="flex items-center gap-1">
+            {row.receiving_id != null ? (
+              <HoverTooltip label="Re-check Zoho for a PO match right now" asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={retryingId === row.receiving_id}
+                  disabled={retryingId != null && retryingId !== row.receiving_id}
+                  onClick={() => void retryPair(row.receiving_id!)}
+                  className="h-auto gap-1 rounded-md px-2 py-1 text-micro font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Retry pair
+                </Button>
+              </HoverTooltip>
+            ) : null}
+            {/* B2: file a Zendesk claim for this unfound carton straight from triage. */}
+            <HoverTooltip label="File a missing-carton / unfound claim for this package" asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  openClaim(row);
+                  dismiss();
+                }}
+                className="h-auto gap-1 rounded-md px-2 py-1 text-micro font-black uppercase tracking-widest text-orange-600 hover:bg-orange-50"
+              >
+                <Flag className="h-3.5 w-3.5" />
+                Claim
+              </Button>
+            </HoverTooltip>
+          </div>
+        )}
+      />
+
+      {claimRow ? (
+        <ReceivingClaimModal
+          open
+          row={claimRow}
+          // Carton-level claim — the unfound stub has no real receiving_line.
+          lineIdOverride={null}
+          onClose={closeClaim}
+          onTicketCreated={onTicketCreated}
+        />
+      ) : null}
+    </>
   );
 }

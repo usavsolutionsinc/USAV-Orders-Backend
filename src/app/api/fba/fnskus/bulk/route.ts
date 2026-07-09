@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 
 type Row = {
@@ -114,7 +115,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       ctx.organizationId,
       `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, condition, is_active, organization_id, created_at, updated_at, last_seen_at)
        VALUES ${placeholders.join(', ')}
-       ON CONFLICT (fnsku) DO UPDATE
+       ON CONFLICT (organization_id, fnsku) DO UPDATE
          SET product_title = COALESCE(EXCLUDED.product_title, fba_fnskus.product_title),
              asin          = COALESCE(EXCLUDED.asin, fba_fnskus.asin),
              sku           = COALESCE(EXCLUDED.sku, fba_fnskus.sku),
@@ -128,6 +129,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     );
 
     await invalidateCacheTags(['fba-fnskus']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaCatalogChanged({ action: 'bulk-uploaded', count: unique.length, source: 'fba.fnskus.bulk', organizationId: ctx.organizationId });
 
     return NextResponse.json({ success: true, inserted: unique.length });

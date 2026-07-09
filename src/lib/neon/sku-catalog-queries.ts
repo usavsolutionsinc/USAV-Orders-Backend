@@ -162,15 +162,16 @@ export async function upsertSkuCatalog(params: {
   replenishTargetCents?: number | null;
   /** Per-SKU pack/handling guidance shown to the packer (P1-PCK-02). */
   notes?: string | null;
-}, orgId?: OrgId): Promise<SkuCatalogRow> {
+}, orgId: OrgId): Promise<SkuCatalogRow> {
   // The lifecycle params are referenced directly ($8–$11) rather than via
   // EXCLUDED so that omitting them (null) preserves the existing row on update
   // and falls back to the column default ('active') on insert — callers that
   // don't opt into lifecycle behave exactly as before.
   //
-  // When orgId is provided we explicitly stamp organization_id ($13) on insert
-  // and scope the upsert via tenantQuery; when omitted we keep the exact prior
-  // behavior (session-less pool.query, organization_id left to the GUC default).
+  // orgId is REQUIRED: we explicitly stamp organization_id ($14) on insert and
+  // scope the upsert via tenantQuery, and conflict on (organization_id, sku) so
+  // the same SKU string can exist per-org (H4). Callers thread ctx.organizationId
+  // / the sync account's org — there is no global (org-less) upsert path.
   const values: unknown[] = [
     params.sku.trim(),
     params.productTitle.trim(),
@@ -189,14 +190,14 @@ export async function upsertSkuCatalog(params: {
     // on upsert here — clearing goes through the PATCH null path), so trim-or-null
     // is the right normalization.
     params.notes !== undefined ? (params.notes?.trim() || null) : null,
+    orgId,
   ];
-  if (orgId) values.push(orgId);
   const sql = `INSERT INTO sku_catalog
        (sku, product_title, category, upc, ean, image_url, is_active,
         lifecycle_status, reorder_threshold, last_known_cost_cents, sourcing_notes,
-        replenish_target_cents, notes${orgId ? ', organization_id' : ''})
-     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'active'), $9, $10, $11, $12, $13${orgId ? ', $14' : ''})
-     ON CONFLICT (sku) DO UPDATE SET
+        replenish_target_cents, notes, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'active'), $9, $10, $11, $12, $13, $14)
+     ON CONFLICT (organization_id, sku) DO UPDATE SET
        product_title = EXCLUDED.product_title,
        category = COALESCE(EXCLUDED.category, sku_catalog.category),
        upc = COALESCE(EXCLUDED.upc, sku_catalog.upc),
@@ -211,9 +212,10 @@ export async function upsertSkuCatalog(params: {
        notes = COALESCE($13, sku_catalog.notes),
        updated_at = NOW()
      RETURNING *`;
-  const result = orgId
-    ? await tenantQuery<SkuCatalogRow>(orgId, sql, values)
-    : await pool.query<SkuCatalogRow>(sql, values);
+  // Always tenant-scoped: orgId is required, the row is stamped organization_id
+  // ($14), and the upsert conflicts on (organization_id, sku) — so two orgs can
+  // hold the same SKU string without colliding (the H4 per-org-unique fix).
+  const result = await tenantQuery<SkuCatalogRow>(orgId, sql, values);
   return result.rows[0];
 }
 
@@ -355,6 +357,113 @@ export async function resolveSkuCatalogByPlatformId(
   return result.rows[0]?.sku_catalog_id ?? null;
 }
 
+export interface SkuCatalogTitleMatch {
+  id: number;
+  sku: string;
+  productTitle: string;
+}
+
+/**
+ * Minimum trigram similarity for a title-only catalog match when the import
+ * row has no SKU or platform item number to anchor on (Google Sheet minimal
+ * imports). Higher than {@link SKU_TITLE_GUARD_MIN} because there is no SKU
+ * cross-check — we need a stronger title signal to avoid false positives.
+ */
+export const SKU_TITLE_ONLY_MIN = 0.45;
+
+/**
+ * Batch-resolve sku_catalog rows from product titles alone.
+ *
+ * Used by the Google Sheets transfer job for small-business imports that only
+ * carry an order number + product title. Returns a map keyed by the exact
+ * input title string (trimmed) so callers can look up per row.
+ */
+export async function batchResolveSkuCatalogByTitles(
+  titles: string[],
+  orgId?: OrgId,
+): Promise<Map<string, SkuCatalogTitleMatch>> {
+  const unique = Array.from(new Set(titles.map((t) => t.trim()).filter(Boolean)));
+  const out = new Map<string, SkuCatalogTitleMatch>();
+  if (unique.length === 0) return out;
+
+  const sql = `WITH inputs AS (
+       SELECT title, LOWER(TRIM(title)) AS norm
+         FROM unnest($1::text[]) AS title
+     )
+     SELECT DISTINCT ON (inputs.title)
+       inputs.title AS input_title,
+       sc.id,
+       sc.sku,
+       sc.product_title,
+       CASE
+         WHEN LOWER(TRIM(sc.product_title)) = inputs.norm THEN 1.0
+         ELSE similarity(LOWER(sc.product_title), inputs.norm)
+       END AS sim
+     FROM inputs
+     JOIN sku_catalog sc ON (
+       LOWER(TRIM(sc.product_title)) = inputs.norm
+       OR similarity(LOWER(sc.product_title), inputs.norm) >= ${SKU_TITLE_ONLY_MIN}
+     )
+     WHERE sc.product_title IS NOT NULL
+       AND BTRIM(sc.product_title) <> ''
+       ${orgId ? 'AND sc.organization_id = $2' : ''}
+     ORDER BY inputs.title,
+       (LOWER(TRIM(sc.product_title)) = inputs.norm) DESC,
+       sim DESC,
+       sc.id`;
+
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [unique, orgId])
+    : await pool.query(sql, [unique]);
+
+  for (const row of result.rows) {
+    const inputTitle = String(row.input_title || '').trim();
+    const id = Number(row.id);
+    const sku = String(row.sku || '').trim();
+    const productTitle = String(row.product_title || '').trim();
+    if (!inputTitle || !Number.isFinite(id) || id <= 0 || !sku) continue;
+    out.set(inputTitle, { id, sku, productTitle });
+  }
+  return out;
+}
+
+/**
+ * Best-effort platform_item_id per sku_catalog row (for backfilling orders.item_number
+ * when a sheet import matched by title but carries no listing id).
+ */
+export async function batchPlatformItemIdsByCatalogIds(
+  catalogIds: number[],
+  orgId?: OrgId,
+): Promise<Map<number, string>> {
+  const unique = Array.from(new Set(catalogIds.filter((id) => Number.isFinite(id) && id > 0)));
+  const out = new Map<number, string>();
+  if (unique.length === 0) return out;
+
+  const sql = `SELECT DISTINCT ON (sku_catalog_id)
+       sku_catalog_id,
+       platform_item_id
+     FROM sku_platform_ids
+     WHERE sku_catalog_id = ANY($1::int[])
+       AND platform_item_id IS NOT NULL
+       AND BTRIM(platform_item_id) <> ''
+       AND is_active = true
+       ${orgId ? 'AND organization_id = $2' : ''}
+     ORDER BY sku_catalog_id, id DESC`;
+
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [unique, orgId])
+    : await pool.query(sql, [unique]);
+
+  for (const row of result.rows) {
+    const catalogId = Number(row.sku_catalog_id);
+    const itemId = String(row.platform_item_id || '').trim();
+    if (Number.isFinite(catalogId) && catalogId > 0 && itemId) {
+      out.set(catalogId, itemId);
+    }
+  }
+  return out;
+}
+
 /**
  * Minimum trigram similarity between a sku_catalog row's product_title and a
  * caller-supplied expected title for a same-SKU match to be trusted.
@@ -485,7 +594,7 @@ export async function resolveOrCreateSkuCatalogId(params: {
    * Marketplace sync callers leave this unset and keep the prior behavior.
    */
   guardTitle?: string | null;
-}, orgId?: OrgId): Promise<number | null> {
+}, orgId: OrgId): Promise<number | null> {
   const sku = (params.sku || '').trim() || null;
   const itemNumber = (params.itemNumber || '').trim() || null;
   const productTitle = (params.productTitle || '').trim() || 'Unknown Product';
@@ -519,10 +628,8 @@ export async function resolveOrCreateSkuCatalogId(params: {
     // gets its correct catalog identity via the authoritative Ecwid/Zoho
     // cross-check path, not by squatting on a marketplace SKU.)
     if (guardTitle) {
-      const clashSql = `SELECT id FROM sku_catalog WHERE sku = $1${orgId ? ' AND organization_id = $2' : ''} LIMIT 1`;
-      const clash = orgId
-        ? await tenantQuery(orgId, clashSql, [sku, orgId])
-        : await pool.query(clashSql, [sku]);
+      const clashSql = `SELECT id FROM sku_catalog WHERE sku = $1 AND organization_id = $2 LIMIT 1`;
+      const clash = await tenantQuery(orgId, clashSql, [sku, orgId]);
       if (clash.rows[0]) return null;
     }
     const catalogRow = await upsertSkuCatalog({
@@ -832,8 +939,8 @@ export function deriveStepPassed(
  */
 export async function ensureSkuCatalogEntry(
   sku: string,
-  hint?: { zoho_item_id?: string; zoho_purchaseorder_id?: string },
-  orgId?: OrgId,
+  hint: { zoho_item_id?: string; zoho_purchaseorder_id?: string } | undefined,
+  orgId: OrgId,
 ): Promise<SkuCatalogRow | null> {
   const trimmed = (sku || '').trim();
 
@@ -896,23 +1003,21 @@ export async function ensureSkuCatalogEntry(
  */
 export async function syncSkuCatalogFromItems(
   rows: Array<{ sku?: string | null; name?: string | null; upc?: string | null; ean?: string | null; image_url?: string | null; status?: string | null }>,
-  orgId?: OrgId,
+  orgId: OrgId,
 ): Promise<void> {
   const valid = rows.filter((r) => r.sku && r.sku.trim());
   if (valid.length === 0) return;
 
-  // sku_catalog is tenant-owned. When orgId is provided we append an
-  // organization_id column to every VALUES tuple (stamp on insert) and run via
-  // withTenantTransaction (GUC set); the column list and per-row placeholder
-  // width grow by one. When omitted the statement is byte-identical to before.
-  // 6 base columns; +1 (organization_id) when orgId is provided.
-  const cols = orgId ? 7 : 6;
+  // sku_catalog is tenant-owned. orgId is REQUIRED: every VALUES tuple carries an
+  // organization_id column (stamp on insert), the upsert runs via
+  // withTenantTransaction (GUC set), and conflicts on (organization_id, sku) so
+  // the same SKU string can be synced per-org without colliding (H4).
+  const cols = 7;
   const values: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
   for (const row of valid) {
-    const ph = [`$${idx}`, `$${idx + 1}`, `$${idx + 2}`, `$${idx + 3}`, `$${idx + 4}`, `$${idx + 5}`];
-    if (orgId) ph.push(`$${idx + 6}`);
+    const ph = [`$${idx}`, `$${idx + 1}`, `$${idx + 2}`, `$${idx + 3}`, `$${idx + 4}`, `$${idx + 5}`, `$${idx + 6}`];
     values.push(`(${ph.join(', ')})`);
     params.push(
       row.sku!.trim(),
@@ -921,25 +1026,21 @@ export async function syncSkuCatalogFromItems(
       row.ean?.trim() || null,
       row.image_url?.trim() || null,
       row.status === 'active',
+      orgId,
     );
-    if (orgId) params.push(orgId);
     idx += cols;
   }
 
-  const sql = `INSERT INTO sku_catalog (sku, product_title, upc, ean, image_url, is_active${orgId ? ', organization_id' : ''})
+  const sql = `INSERT INTO sku_catalog (sku, product_title, upc, ean, image_url, is_active, organization_id)
      VALUES ${values.join(', ')}
-     ON CONFLICT (sku) DO UPDATE SET
+     ON CONFLICT (organization_id, sku) DO UPDATE SET
        product_title = COALESCE(NULLIF(sku_catalog.product_title, 'Unknown Product'), EXCLUDED.product_title),
        upc = COALESCE(EXCLUDED.upc, sku_catalog.upc),
        ean = COALESCE(EXCLUDED.ean, sku_catalog.ean),
        image_url = COALESCE(EXCLUDED.image_url, sku_catalog.image_url),
        is_active = EXCLUDED.is_active,
        updated_at = NOW()`;
-  if (orgId) {
-    await withTenantTransaction(orgId, (client) => client.query(sql, params));
-  } else {
-    await pool.query(sql, params);
-  }
+  await withTenantTransaction(orgId, (client) => client.query(sql, params));
 }
 
 // ─── Unpaired Ecwid Products ────────────────────────────────────────────────

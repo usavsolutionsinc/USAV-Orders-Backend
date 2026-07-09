@@ -12,7 +12,7 @@ const TONES: Record<PoHeaderStatus, string> = {
   RECEIVED: 'bg-emerald-100 text-emerald-700',
 };
 
-const FALLBACK = 'bg-slate-100 text-slate-600';
+const FALLBACK = 'bg-surface-sunken text-text-muted';
 
 /** Flat chip classes for a PO header status; safe for unknown values. */
 export function poHeaderStatusChipClass(status: string): string {

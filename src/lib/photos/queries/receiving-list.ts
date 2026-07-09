@@ -62,6 +62,8 @@ export async function listReceivingPhotos(input: {
   receivingId: number;
   lineId?: number | null;
   scope?: 'po' | 'all';
+  /** Filter by capture intent — triage box shots vs unbox item shots. */
+  photoIntent?: 'package' | 'item' | 'all';
   contentUrl?: (id: number) => string;
 }): Promise<ReceivingPhotoListRow[]> {
   const toUrl = input.contentUrl ?? ((id: number) => `/api/photos/${id}/content`);
@@ -93,11 +95,19 @@ export async function listReceivingPhotos(input: {
       )`;
   }
 
+  const intent = input.photoIntent ?? 'all';
+  const intentSql =
+    intent === 'package'
+      ? ` AND (l.entity_type = 'RECEIVING' OR COALESCE(p.photo_type, '') IN ('receiving_package', 'receiving'))`
+      : intent === 'item'
+        ? ` AND (l.entity_type = 'RECEIVING_LINE' OR COALESCE(p.photo_type, '') = 'receiving_item')`
+        : '';
+
   const res = await pool.query<DbRow>(
     `SELECT ${SELECT}
        FROM photos p
        ${LINK_JOINS}
-      WHERE ${where}
+      WHERE ${where}${intentSql}
       ORDER BY p.id ASC, p.created_at ASC`,
     params,
   );
@@ -117,6 +127,23 @@ export function sqlReceivingPhotoCount(receivingIdExpr: string, orgIdExpr: strin
         (l.entity_type = 'RECEIVING' AND l.entity_id = ${receivingIdExpr})
         OR (l.entity_type = 'RECEIVING_LINE' AND rl_ph.receiving_id = ${receivingIdExpr})
       ))`;
+}
+
+/**
+ * Parameterized photo count for one receiving carton. Bind `[orgId, receivingId]`.
+ * `$2::int` is required — Postgres cannot infer the type inside the subquery.
+ */
+export const SQL_SELECT_RECEIVING_PHOTO_COUNT = `SELECT ${sqlReceivingPhotoCount('$2::int', '$1')}::int AS photo_count`;
+
+export async function countReceivingPhotos(
+  organizationId: string,
+  receivingId: number,
+): Promise<number> {
+  const res = await pool.query<{ photo_count: string }>(SQL_SELECT_RECEIVING_PHOTO_COUNT, [
+    organizationId,
+    receivingId,
+  ]);
+  return Number(res.rows[0]?.photo_count ?? 0);
 }
 
 export function sqlPoLevelPhotoCount(receivingIdExpr: string, orgIdExpr: string): string {

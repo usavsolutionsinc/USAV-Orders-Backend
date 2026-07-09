@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, Loader2, Check, Link2, Plus, AlertCircle } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { platformStyle } from './platform-style';
 import type { UnmappedPlatformId } from './types';
@@ -174,37 +175,35 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-modal bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-modal bg-scrim/30" onClick={onClose} />
       <div className="pointer-events-none fixed inset-0 z-modal flex items-start justify-center p-3 sm:p-6">
         <div
           role="dialog"
           aria-modal="true"
-          className="pointer-events-auto mt-[6vh] flex max-h-[84vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+          className="pointer-events-auto mt-[6vh] flex max-h-[84vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border-soft bg-surface-card shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
-            <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+          <div className="flex shrink-0 items-center justify-between border-b border-border-soft px-4 py-3">
+            <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
               {headerLabel}
             </p>
-            <button
-              type="button"
+            <IconButton
+              icon={<X className="h-4 w-4" />}
+              ariaLabel="Close"
               onClick={onClose}
-              aria-label="Close"
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              className="rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+            />
           </div>
 
           {/* Pending identifier banner */}
           {pending && style && (
-            <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+            <div className="shrink-0 border-b border-border-hairline bg-surface-canvas px-4 py-2.5">
               <div className="flex items-center gap-2">
                 <span className={`inline-flex items-center rounded border px-1.5 py-0 text-eyebrow font-semibold uppercase tracking-wider ${style.chip}`}>
                   {style.label}
                 </span>
-                <span className="font-mono text-xs font-bold text-slate-900">{identifier}</span>
+                <span className="font-mono text-xs font-bold text-text-default">{identifier}</span>
                 {pending.orderCount > 0 && (
                   <span className="text-micro font-semibold text-amber-700">
                     links {pending.orderCount} order{pending.orderCount === 1 ? '' : 's'}
@@ -212,14 +211,14 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
                 )}
               </div>
               {pending.suggestedTitle && (
-                <p className="mt-1 truncate text-caption text-slate-500">{pending.suggestedTitle}</p>
+                <p className="mt-1 truncate text-caption text-text-soft">{pending.suggestedTitle}</p>
               )}
             </div>
           )}
 
           {/* Mode tabs (only meaningful when pairing an identifier) */}
           {pending && (
-            <div className="flex shrink-0 gap-1 border-b border-slate-100 px-3 py-2">
+            <div className="flex shrink-0 gap-1 border-b border-border-hairline px-3 py-2">
               <ModeTab active={mode === 'create'} onClick={() => setMode('create')} icon={<Plus className="h-3.5 w-3.5" />} label="Create new SKU" />
               <ModeTab active={mode === 'existing'} onClick={() => setMode('existing')} icon={<Link2 className="h-3.5 w-3.5" />} label="Pair to existing" />
             </div>
@@ -234,7 +233,7 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
                     placeholder="e.g. 00326-P-2"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm font-bold text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 font-mono text-sm font-bold text-text-default outline-none focus:border-blue-300 focus:bg-surface-card focus:ring-2 focus:ring-blue-100"
                   />
                 </Field>
                 <Field label="Product title" required>
@@ -242,7 +241,7 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Canonical product name"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-sm font-semibold text-text-default outline-none focus:border-blue-300 focus:bg-surface-card focus:ring-2 focus:ring-blue-100"
                   />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
@@ -251,7 +250,7 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
                       placeholder="Optional"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-sm text-text-default outline-none focus:border-blue-300 focus:bg-surface-card focus:ring-2 focus:ring-blue-100"
                     />
                   </Field>
                   <Field label="UPC">
@@ -259,7 +258,7 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
                       value={upc}
                       onChange={(e) => setUpc(e.target.value)}
                       placeholder="Optional"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 font-mono text-sm text-text-default outline-none focus:border-blue-300 focus:bg-surface-card focus:ring-2 focus:ring-blue-100"
                     />
                   </Field>
                 </div>
@@ -272,33 +271,34 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
             ) : (
               <div className="space-y-2">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
                   <input
                     value={existingQuery}
                     onChange={(e) => { setExistingQuery(e.target.value); setSelected(null); }}
                     placeholder="Search canonical SKU or title…"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm font-semibold text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-lg border border-border-soft bg-surface-canvas py-2 pl-8 pr-3 text-sm font-semibold text-text-default outline-none focus:border-blue-300 focus:bg-surface-card focus:ring-2 focus:ring-blue-100"
                   />
-                  {searching && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />}
+                  {searching && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-text-faint" />}
                 </div>
-                <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100">
+                <div className="divide-y divide-border-hairline overflow-hidden rounded-lg border border-border-hairline">
                   {results.length === 0 ? (
-                    <p className="px-3 py-6 text-center text-caption text-slate-400">
+                    <p className="px-3 py-6 text-center text-caption text-text-faint">
                       {existingQuery.trim() ? 'No matches' : 'Type to search the catalog'}
                     </p>
                   ) : (
                     results.map((r) => {
                       const isSel = selected?.id === r.id;
                       return (
+                        // ds-raw-button: text-left master-detail picker row (SKU + title), not a standard action button
                         <button
                           key={r.id}
                           type="button"
                           onClick={() => setSelected(isSel ? null : r)}
-                          className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${isSel ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${isSel ? 'bg-emerald-50' : 'hover:bg-surface-hover'}`}
                         >
                           {isSel && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
-                          <span className="font-mono text-xs font-black text-slate-900">{r.sku}</span>
-                          <span className="truncate text-caption text-slate-500">{r.product_title}</span>
+                          <span className="font-mono text-xs font-black text-text-default">{r.sku}</span>
+                          <span className="truncate text-caption text-text-soft">{r.product_title}</span>
                         </button>
                       );
                     })
@@ -316,23 +316,20 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
           )}
 
           {/* Footer */}
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-3 py-2 text-micro font-bold uppercase tracking-wider text-slate-500 transition-colors hover:bg-slate-100"
-            >
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-soft px-4 py-3">
+            <Button variant="ghost" size="md" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={mode === 'create' ? handleCreate : handlePairExisting}
+            </Button>
+            <Button
+              variant="brand"
+              size="md"
+              loading={submitting}
               disabled={submitting || (mode === 'existing' && !selected)}
-              className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-micro font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={mode === 'create' ? handleCreate : handlePairExisting}
+              icon={mode === 'create' ? <Plus className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
             >
-              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : mode === 'create' ? <Plus className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
               {mode === 'create' ? (pending ? 'Create & pair' : 'Add SKU') : 'Pair SKU'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -343,11 +340,12 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
 
 function ModeTab({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: ReactNode; label: string }) {
   return (
+    // ds-raw-button: segmented mode toggle (conditional active fill), not a single DS variant
     <button
       type="button"
       onClick={onClick}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-micro font-bold uppercase tracking-wider transition-colors ${
-        active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'
+        active ? 'bg-surface-inverse text-white' : 'text-text-soft hover:bg-surface-sunken'
       }`}
     >
       {icon}{label}
@@ -358,7 +356,7 @@ function ModeTab({ active, onClick, icon, label }: { active: boolean; onClick: (
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-micro font-bold uppercase tracking-wider text-slate-500">
+      <span className="mb-1 block text-micro font-bold uppercase tracking-wider text-text-soft">
         {label}{required && <span className="text-red-400"> *</span>}
       </span>
       {children}

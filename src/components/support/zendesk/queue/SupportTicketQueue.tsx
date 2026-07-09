@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock, History, RefreshCw } from '@/components/Icons';
-import { EmptyState } from '@/design-system/primitives';
+import { Button, EmptyState, IconButton } from '@/design-system/primitives';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { TICKET_STATUS_ITEMS } from '@/components/sidebar/support/support-sidebar-shared';
 import {
   isNotConfigured,
   useZendeskTickets,
@@ -18,14 +21,6 @@ import { useRecentTickets } from '@/hooks/useRecentTickets';
 import { cn } from '@/utils/_cn';
 import { ZendeskSelect } from '../ZendeskSelect';
 import { SupportTicketRow } from './SupportTicketRow';
-
-const STATUS_ITEMS: HorizontalSliderItem[] = [
-  { id: 'open', label: 'Open' },
-  { id: 'pending', label: 'Pending' },
-  { id: 'hold', label: 'Hold' },
-  { id: 'solved', label: 'Solved' },
-  { id: 'all', label: 'All' },
-];
 
 type SortKey = 'recent' | 'oldest' | 'priority';
 const SORTS: Record<SortKey, { sortBy: TicketListParams['sortBy']; sortOrder: TicketListParams['sortOrder']; label: string }> = {
@@ -48,7 +43,7 @@ interface SelectableTicket {
  * ticket list, and pagination. Selection drives `?ticket=<id>`; the chat detail
  * reads it.
  */
-export function SupportTicketQueue() {
+export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -94,7 +89,7 @@ export function SupportTicketQueue() {
   const showRecents = recents.length > 0 && !debounced;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface-card">
       {/* Search — shared SearchBar primitive */}
       <div className="shrink-0 px-2 pt-2">
         <SearchBar
@@ -108,52 +103,54 @@ export function SupportTicketQueue() {
         />
       </div>
 
-      {/* Status filter (shared slider) + sort + refresh */}
-      <div className="shrink-0 space-y-2 px-2 py-2">
+      <div className={cn(SIDEBAR_GUTTER, 'shrink-0 overflow-visible pt-1')}>
         <HorizontalButtonSlider
-          variant="nav"
-          dense
-          items={STATUS_ITEMS}
+          className="w-full"
+          items={TICKET_STATUS_ITEMS}
           value={status}
           onChange={(id) => setStatus(id as StatusFilter)}
+          variant="nav"
+          dense
           aria-label="Ticket status"
         />
-        <div className="flex items-center justify-between">
-          <ZendeskSelect value={sort} options={SORT_OPTIONS} onChange={(v) => setSort(v as SortKey)} />
-          <button
-            type="button"
-            onClick={() => void queryClient.invalidateQueries({ queryKey: ['zendesk'] })}
-            aria-label="Refresh tickets"
-            title="Refresh tickets"
-            className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
       </div>
 
-      {/* Body */}
+      <div className="flex shrink-0 items-center justify-between px-2 py-2">
+        <ZendeskSelect value={sort} options={SORT_OPTIONS} onChange={(v) => setSort(v as SortKey)} />
+        <HoverTooltip label="Refresh tickets" asChild>
+          <IconButton
+            icon={<RefreshCw className="h-4 w-4" />}
+            onClick={() => void queryClient.invalidateQueries({ queryKey: ['zendesk'] })}
+            ariaLabel="Refresh tickets"
+            className="rounded-md p-1.5 hover:bg-surface-sunken"
+          />
+        </HoverTooltip>
+      </div>
+
+      {/* Body — mode toggle floats over the scrolling ticket list when master nav is off. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {modeToggle}
         {showRecents ? (
-          <div className="border-b border-gray-100 pb-1.5">
-            <p className="flex items-center gap-1 px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+          <div className="border-b border-border-hairline pb-1.5">
+            <p className="flex items-center gap-1 px-3 pb-1 pt-2 text-micro font-black uppercase tracking-widest text-text-faint">
               <History className="h-3 w-3" /> Recently opened
             </p>
             {recents.map((r) => (
+              // ds-raw-button: text-left master-detail recents row (clock + subject + #id, selection ring), not a standard action Button
               <button
                 key={`recent-${r.id}`}
                 type="button"
                 onClick={() => select(r)}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-1.5 text-left transition',
-                  r.id === selectedId ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50',
+                  r.id === selectedId ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-surface-hover',
                 )}
               >
-                <Clock className="h-3 w-3 shrink-0 text-gray-300" />
-                <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-gray-700">
+                <Clock className="h-3 w-3 shrink-0 text-text-faint" />
+                <span className="min-w-0 flex-1 truncate text-label font-semibold text-text-muted">
                   {r.subject || `Ticket #${r.id}`}
                 </span>
-                <span className="shrink-0 text-[10px] font-bold text-gray-300">#{r.id}</span>
+                <span className="shrink-0 text-micro font-bold text-text-faint">#{r.id}</span>
               </button>
             ))}
           </div>
@@ -177,9 +174,9 @@ export function SupportTicketQueue() {
             <EmptyState title="No tickets match" description="Try a different filter or search." />
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border-hairline">
             {showRecents ? (
-              <p className="px-3 pb-1 pt-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400">
+              <p className="px-3 pb-1 pt-2.5 text-micro font-black uppercase tracking-widest text-text-faint">
                 All tickets
               </p>
             ) : null}
@@ -203,26 +200,26 @@ export function SupportTicketQueue() {
       </div>
 
       {/* Pagination */}
-      <div className="flex shrink-0 items-center justify-between border-t border-gray-100 px-3 py-2">
-        <button
-          type="button"
+      <div className="flex shrink-0 items-center justify-between border-t border-border-hairline px-3 py-2">
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={!data?.previous_page && page <= 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded-lg border border-gray-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-gray-500 transition hover:bg-gray-50 disabled:opacity-40"
         >
           Prev
-        </button>
-        <span className="text-[10px] font-semibold text-gray-400">
+        </Button>
+        <span className="text-micro font-semibold text-text-faint">
           {data?.count != null ? `${data.count} total` : ''}
         </span>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={!data?.next_page}
           onClick={() => setPage((p) => p + 1)}
-          className="rounded-lg border border-gray-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-gray-500 transition hover:bg-gray-50 disabled:opacity-40"
         >
           Next
-        </button>
+        </Button>
       </div>
     </div>
   );

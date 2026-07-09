@@ -10,14 +10,17 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { receivingSurfaceBasePath } from '@/lib/receiving/surface-path';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { parseReceivingPrependedDetail } from '@/lib/queries/receiving-queries';
 import { INCOMING_PAGE_SIZE, type ReceivingModeContext, type ReceivingModeDescriptor } from '@/lib/receiving/receiving-modes';
 import type { ApiResponse } from '@/components/station/receiving-lines-table-helpers';
 import {
   deliveredUnscannedToRow,
   type DeliveredUnscannedResponse,
 } from '@/components/station/receiving-delivered-unscanned';
+import { mergeReceivingPackageMetaIntoRow } from './receiving-lines-table-helpers';
 import type { ReceivingLineRow } from './receiving-line-row';
 
 interface UseReceivingLinesDataArgs {
@@ -52,6 +55,7 @@ export function useReceivingLinesData({
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
 
   // Query key + params both come from the active descriptor. The key varies with
@@ -112,9 +116,9 @@ export function useReceivingLinesData({
     if (incomingPage > maxPage) {
       const params = new URLSearchParams(searchParams.toString());
       params.delete('page');
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${receivingSurfaceBasePath(pathname)}?${params.toString()}`);
     }
-  }, [isIncomingMode, data?.total, incomingPage, router, searchParams]);
+  }, [isIncomingMode, data?.total, incomingPage, router, searchParams, pathname]);
 
   // Refresh signals → invalidate the list query.
   useEffect(() => {
@@ -144,18 +148,26 @@ export function useReceivingLinesData({
     return () => window.removeEventListener('receiving-line-updated', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<Parameters<typeof mergeReceivingPackageMetaIntoRow>[1]>).detail;
+      if (!detail || detail.receiving_id == null) return;
+      setLocalRows((rows) =>
+        rows.map((row) => mergeReceivingPackageMetaIntoRow(row, detail) ?? row),
+      );
+    };
+    window.addEventListener('receiving-package-updated', handler);
+    return () => window.removeEventListener('receiving-package-updated', handler);
+  }, []);
+
   // Tracking scan/search match → prepend matched lines at the top (dedupe by id).
   // Receive flow and other tools dispatch this; History mode primarily uses
   // URL-driven API fetch.
   useEffect(() => {
     const handler = (event: Event) => {
-      const raw = (event as CustomEvent<unknown>).detail;
-      let incoming: ReceivingLineRow[] = [];
-      if (Array.isArray(raw)) {
-        incoming = raw as ReceivingLineRow[];
-      } else if (raw && typeof raw === 'object' && Array.isArray((raw as { rows?: unknown }).rows)) {
-        incoming = (raw as { rows: ReceivingLineRow[] }).rows;
-      }
+      const parsed = parseReceivingPrependedDetail((event as CustomEvent<unknown>).detail);
+      if (parsed.intakeSurface === 'unbox') return;
+      const incoming = parsed.rows as ReceivingLineRow[];
       if (incoming.length === 0) return;
       const incomingIds = new Set(incoming.map((r) => r.id));
       setLocalRows((rows) => {

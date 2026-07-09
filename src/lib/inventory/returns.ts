@@ -33,6 +33,7 @@ import { transaction } from '@/lib/neon-client';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 import { transition } from '@/lib/inventory/state-machine';
+import { tapWorkflow } from '@/lib/workflow/tap';
 
 export interface ReturnsIntakeInput {
   /** Normalized serial strings (already upper-cased, GS1 URLs extracted). */
@@ -225,7 +226,30 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
     };
   };
 
-  return orgId
+  const result = await (orgId
     ? withTenantTransaction<ReturnsIntakeResult>(orgId, run)
-    : transaction<ReturnsIntakeResult>(run);
+    : transaction<ReturnsIntakeResult>(run));
+
+  // Studio tap (Tap 1, §7.1/§9 Stage 2.6 of the returns-unification plan):
+  // fired per unit, after the transaction commits, never inside it — same
+  // timing rule as linkReturnedSerial's Tap 1 (an engine failure must never
+  // roll back a domain write, and the tap must never advance a position for a
+  // write that could still roll back). This is Path B (the bulk admin dock-
+  // intake tool, /admin/inventory/returns) — audited and found to be a
+  // genuinely distinct capability from Path A's per-carton scan flow (a
+  // multi-serial paste/batch tool, not a receiving-line-scoped scan), so it
+  // gets the same tap rather than being retired.
+  if (result.ok) {
+    for (const u of result.units) {
+      await tapWorkflow({
+        serialUnitId: u.unitId,
+        event: 'return_received',
+        orgId: orgId ?? null,
+        staffId: input.actorStaffId,
+        source: 'manual',
+      });
+    }
+  }
+
+  return result;
 }

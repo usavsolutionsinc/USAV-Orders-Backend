@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 /**
  * GET /api/orders/lookup/:orderId
@@ -52,6 +54,16 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
   }
   const decoded = decodeURIComponent(orderId);
 
+  // Short-TTL read model for the mobile order-detail page: order VM + activity
+  // strip, reloaded per scan. 20s TTL bounds staleness; tech/scan + the order
+  // mutation chokepoint (invalidateOrderViews) bust the org-scoped tags.
+  const cached = await getOrSet<{ order: OrderDetail | null; activity: unknown[] }>(
+    CACHE_NS.orderDetail,
+    orgId,
+    decoded,
+    20,
+    [CACHE_TAGS.orders, CACHE_TAGS.techLogs, CACHE_TAGS.orderDetail],
+    async () => {
   // order_id is a per-tenant string key — anchor the read on the org so a
   // collision across tenants can't surface another org's order.
   const orderResult = await tenantQuery<OrderDetail>(
@@ -125,7 +137,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
   const order = orderResult.rows[0] ?? null;
 
   if (!order) {
-    return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404 });
+    return { order: null, activity: [] };
   }
 
   // Recent activity for the activity strip — last 5 work_assignment status
@@ -154,7 +166,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
   `,
     [order.id, orgId],
   );
-  const activity = activityResult.rows;
+  return { order, activity: activityResult.rows };
+    },
+  );
 
-  return NextResponse.json({ ok: true, order, activity });
+  if (!cached.order) {
+    return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true, order: cached.order, activity: cached.activity });
 }, { permission: 'sku_stock.view' });

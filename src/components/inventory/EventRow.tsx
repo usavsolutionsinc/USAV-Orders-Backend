@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { getLast4, OrderIdChip, SerialChip, SkuScanRefChip } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { PulseEventRow } from './types';
 import { inventoryStatusBadgeClass } from './status-classes';
 
@@ -10,7 +11,7 @@ interface EventRowProps {
 }
 
 function statusBadgeClass(status: string | null): string {
-    if (!status) return 'bg-gray-100 text-gray-500';
+    if (!status) return 'bg-surface-sunken text-text-soft';
     return inventoryStatusBadgeClass(status);
 }
 
@@ -51,18 +52,20 @@ export function EventRow({ event }: EventRowProps) {
     const binHref = event.bin_name ? `/inventory?bin=${encodeURIComponent(event.bin_name)}` : null;
 
     return (
-        <li className="flex items-start gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
-            <div className="w-16 shrink-0 text-right text-caption text-gray-400" title={absoluteTime}>
-                {relativeTime(event.occurred_at)}
-            </div>
+        <li className="flex items-start gap-3 border-b border-border-hairline px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
+            <HoverTooltip label={absoluteTime} asChild>
+                <div className="w-16 shrink-0 text-right text-caption text-text-faint">
+                    {relativeTime(event.occurred_at)}
+                </div>
+            </HoverTooltip>
 
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-micro uppercase tracking-wide text-gray-700">
+                    <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-micro uppercase tracking-wide text-text-muted">
                         {event.event_type}
                     </span>
                     {event.prev_status || event.next_status ? (
-                        <span className="flex items-center gap-1 text-caption text-gray-500">
+                        <span className="flex items-center gap-1 text-caption text-text-soft">
                             {event.prev_status ? (
                                 <span className={`rounded px-1.5 py-0.5 ${statusBadgeClass(event.prev_status)}`}>
                                     {event.prev_status}
@@ -96,7 +99,7 @@ export function EventRow({ event }: EventRowProps) {
                     {binHref ? (
                         <Link
                             href={binHref}
-                            className="text-xs text-gray-600 hover:underline"
+                            className="text-xs text-text-muted hover:underline"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {event.bin_name}
@@ -108,11 +111,11 @@ export function EventRow({ event }: EventRowProps) {
                 </div>
 
                 {event.notes ? (
-                    <div className="mt-1 truncate text-xs text-gray-500">{displayNotes(event.notes)}</div>
+                    <div className="mt-1 truncate text-xs text-text-soft">{displayNotes(event.notes)}</div>
                 ) : null}
             </div>
 
-            <div className="hidden shrink-0 text-right text-caption text-gray-400 sm:block">
+            <div className="hidden shrink-0 text-right text-caption text-text-faint sm:block">
                 {event.actor_name || (event.station ? `[${event.station}]` : '')}
             </div>
         </li>

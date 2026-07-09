@@ -6,7 +6,7 @@ import { Pencil } from '@/components/Icons';
 type InlineTone = 'neutral' | 'blue' | 'orange' | 'red' | 'green' | 'purple' | 'yellow';
 
 const focusToneClassName: Record<InlineTone, string> = {
-  neutral: 'border-gray-400',
+  neutral: 'border-border-emphasis',
   blue: 'border-blue-500',
   orange: 'border-orange-500',
   red: 'border-red-500',
@@ -64,7 +64,7 @@ export function InlineEditableValue({
 
   if (!editable) {
     return (
-      <p className={`text-sm font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}>
+      <p className={`text-sm font-bold text-text-default ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}>
         {displayValue || placeholder}
       </p>
     );
@@ -74,7 +74,7 @@ export function InlineEditableValue({
     <button
       type="button"
       onClick={() => setIsEditing((prev) => !prev)}
-      className="shrink-0 text-gray-500 transition-colors duration-100 ease-out hover:text-gray-900 active:scale-95"
+      className="shrink-0 text-text-soft transition-colors duration-100 ease-out hover:text-text-default active:scale-95"
       aria-label="Edit value"
       title="Edit"
     >
@@ -106,7 +106,7 @@ export function InlineEditableValue({
               }
             }}
             className={[
-              'h-7 w-full border-0 border-b-2 bg-transparent px-0 pb-0.5 pt-0 text-sm font-bold text-gray-900 outline-none',
+              'h-7 w-full border-0 border-b-2 bg-transparent px-0 pb-0.5 pt-0 text-sm font-bold text-text-default outline-none',
               monospace ? 'font-mono' : '',
               focusToneClassName[tone],
               inputClassName,
@@ -116,7 +116,7 @@ export function InlineEditableValue({
         ) : (
           <button type="button" onClick={() => setIsEditing(true)} className="block w-full py-0 text-left">
             <span
-              className={`block truncate text-sm font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}
+              className={`block truncate text-sm font-bold text-text-default ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}
             >
               {displayValue || placeholder}
             </span>

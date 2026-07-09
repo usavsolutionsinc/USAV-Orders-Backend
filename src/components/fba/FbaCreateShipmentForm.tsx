@@ -8,7 +8,7 @@
  */
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef } from 'react';
 import { Loader2, Package, Plus, Trash2 } from '@/components/Icons';
-import { DeferredQtyInput } from '@/design-system/primitives';
+import { Button, DeferredQtyInput, IconButton } from '@/design-system/primitives';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
@@ -16,6 +16,7 @@ import {
   SidebarIntakeFormField,
   SidebarIntakeFormShell,
 } from '@/design-system/components';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 export interface FbaCreateShipmentFormState {
   shipment_ref: string;
@@ -95,6 +96,7 @@ export function FbaCreateShipmentForm({
       subtitleAccent={stationTheme}
       onClose={onClose}
       footer={
+        /* ds-raw-button: themed gradient solid CTA (blue→sky / emerald→teal) via chrome.primaryButton */
         <button
           type="button"
           onClick={onSubmit}
@@ -126,6 +128,7 @@ export function FbaCreateShipmentForm({
               </p>
             ) : null}
             {!isAutoRef ? (
+              /* ds-raw-button: inline micro underlined text-link inside a hint stack, not a CTA */
               <button
                 type="button"
                 className="text-micro text-blue-600 underline"
@@ -143,7 +146,7 @@ export function FbaCreateShipmentForm({
                 Invalid plan ref. Set a valid due date or type a custom ref.
               </p>
             ) : null}
-            <p className="text-micro leading-snug text-gray-500">
+            <p className="text-micro leading-snug text-text-soft">
               Stored as shipment_ref — not the internal DB row id or Amazon&apos;s FBA shipment id.
             </p>
           </div>
@@ -220,17 +223,19 @@ export function FbaCreateShipmentForm({
         />
       </SidebarIntakeFormField>
 
-      <div className="space-y-3 border-t border-gray-100 pt-4">
+      <div className="space-y-3 border-t border-border-hairline pt-4">
         <div className="flex items-center justify-between gap-2">
           <span className={chrome.lineItemLabel}>FBA line items</span>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={addItem}
+            icon={<Plus />}
             className={chrome.secondaryButton}
           >
-            <Plus className="h-4 w-4" />
             Add line
-          </button>
+          </Button>
         </div>
 
         {form.items.map((item, i) => (
@@ -238,15 +243,15 @@ export function FbaCreateShipmentForm({
             <div className="flex items-center justify-between gap-2">
               <span className={chrome.lineItemLabel}>Line {i + 1}</span>
               {form.items.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => removeItem(i)}
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-900"
-                  title="Remove line"
-                  aria-label="Remove line"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <HoverTooltip label="Remove line" asChild>
+                  <IconButton
+                    type="button"
+                    onClick={() => removeItem(i)}
+                    ariaLabel="Remove line"
+                    icon={<Trash2 className="h-4 w-4" />}
+                    className="rounded-lg p-1.5 hover:bg-surface-strong"
+                  />
+                </HoverTooltip>
               ) : null}
             </div>
             <div className="flex items-end gap-2">

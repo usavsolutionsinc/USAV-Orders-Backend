@@ -1,6 +1,8 @@
 'use client';
 
 import { ChevronDown, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { toast } from '@/lib/toast';
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -45,7 +47,7 @@ type ZohoResultRow = {
   error_kind?: 'rate_limit' | 'circuit_open' | 'api' | 'other' | null;
 };
 
-function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
+export function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
   verdict: 'success' | 'skipped' | 'rate_limit' | 'circuit_open' | 'api_error' | 'http_error' | 'network';
   headline: string;
   detail: string;
@@ -120,7 +122,21 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
     error?: string | null;
     skip_reason?: string | null;
     results?: ZohoResultRow[];
+    circuit?: { isOpen?: boolean; retryAfterMs?: number; consecutiveFailures?: number };
   };
+  if (zoho.skip_reason === 'zoho_circuit_open') {
+    // Cooldown is recoverable, not a hard failure: the lines committed locally
+    // and the background sync replays once Zoho's breaker closes. Amber, with a
+    // concrete retry window (surfaced from the server's in-process breaker —
+    // this is what replaced the former 3s client-side /api/zoho/health check).
+    const secs = Math.max(1, Math.ceil((zoho.circuit?.retryAfterMs ?? 0) / 1000));
+    return {
+      verdict: 'circuit_open',
+      headline: `Zoho cooldown — retry in ~${secs}s`,
+      tone: 'amber',
+      detail: `Circuit breaker open after ${zoho.circuit?.consecutiveFailures ?? 0} recent Zoho failures. Lines saved locally and stay in Scanned; the PO syncs once Zoho recovers.`,
+    };
+  }
   if (zoho.skip_reason === 'zoho_already_fully_received') {
     return {
       verdict: 'success',
@@ -150,6 +166,16 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
     return {
       verdict: 'success',
       headline: 'Success — line marked as scanned',
+      tone: 'emerald',
+      detail: '',
+    };
+  }
+  if (zoho.skip_reason === 'received_local' || zoho.skip_reason === 'unfound_no_po') {
+    // Unfound carton received locally — lines are RECEIVED, Zoho is
+    // intentionally not touched (there is no PO to reconcile against).
+    return {
+      verdict: 'success',
+      headline: 'Received locally — Zoho not touched',
       tone: 'emerald',
       detail: '',
     };
@@ -263,13 +289,13 @@ export function ReceiveResponsePanel({
                 {classification.headline}
               </p>
               {classification.verdict !== 'success' ? (
-                <span className="text-eyebrow font-semibold tabular-nums text-slate-500">
+                <span className="text-eyebrow font-semibold tabular-nums text-text-soft">
                   {timestamp} · {response.durationMs}ms · HTTP {response.httpStatus || '—'}
                 </span>
               ) : null}
             </div>
             {classification.detail ? (
-              <p className="mt-0.5 text-micro font-medium leading-snug text-slate-700">
+              <p className="mt-0.5 text-micro font-medium leading-snug text-text-muted">
                 {classification.detail}
               </p>
             ) : null}
@@ -294,11 +320,11 @@ export function ReceiveResponsePanel({
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`}
                         aria-hidden
                       />
-                      <span className="truncate font-mono font-semibold text-slate-800">
+                      <span className="truncate font-mono font-semibold text-text-default">
                         PO {r.purchaseorder_id ?? '?'}
                       </span>
-                      <span className="text-slate-400">·</span>
-                      <span className="truncate text-slate-600">
+                      <span className="text-text-faint">·</span>
+                      <span className="truncate text-text-muted">
                         {ok
                           ? `receive ${r.receive_id ?? '—'}`
                           : `${r.error_kind ?? 'error'}: ${r.error ?? 'unknown'}`}
@@ -310,39 +336,40 @@ export function ReceiveResponsePanel({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-label={expanded ? 'Hide raw response' : 'Show raw response'}
-              title={expanded ? 'Hide raw response' : 'Show raw response'}
-              className="rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
-            >
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+            <HoverTooltip label={expanded ? 'Hide raw response' : 'Show raw response'} asChild>
+              <IconButton
+                onClick={onToggle}
+                ariaLabel={expanded ? 'Hide raw response' : 'Show raw response'}
+                className="rounded p-0.5 text-text-faint hover:bg-surface-card/60 hover:text-text-muted"
+                icon={
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+                  />
+                }
               />
-            </button>
-            <button
-              type="button"
-              onClick={onDismiss}
-              aria-label="Dismiss response"
-              title="Dismiss"
-              className="rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            </HoverTooltip>
+            <HoverTooltip label="Dismiss" asChild>
+              <IconButton
+                onClick={onDismiss}
+                ariaLabel="Dismiss response"
+                className="rounded p-0.5 text-text-faint hover:bg-surface-card/60 hover:text-text-muted"
+                icon={<X className="h-3 w-3" />}
+              />
+            </HoverTooltip>
           </div>
         </div>
         {expanded ? (
-          <div className={`border-t ${toneStyles.border} bg-white/70 px-2 py-1.5`}>
-            <p className="mb-1 text-mini font-black uppercase tracking-widest text-slate-500">
+          <div className={`border-t ${toneStyles.border} bg-surface-card/70 px-2 py-1.5`}>
+            <p className="mb-1 text-mini font-black uppercase tracking-widest text-text-soft">
               Raw response · /api/receiving/mark-received-po
             </p>
-            <pre className="max-h-56 overflow-auto rounded border border-slate-200 bg-white p-1.5 font-mono text-eyebrow leading-relaxed text-slate-700">
+            <pre className="max-h-56 overflow-auto rounded border border-border-soft bg-surface-card p-1.5 font-mono text-eyebrow leading-relaxed text-text-muted">
 {JSON.stringify(response.body ?? { networkError: response.networkError }, null, 2)}
             </pre>
             <div className="mt-1 flex justify-end">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   try {
                     void navigator.clipboard.writeText(
@@ -353,10 +380,9 @@ export function ReceiveResponsePanel({
                     /* clipboard unavailable */
                   }
                 }}
-                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-slate-600 transition-colors hover:bg-slate-50"
               >
                 Copy JSON
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}

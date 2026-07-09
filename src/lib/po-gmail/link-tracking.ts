@@ -27,6 +27,8 @@ export interface LinkTrackingArgs {
   trackingCandidates: ReadonlyArray<string>;
   /** Free-form source tag for audit (e.g. 'po-gmail.reconcile'). */
   sourceSystem: string;
+  /** Tenant that owns this PO reconcile — stamps the STN write. */
+  organizationId: string;
 }
 
 export interface LinkTrackingResult {
@@ -79,7 +81,7 @@ export async function linkTrackingToPo(
       const shipment = await registerShipmentPermissive({
         trackingNumber: raw,
         sourceSystem: args.sourceSystem,
-      });
+      }, args.organizationId);
       if (shipment?.id) {
         registered = { id: Number(shipment.id) };
         break;

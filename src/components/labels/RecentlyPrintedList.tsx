@@ -41,7 +41,7 @@ export function RecentlyPrintedList({ onSelect, selectedKey }: RecentlyPrintedLi
 
   if (isLoading && items.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto px-4 py-6 text-center text-caption font-semibold text-gray-400">
+      <div className="flex-1 overflow-y-auto px-4 py-6 text-center text-caption font-semibold text-text-faint">
         Loading recent prints…
       </div>
     );
@@ -58,11 +58,11 @@ export function RecentlyPrintedList({ onSelect, selectedKey }: RecentlyPrintedLi
   if (items.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-        <Clock className="mb-3 h-8 w-8 text-gray-300" />
-        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+        <Clock className="mb-3 h-8 w-8 text-text-faint" />
+        <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-text-faint">
           No recent prints
         </p>
-        <p className="mt-2 max-w-[240px] text-caption font-medium text-gray-500">
+        <p className="mt-2 max-w-[240px] text-caption font-medium text-text-soft">
           Issued labels appear here automatically — switch to Products to print your first one.
         </p>
       </div>
@@ -71,7 +71,7 @@ export function RecentlyPrintedList({ onSelect, selectedKey }: RecentlyPrintedLi
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-border-hairline">
         {items.map((item) => (
           <RecentRow
             key={item.id}
@@ -102,11 +102,11 @@ function RecentRow({
         onClick={() => hasDetail && onSelect(item)}
         disabled={!hasDetail}
         aria-current={isSelected}
-        className={`flex w-full items-start gap-3 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+        className={`ds-raw-button flex w-full items-start gap-3 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
         }`}
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-canvas ring-1 ring-border-soft">
           {item.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -118,27 +118,27 @@ function RecentRow({
               }}
             />
           ) : (
-            <Printer className="h-4 w-4 text-gray-300" />
+            <Printer className="h-4 w-4 text-text-faint" />
           )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="line-clamp-2 text-label font-semibold leading-snug text-gray-900">
+          <span className="line-clamp-2 text-label font-semibold leading-snug text-text-default">
             {item.product_title || item.sku || item.unit_id || 'Untitled'}
           </span>
-          <span className="truncate font-mono text-micro text-gray-500">
+          <span className="truncate font-mono text-micro text-text-soft">
             {item.unit_id || item.sku || '—'}
           </span>
-          <span className="mt-0.5 flex items-center gap-2 text-micro text-gray-400">
+          <span className="mt-0.5 flex items-center gap-2 text-micro text-text-faint">
             <span>{timeAgo(item.printed_at)}</span>
             {item.current_status ? (
               <>
-                <span className="text-gray-300">·</span>
+                <span className="text-text-faint">·</span>
                 <StatusChip status={item.current_status} />
               </>
             ) : null}
             {item.current_location ? (
               <>
-                <span className="text-gray-300">·</span>
+                <span className="text-text-faint">·</span>
                 <span className="font-mono">{item.current_location}</span>
               </>
             ) : null}
@@ -152,7 +152,7 @@ function RecentRow({
 function StatusChip({ status }: { status: string }) {
   return (
     <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${unitStatusBadgeClass(status)}`}
+      className={`rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${unitStatusBadgeClass(status)}`}
     >
       {status}
     </span>

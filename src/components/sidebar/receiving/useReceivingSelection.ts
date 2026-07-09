@@ -24,6 +24,8 @@ import {
   type ReceivingMode,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { resolveLiveReceivingMode } from '@/lib/surface-isolation';
+import { mergeReceivingPackageMetaIntoRow } from '@/components/station/receiving-lines-table-helpers';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface UseReceivingSelectionArgs {
@@ -145,7 +147,10 @@ export function useReceivingSelection({
       // would route the operator back into a fresh details stack.
       const liveMode =
         typeof window !== 'undefined'
-          ? new URLSearchParams(window.location.search).get('mode')
+          ? resolveLiveReceivingMode(
+              window.location.pathname,
+              new URLSearchParams(window.location.search),
+            )
           : modeRef.current;
       if (liveMode === 'history') {
         // History is read-only: the only thing a row click does is open the
@@ -175,17 +180,14 @@ export function useReceivingSelection({
       );
     };
     const handlePackageMeta = (e: Event) => {
-      const detail = (
-        e as CustomEvent<{ receiving_id?: number; support_notes?: string | null }>
-      ).detail;
-      if (!detail || detail.receiving_id == null || detail.support_notes === undefined) return;
-      const rid = detail.receiving_id;
-      const sn = detail.support_notes;
-      setSelectedLine((prev) =>
-        prev?.receiving_id === rid ? { ...prev, receiving_support_notes: sn } : prev,
-      );
+      const detail = (e as CustomEvent<Parameters<typeof mergeReceivingPackageMetaIntoRow>[1]>).detail;
+      if (!detail || detail.receiving_id == null) return;
+      setSelectedLine((prev) => {
+        if (!prev || prev.receiving_id !== detail.receiving_id) return prev;
+        return mergeReceivingPackageMetaIntoRow(prev, detail) ?? prev;
+      });
       setScanMatchedRows((rows) =>
-        rows.map((r) => (r.receiving_id === rid ? { ...r, receiving_support_notes: sn } : r)),
+        rows.map((r) => mergeReceivingPackageMetaIntoRow(r, detail) ?? r),
       );
     };
     // Mirror selectedLine from workspace-open events so the rail highlights
@@ -196,6 +198,17 @@ export function useReceivingSelection({
       const detail = (e as CustomEvent<{ row?: ReceivingLineRow } | null>).detail;
       const row = detail?.row;
       if (!row || typeof row.id !== 'number') return;
+      // History/Incoming are table-only — never mirror a workspace pick into
+      // sidebar selection while those modes are active (prevents a stale open
+      // event from re-arming the unbox bridge after a mode flip).
+      const liveMode =
+        typeof window !== 'undefined'
+          ? resolveLiveReceivingMode(
+              window.location.pathname,
+              new URLSearchParams(window.location.search),
+            )
+          : modeRef.current;
+      if (liveMode === 'history' || liveMode === 'incoming') return;
       setSelectedLine((prev) => (prev?.id === row.id ? prev : row));
     };
     window.addEventListener('receiving-select-line', handleSelect);

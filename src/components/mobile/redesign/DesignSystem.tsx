@@ -1,6 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { Button, type ButtonVariant } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 
 /**
  * USAV Mobile 2026 Design Tokens & Base Components
@@ -15,9 +17,9 @@ export const TOKENS = {
     primaryDark: 'blue-800',
     primaryGradient: 'from-blue-600 to-blue-800',
     primarySoft: 'bg-blue-50 text-blue-600',
-    background: 'bg-slate-50', // Clean slate-50 as base
-    surface: 'bg-white/80 backdrop-blur-2xl',
-    card: 'bg-white shadow-[0_8px_30px_rgb(59,130,246,0.06)] ring-1 ring-blue-100/50',
+    background: 'bg-surface-canvas', // Clean slate-50 as base
+    surface: 'bg-surface-card/80 backdrop-blur-2xl',
+    card: 'bg-surface-card shadow-[0_8px_30px_rgb(59,130,246,0.06)] ring-1 ring-blue-100/50',
     glass: 'bg-blue-50/50 backdrop-blur-xl border border-blue-100/50 shadow-[0_8px_32px_0_rgba(37,99,235,0.08)]',
     text: {
       primary: 'text-blue-950', // Deepest blue for text
@@ -110,7 +112,7 @@ export const BentoItem = ({
     {title && (
       <div className="flex items-center gap-2 px-1">
         {Icon && <Icon className="h-3.5 w-3.5 text-blue-400" />}
-        <span className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-400">{title}</span>
+        <span className="text-micro font-black uppercase tracking-[0.15em] text-blue-400">{title}</span>
       </div>
     )}
     <MobileCard variant={variant} className="flex-1">
@@ -137,14 +139,15 @@ export const MobilePageHeader = ({ title, subtitle, action }: { title: string, s
  */
 export const SectionHeader = ({ title, actionLabel, onAction }: { title: string, actionLabel?: string, onAction?: () => void }) => (
   <div className="flex items-center justify-between px-1 mb-3">
-    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-400">{title}</span>
+    <span className="text-caption font-black uppercase tracking-[0.2em] text-blue-400">{title}</span>
     {actionLabel && (
-      <button 
+      <Button
+        variant="ghost"
         onClick={onAction}
-        className="text-[11px] font-bold text-blue-600 uppercase tracking-wider"
+        className="h-auto px-0 text-caption font-bold uppercase tracking-wider text-blue-600 hover:bg-transparent hover:text-blue-600"
       >
         {actionLabel}
-      </button>
+      </Button>
     )}
   </div>
 );
@@ -169,18 +172,24 @@ export const GlassButton = ({
   const variants = {
     primary: "bg-blue-600 text-white shadow-xl shadow-blue-600/20",
     blue: "bg-blue-950 text-white shadow-xl shadow-blue-950/20",
-    secondary: "bg-white border border-blue-100 text-blue-600 shadow-sm",
+    secondary: "bg-surface-card border border-blue-100 text-blue-600 shadow-sm",
     ghost: "bg-transparent text-blue-400"
+  };
+  const variantToButton: Record<typeof variant, ButtonVariant> = {
+    primary: 'primary',
+    blue: 'brand',
+    secondary: 'secondary',
+    ghost: 'ghost',
   };
 
   return (
-    <motion.button
-      whileTap={TOKENS.motion.tap}
+    <Button
+      variant={variantToButton[variant]}
       onClick={onClick}
-      className={`${baseStyles} ${variants[variant]} ${className}`}
+      className={cn(baseStyles, variants[variant], className)}
     >
       {Icon && <Icon className="h-5 w-5" />}
       {children}
-    </motion.button>
+    </Button>
   );
 };

@@ -42,7 +42,7 @@ export default function RedesignedMobilePickQueue() {
         scrollRef={scrollRef}
         expandLast={false}
         getId={(row) => row.id}
-        className="pt-2 pb-24"
+        className="pt-2 pb-3"
         empty={
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
             <Package className="mb-1 h-10 w-10 text-blue-200" />

@@ -13,7 +13,7 @@ import { deleteIntegrationCredentials, type IntegrationProvider } from '@/lib/in
 
 const PROVIDERS = [
   'ebay', 'zoho', 'ecwid', 'square', 'ups', 'fedex', 'usps', 'zendesk',
-  'google_sheets', 'ably', 'ollama', 'stripe',
+  'google_sheets', 'google_drive', 'ably', 'ollama', 'stripe',
 ] as const;
 
 const Body = z.object({

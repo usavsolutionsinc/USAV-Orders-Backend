@@ -16,9 +16,20 @@ import {
 } from '@/lib/zoho';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
-import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
+import { upsertSerialUnit, recordOriginProvenance } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { transition } from '@/lib/inventory/state-machine';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { getReceivingDefaultPutawayBin } from '@/lib/settings/accessors';
+import type { OrgId } from '@/lib/tenancy/constants';
+import {
+  isPlacementParityObserve,
+  isPlacementStrangleReceivingPutaway,
+} from '@/lib/feature-flags';
+import { observePlacementParity } from '@/lib/workflow/placement-parity';
+import { resolveSitePlacementBin } from '@/lib/workflow/placement-policy';
+import type { PlacementResolverDeps } from '@/lib/workflow/placement';
+import { receivingDefaultPutawayPolicy } from '@/lib/receiving/putaway-placement';
 
 // Default putaway bin (cached per Function instance). When the receive
 // caller doesn't supply destination_bin_id, mark-received falls back to
@@ -26,10 +37,47 @@ import { transition } from '@/lib/inventory/state-machine';
 // this, units pile up at RECEIVED and the picker has nothing to allocate.
 // See migration 2026-05-21_inventory_v2_unsorted_default_bin.sql.
 // Per-org cache (bins are tenant-owned, so the default bin id differs per org).
+// Cache key is `${orgId}:${barcode}` so an org changing its default-putaway-bin
+// setting (Settings Registry `receiving.defaultPutawayBin`) busts the cache.
 const cachedDefaultPutawayBinId = new Map<string, number | null>();
+
+/**
+ * The org's default-putaway bin BARCODE (Settings Registry
+ * `receiving.defaultPutawayBin` → RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE env →
+ * 'UNSORTED'). Extracted so the legacy resolver AND the declarative placement
+ * policy (the strangle) read the symbol from one source and can't drift.
+ */
+async function defaultPutawayBarcode(orgId: string): Promise<string> {
+  const org = await getOrganization(orgId as OrgId);
+  return org
+    ? getReceivingDefaultPutawayBin(org.settings, process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE)
+    : (process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE || 'UNSORTED').trim();
+}
+
+/** A bin lookup that mirrors resolveDefaultPutawayBinId's filter (RESERVE + active),
+ *  so the placement mechanism resolves the SAME bin the legacy path would. */
+function reserveBinDeps(orgId: string): PlacementResolverDeps {
+  const find = async (barcode: string): Promise<{ id: number; name: string } | null> => {
+    const r = await tenantQuery<{ id: number; name: string }>(
+      orgId,
+      `SELECT id, name FROM locations
+        WHERE barcode = $1
+          AND is_active = true
+          AND bin_role = 'RESERVE'
+          AND organization_id = $2
+        ORDER BY id ASC
+        LIMIT 1`,
+      [barcode, orgId],
+    );
+    return r.rows[0] ?? null;
+  };
+  return { findByBarcode: find, findByName: async () => null };
+}
+
 async function resolveDefaultPutawayBinId(orgId: string): Promise<number | null> {
-  if (cachedDefaultPutawayBinId.has(orgId)) return cachedDefaultPutawayBinId.get(orgId)!;
-  const barcode = (process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE || 'UNSORTED').trim();
+  const barcode = await defaultPutawayBarcode(orgId);
+  const cacheKey = `${orgId}:${barcode}`;
+  if (cachedDefaultPutawayBinId.has(cacheKey)) return cachedDefaultPutawayBinId.get(cacheKey)!;
   let resolved: number | null = null;
   try {
     const r = await tenantQuery<{ id: number }>(
@@ -48,7 +96,7 @@ async function resolveDefaultPutawayBinId(orgId: string): Promise<number | null>
     console.warn(`[mark-received] default-putaway bin lookup failed for barcode=${barcode}:`, err);
     resolved = null;
   }
-  cachedDefaultPutawayBinId.set(orgId, resolved);
+  cachedDefaultPutawayBinId.set(cacheKey, resolved);
   return resolved;
 }
 
@@ -139,12 +187,11 @@ async function applyInventoryV2Effects(input: {
       const upsert = await client.query<{ id: number }>(
         `INSERT INTO serial_units (
           serial_number, normalized_serial, sku, zoho_item_id,
-          current_status, current_location, origin_source,
-          origin_receiving_line_id, received_at, received_by, condition_grade,
+          current_status, current_location, received_at, received_by, condition_grade,
           organization_id
         )
         VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED'::serial_status_enum,
-                $8, 'receiving', $4, $5, $6, $7::condition_grade_enum, $9::uuid)
+                $8, $5, $6, $7::condition_grade_enum, $9::uuid)
         ON CONFLICT (organization_id, normalized_serial) DO UPDATE SET
           current_status = 'RECEIVED'::serial_status_enum,
           current_location = COALESCE(EXCLUDED.current_location, serial_units.current_location),
@@ -167,6 +214,16 @@ async function applyInventoryV2Effects(input: {
         ],
       );
       serialUnitId = upsert.rows[0]?.id ?? null;
+      // Phase 4: origin provenance written app-side (columns dropped).
+      if (serialUnitId != null) {
+        await recordOriginProvenance(
+          client,
+          input.organizationId,
+          serialUnitId,
+          { origin_source: 'receiving', origin_receiving_line_id: input.receivingLineId },
+          new Date().toISOString(),
+        );
+      }
     }
 
     // 2. sku_stock_ledger row — only for ACCEPT disposition with qty.
@@ -361,12 +418,45 @@ export const POST = withAuth(async (request, ctx) => {
     let putawayBinSource: 'operator' | 'sku_affinity' | 'default' | null = binExplicit
       ? 'operator'
       : null;
-    if (
-      destinationBinId == null &&
-      String(body?.disposition_code || 'ACCEPT').trim() === 'ACCEPT'
-    ) {
-      destinationBinId = await resolveDefaultPutawayBinId(ctx.organizationId);
+    if (destinationBinId == null && dispositionCode === 'ACCEPT') {
+      const legacyBinId = await resolveDefaultPutawayBinId(ctx.organizationId);
+      destinationBinId = legacyBinId;
       putawayBinSource = 'default';
+
+      // Placement strangle (§1.6 Track 1): the default-putaway bin choice is a
+      // disposition→bin decision. Only do the (extra) policy work when a
+      // placement flag is on — otherwise this is the untouched legacy path.
+      if (isPlacementStrangleReceivingPutaway() || isPlacementParityObserve()) {
+        const barcode = await defaultPutawayBarcode(ctx.organizationId);
+        const policy = receivingDefaultPutawayPolicy(barcode);
+        const binDeps = reserveBinDeps(ctx.organizationId);
+
+        // CUTOVER: resolve from the declarative policy (org Studio rules → system
+        // default), via the RESERVE+active lookup, falling back to the legacy bin.
+        if (isPlacementStrangleReceivingPutaway()) {
+          const resolved = await resolveSitePlacementBin({
+            orgId: ctx.organizationId,
+            facts: { disposition: 'ACCEPT' },
+            systemPolicy: policy,
+            binDeps,
+          });
+          if (resolved) {
+            destinationBinId = resolved.bin.binId;
+            putawayBinSource = 'default';
+          }
+        }
+
+        // OBSERVE-ONLY: prove the mechanism resolves the same bin as the legacy
+        // path. Fire-and-forget + self-guarded — never disturbs the receive.
+        void observePlacementParity({
+          site: 'receiving-default-putaway',
+          orgId: ctx.organizationId,
+          facts: { disposition: 'ACCEPT' },
+          rules: policy,
+          expected: legacyBinId != null ? { binId: legacyBinId, binName: barcode } : null,
+          deps: binDeps,
+        });
+      }
     }
     // Idempotency token from the client (mobile scanner generates a UUID
     // per scan). Optional; unique within inventory_events.
@@ -375,12 +465,10 @@ export const POST = withAuth(async (request, ctx) => {
     // guarantees ctx.staffId is set on this permission-gated route.
     const staffId = ctx.staffId;
 
-    // Resolve a human-readable staff name for Zoho payloads. Prefer the
-    // value the client sent, then fall back to a DB lookup, and only as a
-    // last resort show "Staff #<id>" — that fallback should be rare now
-    // since every paired session is tied to a real staff row.
-    let staffName = String(body?.staff_name || '').trim();
-    if (!staffName && staffId != null && Number.isFinite(staffId) && staffId > 0) {
+    // Resolve a human-readable staff name for Zoho payloads from the
+    // verified session actor only — never trust body.staff_name.
+    let staffName = '';
+    if (staffId != null && Number.isFinite(staffId) && staffId > 0) {
       try {
         const staffLookup = await tenantQuery<{ name: string | null }>(
           ctx.organizationId,
@@ -562,7 +650,8 @@ export const POST = withAuth(async (request, ctx) => {
           WHERE id = $3 AND organization_id = $4
           RETURNING is_return, is_priority,
                     (unboxed_at = $1) AS just_unboxed,
-                    receiving_tracking_number AS tracking`,
+                    (SELECT s.tracking_number_raw FROM shipping_tracking_numbers s
+                      WHERE s.id = receiving.shipment_id) AS tracking`,
         [now, staffId, receivingId, ctx.organizationId],
       ).catch(() => null);
       const carton = cartonUpd?.rows?.[0];
@@ -603,7 +692,7 @@ export const POST = withAuth(async (request, ctx) => {
           shipment_id: number | null;
         }>(
           ctx.organizationId,
-          `SELECT COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+          `SELECT stn.tracking_number_raw AS tracking,
                   r.shipment_id
              FROM receiving r
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id

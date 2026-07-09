@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2 } from '@/components/Icons';
+import { Check } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 interface CountLine {
@@ -144,23 +145,21 @@ export function BinCycleCountSheet({
       role="dialog"
       aria-modal="true"
       aria-label="Cycle count"
-      className="fixed inset-0 z-panelOverlay flex flex-col bg-slate-50"
+      className="fixed inset-0 z-panelOverlay flex flex-col bg-surface-canvas"
     >
-      <header className="border-b border-slate-200 bg-white px-4 py-3 flex items-center gap-2">
-        <button
-          type="button"
+      <header className="border-b border-border-soft bg-surface-card px-4 py-3 flex items-center gap-2">
+        <IconButton
+          icon={<span className="text-sm font-bold text-text-muted">←</span>}
+          ariaLabel="Back"
           onClick={onClose}
-          aria-label="Back"
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          ←
-        </button>
+          className="flex h-11 w-11 items-center justify-center rounded-md border border-border-default bg-surface-card active:bg-surface-hover"
+        />
         <div className="min-w-0 flex-1">
-          <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.18em] text-text-soft">
             Cycle count
           </p>
-          <h1 className="truncate text-sm font-black text-slate-900">{campaignName}</h1>
-          <p className="text-caption font-bold text-slate-500">
+          <h1 className="truncate text-sm font-black text-text-default">{campaignName}</h1>
+          <p className="text-caption font-bold text-text-soft">
             {pendingCount} of {lines.length} pending
           </p>
         </div>
@@ -179,10 +178,10 @@ export function BinCycleCountSheet({
 
       <main className="flex-1 overflow-auto px-3 py-3 pb-24 space-y-2">
         {loading && (
-          <p className="text-center text-sm font-semibold text-slate-500 py-6">Loading…</p>
+          <p className="text-center text-sm font-semibold text-text-soft py-6">Loading…</p>
         )}
         {!loading && lines.length === 0 && (
-          <p className="text-center text-sm font-semibold text-slate-500 py-6">
+          <p className="text-center text-sm font-semibold text-text-soft py-6">
             No lines for this bin in this campaign.
           </p>
         )}
@@ -191,17 +190,17 @@ export function BinCycleCountSheet({
           return (
             <div
               key={line.id}
-              className={`rounded-lg border bg-white p-3 shadow-sm ${
-                done ? 'border-emerald-200 opacity-90' : 'border-slate-200'
+              className={`rounded-lg border bg-surface-card p-3 shadow-sm ${
+                done ? 'border-emerald-200 opacity-90' : 'border-border-soft'
               }`}
             >
-              <p className="font-mono text-sm font-black text-slate-900">{line.sku}</p>
+              <p className="font-mono text-sm font-black text-text-default">{line.sku}</p>
               {line.product_title && (
-                <p className="mt-1 line-clamp-2 text-caption leading-snug text-slate-500">
+                <p className="mt-1 line-clamp-2 text-caption leading-snug text-text-soft">
                   {line.product_title}
                 </p>
               )}
-              <p className="mt-1 text-micro font-bold uppercase tracking-widest text-slate-400">
+              <p className="mt-1 text-micro font-bold uppercase tracking-widest text-text-faint">
                 Expected {line.expected_qty} · {line.status}
               </p>
 
@@ -216,20 +215,18 @@ export function BinCycleCountSheet({
                     onChange={(e) =>
                       setDrafts((prev) => ({ ...prev, [line.id]: e.target.value }))
                     }
-                    className="flex-1 rounded-md border border-slate-300 px-3 py-2.5 text-center font-mono text-base font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 rounded-md border border-border-default px-3 py-2.5 text-center font-mono text-base font-bold text-text-default focus:border-blue-500 focus:outline-none"
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    loading={busyLineId === line.id}
                     disabled={busyLineId != null}
                     onClick={() => submit(line)}
-                    className="rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-bold text-white active:bg-emerald-700 disabled:opacity-40"
+                    className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-700"
                   >
-                    {busyLineId === line.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'Submit'
-                    )}
-                  </button>
+                    Submit
+                  </Button>
                 </div>
               ) : (
                 <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-micro font-bold text-emerald-700">

@@ -2,8 +2,11 @@
 
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from '../../Icons';
+import { HoverTooltip } from '../HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
+import { RECEIVING_WORKSPACE_HEADER_COLUMN } from '@/components/receiving/workspace/receiving-workspace-layout';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -22,10 +25,10 @@ interface PaneHeaderLabelProps {
 }
 
 export const paneHeaderLabelEyebrowClass =
-  'text-eyebrow font-black uppercase tracking-widest text-gray-400';
+  'text-eyebrow font-black uppercase tracking-widest text-text-faint';
 
 export const paneHeaderLabelValueClass =
-  'truncate text-sm font-black tracking-tight text-gray-900';
+  'truncate text-sm font-black tracking-tight text-text-default';
 
 export function PaneHeaderLabel({
   eyebrow,
@@ -37,6 +40,7 @@ export function PaneHeaderLabel({
   return (
     <div className="flex min-w-0 flex-col leading-tight">
       {eyebrow ? <span className={eyebrowClassName}>{eyebrow}</span> : null}
+      {/* ds-allow-title: native OS tooltip shows the full value when truncated */}
       <span className={valueClassName} title={valueTitle}>
         {value}
       </span>
@@ -47,8 +51,8 @@ export function PaneHeaderLabel({
 // ─── PaneHeaderTitle ────────────────────────────────────────────────────────
 // Single bold title — matches the WeekHeader "today" / sticky-date display.
 
-export const paneHeaderHighContrastTitleClass =
-  'text-sm font-black uppercase tracking-widest text-gray-900';
+const paneHeaderHighContrastTitleClass =
+  'text-sm font-black uppercase tracking-widest text-text-default';
 
 interface PaneHeaderTitleProps {
   children: ReactNode;
@@ -129,18 +133,18 @@ export function PaneHeaderCloseButton({
   className,
 }: PaneHeaderCloseButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={ariaLabel}
-      title={title}
-      className={cn(
-        'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95',
-        className,
-      )}
-    >
-      <X className="h-4 w-4" />
-    </button>
+    <HoverTooltip label={title} asChild>
+      <IconButton
+        type="button"
+        onClick={onClick}
+        ariaLabel={ariaLabel}
+        className={cn(
+          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-surface-sunken active:scale-95',
+          className,
+        )}
+        icon={<X className="h-4 w-4" />}
+      />
+    </HoverTooltip>
   );
 }
 
@@ -152,7 +156,7 @@ export function PaneHeaderCloseButton({
 type StatusTone = 'neutral' | 'blue' | 'emerald' | 'amber' | 'yellow' | 'rose' | 'red' | 'purple';
 
 const STATUS_TONE_CLASS: Record<StatusTone, string> = {
-  neutral: 'bg-slate-100 text-slate-700 ring-slate-200',
+  neutral: 'bg-surface-sunken text-text-muted ring-border-soft',
   blue: 'bg-blue-50 text-blue-700 ring-blue-200',
   emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   amber: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -195,7 +199,7 @@ export function PaneHeaderStatusPill({
             tone === 'rose' && 'bg-rose-500',
             tone === 'red' && 'bg-red-500',
             tone === 'purple' && 'bg-purple-500',
-            tone === 'neutral' && 'bg-slate-500',
+            tone === 'neutral' && 'bg-slate-500', // ds-allow-raw-neutral: identity/tone hue — neutral pulse dot among colored tones
           )}
         />
       ) : null}
@@ -233,13 +237,14 @@ export function PaneHeaderTabs<TValue extends string>({
     <div
       role="tablist"
       className={cn(
-        'flex items-center gap-1 bg-white px-2 py-1',
+        'flex items-center gap-1 bg-surface-card px-2 py-1',
         className,
       )}
     >
       {tabs.map((tab) => {
         const active = tab.value === value;
         return (
+          // ds-raw-button: segmented tab (role="tab" + aria-selected + active fill + count), not a Button/IconButton
           <button
             key={tab.value}
             type="button"
@@ -249,8 +254,8 @@ export function PaneHeaderTabs<TValue extends string>({
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
               active
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                ? 'bg-surface-inverse text-white'
+                : 'text-text-muted hover:bg-surface-sunken hover:text-text-default',
             )}
           >
             <span>{tab.label}</span>
@@ -258,7 +263,7 @@ export function PaneHeaderTabs<TValue extends string>({
               <span
                 className={cn(
                   'tabular-nums',
-                  active ? 'text-white/70' : 'text-gray-400',
+                  active ? 'text-white/70' : 'text-text-faint',
                 )}
               >
                 {tab.count}
@@ -284,6 +289,8 @@ export interface PaneHeaderActionBarAction {
   icon: ReactNode;
   onClick: () => void;
   disabled?: boolean;
+  /** Selected/pressed state — highlights the button so the user sees which action's panel is open. */
+  active?: boolean;
   /** Optional tone applied as a wrapper class around the icon — e.g. `'text-blue-600'`. */
   toneClassName?: string;
   /** Override the rendered title attribute. Defaults to `label`. */
@@ -312,14 +319,16 @@ interface PaneHeaderActionBarProps {
   iconOnly?: boolean;
   /** Custom node pinned to the right, before the prev/next chevrons (e.g. an Info button). */
   rightSlot?: ReactNode;
+  /** Extra classes applied to prev/next nav buttons (e.g. responsive hide). */
+  navClassName?: string;
   className?: string;
 }
 
 const PANE_HEADER_ACTION_BTN_CLASS =
-  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-micro font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
+  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-micro font-bold uppercase tracking-widest text-text-soft transition-colors hover:bg-surface-hover hover:text-text-default disabled:cursor-not-allowed disabled:opacity-40';
 
 const PANE_HEADER_ACTION_NAV_CLASS =
-  'inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
+  'inline-flex h-7 w-7 items-center justify-center rounded-md text-text-soft transition-colors hover:bg-surface-hover hover:text-text-default disabled:cursor-not-allowed disabled:opacity-40';
 
 export function PaneHeaderActionBar({
   actions,
@@ -333,11 +342,12 @@ export function PaneHeaderActionBar({
   variant = 'card',
   iconOnly = false,
   rightSlot,
+  navClassName,
   className,
 }: PaneHeaderActionBarProps) {
   const shell =
     variant === 'card'
-      ? 'flex items-center gap-2 rounded-xl border border-gray-200/70 bg-white px-3 py-1.5 shadow-sm'
+      ? 'flex items-center gap-2 rounded-xl border border-border-soft/70 bg-surface-card px-3 py-1.5 shadow-sm'
       : 'flex items-center gap-2 px-2 py-1.5';
 
   const renderText = (value: ReactNode): string | undefined =>
@@ -346,21 +356,29 @@ export function PaneHeaderActionBar({
   const content = (
     <>
       {actions.map((action) => (
-        <button
+        <HoverTooltip
           key={action.key}
-          type="button"
-          onClick={action.onClick}
-          disabled={action.disabled}
-          aria-label={action.ariaLabel ?? renderText(action.label) ?? action.key}
-          title={action.title ?? renderText(action.label) ?? action.key}
-          className={cn(
-            PANE_HEADER_ACTION_BTN_CLASS,
-            iconOnly && 'h-7 w-7 justify-center gap-0 px-0',
-          )}
+          label={action.title ?? renderText(action.label) ?? action.key}
+          asChild
         >
-          <span className={cn('inline-flex items-center', action.toneClassName)}>{action.icon}</span>
-          {iconOnly ? null : action.label}
-        </button>
+          {/* ds-raw-button: compact 28px toolbar action that is icon-only OR icon+label and wraps the icon in a per-action toneClassName span — Button's icon-box sizing can't preserve that */}
+          <button
+            type="button"
+            onClick={action.onClick}
+            disabled={action.disabled}
+            aria-label={action.ariaLabel ?? renderText(action.label) ?? action.key}
+            aria-pressed={action.active}
+            className={cn(
+              PANE_HEADER_ACTION_BTN_CLASS,
+              iconOnly && 'h-7 w-7 justify-center gap-0 px-0',
+              action.active &&
+                'bg-surface-sunken text-text-default ring-1 ring-inset ring-border-default hover:bg-surface-sunken',
+            )}
+          >
+            <span className={cn('inline-flex items-center', action.toneClassName)}>{action.icon}</span>
+            {iconOnly ? null : action.label}
+          </button>
+        </HoverTooltip>
       ))}
       {status != null ? (
         <span
@@ -373,28 +391,28 @@ export function PaneHeaderActionBar({
       {(onPrev || onNext || rightSlot) && <div className="flex-1" />}
       {rightSlot}
       {onPrev ? (
-        <button
-          type="button"
-          onClick={onPrev}
-          disabled={prevDisabled}
-          aria-label={prevTitle}
-          title={prevTitle}
-          className={PANE_HEADER_ACTION_NAV_CLASS}
-        >
-          <ChevronUp className="h-4 w-4" />
-        </button>
+        <HoverTooltip label={prevTitle} asChild>
+          <IconButton
+            type="button"
+            onClick={onPrev}
+            disabled={prevDisabled}
+            ariaLabel={prevTitle}
+            className={cn(PANE_HEADER_ACTION_NAV_CLASS, navClassName)}
+            icon={<ChevronUp className="h-4 w-4" />}
+          />
+        </HoverTooltip>
       ) : null}
       {onNext ? (
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={nextDisabled}
-          aria-label={nextTitle}
-          title={nextTitle}
-          className={PANE_HEADER_ACTION_NAV_CLASS}
-        >
-          <ChevronDown className="h-4 w-4" />
-        </button>
+        <HoverTooltip label={nextTitle} asChild>
+          <IconButton
+            type="button"
+            onClick={onNext}
+            disabled={nextDisabled}
+            ariaLabel={nextTitle}
+            className={cn(PANE_HEADER_ACTION_NAV_CLASS, navClassName)}
+            icon={<ChevronDown className="h-4 w-4" />}
+          />
+        </HoverTooltip>
       ) : null}
     </>
   );
@@ -405,8 +423,8 @@ export function PaneHeaderActionBar({
   // and chevrons (right) line up with the rest of the workspace.
   if (variant === 'header') {
     return (
-      <div className={cn('flex h-[40px] w-full shrink-0 items-center bg-white', receivingHeaderHairlineClass, className)}>
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-6 sm:px-8">
+      <div className={cn('flex h-[40px] w-full shrink-0 items-center bg-surface-card', receivingHeaderHairlineClass, className)}>
+        <div className={cn(RECEIVING_WORKSPACE_HEADER_COLUMN, 'flex items-center gap-1')}>
           {content}
         </div>
       </div>
@@ -416,52 +434,9 @@ export function PaneHeaderActionBar({
   return <div className={cn(shell, className)}>{content}</div>;
 }
 
-// ─── PaneHeaderWeekNav ──────────────────────────────────────────────────────
-// Range label + prev/next buttons — the original WeekHeader right-slot.
-
-interface PaneHeaderWeekNavProps {
-  rangeLabel: ReactNode;
-  onPrev: () => void;
-  onNext: () => void;
-  /** When 0 (current week), Next is disabled. */
-  weekOffset?: number;
-}
-
-export function PaneHeaderWeekNav({
-  rangeLabel,
-  onPrev,
-  onNext,
-  weekOffset = 0,
-}: PaneHeaderWeekNavProps) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-caption font-black uppercase tracking-widest text-neutral-900">
-        {rangeLabel}
-      </span>
-      <button
-        onClick={onPrev}
-        type="button"
-        className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500"
-        title="Previous week"
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-      <button
-        onClick={onNext}
-        type="button"
-        disabled={weekOffset === 0}
-        className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100"
-        title="Next week"
-      >
-        <ChevronRight className="h-5 w-5" />
-      </button>
-    </div>
-  );
-}
-
 // ─── PaneHeaderPagination ─────────────────────────────────────────────────────
-// Range label + prev/next page controls — pairs with {@link PaneHeader} the
-// same way {@link PaneHeaderWeekNav} does for week-based tables.
+// Range label + prev/next page controls — pairs with {@link PaneHeader} for
+// paginated tables.
 
 interface PaneHeaderPaginationProps {
   /** Current 1-based page index. */
@@ -488,41 +463,44 @@ export function PaneHeaderPagination({
 
   return (
     <div className="flex items-center gap-3">
-      <span className="tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-500">
+      <span className="tabular-nums text-eyebrow font-black uppercase tracking-wider text-text-soft">
         {total > 0 ? (
           <>
-            {rangeStart}–{rangeEnd} <span className="text-gray-400">/</span>{' '}
-            <span className="text-gray-700">{total.toLocaleString()}</span>
+            <span className="text-text-default">
+              {rangeStart}–{rangeEnd}
+            </span>{' '}
+            <span className="text-text-faint">/</span>{' '}
+            <span className="text-text-faint">{total.toLocaleString()}</span>
           </>
         ) : (
           '—'
         )}
       </span>
-      <div className="flex items-center gap-0.5 rounded-md border border-gray-200 bg-white p-0.5">
-        <button
-          type="button"
-          onClick={() => canPrev && onPrev()}
-          disabled={!canPrev}
-          aria-label="Previous page"
-          title="Previous page"
-          className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        <span className="px-1 tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-700">
-          {safePage}
-          <span className="text-gray-400"> / {totalPages}</span>
+      <div className="flex items-center gap-0.5 rounded-md border border-border-soft bg-surface-card p-0.5">
+        <HoverTooltip label="Previous page" asChild>
+          <IconButton
+            type="button"
+            onClick={() => canPrev && onPrev()}
+            disabled={!canPrev}
+            ariaLabel="Previous page"
+            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+            icon={<ChevronLeft className="h-3.5 w-3.5" />}
+          />
+        </HoverTooltip>
+        <span className="px-1 tabular-nums text-eyebrow font-black uppercase tracking-wider text-text-soft">
+          <span className="text-text-default">{safePage}</span>
+          <span className="text-text-faint"> / {totalPages}</span>
         </span>
-        <button
-          type="button"
-          onClick={() => canNext && onNext()}
-          disabled={!canNext}
-          aria-label="Next page"
-          title="Next page"
-          className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-        >
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
+        <HoverTooltip label="Next page" asChild>
+          <IconButton
+            type="button"
+            onClick={() => canNext && onNext()}
+            disabled={!canNext}
+            ariaLabel="Next page"
+            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+            icon={<ChevronRight className="h-3.5 w-3.5" />}
+          />
+        </HoverTooltip>
       </div>
     </div>
   );

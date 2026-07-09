@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { Button } from '@/design-system/primitives';
 import { SidebarRailShell } from '@/components/sidebar/SidebarRailShell';
 import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
@@ -51,36 +52,37 @@ function FbaItemRail({ statuses, eyebrowTitle }: { statuses: string[]; eyebrowTi
       getStatusDot={(r) =>
         selectedIds.has(r.item_id)
           ? 'bg-blue-500 ring-2 ring-blue-300/70 animate-pulse'
-          : ITEM_DOT[String(r.item_status)] ?? 'bg-gray-300'}
+          : ITEM_DOT[String(r.item_status)] ?? 'bg-surface-strong'}
       onSelect={(r) => window.dispatchEvent(new CustomEvent(FBA_BOARD_SELECT_BY_FNSKU, { detail: r.fnsku }))}
       renderRowMain={(r) => (
         <>
-          <p className="truncate text-caption font-bold text-gray-900" title={r.display_title}>
+          {/* ds-allow-title: truncation-only fallback on a non-interactive clipped <p> */}
+          <p className="truncate text-caption font-bold text-text-default" title={r.display_title}>
             {r.display_title || r.fnsku}
           </p>
-          <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+          <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
             {r.actual_qty}/{r.expected_qty} units · {FBA_STATUS_LABEL[r.item_status] ?? r.item_status}
           </p>
         </>
       )}
       renderPopover={(r, { openWorkspace }) => (
         <div className="space-y-2 p-3.5">
-          <p className="text-sm font-black leading-snug text-gray-900">{r.display_title || r.fnsku}</p>
+          <p className="text-sm font-black leading-snug text-text-default">{r.display_title || r.fnsku}</p>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="rounded bg-purple-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-purple-700">
               {FBA_STATUS_LABEL[r.item_status] ?? r.item_status}
             </span>
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-600 tabular-nums">
+            <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-text-muted tabular-nums">
               {r.actual_qty}/{r.expected_qty} units
             </span>
           </div>
-          <dl className="space-y-1 border-t border-gray-100 pt-2 text-caption">
-            <div className="flex justify-between gap-3"><dt className="font-semibold text-gray-500">FNSKU</dt><dd className="font-mono font-black text-gray-800">{r.fnsku}</dd></div>
-            {r.shipment_ref ? <div className="flex justify-between gap-3"><dt className="font-semibold text-gray-500">Plan</dt><dd className="font-black text-gray-800">{r.shipment_ref}</dd></div> : null}
+          <dl className="space-y-1 border-t border-border-hairline pt-2 text-caption">
+            <div className="flex justify-between gap-3"><dt className="font-semibold text-text-soft">FNSKU</dt><dd className="font-mono font-black text-text-default">{r.fnsku}</dd></div>
+            {r.shipment_ref ? <div className="flex justify-between gap-3"><dt className="font-semibold text-text-soft">Plan</dt><dd className="font-black text-text-default">{r.shipment_ref}</dd></div> : null}
           </dl>
-          <button type="button" onClick={openWorkspace} className="w-full rounded-md bg-blue-600 px-2.5 py-1 text-micro font-black uppercase tracking-widest text-white transition-colors hover:bg-blue-700">
+          <Button variant="primary" size="sm" onClick={openWorkspace} className="w-full">
             Find on board →
-          </button>
+          </Button>
         </div>
       )}
     />

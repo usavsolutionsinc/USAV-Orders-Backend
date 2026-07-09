@@ -5,10 +5,11 @@
  * Phone receiving Data Matrix labels resolve (via barcode-routing) to one of
  * three mobile routes. On desktop we open the corresponding workspace page:
  *
- *   /m/r/{id}  receiving / PO   →  /receiving?mode=history&recvId={id}
+ *   /m/r/{id}  receiving / PO   →  /receiving/history?recvId={id}
  *              History shows every carton regardless of state, so the deep
  *              link always lands; the default (unbox) view only lists active
- *              work and silently missed already-received cartons.
+ *              work and silently missed already-received cartons. (History
+ *              graduated to its own route `/receiving/history` in Phase 9.)
  *   /m/l/{id}  receiving line   →  /receiving/lines/{id}
  *   /m/u/{id}  serial unit      →  /serial/{id}
  *
@@ -38,7 +39,7 @@ const HANDLE_PATTERNS: Array<{
     re: /^\/m\/r\/(\d+)\b/,
     type: 'receiving',
     typeLabel: 'Receipt',
-    desktop: (id) => `/receiving?mode=history&recvId=${id}`,
+    desktop: (id) => `/receiving/history?recvId=${id}`,
   },
   {
     re: /^\/m\/l\/(\d+)\b/,

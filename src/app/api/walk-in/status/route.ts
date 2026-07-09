@@ -120,4 +120,4 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
   );
 
   return NextResponse.json({ ...results, all_ok: allOk }, { status: allOk ? 200 : 207 });
-}, { permission: 'walk_in.view' });
+}, { permission: 'walk_in.view', feature: 'walkIn' });

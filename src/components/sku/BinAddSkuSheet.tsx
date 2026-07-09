@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Search, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -206,22 +206,20 @@ export function BinAddSkuSheet({
       role="dialog"
       aria-modal="true"
       aria-label="Add product to bin"
-      className="fixed inset-0 z-panel flex flex-col bg-white"
+      className="fixed inset-0 z-panel flex flex-col bg-surface-card"
     >
-      <header className="flex items-center gap-2 border-b border-slate-200 px-3 py-3">
-        <button
-          type="button"
+      <header className="flex items-center gap-2 border-b border-border-soft px-3 py-3">
+        <IconButton
+          icon={selected ? '←' : <X className="mx-auto h-4 w-4" />}
           onClick={() => (selected ? setSelected(null) : onClose())}
-          aria-label="Back"
-          className="h-10 w-10 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          {selected ? '←' : <X className="mx-auto h-4 w-4" />}
-        </button>
+          ariaLabel="Back"
+          className="h-10 w-10 rounded-md border border-border-default bg-surface-card text-sm font-bold text-text-muted active:bg-surface-hover"
+        />
         <div className="min-w-0 flex-1">
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
             Add to bin
           </p>
-          <p className="truncate font-mono text-sm font-black text-slate-900">
+          <p className="truncate font-mono text-sm font-black text-text-default">
             {binBarcode}
           </p>
         </div>
@@ -229,9 +227,9 @@ export function BinAddSkuSheet({
 
       {!selected ? (
         <>
-          <div className="border-b border-slate-200 px-3 py-2">
-            <div className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 focus-within:border-blue-500">
-              <Search className="h-4 w-4 text-slate-400" />
+          <div className="border-b border-border-soft px-3 py-2">
+            <div className="flex items-center gap-2 rounded-md border border-border-default bg-surface-card px-3 py-2 focus-within:border-blue-500">
+              <Search className="h-4 w-4 text-text-faint" />
               <input
                 ref={inputRef}
                 type="text"
@@ -240,9 +238,9 @@ export function BinAddSkuSheet({
                 placeholder="Search Ecwid SKU or product title"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400"
+                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-text-default outline-none placeholder:font-medium placeholder:text-text-faint"
               />
-              {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+              {loading && <Loader2 className="h-4 w-4 animate-spin text-text-faint" />}
             </div>
           </div>
 
@@ -253,12 +251,12 @@ export function BinAddSkuSheet({
               </div>
             )}
             {!loading && debounced.trim() && rows.length === 0 && !error && (
-              <p className="px-2 py-8 text-center text-sm font-semibold text-slate-500">
+              <p className="px-2 py-8 text-center text-sm font-semibold text-text-soft">
                 No matches for &ldquo;{debounced.trim()}&rdquo;.
               </p>
             )}
             {!debounced.trim() && (
-              <p className="px-2 py-8 text-center text-caption font-bold uppercase tracking-widest text-slate-400">
+              <p className="px-2 py-8 text-center text-caption font-bold uppercase tracking-widest text-text-faint">
                 Type a few characters to search
               </p>
             )}
@@ -276,29 +274,28 @@ export function BinAddSkuSheet({
                           sku,
                         })
                       }
-                      className="flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm active:bg-slate-50"
+                      className="ds-raw-button flex w-full items-start gap-3 rounded-lg border border-border-soft bg-surface-card px-4 py-3 text-left shadow-sm active:bg-surface-hover"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="font-mono text-sm font-black text-slate-900">
+                        <p className="font-mono text-sm font-black text-text-default">
                           {sku}
                         </p>
                         {row.product_title && (
-                          <p className="mt-1 line-clamp-2 text-caption leading-snug text-slate-500">
+                          <p className="mt-1 line-clamp-2 text-caption leading-snug text-text-soft">
                             {row.product_title}
                           </p>
                         )}
                       </div>
                       {row.source === 'stock' ? (
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-micro font-bold text-slate-700">
+                        <span className="shrink-0 rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-bold text-text-muted">
                           {row.stock ?? 0} on hand
                         </span>
                       ) : (
-                        <span
-                          className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-micro font-bold text-blue-700"
-                          title="Not yet in stock — will create the entry on first put"
-                        >
-                          Ecwid only
-                        </span>
+                        <HoverTooltip label="Not yet in stock — will create the entry on first put" asChild>
+                          <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-micro font-bold text-blue-700">
+                            Ecwid only
+                          </span>
+                        </HoverTooltip>
                       )}
                     </button>
                   </li>
@@ -309,22 +306,22 @@ export function BinAddSkuSheet({
         </>
       ) : (
         <main className="flex-1 overflow-auto px-4 py-6">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="font-mono text-base font-black text-slate-900">
+          <div className="rounded-lg border border-border-soft bg-surface-card p-4 shadow-sm">
+            <p className="font-mono text-base font-black text-text-default">
               {selected.sku}
             </p>
             {selected.product_title && (
-              <p className="mt-1 text-caption leading-snug text-slate-500">
+              <p className="mt-1 text-caption leading-snug text-text-soft">
                 {selected.product_title}
               </p>
             )}
-            <p className="mt-2 text-micro font-bold uppercase tracking-widest text-slate-400">
+            <p className="mt-2 text-micro font-bold uppercase tracking-widest text-text-faint">
               Currently {selected.stock ?? 0} total on hand
             </p>
           </div>
 
           <label className="mt-6 block">
-            <span className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <span className="text-micro font-black uppercase tracking-[0.16em] text-text-soft">
               Add to this bin
             </span>
             <input
@@ -334,7 +331,7 @@ export function BinAddSkuSheet({
               value={qtyDraft}
               onChange={(e) => setQtyDraft(e.target.value)}
               autoFocus
-              className="mt-2 w-full rounded-md border border-slate-300 px-3 py-3 text-center font-mono text-2xl font-black text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="mt-2 w-full rounded-md border border-border-default px-3 py-3 text-center font-mono text-2xl font-black text-text-default focus:border-blue-500 focus:outline-none"
             />
           </label>
 
@@ -343,26 +340,23 @@ export function BinAddSkuSheet({
           )}
 
           <div className="mt-6 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setSelected(null)}
+            <Button
+              variant="secondary"
               disabled={busy}
-              className="rounded-md border border-slate-300 bg-white px-3 py-3 text-sm font-bold text-slate-700 active:bg-slate-50 disabled:opacity-40"
+              onClick={() => setSelected(null)}
+              className="h-11 w-full"
             >
               Back
-            </button>
-            <button
-              type="button"
-              disabled={busy || !qtyDraft.trim()}
+            </Button>
+            <Button
+              variant="primary"
+              loading={busy}
+              disabled={!qtyDraft.trim()}
               onClick={applyPut}
-              className="rounded-md bg-blue-600 px-3 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-40"
+              className="h-11 w-full"
             >
-              {busy ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-              ) : (
-                'Add'
-              )}
-            </button>
+              Add
+            </Button>
           </div>
         </main>
       )}

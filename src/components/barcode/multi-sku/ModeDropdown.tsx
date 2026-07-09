@@ -36,7 +36,7 @@ export function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 ${
+        className={`ds-raw-button flex w-full items-center gap-3 rounded-xl border border-border-soft bg-surface-card px-3 py-2.5 text-left transition-colors hover:border-border-default ${
           open ? 'rounded-b-none border-b-0' : ''
         }`}
       >
@@ -44,16 +44,16 @@ export function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
           <CurrentIcon className="h-4 w-4" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">{current.label}</span>
-          <span className="truncate text-micro font-medium text-gray-500">{current.description}</span>
+          <span className="text-caption font-black uppercase tracking-[0.14em] text-text-default">{current.label}</span>
+          <span className="truncate text-micro font-medium text-text-soft">{current.description}</span>
         </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-4 w-4 shrink-0 text-text-faint transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <ul
           role="listbox"
-          className="absolute left-0 right-0 top-full z-20 overflow-hidden rounded-b-xl rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg -mt-px"
+          className="absolute left-0 right-0 top-full z-20 overflow-hidden rounded-b-xl rounded-t-none border border-border-soft border-t-0 bg-surface-card shadow-lg -mt-px"
         >
           {BARCODE_MODES.filter(({ id }) => id !== mode).map(({ id, label, description, Icon }) => (
             <li key={id}>
@@ -65,14 +65,14 @@ export function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
                   onChange(id);
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
+                className="ds-raw-button flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-sunken text-text-soft">
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="flex min-w-0 flex-col">
-                  <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">{label}</span>
-                  <span className="truncate text-micro font-medium text-gray-500">{description}</span>
+                  <span className="text-caption font-black uppercase tracking-[0.14em] text-text-default">{label}</span>
+                  <span className="truncate text-micro font-medium text-text-soft">{description}</span>
                 </span>
               </button>
             </li>

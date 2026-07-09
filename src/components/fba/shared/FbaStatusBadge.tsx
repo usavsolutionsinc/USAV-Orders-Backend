@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Barcode, Check, ClipboardList, Lock, PackageCheck, Truck } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Single source of truth for FBA status display. Labels + vocabulary mirror
@@ -34,8 +35,8 @@ const TOKENS: Record<FbaStatus, StatusToken> = {
   PLANNED: {
     label: 'Planned',
     icon: ClipboardList,
-    pill: 'bg-gray-100 text-gray-600 border-gray-200',
-    icon_tone: 'text-gray-500',
+    pill: 'bg-surface-sunken text-text-muted border-border-soft',
+    icon_tone: 'text-text-soft',
   },
   TESTED: {
     label: 'Tested',
@@ -64,16 +65,16 @@ const TOKENS: Record<FbaStatus, StatusToken> = {
   CLOSED: {
     label: 'Closed',
     icon: Lock,
-    pill: 'bg-slate-100 text-slate-600 border-slate-200',
-    icon_tone: 'text-slate-500',
+    pill: 'bg-surface-sunken text-text-muted border-border-soft',
+    icon_tone: 'text-text-soft',
   },
 };
 
 const FALLBACK: StatusToken = {
   label: '—',
   icon: ClipboardList,
-  pill: 'bg-gray-100 text-gray-500 border-gray-200',
-  icon_tone: 'text-gray-400',
+  pill: 'bg-surface-sunken text-text-soft border-border-soft',
+  icon_tone: 'text-text-faint',
 };
 
 export interface FbaStatusBadgeProps {
@@ -100,13 +101,14 @@ export function FbaStatusBadge({
 
   if (iconOnly) {
     return (
-      <span
-        aria-label={token.label}
-        title={token.label}
-        className={`inline-flex items-center justify-center ${className ?? ''}`}
-      >
-        <Icon className={`${iconSize} ${token.icon_tone}`} />
-      </span>
+      <HoverTooltip label={token.label} asChild>
+        <span
+          aria-label={token.label}
+          className={`inline-flex items-center justify-center ${className ?? ''}`}
+        >
+          <Icon className={`${iconSize} ${token.icon_tone}`} />
+        </span>
+      </HoverTooltip>
     );
   }
 

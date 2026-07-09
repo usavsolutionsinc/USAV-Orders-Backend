@@ -3,6 +3,7 @@ import {
   PHOTO_SOURCE_SCOPE_LABELS,
   sourceScopeFromFilters,
 } from './library-filter-state';
+import { claimsTicketLabel } from '@/lib/photos/display-names';
 
 export const PHOTO_LIBRARY_DEFAULT_SUBTITLE =
   'Browse receiving, packing, and unit photos';
@@ -12,7 +13,7 @@ export function describePhotoLibraryContext(filters: PhotoLibraryFilterState): {
   subtitle: string;
 } {
   const source = sourceScopeFromFilters(filters);
-  if (source !== 'all' && !filters.receivingId && !filters.poRef) {
+  if (source !== 'all' && !filters.receivingId && !filters.poRef && !filters.ticketId) {
     return {
       title: PHOTO_SOURCE_SCOPE_LABELS[source],
       subtitle: PHOTO_LIBRARY_DEFAULT_SUBTITLE,
@@ -22,6 +23,12 @@ export function describePhotoLibraryContext(filters: PhotoLibraryFilterState): {
     return {
       title: `Receiving #${filters.receivingId}`,
       subtitle: 'Photos linked to this receiving session',
+    };
+  }
+  if (filters.ticketId) {
+    return {
+      title: claimsTicketLabel(filters.ticketId),
+      subtitle: 'Photos linked to this Zendesk claim',
     };
   }
   if (filters.poRef) {

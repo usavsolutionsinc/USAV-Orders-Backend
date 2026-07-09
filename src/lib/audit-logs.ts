@@ -81,9 +81,13 @@ export const AUDIT_ENTITY = {
   RECEIVING_LINE: 'receiving_line',
   SERIAL_UNIT: 'serial_unit',
   HANDLING_UNIT: 'handling_unit',
+  LABEL_MANIFEST: 'label_manifest',
   TECH_SERIAL: 'tech_serial_number',
   SKU: 'sku',
   SKU_RELATIONSHIP: 'sku_relationship',
+  PART_LINK: 'part_link',
+  // Fulfillment substitution / order-line amendment (ordered vs fulfilled unit)
+  ORDER_AMENDMENT: 'order_amendment',
   SKU_STOCK: 'sku_stock',
   BIN: 'bin',
   SHIPMENT: 'shipment',
@@ -92,13 +96,21 @@ export const AUDIT_ENTITY = {
   STAFF: 'staff',
   PHOTO: 'photo',
   PHOTO_FOLDER: 'photo_folder',
+  PHOTO_IMAGE_TYPE: 'photo_image_type',
+  PHOTO_LABEL: 'photo_label',
+  LISTING_PHOTO: 'listing_photo',
+  // External platform connection (organization_integrations vault row).
+  INTEGRATION: 'integration',
   STAFF_TODO: 'staff_todo',
   STAFF_MESSAGE: 'staff_message',
   STAFF_PREFERENCE: 'staff_preference',
+  // Settings Registry — per-page org/staff configurable behavior (docs/settings-registry.md)
+  SETTINGS: 'settings',
   REASON_CODE: 'reason_code',
   RMA: 'rma',
   REPAIR_SERVICE: 'repair_service',
   QC_CHECK_TEMPLATE: 'qc_check_template',
+  CHECKLIST_TEMPLATE: 'checklist_template',
   KIT_PART_TEMPLATE: 'kit_part_template',
   FAILURE_MODE: 'failure_mode',
   UNIT_FAILURE_TAG: 'unit_failure_tag',
@@ -113,10 +125,25 @@ export const AUDIT_ENTITY = {
   PART_ACQUISITION: 'part_acquisition',
   // Station builder (Operations Studio layer 2)
   STATION_DEFINITION: 'station_definition',
+  // Navigation as data (operator-surfaces refactor Phase 4)
+  NAV_DEFINITION: 'nav_definition',
   // Workflow graphs (Operations Studio layer 1)
   WORKFLOW_DEFINITION: 'workflow_definition',
+  // AI write path (universal-feed plan §2.6) — agent-proposed mutations
+  AGENT_MUTATION: 'agent_mutation',
+  // Per-staff rail dismiss (universal-feed plan Phase 4) — staff_rail_exclusions
+  RAIL_EXCLUSION: 'rail_exclusion',
   // Operations ▸ History — server-backed Master Journey saved views
   OPERATIONS_SAVED_VIEW: 'operations_saved_view',
+  // Media library (/ops/photos) — server-backed filter/view presets
+  MEDIA_SAVED_VIEW: 'media_saved_view',
+  // Voice (Nextiva) — Support ▸ Voicemail / Calls
+  VOICEMAIL: 'voicemail',
+  CALL_EVENT: 'call_event',
+  // Tenant / identity (Phase F signup → org provisioning)
+  ORGANIZATION: 'organization',
+  // AI search (docs/ai-search-modernization-plan.md) — the Ask-AI invocation
+  AI_SEARCH: 'ai_search',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -127,8 +154,38 @@ export const AUDIT_ACTION = {
   RECEIVING_DISPOSITION_SET: 'receiving.disposition.set',
   RECEIVING_LINE_QTY_UPDATE: 'receiving_line.qty.update',
   RECEIVING_HEADER_UPDATE:   'receiving.header.update',
+  /**
+   * Operator-driven PO relink — make the website authoritative over Zoho. Writes
+   * the chosen PO (and optional SKU correction) onto the line + carton, even when
+   * Zoho already had a different (wrong) link. Distinct from RECEIVING_MATCH
+   * (adopt expected lines) and the upgrade-only header update.
+   */
+  RECEIVING_RELINK:          'receiving.relink',
+  /** A marketplace purchase (eBay buyer account, …) was imported onto the Incoming
+   *  spine via the bridge/sync (Universal Incoming Phase 2). */
+  RECEIVING_INBOUND_IMPORT:  'receiving.inbound.import',
+  /** An operator manually linked one Incoming spine row to a second purchase
+   *  identity (e.g. an eBay line → its Zoho PO), writing the secondary link +
+   *  cross-source equivalence and optionally collapsing a duplicate spine row
+   *  (Universal Incoming Phase 4, §7.2). Distinct from RECEIVING_RELINK, which
+   *  re-points a carton at a different Zoho PO. */
+  RECEIVING_INBOUND_LINKED:  'receiving.inbound.linked',
   /** Manual n8n-style lifecycle advance through transitionReceivingLine(). */
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
+  /** Real "Save for unbox" transition — stamps receiving.triage_complete. */
+  RECEIVING_TRIAGE_COMPLETE: 'receiving.triage.complete',
+  /** Per-staff rail dismiss / restore (universal-feed Phase 4) — writes/removes
+   *  a staff_rail_exclusions row; hides an entity from THIS staffer's rail only
+   *  (reversible, never a shared delete). */
+  RAIL_EXCLUSION_ADD:        'rail_exclusion.add',
+  RAIL_EXCLUSION_REMOVE:     'rail_exclusion.remove',
+  /**
+   * A scanned serial was auto-resolved to a previously-shipped order during
+   * receiving (the shipped↔returned loop), flipping the carton to a return and
+   * its open allocation SHIPPED→RETURNED. Distinct from a manual returns-dock
+   * intake — this fires on the normal unbox serial scan.
+   */
+  RETURN_LINK:               'return.link',
   // Bin / location
   BIN_CREATE: 'bin.create',
   BIN_UPDATE: 'bin.update',
@@ -146,15 +203,26 @@ export const AUDIT_ACTION = {
   HANDLING_UNIT_CREATE:   'handling_unit.create',
   HANDLING_UNIT_ASSIGN:   'handling_unit.assign',
   HANDLING_UNIT_UNASSIGN: 'handling_unit.unassign',
+  // Label manifests (preboxed kit — one label, many serials)
+  MANIFEST_CREATE:        'label_manifest.create',
+  MANIFEST_ADD_ITEM:      'label_manifest.add_item',
+  MANIFEST_REMOVE_ITEM:   'label_manifest.remove_item',
+  MANIFEST_SEAL:          'label_manifest.seal',
+  MANIFEST_DISSOLVE:      'label_manifest.dissolve',
   // Tech / QC verdicts (per-unit testing outcomes)
   TECH_QC_PASS:   'tech.qc.pass',
   TECH_QC_RETEST: 'tech.qc.retest',
   TECH_QC_FAIL:   'tech.qc.fail',
+  TECH_DATA_WIPE: 'tech.data_wipe',   // secure erase / factory reset (electronics)
   // QC checklist templates (authoring CRUD) + per-unit results (execution)
   QC_CHECK_CREATE:  'qc_check.create',
   QC_CHECK_UPDATE:  'qc_check.update',
   QC_CHECK_DELETE:  'qc_check.delete',
   QC_CHECK_PUBLISH: 'qc_check.publish',
+  CHECKLIST_CREATE:  'checklist.create',
+  CHECKLIST_UPDATE:  'checklist.update',
+  CHECKLIST_DELETE:  'checklist.delete',
+  CHECKLIST_PUBLISH: 'checklist.publish',
   QC_RESULT_RECORD: 'qc_result.record',
   // Kit-parts / BOM templates ("what's in the box" authoring CRUD)
   KIT_PART_CREATE: 'kit_part.create',
@@ -175,6 +243,7 @@ export const AUDIT_ACTION = {
   STAFF_MESSAGE_SEND:      'staff_message.send',
   // Photo library — minted N temporary signed share links for selected photos
   PHOTO_SHARE_LINK:        'photo.share_link',
+  PHOTO_REASSIGN:          'photo.reassign',
   // Photo library master folders (operator-created, persistent) + assignments
   PHOTO_FOLDER_CREATE:     'photo_folder.create',
   PHOTO_FOLDER_RENAME:     'photo_folder.rename',
@@ -182,8 +251,30 @@ export const AUDIT_ACTION = {
   PHOTO_FOLDER_DELETE:     'photo_folder.delete',
   PHOTO_FOLDER_ASSIGN:     'photo_folder.assign',
   PHOTO_FOLDER_UNASSIGN:   'photo_folder.unassign',
+  PHOTO_IMAGE_TYPE_CREATE: 'photo_image_type.create',
+  // Photo labels — org vocabulary CRUD + per-photo / bulk assignment
+  PHOTO_LABEL_CREATE:      'photo_label.create',
+  PHOTO_LABEL_UPDATE:      'photo_label.update',
+  PHOTO_LABEL_DELETE:      'photo_label.delete',
+  PHOTO_LABELS_SET:        'photo_label.set',
+  PHOTO_LABELS_BULK_APPLY: 'photo_label.bulk_apply',
+  // Listing gallery composition (marketplace photo set)
+  LISTING_PHOTO_ADD:       'listing_photo.add',
+  LISTING_PHOTO_REORDER:   'listing_photo.reorder',
+  LISTING_PHOTO_SET_COVER: 'listing_photo.set_cover',
+  LISTING_PHOTO_REMOVE:    'listing_photo.remove',
+  // Photo backup — copied photo originals into a tenant's connected Google Drive
+  PHOTO_DRIVE_EXPORT:      'photo.drive_export',
+  // External integration connection lifecycle (OAuth connect / disconnect)
+  INTEGRATION_CONNECT:     'integration.connect',
+  INTEGRATION_DISCONNECT:  'integration.disconnect',
+  // AI search — the explicit Ask-AI tool-calling invocation only (plain
+  // keystroke retrieval is deliberately NOT audited — see /api/ai/retrieve)
+  AI_SEARCH_ASK: 'ai_search.ask',
   // Personal UI preferences (e.g. configurable focus-scan hotkey)
   STAFF_PREFERENCE_UPDATE: 'staff_preference.update',
+  // Settings Registry — org/staff per-page setting change (docs/settings-registry.md)
+  SETTINGS_UPDATE: 'settings.update',
   // Per-unit repair records
   REPAIR_OPEN:     'unit_repair.open',
   REPAIR_UPDATE:   'unit_repair.update',
@@ -191,6 +282,10 @@ export const AUDIT_ACTION = {
   // Receiving (scanner-driven matching)
   PO_LOOKUP:        'po.lookup',
   RECEIVING_MATCH:  'receiving.match',
+  /** Manual "Retry pair" from the Unfound strip — re-runs the same tracking search reconcileUnmatchedReceiving does on its cron sweep. */
+  RECEIVING_RETRY_PAIR: 'receiving.retry_pair',
+  /** Operator-initiated "Look up Amazon return" on an unfound carton — SP-API External Fulfillment Returns lookup by reverse tracking. */
+  RECEIVING_AMAZON_RETURN_LOOKUP: 'receiving.amazon_return_lookup',
   // GS1 Digital Link resolver (single QR → contextual internal page)
   GS1_RESOLVE:      'gs1.resolve',
   // SKU stock
@@ -209,6 +304,9 @@ export const AUDIT_ACTION = {
   SKU_RELATIONSHIP_CREATE: 'sku_relationship.create',
   SKU_RELATIONSHIP_UPDATE: 'sku_relationship.update',
   SKU_RELATIONSHIP_DELETE: 'sku_relationship.delete',
+  PART_LINK_CREATE: 'part_link.create',
+  PART_LINK_DELETE: 'part_link.delete',
+  PART_LINK_MARK_NOT_PART: 'part_link.mark_not_a_part',
   // Reason codes (CRUD)
   REASON_CODE_CREATE: 'reason_code.create',
   REASON_CODE_UPDATE: 'reason_code.update',
@@ -216,13 +314,32 @@ export const AUDIT_ACTION = {
   // RMA (record-level CRUD; lifecycle transitions live in verb routes)
   RMA_UPDATE: 'rma.update',
   RMA_CANCEL: 'rma.cancel',
+  RMA_DISPOSITION: 'rma.disposition',
   // Order record edit (delete uses the legacy 'orders.delete' literal)
   ORDER_UPDATE: 'orders.update',
+  // Fulfillment substitution — the unit that ships deviates from what was
+  // ordered/listed. Re-allocation event recorded in order_unit_amendments;
+  // approve/reject gate the block_until_approved enforcement path.
+  ORDER_SUBSTITUTE_UNIT:   'order.substitute_unit',
+  ORDER_AMENDMENT_APPROVE: 'order.amendment.approve',
+  ORDER_AMENDMENT_REJECT:  'order.amendment.reject',
   // Unshipped governing events — first time a carrier tracking number is added to
   // an order, and when its shipping label is printed/attached. Feed the order
   // timeline (EventTimeline) on the dashboard details panel.
   TRACKING_ADDED: 'orders.tracking.added',
   LABEL_PRINTED: 'orders.label.printed',
+  // Carrier-API label lifecycle (ShipStation outbound station): buying a
+  // rate-shopped label and voiding/refunding it. LABEL_PRINTED still fires on
+  // the first stored label for the order timeline.
+  LABEL_PURCHASED: 'orders.label.purchased',
+  LABEL_VOIDED: 'orders.label.voided',
+  // Outbound documents (docs/outbound-documents-plan.md) — packing slips +
+  // shipping labels stored on `documents` + linked via `document_entity_links`.
+  // LABEL_PRINTED (above) is preserved for the timeline on an order's FIRST
+  // label attach; these cover the general CRUD lifecycle for both doc types.
+  ORDER_DOCUMENT_ATTACH: 'order.document.attach',
+  ORDER_DOCUMENT_FETCH:  'order.document.fetch',
+  ORDER_DOCUMENT_DELETE: 'order.document.delete',
   // Orders-exceptions reconciliation sweep (writes orders + orders_exceptions)
   ORDERS_EXCEPTIONS_SYNC: 'orders_exceptions.sync',
   // Repair service soft-cancel + its reverse (reopen → restore prior status)
@@ -260,16 +377,32 @@ export const AUDIT_ACTION = {
   // Station builder (Operations Studio layer 2) — draft/publish lifecycle
   STATION_DRAFT_SAVE: 'station.draft.save',
   STATION_PUBLISH:    'station.publish',
+  // Navigation as data (operator-surfaces refactor Phase 4)
+  NAV_PUBLISH:        'nav.publish',
   // Workflow graphs (Operations Studio layer 1) — draft/publish lifecycle
   WORKFLOW_DRAFT_CREATE: 'workflow.draft.create',
   WORKFLOW_DRAFT_SAVE:   'workflow.draft.save',
   WORKFLOW_PUBLISH:      'workflow.publish',
   // Cloning a system template into the org's definitions as a draft (Phase E4).
   WORKFLOW_TEMPLATE_IMPORT: 'workflow.template.import',
+  // AI write path (universal-feed plan §2.6) — apply / propose / revert.
+  AGENT_MUTATION_APPLY:   'agent_mutation.apply',
+  AGENT_MUTATION_PROPOSE: 'agent_mutation.propose',
+  AGENT_MUTATION_REVERT:  'agent_mutation.revert',
   // Operations ▸ History — Master Journey saved views (personal/shared presets)
   OPERATIONS_SAVED_VIEW_CREATE: 'operations.saved_view.create',
   OPERATIONS_SAVED_VIEW_UPDATE: 'operations.saved_view.update',
   OPERATIONS_SAVED_VIEW_DELETE: 'operations.saved_view.delete',
+  // Media library (/ops/photos) — saved filter/view presets (personal/shared)
+  MEDIA_SAVED_VIEW_CREATE: 'media.saved_view.create',
+  MEDIA_SAVED_VIEW_UPDATE: 'media.saved_view.update',
+  MEDIA_SAVED_VIEW_DELETE: 'media.saved_view.delete',
+  // Voice (Nextiva) — Support ▸ Voicemail / Calls
+  VOICEMAIL_FOLLOWUP_RESOLVED: 'voicemail.followup.resolved',
+  VOICEMAIL_LINKED:            'voicemail.linked',
+  VOICE_CALL_ORIGINATED:       'voice.call.originated',
+  // Tenant lifecycle — self-service signup provisions a new org (Phase F).
+  ORG_CREATE: 'organization.create',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];
@@ -286,6 +419,10 @@ export const AUDIT_REASON_REQUIRED: ReadonlySet<string> = new Set([
   // Sourcing: resolving an alert and importing a candidate both need a "why".
   AUDIT_ACTION.SOURCING_ALERT_RESOLVE,
   AUDIT_ACTION.SOURCING_CANDIDATE_IMPORT,
+  // A substitution deviates from the order — it must justify itself.
+  AUDIT_ACTION.ORDER_SUBSTITUTE_UNIT,
+  // Voiding a purchased label reverses a paid carrier action — require a reason.
+  AUDIT_ACTION.LABEL_VOIDED,
 ]);
 
 // ── Server-trusted wrapper ─────────────────────────────────────────────────

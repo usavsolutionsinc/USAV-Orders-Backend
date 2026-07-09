@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, Plus, Tool } from '@/components/Icons';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { IconButton } from '@/design-system/primitives';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useBodyScrollLock } from '@/design-system/hooks';
@@ -26,39 +29,17 @@ import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspa
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 import type { RepairTab } from '@/lib/neon/repair-service-queries';
 import { sectionLabel, cardTitle } from '@/design-system/tokens/typography/presets';
+import {
+  buildDraftFromFavorite,
+  fetchFavoriteIntakeContext,
+} from '@/components/repair/repair-favorite-intake';
 
 interface RepairSidebarPanelProps {
   embedded?: boolean;
   hideSectionHeader?: boolean;
 }
 
-interface EcwidSearchProduct {
-  id: string;
-  name: string;
-  sku: string;
-  price: number | null;
-}
-
-function buildDraftFromFavorite(
-  favorite: FavoriteSkuRecord,
-  ecwidProduct?: EcwidSearchProduct | null,
-  preSelectedReasons?: string[],
-): Partial<RepairFormData> {
-  return {
-    product: {
-      type: 'Bose Repair Service',
-      model: ecwidProduct?.name || favorite.productTitle || favorite.label || favorite.sku,
-      sourceSku: ecwidProduct?.sku || favorite.sku,
-    },
-    repairReasons: preSelectedReasons?.length ? preSelectedReasons : [],
-    repairNotes: favorite.issueTemplate || '',
-    price:
-      ecwidProduct?.price != null
-        ? ecwidProduct.price.toFixed(2)
-        : favorite.defaultPrice || '130',
-    notes: favorite.notes || '',
-  };
-}
+const REPAIR_SUBMIT_TIMEOUT_MS = 60_000;
 
 export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false }: RepairSidebarPanelProps) {
   const router = useRouter();
@@ -118,9 +99,9 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const handleSubmitForm = async (data: RepairFormData): Promise<RepairSubmitResult | null> => {
     setIsSubmitting(true);
-    if (!repairIdemKey.current) repairIdemKey.current = crypto.randomUUID();
+    if (!repairIdemKey.current) repairIdemKey.current = safeRandomUUID();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), REPAIR_SUBMIT_TIMEOUT_MS);
     try {
       const response = await fetch('/api/repair/submit', {
         method: 'POST',
@@ -133,9 +114,18 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
       });
       clearTimeout(timeout);
 
-      const result = await response.json();
+      let result: Record<string, unknown>;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(
+          response.ok
+            ? 'Invalid response from server. Please try again.'
+            : `Failed to submit repair (${response.status}). Please try again.`,
+        );
+      }
 
-      if (result.success) {
+      if (response.ok && result.success) {
         repairIdemKey.current = null;
         const ticketUrl: string | null =
           typeof result.zendeskTicketUrl === 'string' ? result.zendeskTicketUrl : null;
@@ -148,28 +138,32 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             : undefined,
         });
         if (result.signatureWarning) {
-          window.alert(`Repair submitted, but: ${result.signatureWarning}`);
+          toast.warning(`Repair submitted, but: ${String(result.signatureWarning)}`);
         }
-        // Keep the overlay open — the form transitions to its print screen so a
-        // waiting customer never sees the walk-in dashboard. Close happens on Done.
         return {
           id: Number(result.id),
-          rsNumber: result.rsNumber ?? null,
-          zendeskTicketNumber: result.zendeskTicketNumber ?? null,
+          rsNumber: (result.rsNumber as string | number | null | undefined) ?? null,
+          zendeskTicketNumber: (result.zendeskTicketNumber as string | null | undefined) ?? null,
           zendeskTicketUrl: ticketUrl,
         };
       }
 
-      window.alert('Failed to submit repair form. Please try again.');
-      return null;
+      const message =
+        typeof result.error === 'string' && result.error.trim()
+          ? result.error
+          : typeof result.details === 'string' && result.details.trim()
+            ? result.details
+            : `Failed to submit repair form (${response.status}). Please try again.`;
+      throw new Error(message);
     } catch (error: unknown) {
       clearTimeout(timeout);
       if (error instanceof DOMException && error.name === 'AbortError') {
-        window.alert('Submission timed out. Please check your connection and try again.');
-      } else {
-        window.alert('Error submitting repair form. Please try again.');
+        throw new Error(
+          'Submission timed out. The repair may already have been saved — check the Active repairs list before submitting again.',
+        );
       }
-      return null;
+      if (error instanceof Error) throw error;
+      throw new Error('Error submitting repair form. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -177,43 +171,22 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const handleUseFavorite = async (favorite: FavoriteSkuRecord) => {
     setIsFetchingFavorite(true);
-    let ecwidProduct: EcwidSearchProduct | null = null;
-    let skuReasons: string[] = [];
     try {
-      const [ecwidRes, issuesRes] = await Promise.all([
-        fetch(`/api/ecwid/products/search?q=${encodeURIComponent(favorite.sku)}`),
-        fetch(`/api/repair/issues?favoriteSkuId=${favorite.id}`),
-      ]);
-      const ecwidData = await ecwidRes.json();
-      const products: EcwidSearchProduct[] = Array.isArray(ecwidData?.products) ? ecwidData.products : [];
-      ecwidProduct =
-        products.find((p) => p.sku.trim().toLowerCase() === favorite.sku.trim().toLowerCase()) ??
-        products[0] ??
-        null;
-
-      const issuesData = await issuesRes.json();
-      if (Array.isArray(issuesData?.issues)) {
-        // Pre-select only SKU-specific issues (not globals) as "same as template"
-        skuReasons = issuesData.issues
-          .filter((i: { favorite_sku_id: number | null }) => i.favorite_sku_id !== null)
-          .map((i: { label: string }) => i.label);
-      }
-    } catch {
-      // fall through — will use cached favorite data
+      const { ecwidProduct, skuReasons } = await fetchFavoriteIntakeContext(favorite);
+      setSelectedFavoriteId(favorite.id);
+      setIntakeDraft(buildDraftFromFavorite(favorite, ecwidProduct, skuReasons));
+      setShowIntakeForm(true);
     } finally {
       setIsFetchingFavorite(false);
     }
-    setSelectedFavoriteId(favorite.id);
-    setIntakeDraft(buildDraftFromFavorite(favorite, ecwidProduct, skuReasons));
-    setShowIntakeForm(true);
   };
 
   const content = (
     <SidebarShell
-      className="bg-white"
+      className="bg-surface-card"
       headerAbove={
         !hideSectionHeader ? (
-          <div className={`border-b border-gray-100 ${SIDEBAR_GUTTER} pt-4 pb-3`}>
+          <div className={`border-b border-border-hairline ${SIDEBAR_GUTTER} pt-4 pb-3`}>
             <p className={`${sectionLabel} text-orange-500`}>Repair Service</p>
             <h2 className={`mt-1 ${cardTitle}`}>Repairs</h2>
           </div>
@@ -231,7 +204,8 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
         placeholder: 'Search repairs, tickets, SKU…',
         variant: 'orange',
         rightElement: (
-          <button
+          <HoverTooltip label="New repair" asChild>
+          <IconButton
             type="button"
             onClick={() => {
               setIntakeDraft(undefined);
@@ -239,12 +213,11 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               setShowIntakeForm(true);
             }}
             disabled={isSubmitting}
-            className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-400"
-            title="New repair"
-            aria-label="Open new repair order form"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
+            ariaLabel="Open new repair order form"
+            icon={<Plus className="h-5 w-5 text-white" />}
+            className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-border-emphasis"
+          />
+          </HoverTooltip>
         ),
       }}
       headerRows={[
@@ -268,7 +241,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
       bodyClassName="relative pb-4"
     >
         {isFetchingFavorite && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-surface-card/80 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-orange-500">
               <Loader2 className="h-5 w-5 animate-spin" />
               <span className={sectionLabel}>Loading…</span>
@@ -299,7 +272,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const intakeOverlay =
     isMounted && showIntakeForm
       ? createPortal(
-          <div className="fixed inset-0 z-panelOverlay bg-white">
+          <div className="fixed inset-0 z-panelOverlay bg-surface-card">
             <RepairIntakeForm
               onClose={handleCloseForm}
               onSubmit={handleSubmitForm}
@@ -314,7 +287,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   if (embedded) {
     return (
       <>
-        <div className="h-full overflow-hidden bg-white">{content}</div>
+        <div className="h-full overflow-hidden bg-surface-card">{content}</div>
         {intakeOverlay}
       </>
     );
@@ -322,7 +295,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   return (
     <>
-      <aside className="h-full overflow-hidden border-r border-gray-200 bg-white">{content}</aside>
+      <aside className="h-full overflow-hidden border-r border-border-soft bg-surface-card">{content}</aside>
       {intakeOverlay}
     </>
   );

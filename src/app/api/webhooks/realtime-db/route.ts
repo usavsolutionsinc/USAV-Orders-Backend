@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { publishDbEvent, type RealtimeDbEvent } from '@/lib/realtime/db-events';
+import { safeStrEqual } from '@/lib/security/safe-compare';
 
 export const runtime = 'nodejs';
 
@@ -7,9 +8,10 @@ function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.REALTIME_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
   if (!secret) return false;
 
-  const authHeader = req.headers.get('authorization');
-  if (authHeader === `Bearer ${secret}`) return true;
-  if (req.headers.get('x-webhook-secret') === secret) return true;
+  const authHeader = req.headers.get('authorization') || '';
+  if (authHeader.startsWith('Bearer ') && safeStrEqual(authHeader.slice(7), secret)) return true;
+  const headerSecret = req.headers.get('x-webhook-secret');
+  if (headerSecret && safeStrEqual(headerSecret, secret)) return true;
   return false;
 }
 

@@ -77,12 +77,15 @@ export const PERMISSIONS = [
   { id: 'packing.scan_order',       category: 'packing', label: 'Scan order to pack' },
   { id: 'packing.print_label',      category: 'packing', label: 'Print packing label' },
   { id: 'packing.complete_order',   category: 'packing', label: 'Complete packed order' },
+  { id: 'packing.substitute_unit',  category: 'packing', label: 'Substitute fulfilled unit' },
+  { id: 'packing.approve_amendment', category: 'packing', label: 'Approve substitution amendment' },
 
   // ─ Tech & Repair ─
   { id: 'tech.view',                category: 'tech', label: 'View tech station' },
   { id: 'tech.scan_serial',         category: 'tech', label: 'Scan serial' },
   { id: 'tech.qc_pass',             category: 'tech', label: 'QC pass' },
   { id: 'tech.qc_fail',             category: 'tech', label: 'QC fail' },
+  { id: 'tech.data_wipe',           category: 'tech', label: 'Data wipe (secure erase)' },
   { id: 'tech.assign_bin',          category: 'tech', label: 'Assign bin from tech' },
   { id: 'serial_units.grade',       category: 'tech', label: 'Grade serial unit (condition)' },
   { id: 'repair.view',              category: 'tech', label: 'View repair queue' },
@@ -94,6 +97,8 @@ export const PERMISSIONS = [
   { id: 'shipping.view',            category: 'shipping', label: 'View shipping' },
   { id: 'shipping.mark_shipped',    category: 'shipping', label: 'Mark shipped' },
   { id: 'shipping.void_order',      category: 'shipping', label: 'Void shipment', destructive: true, stepUp: true },
+  { id: 'shipping.buy_label',       category: 'shipping', label: 'Buy shipping label (rate-shop + purchase)' },
+  { id: 'shipping.void_label',      category: 'shipping', label: 'Void shipping label', destructive: true, stepUp: true },
   { id: 'orders.view',              category: 'shipping', label: 'View orders' },
   { id: 'orders.create',            category: 'shipping', label: 'Create orders' },
   { id: 'orders.import',            category: 'shipping', label: 'Import orders (Google Sheets + Ecwid)' },
@@ -102,6 +107,8 @@ export const PERMISSIONS = [
   { id: 'warranty.view',            category: 'shipping', label: 'View warranty claims' },
   { id: 'warranty.manage',          category: 'shipping', label: 'Manage warranty claims (log / lifecycle / quote)' },
   { id: 'warranty.repair',          category: 'shipping', label: 'Log warranty repair attempts' },
+  { id: 'rma.view',                 category: 'shipping', label: 'View RMA authorizations' },
+  { id: 'rma.manage',               category: 'shipping', label: 'Manage RMA authorizations (issue / receive / disposition / close / cancel)' },
 
   // ─ FBA ─
   { id: 'fba.view',                 category: 'fba', label: 'View FBA' },
@@ -137,9 +144,11 @@ export const PERMISSIONS = [
   // ─ Operations & Reports ─
   { id: 'dashboard.view',           category: 'ops', label: 'View dashboard' },
   { id: 'operations.view',          category: 'ops', label: 'View operations' },
-  { id: 'photos.view',              category: 'ops', label: 'View photo library' },
-  { id: 'photos.share',             category: 'ops', label: 'Create photo share links' },
-  { id: 'photos.manage',            category: 'ops', label: 'Manage photo folders (create, organize, assign)' },
+  { id: 'ai.search',                category: 'ops', label: 'AI search retrieval (⌘K hybrid search + Ask AI)' },
+  { id: 'assistant.chat',           category: 'ops', label: 'Use the operations assistant (global AI dock)' },
+  { id: 'photos.view',              category: 'ops', label: 'View media library' },
+  { id: 'photos.share',             category: 'ops', label: 'Create media share links' },
+  { id: 'photos.manage',            category: 'ops', label: 'Manage media library (labels, folders, organize)' },
   { id: 'work_orders.view',         category: 'ops', label: 'View work orders' },
   { id: 'work_orders.claim',        category: 'ops', label: 'Claim work order' },
   { id: 'work_orders.complete',     category: 'ops', label: 'Complete work order' },
@@ -159,6 +168,7 @@ export const PERMISSIONS = [
   { id: 'reports.export',           category: 'ops', label: 'Export reports' },
   { id: 'print.label',              category: 'ops', label: 'Print labels' },
   { id: 'print.silent',             category: 'ops', label: 'Silent print' },
+  { id: 'label.manifest.manage',    category: 'ops', label: 'Create / seal / dissolve label manifests' },
 
   // ─ Integrations ─
   { id: 'integrations.zoho',        category: 'integrations', label: 'Manage Zoho integration' },
@@ -166,6 +176,7 @@ export const PERMISSIONS = [
   { id: 'integrations.amazon',      category: 'integrations', label: 'Manage Amazon integration' },
   { id: 'integrations.ecwid',       category: 'integrations', label: 'Manage Ecwid integration' },
   { id: 'integrations.sheets',      category: 'integrations', label: 'Trigger Google Sheets sync' },
+  { id: 'integrations.google_drive', category: 'integrations', label: 'Manage Google Drive photo backup' },
   { id: 'integrations.zendesk',     category: 'integrations', label: 'Manage Zendesk tickets' },
 
   // ─ Product manuals (cross-cutting, lives under "data sources" admin tab) ─

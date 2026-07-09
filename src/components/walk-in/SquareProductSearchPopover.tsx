@@ -17,6 +17,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Package, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { formatCentsToDollars, parsePriceToMinorUnits } from '@/lib/square/client';
 import type { SquareCatalogItem } from '@/hooks/useSquareCatalog';
@@ -159,7 +161,7 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-panelPopover bg-gray-900/50 backdrop-blur-sm"
+        className="fixed inset-0 z-panelPopover bg-scrim/50 backdrop-blur-sm"
         onClick={onClose}
       />
       <motion.div
@@ -174,33 +176,32 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="pointer-events-auto flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl ring-1 ring-gray-200"
+          className="pointer-events-auto flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-emerald-200 bg-surface-card shadow-2xl ring-1 ring-border-soft"
         >
           {/* Header: manual toggle + close */}
-          <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+          <div className="flex items-center justify-between border-b border-border-hairline px-3 py-2">
             {manualMode ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setManualMode(false);
                   setManualTitle('');
                   setManualPrice('');
                 }}
-                className={`${microBadge} rounded px-2 py-1 text-emerald-700 transition-colors hover:bg-emerald-50`}
+                className={`${microBadge} rounded px-2 py-1 text-emerald-700 hover:bg-emerald-50`}
               >
                 ← Back to catalog search
-              </button>
+              </Button>
             ) : (
-              <span className={`${microBadge} text-gray-700`}>Search Square catalog</span>
+              <span className={`${microBadge} text-text-muted`}>Search Square catalog</span>
             )}
-            <button
-              type="button"
+            <IconButton
               onClick={onClose}
-              aria-label="Close search"
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              ariaLabel="Close search"
+              icon={<X className="h-4 w-4" />}
+              className="rounded-lg p-1.5 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+            />
           </div>
 
           {/* Search input — catalog flow */}
@@ -216,23 +217,25 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
                 size="compact"
                 hideUnderline
                 trailingPrefix={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualMode(true);
-                      setManualTitle('');
-                      setManualPrice('');
-                      setQuery('');
-                      setItems([]);
-                      setError(null);
-                      abortRef.current?.abort();
-                      setIsLoading(false);
-                    }}
-                    className="max-w-[min(11rem,calc(100vw-200px))] shrink-0 truncate rounded-md border border-emerald-200 bg-emerald-50/80 px-1.5 py-0.5 text-left text-[10px] font-semibold text-emerald-800 hover:bg-emerald-100 sm:max-w-[14rem] sm:text-caption sm:leading-tight"
-                    title="Product not added yet?"
-                  >
-                    Product not added yet?
-                  </button>
+                  <HoverTooltip label="Product not added yet?" asChild>
+                    {/* ds-raw-button: text-left truncating constrained-width chip (max-w + truncate) — Button is justify-center and can't truncate its label the same way */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManualMode(true);
+                        setManualTitle('');
+                        setManualPrice('');
+                        setQuery('');
+                        setItems([]);
+                        setError(null);
+                        abortRef.current?.abort();
+                        setIsLoading(false);
+                      }}
+                      className="max-w-[min(11rem,calc(100vw-200px))] shrink-0 truncate rounded-md border border-emerald-200 bg-emerald-50/80 px-1.5 py-0.5 text-left text-micro font-semibold text-emerald-800 hover:bg-emerald-100 sm:max-w-[14rem] sm:text-caption sm:leading-tight"
+                    >
+                      Product not added yet?
+                    </button>
+                  </HoverTooltip>
                 }
               />
             </div>
@@ -248,7 +251,7 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
                 hideUnderline
               />
               <div className="px-1">
-                <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                   Price
                 </label>
                 <div className="relative">
@@ -263,15 +266,16 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
                     value={manualPrice}
                     onChange={(e) => setManualPrice(e.target.value)}
                     placeholder="0.00"
-                    className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-6 pr-3 text-caption font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none"
+                    className="h-9 w-full rounded-lg border border-border-soft bg-surface-card pl-6 pr-3 text-caption font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
               </div>
+              {/* ds-raw-button: solid emerald CTA — no green Button variant (primary=blue, brand=navy); className bg override is unreliable vs the variant's own bg */}
               <button
                 type="button"
                 disabled={manualSubmitting || submittingId != null || !manualTitle.trim()}
                 onClick={() => void handleManualSubmit()}
-                className="w-full rounded-lg bg-emerald-600 py-2.5 text-caption font-bold uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                className="w-full rounded-lg bg-emerald-600 py-2.5 text-caption font-bold uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-surface-strong"
               >
                 {manualSubmitting ? 'Adding…' : 'Add to sale'}
               </button>
@@ -289,7 +293,7 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
               {error && <li className="px-3 py-3 text-label text-red-600">{error}</li>}
 
               {!error && !isLoading && query.trim() && items.length === 0 && (
-                <li className="px-3 py-3 text-label text-gray-500">
+                <li className="px-3 py-3 text-label text-text-soft">
                   No matches. Refine the query, or use &ldquo;Product not added yet?&rdquo; for a manual line.
                 </li>
               )}
@@ -333,21 +337,22 @@ interface SalesResultRowProps {
 function SalesResultRow({ name, sku, price, isSubmitting, disabled, onSelect }: SalesResultRowProps) {
   return (
     <li role="option" aria-selected={false}>
+      {/* ds-raw-button: composite text-left result row (thumbnail + multi-line name/sku + price), not a standard action button */}
       <button
         type="button"
         disabled={disabled || isSubmitting}
         onClick={onSelect}
-        className="flex w-full items-center gap-3 border-b border-gray-50 px-3 py-2 text-left transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center gap-3 border-b border-border-hairline px-3 py-2 text-left transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {/* Thumbnail — Square catalog search carries no image, so placeholder. */}
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-gray-100 bg-gray-50">
-          <Package className="h-5 w-5 text-gray-300" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-border-hairline bg-surface-canvas">
+          <Package className="h-5 w-5 text-text-faint" />
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-gray-900">{name}</div>
+          <div className="truncate text-sm font-semibold text-text-default">{name}</div>
           {sku ? (
-            <div className="mt-0.5 font-mono text-micro tracking-wide text-gray-500">{sku}</div>
+            <div className="mt-0.5 font-mono text-micro tracking-wide text-text-soft">{sku}</div>
           ) : null}
         </div>
 

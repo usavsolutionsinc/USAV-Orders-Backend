@@ -15,6 +15,7 @@
 import type { Entitlements } from './plans';
 import type { OrgId } from '../tenancy/constants';
 import { isStudioGated } from './studio-gate';
+import { makePlanFeatureGate } from './plan-feature-gate';
 
 export type EntitlementFeature = keyof Entitlements['features'];
 
@@ -22,11 +23,20 @@ export type EntitlementFeature = keyof Entitlements['features'];
  * Map of feature → its block-decision fn. Only features with bespoke
  * enforcement (flag + exemptions + override) are listed; everything else is
  * implicitly never-gated by the wrapper.
+ *
+ * `studio` has its own bespoke gate (STUDIO_ENTITLEMENT_ENFORCED). The Growth+
+ * plan features (walkIn, sourcing, support, aiChat) share one generic plan-tier
+ * gate behind PLAN_FEATURE_ENFORCED — all dormant + fail-open by default, so
+ * wiring them changes nothing until enforcement is explicitly turned on.
  */
 const FEATURE_GATES: Partial<
   Record<EntitlementFeature, (orgId: OrgId | null | undefined) => Promise<boolean>>
 > = {
   studio: isStudioGated,
+  walkIn: makePlanFeatureGate('walkIn'),
+  sourcing: makePlanFeatureGate('sourcing'),
+  support: makePlanFeatureGate('support'),
+  aiChat: makePlanFeatureGate('aiChat'),
 };
 
 /**

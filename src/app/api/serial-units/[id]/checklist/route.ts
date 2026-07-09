@@ -207,7 +207,7 @@ export const POST = withAuth(async (request, ctx) => {
       } catch (tagErr) {
         console.warn('[checklist] auto-tag-on-fail failed (non-fatal)', tagErr);
       }
-      if (autoTag) await recomputeUnitQualitySafe(serialUnitId);
+      if (autoTag) await recomputeUnitQualitySafe(serialUnitId, orgId);
     }
 
     await recordAudit(pool, ctx, request, {

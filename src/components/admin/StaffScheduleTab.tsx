@@ -138,9 +138,9 @@ export function StaffScheduleTab() {
         />
 
         {filteredStaff.length === 0 && (
-          <div className="border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
+          <div className="border border-dashed border-border-default bg-surface-card px-6 py-10 text-center">
             <p className={sectionLabel}>No Staff Match</p>
-            <p className="mt-2 text-label font-bold text-gray-500">
+            <p className="mt-2 text-label font-bold text-text-soft">
               Change the sidebar filters or add teammates in Settings → Team.
             </p>
           </div>

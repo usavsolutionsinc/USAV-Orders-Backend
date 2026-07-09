@@ -20,6 +20,8 @@ import pool from '../db';
 import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import type {
   PairingAuditAction,
   PairingAuditActorKind,
@@ -360,9 +362,12 @@ export async function batchPair(input: BatchPairInput): Promise<BatchPairResult>
   // fall back to the original raw-pool transaction, byte-identical.
   if (input.organizationId) {
     const orgId = input.organizationId;
-    return withTenantTransaction<BatchPairResult>(orgId, (client) =>
+    const result = await withTenantTransaction<BatchPairResult>(orgId, (client) =>
       runBatchPair(client, input, orgId),
     );
+    // Pairing changes how a SKU resolves → bust cached get-title-by-sku bundles.
+    await invalidateCacheTags(orgId, [CACHE_TAGS.skuCatalog]);
+    return result;
   }
 
   const client = await pool.connect();

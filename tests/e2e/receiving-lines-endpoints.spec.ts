@@ -23,8 +23,8 @@ async function firstLine(request: APIRequestContext) {
 }
 
 test.describe('receiving-lines endpoints', () => {
-  test('GET list works for every view and exposes zendesk_ticket', async ({ request }) => {
-    for (const view of ['recent', 'all', 'incoming', 'testing', 'received', 'activity']) {
+  test('GET list works for every receiving view and exposes zendesk_ticket', async ({ request }) => {
+    for (const view of ['recent', 'all', 'incoming', 'received', 'activity']) {
       const res = await request.get(`/api/receiving-lines?view=${view}&limit=3`);
       expect(res.status(), `view=${view}`).toBe(200);
       const body = await res.json();
@@ -33,6 +33,22 @@ test.describe('receiving-lines endpoints', () => {
         expect(row, `view=${view} row`).toHaveProperty('zendesk_ticket');
       }
     }
+  });
+
+  test('GET receiving-lines rejects testing views (isolated endpoint)', async ({ request }) => {
+    for (const view of ['testing', 'needs-test']) {
+      const res = await request.get(`/api/receiving-lines?view=${view}&limit=3`);
+      expect(res.status(), `view=${view}`).toBe(403);
+      const body = await res.json();
+      expect(body.error).toBe('TESTING_VIEW_NOT_ALLOWED');
+    }
+  });
+
+  test('GET testing/receiving-lines serves testing views only', async ({ request }) => {
+    const bad = await request.get('/api/testing/receiving-lines?view=recent&limit=3');
+    expect(bad.status()).toBe(400);
+    const ok = await request.get('/api/testing/receiving-lines?view=testing&limit=3');
+    expect(ok.status()).toBe(200);
   });
 
   test('GET single + package include the new column', async ({ request }) => {

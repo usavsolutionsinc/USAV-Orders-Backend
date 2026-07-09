@@ -73,7 +73,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'walk_in.view' });
+}, { permission: 'walk_in.view', feature: 'walkIn' });
 
 /**
  * POST /api/walk-in/customers
@@ -122,4 +122,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'walk_in.intake' });
+}, { permission: 'walk_in.intake', feature: 'walkIn' });

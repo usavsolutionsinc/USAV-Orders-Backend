@@ -2,24 +2,30 @@
 
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Barcode, ExternalLink, Plus, X } from '@/components/Icons';
+import { Barcode, ExternalLink, Plus, SlidersHorizontal, X } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { WorkspaceCard } from '@/design-system/components';
+import { Button, IconButton } from '@/design-system/primitives';
 import {
-  FLOW_SECTION_LABEL,
   RECEIVING_SCAN_RULE_LINE_CLASS,
   TRACKING_ADD_BTN_CLASS,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { WorkspaceFieldLabel } from '../WorkspaceSectionLabel';
 import { ReceivingPhotoButton } from './ReceivingPhotoButton';
 import { IdentityLinkChip } from './IdentityLinkChip';
 import { ReceivingTicketChip } from './ReceivingTicketChip';
 import { SellerMessageChip } from './SellerMessageChip';
+import { FulfillmentPickupPill } from '@/components/receiving/ReceivingIdentityChips';
 import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
 import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
 import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
-import { parseZendeskTicketId } from '@/lib/receiving-claim-seller-ticket-match';
 import { usePlatformCatalog, useReceivingTypeCatalog, usePlatformMeta } from '@/hooks/useCatalog';
+import {
+  formatListingLinkMenuOptions,
+  type CartonListingLink,
+} from '@/lib/receiving/listing-links';
 
 
 /**
@@ -27,12 +33,19 @@ import { usePlatformCatalog, useReceivingTypeCatalog, usePlatformMeta } from '@/
  * Zendesk / PO# / tracking chip row, the matching below-row inline editors,
  * and the source-platform + receiving-type pickers.
  *
+ * DENSITY CONTRACT: this is an operations-heavy surface — everything stays on
+ * ONE condensed row (pills + chips + actions), with editors sliding in below
+ * on demand. Do not regroup it into stacked form sections; the one-row
+ * anatomy is the display method. The card renders on the frosted glass
+ * workspace surface (`WorkspaceCard variant="glass"`) shared by the whole
+ * unbox column.
+ *
  * Layout decisions preserved from the original inline implementation:
- *  - The listing chip is hidden when the URL is empty AND its editor is closed
- *    (unmatched cartons have no listing until a PO# binds them).
- *  - When the PO# editor is open and the listing slot is free, the PO# input
- *    promotes from a compact chip+pencil to a full-width inline SearchBar; the
- *    below-row PO# editor is skipped in that case to avoid a duplicate input.
+ *  - The listing chip reads "----" (gray, no platform tone) until a URL or a
+ *    derived storefront href exists (unmatched cartons have no listing until a
+ *    PO# binds them).
+ *  - All three identity editors (PO# / tracking / listing URL) live in the
+ *    below-row drawer; the condensed top row stays chips + hover menus only.
  *
  * Purely presentational/controlled — all state lives in the parent.
  */
@@ -47,9 +60,11 @@ export function CartonContextCard({
   listingEditorOpen,
   setListingEditorOpen,
   listingOpenHref,
+  listingLinks = [],
   poOpenHref,
   trackingOpenHref,
   poDisplay,
+  linkedOrderNumber = null,
   poEditorOpen,
   setPoEditorOpen,
   poNumberEdit,
@@ -59,9 +74,11 @@ export function CartonContextCard({
   zendeskTrimmed,
   zendeskHref,
   zendeskChipDisplay,
+  providerTicketId = null,
   onTicketUnlinked,
   primaryTrackingTrimmed,
   filledExtraTrackingsCount,
+  isLocalPickup = false,
   trackingEditorsOpen,
   onToggleTrackingEditors,
   trackingEdit,
@@ -89,12 +106,20 @@ export function CartonContextCard({
   listingEditorOpen: boolean;
   setListingEditorOpen: Dispatch<SetStateAction<boolean>>;
   listingOpenHref: string | null | undefined;
+  /** All resolvable listing URLs (inventory catalog + manual + derived). */
+  listingLinks?: CartonListingLink[];
   /** External link target for the PO# chip (Zoho purchase order). */
   poOpenHref: string | null | undefined;
   /** External link target for the tracking# chip (carrier tracking page). */
   trackingOpenHref: string | null | undefined;
   /** Already-trimmed PO# (number ?? id) for the chip + editor seed. */
   poDisplay: string;
+  /**
+   * Serial-resolved outbound (return) order#. Fills the PO#/order chip (last-4,
+   * copy-only) ONLY when the carton has no PO# of its own — never clobbers a
+   * bound PO#. This is the lifted LINKAGE identity (the standalone panel is gone).
+   */
+  linkedOrderNumber?: string | null;
   poEditorOpen: boolean;
   setPoEditorOpen: Dispatch<SetStateAction<boolean>>;
   poNumberEdit: string;
@@ -106,10 +131,13 @@ export function CartonContextCard({
   zendeskTrimmed: string;
   zendeskHref: string | null | undefined;
   zendeskChipDisplay: string;
+  providerTicketId?: number | null;
   /** Called after the ticket chip's popover unlinks the ticket — clears it. */
   onTicketUnlinked?: () => void;
   primaryTrackingTrimmed: string;
   filledExtraTrackingsCount: number;
+  /** Local-pickup fulfillment — suppress tracking chip/editor; show Pickup pill. */
+  isLocalPickup?: boolean;
   trackingEditorsOpen: boolean;
   onToggleTrackingEditors: () => void;
   trackingEdit: string;
@@ -137,6 +165,8 @@ export function CartonContextCard({
   const listingRef = useRef<HTMLInputElement>(null);
   const poInputRef = useRef<HTMLInputElement>(null);
 
+  const [classifyOpen, setClassifyOpen] = useState(false);
+
   // One picker open at a time. Opening any pill unrenders the trailing chip
   // cluster (the options fill the freed row); selecting / dismissing collapses
   // back to null and rerenders the chips. See the AnimatePresence swap below.
@@ -151,6 +181,34 @@ export function CartonContextCard({
   const typeCatalog = useReceivingTypeCatalog();
   const resolvePlatformMeta = usePlatformMeta();
   const platformMeta = resolvePlatformMeta(platformValue);
+
+  // An imported return shows its PLATFORM on the listing chip; its originating
+  // ORDER# stays a SEPARATE copy chip (the PO#/order# slot below), so the listing
+  // link and the order id each copy/open on their own — never glued into one
+  // "Amazon · <order#>" chip. poDisplay carries the order# (the import sets
+  // receiving.zoho_purchaseorder_number as the display representative).
+  const isReturn = receivingType.trim().toUpperCase() === 'RETURN';
+  // A serial-resolved outbound order (a return) fills the PO#/order slot only
+  // when the carton has no PO# of its own — never clobber a real bound PO#. Like
+  // an imported-return order#, the lifted linkage reads copy-only (last-4): it is
+  // not a Zoho PO, so no Zoho open + no inline editor.
+  const linkedReturnOrder = (linkedOrderNumber ?? '').trim();
+  const effectiveOrder = poDisplay || linkedReturnOrder;
+  const orderCopyOnly = isReturn || (!poDisplay && !!linkedReturnOrder);
+  const listingHasTarget = !!(listingLink || listingOpenHref);
+  const listingLinkOptions = formatListingLinkMenuOptions(listingLinks);
+  const syncNoteListingLinks = listingLinks.filter((l) => l.source === 'sync_notes');
+  const listingChipDisplay = isReturn
+    ? platformValue
+      ? platformMeta.label
+      : 'Return'
+    : listingHasTarget
+      ? platformValue
+        ? platformMeta.label
+        : isUnmatched
+          ? 'Unfound'
+          : 'Listing'
+      : '----';
 
   // Urgency is a tier picker: Auto + Priority/High/Medium/Low. Collapsed it
   // shows the *effective* tier — the manual override when set, else the
@@ -177,8 +235,9 @@ export function CartonContextCard({
       value: 'auto',
       label: 'Auto',
       title: `Auto — follows platform (${derivedTone.label})`,
-      activeClass: 'border-slate-300 bg-white text-slate-600',
-      inactiveClass: 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50',
+      activeClass: 'border-border-default bg-surface-card text-text-muted',
+      inactiveClass:
+        'border-border-soft bg-surface-card/70 text-text-soft hover:border-border-default hover:bg-surface-hover',
     },
     ...PRIORITY_OVERRIDE_TIERS.map((t) => ({
       value: String(t.value),
@@ -196,7 +255,9 @@ export function CartonContextCard({
 
   // All three identity editors now live in the below-row drawer — the condensed
   // top row is chips + pencils only.
-  const anyBelow = trackingEditorsOpen || listingEditorOpen || poEditorOpen;
+  // The PO# editor is suppressed once the carton is an imported return — a
+  // return is keyed by its order number (shown on the listing chip), not a PO.
+  const anyBelow = (trackingEditorsOpen && !isLocalPickup) || listingEditorOpen || (poEditorOpen && !isReturn);
 
   // Platform/Type pill options come straight from the org catalog (active rows,
   // org sort order) — so renames, hides, reorders, and custom entries the org
@@ -224,14 +285,14 @@ export function CartonContextCard({
     .map((o) => ({ value: o.value, label: o.label }));
 
   return (
-    <WorkspaceCard bodyClassName="px-0 py-0" overflow="visible">
+    <WorkspaceCard variant="glass" bodyClassName="px-0 py-0" overflow="visible">
       <div className="space-y-2 px-4 pt-2 pb-3">
         <div className="flex min-w-0 flex-col gap-y-1">
           {/* Condensed identity row — Priority · Platform · Type · listing ·
-              PO# · tracking# · Claim · Photos. Platform/Type collapse to the
-              active pill and expand inline on click; listing/PO#/tracking are
-              compact chips with hover Open/Edit menus. Priority/Claim/Photos
-              are unbox-only (hidden in triage). */}
+              PO# · tracking# · Claim · Photos (in that order). Platform/Type
+              collapse to the active pill and expand inline on click;
+              listing/PO#/tracking are compact chips with hover Open/Edit menus.
+              Priority/Claim/Photos are unbox-only (hidden in triage). */}
           <div className="flex min-w-0 items-center">
             <AnimatePresence mode="wait" initial={false}>
               {openPicker === null ? (
@@ -247,6 +308,26 @@ export function CartonContextCard({
                 collapse-to-active. Clicking any opens it full-width and
                 unrenders the trailing chip cluster (the options take the freed
                 row); selecting collapses back and rerenders them. */}
+            {showStaffPhotoRow ? (
+              <HoverTooltip label={classifyOpen ? 'Hide classification' : 'Show classification'} asChild>
+                <button
+                  type="button"
+                  onClick={() => setClassifyOpen((v) => !v)}
+                  aria-expanded={classifyOpen}
+                  aria-pressed={classifyOpen}
+                  aria-label={classifyOpen ? 'Hide classification' : 'Show classification'}
+                  className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition-colors ${
+                    classifyOpen
+                      ? 'bg-surface-sunken text-text-default ring-border-default'
+                      : 'text-text-faint ring-border-soft hover:bg-surface-hover hover:text-text-muted'
+                  }`}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </HoverTooltip>
+            ) : null}
+            {classifyOpen ? (
+              <>
             {showStaffPhotoRow ? (
               <InlinePillPicker
                 ariaLabel="Urgency"
@@ -279,6 +360,8 @@ export function CartonContextCard({
               onOpenChange={(o) => { if (o) setOpenPicker('type'); }}
               placeholder="Type"
             />
+              </>
+            ) : null}
 
             {/* Listing — the complete platform-colored chip opens the listing.
                 Its hover menu offers Copy, then Edit. It is labeled by the
@@ -288,19 +371,20 @@ export function CartonContextCard({
               grow
               openHref={listingOpenHref}
               openTitle="Open listing in new tab"
-              value={listingLink}
-              display={
-                listingLink
-                  ? platformValue
-                    ? platformMeta.label
-                    : isUnmatched
-                      ? 'Unfound'
-                      : 'Listing'
-                  : '----'
-              }
-              underlineClass={platformValue ? platformMeta.border : 'border-slate-300'}
-              iconClass={platformValue ? platformMeta.text : 'text-slate-400'}
-              disableCopy={!listingLink.trim()}
+              linkOptions={listingLinkOptions}
+              // An explicit pasted URL wins; otherwise fall back to the derived
+              // storefront href (listingOpenHref) so the chip reads as a real,
+              // copyable/openable Listing instead of "----".
+              value={listingLink || listingOpenHref || ''}
+              // Imported return → the platform label; otherwise the platform /
+              // Unfound / Listing label (or "----" when nothing's bound yet).
+              display={listingChipDisplay}
+              // Platform tone ONLY when there's an actual listing to open. With
+              // no link the chip isn't a live link, so it reads gray rather than
+              // painting a platform color it can't act on.
+              underlineClass={listingHasTarget && platformValue ? platformMeta.border : 'border-border-default'}
+              iconClass={listingHasTarget && platformValue ? platformMeta.text : 'text-text-faint'}
+              disableCopy={!(listingLink.trim() || listingOpenHref)}
               onEdit={() => {
                 setListingEditorOpen((v) => {
                   const next = !v;
@@ -316,54 +400,74 @@ export function CartonContextCard({
               menuFirstAction="copy"
             />
 
-            {/* PO# — chip click copies; hover menu opens Zoho or edits. */}
+            {/* PO# — or the originating ORDER# for a return: an imported RETURN
+                shows its Zoho order#, and a serial-resolved return (scanned unit
+                that was previously shipped) shows the closed-loop outbound order#
+                lifted into this slot. Either way it's a copy chip SEPARATE from
+                the listing link, and — not being a Zoho PO — copy-only: no Zoho
+                open, no inline editor. Normal bound POs keep open + edit. */}
             <IdentityLinkChip
-              openHref={poOpenHref}
-              openTitle="Open PO in Zoho"
-              value={poDisplay}
-              display={poDisplay ? getLast4(poDisplay) : '----'}
+              openHref={orderCopyOnly ? undefined : poOpenHref}
+              openTitle={orderCopyOnly ? 'Order number' : 'Open PO in Zoho'}
+              value={effectiveOrder}
+              display={effectiveOrder ? getLast4(effectiveOrder) : '----'}
               tone="id"
-              underlineClass="border-gray-500"
-              disableCopy={!poDisplay}
-              onEdit={() => {
-                setPoEditorOpen((v) => {
-                  const next = !v;
-                  if (next) queueMicrotask(() => poInputRef.current?.focus());
-                  return next;
-                });
-              }}
-              editOpen={poEditorOpen}
-              editLabel="Edit PO#"
+              underlineClass="border-border-emphasis"
+              disableCopy={!effectiveOrder}
+              onEdit={
+                orderCopyOnly
+                  ? undefined
+                  : () => {
+                      setPoEditorOpen((v) => {
+                        const next = !v;
+                        if (next) queueMicrotask(() => poInputRef.current?.focus());
+                        return next;
+                      });
+                    }
+              }
+              editOpen={orderCopyOnly ? false : poEditorOpen}
+              editLabel={orderCopyOnly ? undefined : 'Edit PO#'}
               actionsInMenu
             />
 
             {/* Tracking# — chip click copies; hover menu opens carrier tracking
-                or edits the primary/extra tracking values. */}
+                or edits the primary/extra tracking values. Suppressed for pickup. */}
             <div className="flex shrink-0 items-center gap-1">
-              <IdentityLinkChip
-                openHref={trackingOpenHref}
-                openTitle="Open carrier tracking"
-                value={primaryTrackingTrimmed}
-                display={primaryTrackingTrimmed ? getLast4(primaryTrackingTrimmed) : '----'}
-                tone="tracking"
-                underlineClass="border-blue-500"
-                disableCopy={!primaryTrackingTrimmed}
-                onEdit={onToggleTrackingEditors}
-                editOpen={trackingEditorsOpen}
-                editLabel="Edit tracking"
-                actionsInMenu
-              />
-              {filledExtraTrackingsCount > 0 ? (
-                <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
-                  +{filledExtraTrackingsCount}
-                </span>
-              ) : null}
+              {isLocalPickup ? (
+                <FulfillmentPickupPill
+                  variant="rail"
+                  tooltip="Fulfilled in person — no tracking number"
+                />
+              ) : (
+                <>
+                  <IdentityLinkChip
+                    openHref={trackingOpenHref}
+                    openTitle="Open carrier tracking"
+                    value={primaryTrackingTrimmed}
+                    display={primaryTrackingTrimmed ? getLast4(primaryTrackingTrimmed) : '----'}
+                    tone="tracking"
+                    underlineClass="border-blue-500"
+                    disableCopy={!primaryTrackingTrimmed}
+                    onEdit={onToggleTrackingEditors}
+                    editOpen={trackingEditorsOpen}
+                    editLabel="Edit tracking"
+                    actionsInMenu
+                  />
+                  {filledExtraTrackingsCount > 0 ? (
+                    <HoverTooltip
+                      label={`${filledExtraTrackingsCount} extra box${filledExtraTrackingsCount === 1 ? '' : 'es'} on this PO`}
+                      asChild
+                    >
+                      <span className="shrink-0 rounded bg-surface-strong/90 px-1 py-px text-eyebrow font-black tabular-nums text-text-muted">
+                        +{filledExtraTrackingsCount}
+                      </span>
+                    </HoverTooltip>
+                  ) : null}
+                </>
+              )}
             </div>
 
-            {/* Claim → flips to the filed ticket# chip once a claim exists.
-                Same IdentityLinkChip primitive as PO#/tracking (flush spacing,
-                tone-driven `#` icon): chip copies, hover menu opens Zendesk or
-                shows ticket history (with Unlink) via Edit. */}
+            {/* Claim — ticket chip replaces the CTA when filed. */}
             {showStaffPhotoRow ? (
               zendeskTrimmed ? (
                 <div className="flex shrink-0 items-center gap-1">
@@ -371,6 +475,7 @@ export function CartonContextCard({
                     value={zendeskTrimmed}
                     display={zendeskChipDisplay}
                     openHref={zendeskHref}
+                    providerTicketId={providerTicketId}
                     receivingId={receivingId}
                     lineId={lineId}
                     onUnlinked={() => onTicketUnlinked?.()}
@@ -378,25 +483,31 @@ export function CartonContextCard({
                   <SellerMessageChip
                     receivingId={receivingId}
                     lineId={lineId}
-                    linkedTicketId={parseZendeskTicketId(zendeskTrimmed)}
+                    linkedTicketId={providerTicketId}
                   />
                 </div>
               ) : onMakeClaim ? (
-                <button
-                  type="button"
-                  onClick={onMakeClaim}
-                  className="inline-flex h-8 w-[50.32px] shrink-0 items-center justify-center self-center rounded-full bg-orange-500 px-0 text-[10px] font-black uppercase leading-none tracking-wide text-white shadow-sm transition-colors hover:bg-orange-600"
-                  title="File a damage / wrong-item / missing claim for this package"
-                  aria-label="File claim"
-                >
-                  Claim
-                </button>
+                <HoverTooltip label="File a damage / wrong-item / missing claim for this package" asChild>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={onMakeClaim}
+                    ariaLabel="File claim"
+                    className="h-8 w-[50.32px] shrink-0 self-center rounded-full bg-orange-50 px-0 text-micro font-black uppercase leading-none tracking-wide text-orange-700 shadow-none ring-1 ring-inset ring-orange-200 hover:bg-orange-100 active:bg-orange-100"
+                  >
+                    Claim
+                  </Button>
+                </HoverTooltip>
               ) : null
             ) : null}
 
-            {/* Photos — camera + ×N. Unbox-only. */}
+            {/* Photos — camera + ×N + send-to-phone (+); hover opens gallery when photos exist. */}
             {showStaffPhotoRow && receivingId != null ? (
-              <ReceivingPhotoButton receivingId={receivingId} staffId={Number(staffId) || 0} />
+              <ReceivingPhotoButton
+                receivingId={receivingId}
+                staffId={Number(staffId) || 0}
+              />
             ) : null}
                 </motion.div>
               ) : (
@@ -448,20 +559,20 @@ export function CartonContextCard({
 
           {/* Below-row inline editors for PO# / tracking / listing URL. */}
           {anyBelow ? (
-            <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
-              {poEditorOpen ? (
+            <div className="mt-2 space-y-2.5 border-t border-border-hairline pt-2">
+              {poEditorOpen && !isReturn ? (
                 <div className="relative">
                   <div className="mb-1 flex items-start justify-between gap-2">
-                    <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>PO number</span>
-                    <button
-                      type="button"
-                      onClick={() => setPoEditorOpen(false)}
-                      aria-label="Close PO# editor"
-                      title="Close editor"
-                      className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <WorkspaceFieldLabel>PO number</WorkspaceFieldLabel>
+                    <HoverTooltip label="Close editor" asChild>
+                      <IconButton
+                        type="button"
+                        onClick={() => setPoEditorOpen(false)}
+                        ariaLabel="Close PO# editor"
+                        className="rounded p-0.5 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        icon={<X className="h-3.5 w-3.5" />}
+                      />
+                    </HoverTooltip>
                   </div>
                   <div className="group">
                     <SearchBar
@@ -480,30 +591,33 @@ export function CartonContextCard({
                   </div>
                 </div>
               ) : null}
-              {trackingEditorsOpen ? (
+              {trackingEditorsOpen && !isLocalPickup ? (
                 <div className="relative">
                   <div className="flex items-start justify-between gap-2">
-                    <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Tracking number</span>
+                    <WorkspaceFieldLabel>Tracking number</WorkspaceFieldLabel>
                     <span className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setExtraTrackings((xs) => (xs.length >= 1 ? xs : [...xs, '']))}
-                        disabled={extraTrackings.length >= 1}
-                        aria-label="Add second tracking number row"
-                        title={extraTrackings.length >= 1 ? 'Only one extra tracking row' : 'Add tracking number'}
-                        className={TRACKING_ADD_BTN_CLASS}
+                      <HoverTooltip
+                        label={extraTrackings.length >= 1 ? 'Only one extra tracking row' : 'Add tracking number'}
+                        asChild
                       >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={onToggleTrackingEditors}
-                        aria-label="Close tracking editor"
-                        title="Close editor"
-                        className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                        <IconButton
+                          type="button"
+                          onClick={() => setExtraTrackings((xs) => (xs.length >= 1 ? xs : [...xs, '']))}
+                          disabled={extraTrackings.length >= 1}
+                          ariaLabel="Add second tracking number row"
+                          className={TRACKING_ADD_BTN_CLASS}
+                          icon={<Plus className="h-3 w-3" />}
+                        />
+                      </HoverTooltip>
+                      <HoverTooltip label="Close editor" asChild>
+                        <IconButton
+                          type="button"
+                          onClick={onToggleTrackingEditors}
+                          ariaLabel="Close tracking editor"
+                          className="rounded p-0.5 text-red-500 hover:bg-red-50 hover:text-red-600"
+                          icon={<X className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
                     </span>
                   </div>
                   <div className="group min-w-0">
@@ -544,47 +658,86 @@ export function CartonContextCard({
               {listingEditorOpen ? (
                 <div className="relative">
                   <div className="mb-1 flex items-start justify-between gap-2">
-                    <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Listing URL</span>
-                    <button
-                      type="button"
-                      onClick={() => setListingEditorOpen(false)}
-                      aria-label="Close listing editor"
-                      title="Close editor"
-                      className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <WorkspaceFieldLabel>Listing URL</WorkspaceFieldLabel>
+                    <HoverTooltip label="Close editor" asChild>
+                      <IconButton
+                        type="button"
+                        onClick={() => setListingEditorOpen(false)}
+                        ariaLabel="Close listing editor"
+                        className="rounded p-0.5 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        icon={<X className="h-3.5 w-3.5" />}
+                      />
+                    </HoverTooltip>
                   </div>
-                  <div className="group">
-                    <SearchBar
-                      value={listingLink}
-                      onChange={setListingLink}
-                      onClear={() => setListingLink('')}
-                      inputRef={listingRef}
-                      placeholder="Listing URL"
-                      variant="blue"
-                      size="compact"
-                      hideUnderline
-                      leadingIcon={
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (listingOpenHref) {
-                              window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
-                            }
-                          }}
-                          disabled={listingOpenHref == null}
-                          aria-label="Open listing URL in new tab"
-                          title={listingOpenHref ? 'Open link' : 'Enter a valid URL'}
-                          className="-m-0.5 rounded p-0.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:opacity-60"
-                        >
-                          <ExternalLink className="h-[14px] w-[14px]" />
-                        </button>
-                      }
-                      className="w-full"
-                    />
-                    <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                  <div className="space-y-2">
+                    <div className="group">
+                      <SearchBar
+                        value={listingLink}
+                        onChange={setListingLink}
+                        onClear={() => setListingLink('')}
+                        inputRef={listingRef}
+                        placeholder="Manual override URL"
+                        variant="blue"
+                        size="compact"
+                        hideUnderline
+                        leadingIcon={
+                          <HoverTooltip label={listingOpenHref ? 'Open primary link' : 'Enter a valid URL'} asChild>
+                            <IconButton
+                              type="button"
+                              tone="accent"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (listingOpenHref) {
+                                  window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
+                                }
+                              }}
+                              disabled={listingOpenHref == null}
+                              ariaLabel="Open primary listing URL in new tab"
+                              className="-m-0.5 rounded p-0.5 text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-text-faint disabled:opacity-60"
+                              icon={<ExternalLink className="h-[14px] w-[14px]" />}
+                            />
+                          </HoverTooltip>
+                        }
+                        className="w-full"
+                      />
+                      <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                    </div>
+
+                    {syncNoteListingLinks.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <WorkspaceFieldLabel>Synced listing links</WorkspaceFieldLabel>
+                          <HoverTooltip label="Scroll to Zoho Notes editor (to edit the synced list)" asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                const el = document.getElementById('zoho-notes-card');
+                                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }}
+                            >
+                              Edit Zoho notes
+                            </Button>
+                          </HoverTooltip>
+                        </div>
+                        <div className="space-y-1">
+                          {syncNoteListingLinks.map((l, i) => (
+                            <button
+                              key={`${l.href}-${i}`}
+                              type="button"
+                              onClick={() => window.open(l.href, '_blank', 'noopener,noreferrer')}
+                              className="flex w-full items-center justify-between gap-2 rounded-md border border-border-hairline bg-surface-card/70 px-2 py-1.5 text-left text-caption font-semibold text-text-muted transition hover:bg-surface-hover"
+                            >
+                              <span className="min-w-0 flex-1 truncate">
+                                {(l.label || '').trim() || `Listing ${i + 1}/${syncNoteListingLinks.length}`}
+                              </span>
+                              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-text-faint" aria-hidden />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

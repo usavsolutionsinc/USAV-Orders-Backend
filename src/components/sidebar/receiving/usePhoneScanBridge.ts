@@ -3,7 +3,7 @@
 /**
  * Phone-paired scan bridge. Incoming `phone_scan` messages on `phone:{staffId}`
  * route straight through the same `submitTrackingScan` flow as a desktop
- * scanner; the result is echoed back on `station:{staffId}` as
+ * scanner; the result is echoed back on `staffstation:{staffId}` as
  * `phone_scan_result` so the phone's UI can render matched/unmatched without a
  * round-trip DB query. Extracted from ReceivingSidebarPanel; behaviour is
  * unchanged.

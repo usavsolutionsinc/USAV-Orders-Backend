@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clipboard, ExternalLink } from '@/components/Icons';
 import { DetailsPanelRow, InlineSaveIndicator } from '@/design-system/components';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 function extractGoogleFileId(input: string): string {
   const raw = String(input || '').trim();
@@ -117,7 +119,7 @@ export function ContextualManualLinkRow({
       label="Product Manual"
       headerAccessory={
         effectiveItemNumber ? (
-          <span className="truncate text-micro font-black uppercase tracking-wide text-gray-500">
+          <span className="truncate text-micro font-black uppercase tracking-wide text-text-soft">
             {effectiveItemNumber}
           </span>
         ) : null
@@ -126,16 +128,17 @@ export function ContextualManualLinkRow({
         <div className="flex items-center gap-2">
           <InlineSaveIndicator state={saveState} />
           {openUrl ? (
-            <a
-              href={openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-400 transition-colors hover:text-blue-600"
-              aria-label={`Open manual for ${contextualKey}`}
-              title="Open manual"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            <HoverTooltip label="Open manual" asChild>
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-text-faint transition-colors hover:text-blue-600"
+                aria-label={`Open manual for ${contextualKey}`}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </HoverTooltip>
           ) : null}
         </div>
       )}
@@ -151,7 +154,7 @@ export function ContextualManualLinkRow({
               setSaveState('idle');
             }}
             placeholder="Item number"
-            className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold uppercase tracking-wide text-gray-900 outline-none"
+            className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold uppercase tracking-wide text-text-default outline-none"
           />
         ) : null}
         <div className="flex items-center gap-2">
@@ -170,28 +173,29 @@ export function ContextualManualLinkRow({
                 : 'Enter item number'
             }
             disabled={!effectiveItemNumber}
-            className="h-8 flex-1 border-0 bg-transparent px-0 text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400 disabled:text-gray-400"
+            className="h-8 flex-1 border-0 bg-transparent px-0 text-sm font-medium text-text-default outline-none placeholder:text-text-faint disabled:text-text-faint"
           />
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                const text = await navigator.clipboard.readText();
-                if (text.trim()) {
-                  setGoogleInput(text.trim());
-                  setSaveState('idle');
+          <HoverTooltip label="Paste manual link" asChild>
+            <IconButton
+              type="button"
+              onClick={async () => {
+                try {
+                  const text = await navigator.clipboard.readText();
+                  if (text.trim()) {
+                    setGoogleInput(text.trim());
+                    setSaveState('idle');
+                  }
+                } catch {
+                  // noop
                 }
-              } catch {
-                // noop
-              }
-              googleInputRef.current?.focus();
-            }}
-            className="shrink-0 text-gray-400 transition-colors hover:text-blue-600"
-            aria-label={`Paste manual link for ${contextualKey}`}
-            title="Paste manual link"
-          >
-            <Clipboard className="h-3.5 w-3.5" />
-          </button>
+                googleInputRef.current?.focus();
+              }}
+              tone="accent"
+              className="shrink-0"
+              ariaLabel={`Paste manual link for ${contextualKey}`}
+              icon={<Clipboard className="h-3.5 w-3.5" />}
+            />
+          </HoverTooltip>
         </div>
       </div>
     </DetailsPanelRow>

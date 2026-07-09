@@ -9,6 +9,7 @@
  */
 
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
+import { IconButton } from '@/design-system/primitives';
 import { X } from '@/components/Icons';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { CatalogManagerList, type CatalogKind } from './CatalogManagerList';
@@ -35,18 +36,16 @@ export function CatalogManagerPopover({
       onClose={onClose}
       align="center"
       aria-label={TITLE[kind]}
-      className="w-[min(94%,32rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
+      className="w-[min(94%,32rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-border-soft"
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
-        <span className={`${microBadge} text-gray-700`}>{TITLE[kind]}</span>
-        <button
-          type="button"
+      <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-5 py-3">
+        <span className={`${microBadge} text-text-muted`}>{TITLE[kind]}</span>
+        <IconButton
           onClick={onClose}
-          aria-label="Close"
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          ariaLabel="Close"
+          icon={<X className="h-4 w-4" />}
+          className="rounded-lg p-1.5 transition-colors hover:bg-surface-sunken"
+        />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <CatalogManagerList kind={kind} enabled={open} />

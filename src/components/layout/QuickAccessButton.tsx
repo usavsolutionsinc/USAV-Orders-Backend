@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnchoredLayer } from '@/design-system';
+import { IconButton } from '@/design-system/primitives';
 import { Search, X } from '@/components/Icons';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
@@ -10,9 +11,9 @@ import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { useQuickAccessHotkey } from '@/lib/quick-access/use-hotkey';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
 import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopover';
-import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
 import { FeedbackPopover } from '@/components/quick-access/FeedbackWidget';
 import { useAuth } from '@/contexts/AuthContext';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { cn } from '@/utils/_cn';
 
 interface QuickAccessButtonProps {
@@ -34,12 +35,11 @@ export function QuickAccessButton({
   compact = false,
 }: QuickAccessButtonProps) {
   const pathname = usePathname();
-  const { settings, recordVisit } = useQuickAccess();
+  const { settings } = useQuickAccess();
   const { user: authUser } = useAuth();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [inboxOpen, setInboxOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -66,7 +66,6 @@ export function QuickAccessButton({
   useEffect(() => {
     setMenuOpen(false);
     setHistoryOpen(false);
-    setInboxOpen(false);
     setFeedbackOpen(false);
   }, [pathname]);
 
@@ -75,7 +74,6 @@ export function QuickAccessButton({
       const next = !prev;
       if (next) {
         setHistoryOpen(false);
-        setInboxOpen(false);
         setFeedbackOpen(false);
       }
       return next;
@@ -86,22 +84,13 @@ export function QuickAccessButton({
 
   const handleOpenHistory = useCallback(() => {
     setMenuOpen(false);
-    setInboxOpen(false);
     setFeedbackOpen(false);
     setHistoryOpen(true);
-  }, []);
-
-  const handleOpenInbox = useCallback(() => {
-    setMenuOpen(false);
-    setHistoryOpen(false);
-    setFeedbackOpen(false);
-    setInboxOpen(true);
   }, []);
 
   const handleOpenFeedback = useCallback(() => {
     setMenuOpen(false);
     setHistoryOpen(false);
-    setInboxOpen(false);
     setFeedbackOpen(true);
   }, []);
 
@@ -124,7 +113,6 @@ export function QuickAccessButton({
         <QuickAccessPopover
           onClose={() => setMenuOpen(false)}
           onOpenHistoryPopover={handleOpenHistory}
-          onOpenInboxPopover={handleOpenInbox}
           onOpenFeedbackPopover={handleOpenFeedback}
         />
       </AnchoredLayer>
@@ -140,16 +128,6 @@ export function QuickAccessButton({
       </AnchoredLayer>
 
       <AnchoredLayer
-        open={inboxOpen}
-        onClose={() => setInboxOpen(false)}
-        anchorRef={wrapperRef}
-        placement={popoverPlacement}
-        gap={2}
-      >
-        <ActivityInboxPopover onClose={() => setInboxOpen(false)} />
-      </AnchoredLayer>
-
-      <AnchoredLayer
         open={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
         anchorRef={wrapperRef}
@@ -159,42 +137,46 @@ export function QuickAccessButton({
         <FeedbackPopover onClose={() => setFeedbackOpen(false)} />
       </AnchoredLayer>
 
-      <button
-        type="button"
-        onClick={toggleMenu}
-        aria-label={
-          menuOpen
-            ? 'Close quick access'
-            : staffChipActive && staffName
-              ? `Quick access — signed in as ${staffName}`
-              : 'Open quick access'
-        }
-        aria-expanded={menuOpen}
-        title={menuOpen ? 'Close' : staffChipActive && staffName ? `${staffName} — Quick access (⌘K)` : 'Quick access (⌘K)'}
-        className={cn(
-          'relative flex items-center justify-center transition-all active:scale-95 text-white shadow-sm',
-          compact
-            ? 'h-9 w-9 min-h-0 min-w-0 shrink-0 rounded-full ring-1 ring-gray-200/90'
-            : 'h-10 w-10 rounded-xl',
-          menuOpen
-            ? 'bg-gray-700 hover:bg-gray-600'
-            : staffChipActive && staffColorHex
-              ? 'hover:brightness-110'
-              : 'bg-gray-900 hover:bg-gray-800',
-          buttonClassName,
-        )}
-        style={
-          !menuOpen && staffChipActive && staffColorHex
-            ? { backgroundColor: staffColorHex }
-            : undefined
-        }
+      <HoverTooltip
+        label={menuOpen ? 'Close' : staffChipActive && staffName ? `${staffName} — Quick access (⌘K)` : 'Quick access (⌘K)'}
+        asChild
       >
-        {menuOpen ? (
-          <X className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
-        ) : (
-          <Search className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
-        )}
-      </button>
+        <IconButton
+          onClick={toggleMenu}
+          ariaLabel={
+            menuOpen
+              ? 'Close quick access'
+              : staffChipActive && staffName
+                ? `Quick access — signed in as ${staffName}`
+                : 'Open quick access'
+          }
+          aria-expanded={menuOpen}
+          className={cn(
+            'relative flex items-center justify-center transition-all active:scale-95 shadow-sm',
+            compact
+              ? 'h-9 w-9 min-h-0 min-w-0 shrink-0 rounded-full ring-1 ring-border-soft/90'
+              : 'h-10 w-10 rounded-xl',
+            menuOpen
+              ? 'bg-surface-inverse-raised hover:bg-surface-inverse-soft'
+              : staffChipActive && staffColorHex
+                ? 'hover:brightness-110'
+                : 'bg-surface-inverse hover:bg-surface-inverse-hover',
+            buttonClassName,
+          )}
+          style={
+            !menuOpen && staffChipActive && staffColorHex
+              ? { backgroundColor: staffColorHex }
+              : undefined
+          }
+          icon={
+            menuOpen ? (
+              <X className={`${compact ? 'h-4 w-4' : 'h-5 w-5'} text-white`} />
+            ) : (
+              <Search className={`${compact ? 'h-4 w-4' : 'h-5 w-5'} text-white`} />
+            )
+          }
+        />
+      </HoverTooltip>
     </div>
   );
 }

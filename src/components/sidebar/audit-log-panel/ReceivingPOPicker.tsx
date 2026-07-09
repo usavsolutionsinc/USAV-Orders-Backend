@@ -57,11 +57,11 @@ export function ReceivingPOPicker({
             {error}
           </div>
         ) : loading ? (
-          <div className="p-4 text-center text-caption text-gray-400">Loading…</div>
+          <div className="p-4 text-center text-caption text-text-faint">Loading…</div>
         ) : list.length === 0 ? (
-          <div className="p-4 text-center text-caption text-gray-400">No POs found.</div>
+          <div className="p-4 text-center text-caption text-text-faint">No POs found.</div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border-hairline">
             {list.map((po) => {
               const isSelected = po.po_id === selectedPo;
               const pct =
@@ -73,29 +73,29 @@ export function ReceivingPOPicker({
                   <button
                     type="button"
                     onClick={() => onSelect(po.po_id)}
-                    className={`w-full ${SIDEBAR_GUTTER} py-2.5 text-left transition ${
+                    className={`ds-raw-button w-full ${SIDEBAR_GUTTER} py-2.5 text-left transition ${
                       isSelected
                         ? 'bg-emerald-50/80 ring-1 ring-inset ring-emerald-200'
-                        : 'hover:bg-gray-50'
+                        : 'hover:bg-surface-hover'
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <div className={`truncate text-xs font-semibold ${fieldLabel} text-gray-900`}>
+                      <div className={`truncate text-xs font-semibold ${fieldLabel} text-text-default`}>
                         {po.po_number ?? po.po_id}
                       </div>
-                      <div className="shrink-0 text-micro text-gray-400">
+                      <div className="shrink-0 text-micro text-text-faint">
                         {relTime(po.latest_event_at)}
                       </div>
                     </div>
                     {po.vendor_name && (
-                      <div className="truncate text-caption text-gray-500">{po.vendor_name}</div>
+                      <div className="truncate text-caption text-text-soft">{po.vendor_name}</div>
                     )}
-                    <div className="mt-1 flex items-center gap-1.5 text-micro text-gray-500">
+                    <div className="mt-1 flex items-center gap-1.5 text-micro text-text-soft">
                       <span>{po.line_count}L</span>
                       <span>·</span>
                       <span>{po.carton_count}C</span>
                       <span>·</span>
-                      <span className="font-semibold text-gray-700">
+                      <span className="font-semibold text-text-muted">
                         {po.quantity_received}/{po.quantity_expected}
                       </span>
                       {po.last_actor_name && (
@@ -108,7 +108,7 @@ export function ReceivingPOPicker({
                         </>
                       )}
                     </div>
-                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-gray-100">
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-sunken">
                       <div
                         className="h-full bg-emerald-500"
                         style={{ width: `${pct}%` }}

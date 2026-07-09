@@ -9,7 +9,9 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import type { BinsOverviewRow } from '@/hooks/useBinsOverview';
-import { Printer, X } from '@/components/Icons';
+import { Printer } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 interface Props {
   selected: Set<number>;
@@ -75,45 +77,44 @@ export function BinsBulkActionBar({ selected, rows, onClearSelection }: Props) {
     <div
       role="region"
       aria-label="Bulk actions"
-      className="sticky bottom-0 left-0 right-0 z-sticky border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-md"
+      className="sticky bottom-0 left-0 right-0 z-sticky border-t border-border-soft bg-surface-card/95 px-4 py-3 backdrop-blur-md"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
       <div className="mx-auto flex max-w-5xl items-center gap-3">
-        <div className="text-sm font-semibold text-gray-900">
+        <div className="text-sm font-semibold text-text-default">
           {count} bin{count === 1 ? '' : 's'} selected
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onClearSelection}
-          className="text-caption font-semibold text-gray-500 hover:text-gray-700"
+          className="text-caption text-text-soft hover:text-text-muted"
         >
           Clear
-        </button>
+        </Button>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Printer />}
             onClick={printLabels}
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 py-1.5 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.97]"
           >
-            <Printer className="h-4 w-4" />
             Print {count} label{count === 1 ? '' : 's'}
-          </button>
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-          >
+          </Button>
+          <Button variant="secondary" size="md" onClick={exportCsv}>
             Export CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => toast('Cycle counts arrive in the next update.')}
-            className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-500 hover:bg-gray-50"
-            title="Cycle count UI lands in the next update"
-          >
-            Mark for cycle count
-          </button>
+          </Button>
+          <HoverTooltip label="Cycle count UI lands in the next update" asChild>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => toast('Cycle counts arrive in the next update.')}
+              className="text-text-soft"
+            >
+              Mark for cycle count
+            </Button>
+          </HoverTooltip>
         </div>
       </div>
     </div>

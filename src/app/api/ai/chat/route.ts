@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { buildContextBlock } from '@/lib/ai/context-fetchers';
+import { buildSearchContextBlock } from '@/lib/ai/search-context';
 import { detectIntents, extractParams } from '@/lib/ai/intent-router';
 import { formatAnalysisForPrompt, resolveLocalAiAnswer } from '@/lib/ai/ops-assistant';
 import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
@@ -137,18 +138,26 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       enrichedMessage =
         `[Structured USAV ops data]\n${formatAnalysisForPrompt(localResolution.analysis)}\n\nUser question: ${trimmedMessage}`;
     }
-    if (intents.length > 0) {
-      try {
-        const contextBlock = await buildContextBlock(intents, params, ctx.organizationId);
-        if (contextBlock) {
-          enrichedMessage =
-            `[Live USAV data - ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PST]\n` +
-            contextBlock +
-            `\n\nUser question: ${trimmedMessage}`;
-        }
-      } catch (err) {
-        console.error('[ai-chat] context fetch error (non-fatal):', err);
-      }
+    // Intent context + hybrid entity search run in parallel; each is
+    // independently non-fatal (degrade-not-fail — the reply must never
+    // depend on an enrichment source).
+    const [contextBlock, searchBlock] = await Promise.all([
+      intents.length > 0
+        ? buildContextBlock(intents, params, ctx.organizationId).catch((err) => {
+            console.error('[ai-chat] context fetch error (non-fatal):', err);
+            return null;
+          })
+        : Promise.resolve(null),
+      // Phase 2c (AI search plan §7.2): the same hybridSearch behind ⌘K
+      // grounds "find/where/which" questions in real org-scoped hits.
+      buildSearchContextBlock(ctx.organizationId, trimmedMessage),
+    ]);
+    if (contextBlock || searchBlock) {
+      const blocks = [contextBlock, searchBlock].filter(Boolean).join('\n\n');
+      enrichedMessage =
+        `[Live USAV data - ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PST]\n` +
+        blocks +
+        `\n\nUser question: ${trimmedMessage}`;
     }
 
     // 3. Send to local Hermes gateway. Hermes loads our skills (00/10/40),
@@ -224,4 +233,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 503 },
     );
   }
-}, { permission: 'dashboard.view' });
+}, { permission: 'dashboard.view', feature: 'aiChat' });

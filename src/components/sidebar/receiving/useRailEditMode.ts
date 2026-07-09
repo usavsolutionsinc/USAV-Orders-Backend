@@ -4,14 +4,21 @@
  * Rail edit-mode (the eyebrow pencil) for the triage/unbox sidebar rails.
  *
  * Flips the rails from open-on-click to checkbox multi-select (see
- * RailEditModeProvider / SidebarRailShell) so junk rows can be bulk deleted.
+ * RailEditModeProvider / SidebarRailShell) so rows can be bulk DISMISSED.
  * Selection keys are the rails' row ids: positive = a receiving line,
  * negative = an unfound carton stub (TriageUnfoundList negates receiving_id).
  *
- * Extracted from ReceivingSidebarPanel; behaviour is unchanged.
+ * Phase 4 (universal-feed plan): the bulk action now writes a PER-STAFF
+ * `staff_rail_exclusions` row (POST /api/receiving/rail-exclusions) instead of
+ * hard-DELETE'ing the shared receiving line/carton. Dismissing hides the row
+ * from THIS staffer's rail only and is reversible — the row still exists for
+ * everyone else. The rail read filter anti-joins the same set so a refetch
+ * keeps it hidden (no `usav-refresh-data` broadcast needed; the optimistic
+ * drop + the read filter carry it).
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { onToggleAll } from '@/lib/selection/table-selection';
 
@@ -31,11 +38,11 @@ export interface RailEditModeState {
   railEditMode: boolean;
   railSelectedIds: ReadonlySet<number>;
   railSelectedIdList: number[];
-  railBulkDeleting: boolean;
+  railBulkDismissing: boolean;
   toggleRailEditMode: () => void;
   toggleRailSelected: (id: number) => void;
   setManyRailSelected: (ids: number[], checked: boolean) => void;
-  handleRailBulkDelete: (ids: number[]) => Promise<void>;
+  handleRailBulkDismiss: (ids: number[]) => Promise<void>;
 }
 
 export function useRailEditMode({
@@ -44,9 +51,10 @@ export function useRailEditMode({
   unboxView,
   triageView,
 }: UseRailEditModeArgs): RailEditModeState {
+  const queryClient = useQueryClient();
   const [railEditMode, setRailEditMode] = useState(false);
   const [railSelectedIds, setRailSelectedIds] = useState<ReadonlySet<number>>(() => new Set());
-  const [railBulkDeleting, setRailBulkDeleting] = useState(false);
+  const [railBulkDismissing, setRailBulkDismissing] = useState(false);
 
   const toggleRailEditMode = useCallback(() => setRailEditMode((v) => !v), []);
 
@@ -92,71 +100,65 @@ export function useRailEditMode({
 
   const railSelectedIdList = useMemo(() => Array.from(railSelectedIds), [railSelectedIds]);
 
-  const handleRailBulkDelete = useCallback(
+  // The rail dismiss targets a feed_key; the two scan surfaces map 1:1.
+  const feedKey = mode === 'triage' ? 'receiving_triage' : 'receiving_unbox';
+
+  const handleRailBulkDismiss = useCallback(
     async (ids: number[]) => {
-      if (ids.length === 0 || railBulkDeleting) return;
+      if (ids.length === 0 || railBulkDismissing) return;
       const label = ids.length === 1 ? 'this row' : `these ${ids.length} rows`;
-      if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
-      setRailBulkDeleting(true);
+      if (!window.confirm(`Dismiss ${label} from your receiving rails? This hides them for you only (across this surface's tabs) — you can restore them.`)) return;
+      setRailBulkDismissing(true);
       try {
-        // ONE batched request per entity kind (bulk `ids` endpoints) — firing N
-        // parallel single-id deletes proved flaky: a couple of requests per
-        // batch would 500 under pool contention, leaving survivors behind.
-        // Negative rail ids are unfound carton stubs (-receiving_id, whole
-        // carton); positive ids are receiving lines.
-        const cartonIds = ids.filter((id) => id < 0).map((id) => -id);
-        const lineIds = ids.filter((id) => id > 0);
-        const failures: string[] = [];
-        if (cartonIds.length > 0) {
-          const res = await fetch(`/api/receiving-logs?ids=${cartonIds.join(',')}`, {
-            method: 'DELETE',
-          });
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok || !body?.success) failures.push(body?.error || `cartons (${res.status})`);
-          else {
-            // Already-gone ids are confirmed absent server-side — safe to drop
-            // every requested carton from the rails, not just `body.deleted`.
-            for (const recvId of cartonIds) {
-              window.dispatchEvent(new CustomEvent('receiving-entry-deleted', { detail: recvId }));
-            }
+        // Rail id encoding → (entity_type, entity_id): negative = unfound carton
+        // stub (-receiving_id → RECEIVING), positive = a receiving line. One
+        // batched POST writes a staff_rail_exclusions row per item (idempotent).
+        const items = ids.map((id) =>
+          id < 0
+            ? { entityType: 'RECEIVING', entityId: -id }
+            : { entityType: 'RECEIVING_LINE', entityId: id },
+        );
+        const res = await fetch('/api/receiving/rail-exclusions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feedKey, items }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || !body?.success) {
+          toast.error(`Dismiss failed: ${body?.error || res.status}`);
+        } else {
+          // Optimistically drop the dismissed rows from the rail (the same
+          // events the engine already listens for). The rows still exist — the
+          // read filter keeps them hidden from THIS staffer on the next refetch,
+          // so no global refresh is fired (which would un-hide them).
+          for (const id of ids) {
+            if (id < 0) window.dispatchEvent(new CustomEvent('receiving-entry-deleted', { detail: -id }));
+            else window.dispatchEvent(new CustomEvent('receiving-line-deleted', { detail: { id } }));
           }
-        }
-        if (lineIds.length > 0) {
-          const res = await fetch(`/api/receiving-lines?ids=${lineIds.join(',')}`, {
-            method: 'DELETE',
-          });
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok || !body?.success) failures.push(body?.error || `lines (${res.status})`);
-          else {
-            for (const id of lineIds) {
-              window.dispatchEvent(new CustomEvent('receiving-line-deleted', { detail: { id } }));
-            }
-          }
-        }
-        if (failures.length > 0) toast.error(`Delete failed: ${failures.join('; ')}`);
-        else {
-          toast.success(ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`);
-          // Deletion is the edit-mode task — drop back to the normal
+          toast.success(ids.length === 1 ? 'Row dismissed' : `${ids.length} rows dismissed`);
+          // Refresh the exclusion set so the rail's read filter (which rides the
+          // queryKey) picks up the new dismissals on its next refetch.
+          void queryClient.invalidateQueries({ queryKey: ['rail-exclusions', feedKey] });
+          // Dismiss is the edit-mode task — drop back to the normal
           // open-on-click rail instead of leaving empty checkboxes armed.
           setRailEditMode(false);
         }
         setRailSelectedIds(new Set());
-        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
       } finally {
-        setRailBulkDeleting(false);
+        setRailBulkDismissing(false);
       }
     },
-    [railBulkDeleting],
+    [railBulkDismissing, feedKey, queryClient],
   );
 
   return {
     railEditMode,
     railSelectedIds,
     railSelectedIdList,
-    railBulkDeleting,
+    railBulkDismissing,
     toggleRailEditMode,
     toggleRailSelected,
     setManyRailSelected,
-    handleRailBulkDelete,
+    handleRailBulkDismiss,
   };
 }

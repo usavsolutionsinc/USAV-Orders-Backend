@@ -92,7 +92,7 @@ export interface ShippingDisplayMeta {
   scannedOutByDisplay: string | null;
   packerNameDisplay: string;
   techNameDisplay: string;
-  /** The Return Info block as one clipboard payload. */
+  /** Combined return/provenance block as one clipboard payload. */
   returnsCopyText: string;
 }
 

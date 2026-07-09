@@ -178,7 +178,7 @@ export const POST = withAuth(async (request, ctx) => {
         // Advisory grade signals (non-blocking) + quality recompute.
         let warnings: ReturnType<typeof evaluateGradeAdvice>['warnings'] = [];
         try {
-            const gathered = await gatherQualityInputs(serialUnitId);
+            const gathered = await gatherQualityInputs(serialUnitId, orgId);
             if (gathered) {
                 warnings = evaluateGradeAdvice({
                     grade: newGrade as ConditionGrade,
@@ -188,7 +188,7 @@ export const POST = withAuth(async (request, ctx) => {
         } catch (adviceErr) {
             console.warn('[grade] advice failed (non-fatal)', adviceErr);
         }
-        await recomputeUnitQualitySafe(serialUnitId);
+        await recomputeUnitQualitySafe(serialUnitId, orgId);
 
         return NextResponse.json({
             ok: true,

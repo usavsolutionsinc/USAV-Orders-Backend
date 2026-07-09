@@ -14,8 +14,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 
 const ALLOWED_KINDS = new Set([
   'all',
@@ -39,6 +40,7 @@ interface QueueRow {
   follow_up_at: string | null;
   checked: boolean;
   checked_at: string | null;
+  photo_count: string;
 }
 
 export const GET = withAuth(async (request: NextRequest, ctx) => {
@@ -54,52 +56,81 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
   const q = (searchParams.get('q') || '').trim();
   const limit = Math.min(Math.max(Number(searchParams.get('limit') || 100), 1), 500);
   const offset = Math.max(Number(searchParams.get('offset') || 0), 0);
+  const excludeUnboxIntake = searchParams.get('exclude_unbox_intake') === 'true';
 
-  const conditions: string[] = ['organization_id = $1'];
+  const conditions: string[] = ['vq.organization_id = $1'];
   const params: unknown[] = [ctx.organizationId];
   let idx = 2;
 
   if (kind !== 'all') {
-    conditions.push(`kind = $${idx++}`);
+    conditions.push(`vq.kind = $${idx++}`);
     params.push(kind);
   } else {
     // 'all' should not surface station_exception — those are now triaged at
     // the affected station, not in the receiving sidebar.
-    conditions.push(`kind <> 'station_exception'`);
+    conditions.push(`vq.kind <> 'station_exception'`);
   }
 
   if (checked === 'false') {
-    conditions.push('checked = FALSE');
+    conditions.push('vq.checked = FALSE');
   } else if (checked === 'true') {
-    conditions.push('checked = TRUE');
+    conditions.push('vq.checked = TRUE');
   }
 
   if (q) {
     conditions.push(
-      `(product_title ILIKE $${idx} OR serial_numbers ILIKE $${idx} OR context ILIKE $${idx} OR usa_team_note ILIKE $${idx} OR vietnam_team_note ILIKE $${idx} OR zendesk_ticket_id ILIKE $${idx})`,
+      `(vq.product_title ILIKE $${idx} OR vq.serial_numbers ILIKE $${idx} OR vq.context ILIKE $${idx} OR vq.usa_team_note ILIKE $${idx} OR vq.vietnam_team_note ILIKE $${idx} OR vq.zendesk_ticket_id ILIKE $${idx})`,
     );
     params.push(`%${q}%`);
     idx++;
+  }
+
+  // Triage unfound rail only — cartons scanned on the Unbox surface live in the
+  // Unboxed rail + History, not the triage Unfound list.
+  if (excludeUnboxIntake) {
+    conditions.push(`NOT (
+      vq.kind = 'unmatched_receiving'
+      AND EXISTS (
+        SELECT 1 FROM receiving r
+        WHERE r.organization_id = vq.organization_id
+          AND r.id = vq.source_id::int
+          AND (
+            r.unbox_opened_at IS NOT NULL
+            OR EXISTS (
+              SELECT 1 FROM ops_events oe
+              WHERE oe.organization_id = r.organization_id
+                AND oe.entity_type = 'receiving'
+                AND oe.entity_id = r.id
+                AND oe.event_type = 'UNBOX_SCAN_OPENED'
+            )
+          )
+      )
+    )`);
   }
 
   params.push(limit, offset);
 
   const sql = `
     SELECT
-      kind, source_id, organization_id,
-      product_title, serial_numbers, context,
-      created_at::text AS created_at,
-      zendesk_ticket_id, zendesk_synced_at::text AS zendesk_synced_at,
-      usa_team_note, vietnam_team_note,
-      follow_up_at::text AS follow_up_at,
-      checked, checked_at::text AS checked_at
-    FROM v_unfound_queue
+      vq.kind, vq.source_id, vq.organization_id,
+      vq.product_title, vq.serial_numbers, vq.context,
+      vq.created_at::text AS created_at,
+      vq.zendesk_ticket_id, vq.zendesk_synced_at::text AS zendesk_synced_at,
+      vq.usa_team_note, vq.vietnam_team_note,
+      vq.follow_up_at::text AS follow_up_at,
+      vq.checked, vq.checked_at::text AS checked_at,
+      CASE
+        WHEN vq.kind = 'unmatched_receiving' AND vq.source_id ~ '^[0-9]+$'
+        THEN ${sqlReceivingPhotoCount('vq.source_id::int', '$1')}
+        ELSE 0
+      END AS photo_count
+    FROM v_unfound_queue vq
     WHERE ${conditions.join(' AND ')}
-    ORDER BY checked ASC, created_at DESC
+    ORDER BY vq.checked ASC, vq.created_at DESC
     LIMIT $${idx++} OFFSET $${idx++}
   `;
 
-  const result = await pool.query<QueueRow>(sql, params);
+  const result = await tenantQuery<QueueRow>(ctx.organizationId, sql, params);
 
   return NextResponse.json({
     success: true,

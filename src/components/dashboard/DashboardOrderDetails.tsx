@@ -8,10 +8,21 @@
  */
 
 import { AnimatePresence } from 'framer-motion';
-import { ShippedDetailsPanel } from '@/components/shipped';
-import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
+import dynamic from 'next/dynamic';
 import type { ShippedOrder } from '@/types/orders';
 import type { ShippedDetailsContext } from '@/utils/events';
+
+// Phase 4 (bundle deferral): the detail panels load on FIRST open (a row click),
+// not in the initial dashboard bundle. `ssr: false` — they're client-only
+// slide-overs already gated behind a selection, so a null-while-loading is invisible.
+const ShippedDetailsPanel = dynamic(
+  () => import('@/components/shipped').then((m) => m.ShippedDetailsPanel),
+  { ssr: false },
+);
+const UnshippedDetailsPanel = dynamic(
+  () => import('@/components/unshipped/UnshippedDetailsPanel').then((m) => m.UnshippedDetailsPanel),
+  { ssr: false },
+);
 
 interface DashboardOrderDetailsProps {
   detailsEnabled: boolean;

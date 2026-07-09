@@ -18,6 +18,7 @@
 
 import { useLocalStorage } from '@/hooks';
 import { ChevronLeft, ChevronRight, Plus, Sparkles } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useStudioWorkspace } from './StudioWorkspaceContext';
 import { useStudioSimulation } from './useStudioSimulation';
 import { StudioCanvas } from './StudioCanvas';
@@ -25,6 +26,11 @@ import { StudioInspector } from './StudioInspector';
 import { StudioSimulatePanel } from './StudioSimulatePanel';
 import { StudioStationPreview } from './StudioStationPreview';
 import { StudioNodeStationEditor } from './StudioNodeStationEditor';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { useAssistantContext } from '@/hooks/useAssistantContext';
+import { useAssistantDockOpen } from '@/components/assistant/AssistantProvider';
+import { cn } from '@/utils/_cn';
+import { STUDIO_SKILL } from '@/lib/assistant/page-skills';
 
 export function StudioShell() {
   const {
@@ -68,6 +74,21 @@ export function StudioShell() {
     discardDraft,
   } = useStudioWorkspace();
 
+  // Global-assistant context: flow-display skill + focused-node selection (plan §-2.2).
+  useAssistantContext({
+    page: 'studio',
+    mode: lens,
+    selection: focus ? { kind: 'workflow_node', id: focus } : null,
+    skill: STUDIO_SKILL,
+  });
+
+  // AI-first refactor (plan §4): when the assistant dock is OPEN it ABSORBS the
+  // inspector — focused-node detail renders in the dock instead of the standalone
+  // w-72 aside. Gated on the dock actually being open (not just permissioned):
+  // a closed dock must leave the classic aside/rail, else a permissioned user
+  // who never opened it would have no inspector at all at ≥lg.
+  const dockAbsorbsInspector = useAssistantDockOpen();
+
   // Inspector is a workspace preference (not shareable view state) → localStorage.
   const [inspectorOpen, setInspectorOpen] = useLocalStorage('studio:inspector-open', true);
 
@@ -82,12 +103,12 @@ export function StudioShell() {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-slate-50">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface-canvas">
       {/* ─── Header: title · version switcher · draft controls · in-flight count ─── */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-4 py-2.5">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border-soft bg-surface-card px-4 py-2.5">
         <div className="min-w-0">
-          <h1 className="text-sm font-bold tracking-tight text-slate-900">Operations Studio</h1>
-          <p className="text-[11px] text-slate-400">
+          <h1 className="text-sm font-bold tracking-tight text-text-default">Operations Studio</h1>
+          <p className="text-caption text-text-faint">
             {editing ? 'Editing a draft — changes go live on publish' : 'Viewing · edits happen on a draft'}
           </p>
         </div>
@@ -96,7 +117,7 @@ export function StudioShell() {
           <select
             value={String(graph.definition?.id ?? '')}
             onChange={(e) => setParams({ v: e.target.value || null, focus: null })}
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+            className="rounded-md border border-border-soft bg-surface-card px-2 py-1 text-xs font-medium text-text-muted"
             aria-label="Workflow version"
           >
             {graph.definitions.map((d) => (
@@ -109,91 +130,114 @@ export function StudioShell() {
         )}
 
         {lens === 'live' && !editing && live && (
-          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-caption font-semibold text-blue-700">
             {live.totalInFlight} in flight
           </span>
         )}
 
         {lens === 'people' && !editing && people && (
-          <span
-            className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700"
-            title={
+          <HoverTooltip
+            label={
               people.uncoveredNodeIds.length > 0
                 ? `${people.uncoveredNodeIds.length} step(s) with no staff coverage`
                 : 'Every staffable step is covered'
             }
+            asChild
           >
-            {people.totalCovering} covering
-            {people.uncoveredNodeIds.length > 0 && ` · ${people.uncoveredNodeIds.length} gap`}
-          </span>
+            <span className="rounded-full bg-violet-50 px-2.5 py-1 text-caption font-semibold text-violet-700">
+              {people.totalCovering} covering
+              {people.uncoveredNodeIds.length > 0 && ` · ${people.uncoveredNodeIds.length} gap`}
+            </span>
+          </HoverTooltip>
         )}
 
         {/* ─── Simulate toggle (ST6) — a read-only authoring aid, studio.view+ ─── */}
         {graph?.definition && (
-          <button
-            type="button"
-            onClick={() => setSimulateOpen((open) => !open)}
-            aria-pressed={simulateOpen}
-            title="Walk a hypothetical unit through the graph — no real unit moves"
-            className={[
-              'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors',
-              simulateOpen
-                ? 'border-violet-300 bg-violet-100 text-violet-700'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-            ].join(' ')}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Simulate
-          </button>
+          <HoverTooltip label="Walk a hypothetical unit through the graph — no real unit moves" asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSimulateOpen((open) => !open)}
+              aria-pressed={simulateOpen}
+              ariaLabel="Walk a hypothetical unit through the graph — no real unit moves"
+              icon={<Sparkles className="h-3.5 w-3.5" />}
+              className={[
+                'h-auto gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold',
+                simulateOpen
+                  ? 'border-violet-300 bg-violet-100 text-violet-700'
+                  : 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover',
+              ].join(' ')}
+            >
+              Simulate
+            </Button>
+          </HoverTooltip>
         )}
 
         {/* ─── Draft ▸ Publish controls ─── */}
         {canManage && graph?.definition && (
           <div className="ml-auto flex items-center gap-1.5">
             {!isDraft ? (
-              <button
+              <Button
+                type="button"
+                variant="brand"
+                size="sm"
                 onClick={() => void createDraft()}
                 disabled={busy !== null}
-                className="rounded-md bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:opacity-50"
+                className="h-auto rounded-md px-3 py-1 text-xs font-semibold"
               >
                 {busy === 'drafting' ? 'Creating draft…' : 'Edit as draft'}
-              </button>
+              </Button>
             ) : (
               <>
-                <span className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">
+                <span className="rounded-md bg-amber-100 px-2 py-1 text-caption font-bold uppercase tracking-wide text-amber-700">
                   Draft v{graph.definition.version}
                 </span>
                 {/* Add a sticky-note (Phase E3) — only on a draft (the active
                     version's notes are read-only); the canvas owns positioning. */}
                 {editing && (
-                  <button
-                    onClick={() => onAddAnnotation()}
-                    disabled={busy !== null}
-                    title="Drop a sticky-note on the canvas"
-                    className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add note
-                  </button>
+                  <HoverTooltip label="Drop a sticky-note on the canvas" asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onAddAnnotation()}
+                      disabled={busy !== null}
+                      ariaLabel="Drop a sticky-note on the canvas"
+                      icon={<Plus className="h-3.5 w-3.5" />}
+                      className="h-auto gap-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                    >
+                      Add note
+                    </Button>
+                  </HoverTooltip>
                 )}
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => void saveDraft()}
                   disabled={!dirty || busy !== null}
                   className={[
-                    'rounded-md px-3 py-1 text-xs font-semibold shadow-sm transition-colors disabled:opacity-50',
-                    dirty ? 'bg-slate-900 text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-400',
+                    'h-auto rounded-md px-3 py-1 text-xs font-semibold shadow-sm',
+                    dirty ? 'bg-surface-inverse text-white hover:bg-surface-inverse-hover' : 'bg-surface-sunken text-text-faint',
                   ].join(' ')}
                 >
                   {busy === 'saving' ? 'Saving…' : dirty ? 'Save draft' : 'Saved'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
                   onClick={() => void publish()}
                   disabled={busy !== null}
-                  className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:opacity-50"
+                  className="h-auto rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500"
                 >
                   {busy === 'publishing' ? 'Publishing…' : 'Publish'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     if (
                       window.confirm(
@@ -204,15 +248,15 @@ export function StudioShell() {
                     }
                   }}
                   disabled={busy !== null}
-                  className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
+                  className="h-auto rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                 >
                   {busy === 'discarding' ? 'Discarding…' : 'Discard draft'}
-                </button>
+                </Button>
               </>
             )}
           </div>
         )}
-        {actionError && <span className="text-[11px] font-semibold text-rose-600">{actionError}</span>}
+        {actionError && <span className="text-caption font-semibold text-rose-600">{actionError}</span>}
       </header>
 
       {/* ─── Panes: full-width canvas + contextual inspector ─── */}
@@ -221,11 +265,11 @@ export function StudioShell() {
           {error ? (
             <div className="flex h-full items-center justify-center p-8 text-sm text-rose-600">{error}</div>
           ) : !graph ? (
-            <div className="flex h-full items-center justify-center p-8 text-sm text-slate-400">
+            <div className="flex h-full items-center justify-center p-8 text-sm text-text-faint">
               Loading the operations graph…
             </div>
           ) : !graph.definition ? (
-            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-slate-500">
+            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-text-soft">
               No workflow definition yet — seed one to see your operation here.
             </div>
           ) : z === 2 ? (
@@ -276,24 +320,34 @@ export function StudioShell() {
 
         {/* ─── Simulate panel (ST6) — its own slot, orthogonal to the inspector ─── */}
         {simulateOpen && (
-          <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 bg-white md:flex">
+          <aside className="hidden w-72 shrink-0 flex-col border-l border-border-soft bg-surface-card md:flex">
             <StudioSimulatePanel sim={sim} nodes={nodes} edges={edges} editing={editing} onClose={closeSimulate} />
           </aside>
         )}
 
+        {/* An OPEN dock absorbs the inspector (plan §4). But the dock/FAB are
+            desktop-lg only, so at 768–1024px keep the aside (lg:hidden) as the
+            fallback — otherwise that band would have no inspector at all. A
+            closed dock leaves the aside/rail everywhere (dockAbsorbsInspector
+            is false), so a permissioned first-run user still gets an inspector. */}
         {inspectorOpen ? (
-          <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 bg-white md:flex">
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Inspector</span>
-              <button
-                type="button"
-                onClick={() => setInspectorOpen(false)}
-                title="Hide inspector"
-                aria-label="Hide inspector panel"
-                className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+          <aside
+            className={cn(
+              'hidden w-72 shrink-0 flex-col border-l border-border-soft bg-surface-card md:flex',
+              dockAbsorbsInspector && 'lg:hidden',
+            )}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-border-hairline px-3 py-2">
+              <span className="text-micro font-bold uppercase tracking-wider text-text-faint">Inspector</span>
+              <HoverTooltip label="Hide inspector" asChild>
+                <IconButton
+                  type="button"
+                  onClick={() => setInspectorOpen(false)}
+                  ariaLabel="Hide inspector panel"
+                  icon={<ChevronRight className="h-4 w-4" />}
+                  className="rounded p-1 text-text-faint transition-colors hover:bg-surface-sunken hover:text-text-muted"
+                />
+              </HoverTooltip>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <StudioInspector
@@ -321,22 +375,27 @@ export function StudioShell() {
             </div>
           </aside>
         ) : (
-          <button
-            type="button"
-            onClick={() => setInspectorOpen(true)}
-            title="Show inspector"
-            aria-label="Show inspector panel"
-            className="relative hidden w-8 shrink-0 flex-col items-center gap-2 border-l border-slate-200 bg-white py-3 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 md:flex"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider [writing-mode:vertical-rl]">
-              Inspector
-            </span>
-            {/* A node is selected but its detail is tucked away — hint it. */}
-            {focusedNode && (
-              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-blue-500" />
-            )}
-          </button>
+          <HoverTooltip label="Show inspector" asChild>
+            {/* ds-raw-button: structural collapsed-rail toggle (flex-col, vertical writing-mode label, absolute indicator dot) — not a content button; no DS variant fits */}
+            <button
+              type="button"
+              onClick={() => setInspectorOpen(true)}
+              aria-label="Show inspector panel"
+              className={cn(
+                'relative hidden w-8 shrink-0 flex-col items-center gap-2 border-l border-border-soft bg-surface-card py-3 text-text-faint transition-colors hover:bg-surface-hover hover:text-text-muted md:flex',
+                dockAbsorbsInspector && 'lg:hidden',
+              )}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="text-micro font-semibold uppercase tracking-wider [writing-mode:vertical-rl]">
+                Inspector
+              </span>
+              {/* A node is selected but its detail is tucked away — hint it. */}
+              {focusedNode && (
+                <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-blue-500" />
+              )}
+            </button>
+          </HoverTooltip>
         )}
       </div>
     </div>

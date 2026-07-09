@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
+import { dispatchLineUpdated } from '@/components/station/receiving-lines-table-helpers';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 /** Trimmed PO# for a row — number wins over id. */
@@ -30,23 +31,28 @@ export function usePoBinding(row: ReceivingLineRow) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id]);
 
-  // Re-arm the PO# editor for unmatched / un-bound rows so the operator
-  // doesn't have to click the pencil after each switch. Don't auto-close for
-  // matched rows — the operator may have deliberately opened it.
+  // Re-arm the PO# editor for unmatched / un-bound rows so the operator doesn't
+  // have to click the pencil after each switch — and COLLAPSE it once the row is
+  // filled/linked. A bound PO# reads in the carton header chip; the open search
+  // editor is only for finding/typing one, so it folds away when there's nothing
+  // left to bind (fires on row switch + when a link fills the PO#). The operator
+  // can still re-open it via the PO# edit affordance.
   useEffect(() => {
-    if (row.receiving_source === 'unmatched' || !poValueOf(row)) {
-      setPoEditorOpen(true);
-    }
+    setPoEditorOpen(row.receiving_source === 'unmatched' || !poValueOf(row));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id, row.receiving_source, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id]);
 
   /**
-   * Save the operator-typed PO# to the carton AND every existing
-   * receiving_line for it. /api/receiving/[id] auto-flips `receiving.source`
-   * 'unmatched' → 'zoho_po' on a non-null PO# write, so the carton drops off
-   * the Unfound queue. Fanning out to lines means mark-received-po + line
-   * lookups + the PO accordion all see the link without waiting for a refresh
-   * round-trip.
+   * Save the operator-typed PO# to the carton. ONE round-trip: PATCH
+   * /api/receiving/[id] auto-flips `receiving.source` 'unmatched' → 'zoho_po' on
+   * a non-null PO# write, so the carton drops off the Unfound queue.
+   *
+   * No line fan-out: the carton's `zoho_purchaseorder_number` already flows to
+   * every line on read (`normalizeRow` falls back to the carton number when a
+   * line's own is null) and is searchable via the carton column — so the old
+   * "GET every line → PATCH each" (N+2 round-trips) bought nothing but latency.
+   * The active line is patched optimistically below; sibling lines reconcile
+   * from the carton number on the next list refresh (`usav-refresh-data`).
    */
   const persistPoNumber = useCallback(
     async (nextRaw: string) => {
@@ -63,24 +69,14 @@ export function usePoBinding(row: ReceivingLineRow) {
           toast.error(data?.error ?? `PO# save failed (${res.status})`);
           return;
         }
-        try {
-          const linesRes = await fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`);
-          const linesData = await linesRes.json();
-          const rows = Array.isArray(linesData?.receiving_lines) ? linesData.receiving_lines : [];
-          await Promise.all(
-            rows.map((r: { id?: number }) =>
-              r?.id != null
-                ? fetch('/api/receiving-lines', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: r.id, zoho_purchaseorder_number: next || null }),
-                  }).catch(() => null)
-                : null,
-            ),
-          );
-        } catch {
-          /* line fan-out is best-effort; the carton write is source of truth */
-        }
+        // Optimistic active-line patch — reflect the number (and the unmatched →
+        // zoho_po promotion the server just did) instantly, no refetch.
+        const patch: Partial<ReceivingLineRow> & { id: number } = {
+          id: row.id,
+          zoho_purchaseorder_number: next || null,
+        };
+        if (next && row.receiving_source === 'unmatched') patch.receiving_source = 'zoho_po';
+        dispatchLineUpdated(patch);
         toast.success(next ? `PO# saved (${next})` : 'PO# cleared');
         window.dispatchEvent(new CustomEvent('usav-refresh-data'));
         window.dispatchEvent(
@@ -92,7 +88,7 @@ export function usePoBinding(row: ReceivingLineRow) {
         toast.error(err instanceof Error ? err.message : 'PO# save failed');
       }
     },
-    [row.receiving_id],
+    [row.receiving_id, row.id, row.receiving_source],
   );
 
   return { poEditorOpen, setPoEditorOpen, poNumberEdit, setPoNumberEdit, persistPoNumber };

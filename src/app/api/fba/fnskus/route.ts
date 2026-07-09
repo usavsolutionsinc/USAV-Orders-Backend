@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
@@ -25,7 +26,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       ctx.organizationId,
       `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, condition, organization_id, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW())
-       ON CONFLICT (fnsku) DO UPDATE
+       ON CONFLICT (organization_id, fnsku) DO UPDATE
          SET product_title = COALESCE(EXCLUDED.product_title, fba_fnskus.product_title),
              asin          = COALESCE(EXCLUDED.asin, fba_fnskus.asin),
              sku           = COALESCE(EXCLUDED.sku, fba_fnskus.sku),
@@ -38,6 +39,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     );
 
     await invalidateCacheTags(['fba-fnskus']);
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaCatalogChanged({ action: 'created', fnsku: fnsku || '', source: 'fba.fnskus.create', organizationId: ctx.organizationId });
 
     return NextResponse.json({ success: true, fnsku: result.rows[0] });

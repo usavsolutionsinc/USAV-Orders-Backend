@@ -5,12 +5,16 @@ import {
   fetchAllEcwidCategories,
 } from '@/lib/product-manuals';
 import { getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const CACHE_NS = 'pm:categories';
 const CACHE_KEY = 'all';
 const CACHE_TTL = 60 * 60; // 1 hour — categories and product counts change rarely
 
-export async function GET() {
+// Requires a valid session (mirrors product-manuals/search, which gates on
+// getCurrentUser). The Ecwid category tree is org-agnostic, so no permission
+// or org scope is needed beyond authentication.
+export const GET = withAuth(async () => {
   try {
     // Try cache first
     const cached = await getCachedJson<{ success: boolean; categories: unknown[] }>(CACHE_NS, CACHE_KEY);
@@ -59,4 +63,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+});

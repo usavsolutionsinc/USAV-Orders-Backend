@@ -15,7 +15,7 @@ const toneClass: Record<
   { input: string; floatLabel: string; focusLabel: string }
 > = {
   blue: {
-    input: 'border-gray-200 focus:border-blue-500 focus:ring-blue-500/20',
+    input: 'border-border-soft focus:border-blue-500 focus:ring-blue-500/20',
     floatLabel: 'text-blue-600',
     focusLabel: 'peer-focus:text-blue-600',
   },
@@ -30,9 +30,9 @@ const toneClass: Record<
     focusLabel: 'peer-focus:text-emerald-600',
   },
   neutral: {
-    input: 'border-gray-200 focus:border-gray-900 focus:ring-gray-900/10',
-    floatLabel: 'text-gray-500',
-    focusLabel: 'peer-focus:text-gray-900',
+    input: 'border-border-soft focus:border-border-strong focus:ring-border-strong/10',
+    floatLabel: 'text-text-soft',
+    focusLabel: 'peer-focus:text-text-default',
   },
 };
 
@@ -99,7 +99,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
     const t = toneClass[tone];
 
     // Shared chrome for both variants — only the element + a little padding differ.
-    const sharedClass = `peer block w-full rounded-xl border bg-white px-3.5 text-sm text-gray-900 outline-none transition-[box-shadow,border-color] duration-150 placeholder:text-transparent focus:ring-2 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 ${
+    const sharedClass = `peer block w-full rounded-xl border bg-surface-card px-3.5 text-sm text-text-default outline-none transition-[box-shadow,border-color] duration-150 placeholder:text-transparent focus:ring-2 disabled:cursor-not-allowed disabled:bg-surface-canvas disabled:text-text-faint ${
       mono ? 'font-mono' : ''
     } ${t.input} ${inputClassName}`;
 
@@ -134,9 +134,9 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           htmlFor={fieldId}
           className={`pointer-events-none absolute left-3.5 origin-left transition-all duration-150 ${
             float
-              ? `top-1.5 text-[10px] font-semibold uppercase tracking-wide ${t.floatLabel}`
-              : `${multiline ? 'top-5' : 'top-3'} text-sm text-gray-400`
-          } peer-focus:top-1.5 peer-focus:text-[10px] peer-focus:font-semibold peer-focus:uppercase peer-focus:tracking-wide ${t.focusLabel}`}
+              ? `top-1.5 text-micro font-semibold uppercase tracking-wide ${t.floatLabel}`
+              : `${multiline ? 'top-5' : 'top-3'} text-sm text-text-faint`
+          } peer-focus:top-1.5 peer-focus:text-micro peer-focus:font-semibold peer-focus:uppercase peer-focus:tracking-wide ${t.focusLabel}`}
         >
           {label}
         </label>

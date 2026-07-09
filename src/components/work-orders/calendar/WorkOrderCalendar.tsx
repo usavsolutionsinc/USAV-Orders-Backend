@@ -57,7 +57,7 @@ export function WorkOrderCalendar() {
     <div className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h1 className="text-lg font-black tracking-tight text-slate-900">{monthLabel}</h1>
+          <h1 className="text-lg font-black tracking-tight text-text-default">{monthLabel}</h1>
           {loading ? <Spinner className="h-4 w-4" /> : null}
         </div>
         <div className="flex items-center gap-2">
@@ -74,16 +74,16 @@ export function WorkOrderCalendar() {
       </header>
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-label font-medium text-red-700">
           {error}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-7 overflow-hidden rounded-lg border border-slate-200 bg-slate-200 [gap:1px]">
+      <div className="grid grid-cols-7 overflow-hidden rounded-lg border border-border-soft bg-surface-strong [gap:1px]">
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
-            className="bg-slate-50 px-2 py-1.5 text-center text-[10px] font-black uppercase tracking-wider text-slate-400"
+            className="bg-surface-canvas px-2 py-1.5 text-center text-micro font-black uppercase tracking-wider text-text-faint"
           >
             {label}
           </div>
@@ -99,24 +99,24 @@ export function WorkOrderCalendar() {
           return (
             <div
               key={key}
-              className={`min-h-[104px] bg-white px-1.5 pb-1.5 pt-1 ${
-                inMonth ? '' : 'bg-slate-50/60'
+              className={`min-h-[104px] bg-surface-card px-1.5 pb-1.5 pt-1 ${
+                inMonth ? '' : 'bg-surface-canvas/60'
               }`}
             >
               <div className="mb-1 flex items-center justify-between">
                 <span
-                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-caption font-bold ${
                     isToday
                       ? 'bg-blue-600 text-white'
                       : inMonth
-                      ? 'text-slate-700'
-                      : 'text-slate-300'
+                      ? 'text-text-muted'
+                      : 'text-text-faint'
                   }`}
                 >
                   {day.getDate()}
                 </span>
                 {dayRows.length > 0 ? (
-                  <span className="text-[9px] font-semibold text-slate-400">{dayRows.length}</span>
+                  <span className="text-eyebrow font-semibold text-text-faint">{dayRows.length}</span>
                 ) : null}
               </div>
 
@@ -125,7 +125,7 @@ export function WorkOrderCalendar() {
                   <WorkOrderCalendarChip key={row.id} row={row} onAssigned={refetch} />
                 ))}
                 {overflow > 0 ? (
-                  <span className="px-1 text-[9px] font-semibold text-slate-400">
+                  <span className="px-1 text-eyebrow font-semibold text-text-faint">
                     +{overflow} more
                   </span>
                 ) : null}
@@ -135,7 +135,7 @@ export function WorkOrderCalendar() {
         })}
       </div>
 
-      <p className="text-[11px] text-slate-400">
+      <p className="text-caption text-text-faint">
         Assignments are placed on their deadline day. Click any item to view or reassign — changes
         save to the work-order queue.
       </p>

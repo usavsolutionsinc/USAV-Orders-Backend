@@ -13,6 +13,12 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
  * the active line's override when no carton default is set yet (so a freshly
  * tagged line still reads correctly), and persists via PATCH /api/receiving/:id,
  * broadcasting `receiving-package-updated` so sibling surfaces stay in sync.
+ *
+ * Deliberately carton-first — the OPPOSITE precedence of `effectiveIntakeKind`
+ * (src/lib/receiving/kinds/registry.ts). That SoT answers "what's this LINE's
+ * effective type" (line override wins) for display; this hook answers "what
+ * should the CARTON's own type field show/edit" for an editor seeding from the
+ * record it's actually about to PATCH. Not a duplicate to consolidate.
  */
 export function useReceivingType(row: ReceivingLineRow) {
   // Carton default first; fall back to the line's own type so a carton that

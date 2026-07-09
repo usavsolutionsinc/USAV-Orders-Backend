@@ -3,7 +3,7 @@
 import { ChipColumns } from '@/components/ui/ChipColumns';
 import { buildStationChipColumns, buildStationFnskuColumns } from '@/components/station/station-chip-columns';
 import { StationRecordShell } from '@/components/station/StationRecordShell';
-import { getOrderPlatformLabel } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { resolveStationSource } from '@/utils/source-dot';
@@ -23,6 +23,7 @@ export interface PackerRecordRowProps {
  * for their FNSKU.
  */
 export function PackerRecordRow({ record, index, onOpen }: PackerRecordRowProps) {
+  const orderChannelLabel = useOrderChannelLabel();
   const displayValues = getOrderDisplayValues({
     sku: record.sku,
     condition: record.condition,
@@ -43,7 +44,7 @@ export function PackerRecordRow({ record, index, onOpen }: PackerRecordRowProps)
     // No serial column on packer rows; FBA rows take the tracking column for FNSKU.
     chipGrid = <ChipColumns columns={buildStationFnskuColumns({ fnskuValue })} />;
   } else {
-    const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+    const plat = orderChannelLabel(record.order_id || '', record.account_source);
     const scanForSku = String(record.scan_ref || record.shipping_tracking_number || '');
     const productUrl = getExternalUrlByItemNumber(
       String(record.item_number || '').trim() || skuScanPrefixBeforeColon(scanForSku),

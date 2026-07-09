@@ -147,9 +147,11 @@ export async function attachSerialToLine(
 
       // Idempotent re-scan: same serial already on this line → friendly no-op.
       const existing = await client.query<{ id: number }>(
+        // Phase 3: line membership via provenance reverse lookup.
         `SELECT id FROM serial_units
           WHERE normalized_serial = $1
-            AND origin_receiving_line_id = $2
+            AND id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                        WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $2 AND p.organization_id = $3)
             AND organization_id = $3
           LIMIT 1`,
         [normalized, line.id, orgId],
@@ -320,16 +322,20 @@ export async function detachSerialFromLine(
         sku: string | null;
         serial_number: string;
       }>(
+        // Phase 3: line membership via provenance reverse lookup.
         serialUnitId
           ? `SELECT id, sku, serial_number
                FROM serial_units
-              WHERE id = $1 AND origin_receiving_line_id = $2
+              WHERE id = $1
+                AND id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                            WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $2 AND p.organization_id = $3)
                 AND organization_id = $3
               LIMIT 1`
           : `SELECT id, sku, serial_number
                FROM serial_units
               WHERE normalized_serial = upper(trim($1))
-                AND origin_receiving_line_id = $2
+                AND id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                            WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $2 AND p.organization_id = $3)
                 AND organization_id = $3
               LIMIT 1`,
         serialUnitId

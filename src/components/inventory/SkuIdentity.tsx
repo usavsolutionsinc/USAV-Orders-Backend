@@ -25,11 +25,14 @@
  *             For dense lists (pick queue rows, table cells, etc.).
  */
 
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+
 export interface SkuPlatformMapping {
   platform: string;             // 'amazon' | 'ecwid' | 'ebay' | 'fba' | …
   platformSku: string | null;   // marketplace SKU/MSKU (or null when only an item id exists)
   platformItemId?: string | null; // e.g. Amazon ASIN, ebay item id — shown as fallback when SKU is null
   accountName?: string | null;  // e.g. "ebay-us-main" vs "ebay-us-warehouse2" — disambiguates duplicates
+  listingUrl?: string | null;   // stored marketplace listing URL from sku_platform_ids
 }
 
 interface SkuIdentityProps {
@@ -49,10 +52,10 @@ const PLATFORM_CHIP_CLASSES: Record<string, string> = {
   ebay:    'border-yellow-200 bg-yellow-50 text-yellow-800',
   walmart: 'border-amber-200  bg-amber-50  text-amber-800',
   mercari: 'border-purple-200 bg-purple-50 text-purple-700',
-  shopify: 'border-slate-300  bg-slate-50  text-slate-800',
+  shopify: 'border-border-default  bg-surface-canvas  text-text-default',
   zoho:    'border-red-200    bg-red-50    text-red-700',
 };
-const DEFAULT_PLATFORM_CHIP = 'border-slate-200 bg-slate-50 text-slate-700';
+const DEFAULT_PLATFORM_CHIP = 'border-border-soft bg-surface-canvas text-text-muted';
 
 function platformChipClass(platform: string): string {
   return PLATFORM_CHIP_CLASSES[platform.toLowerCase()] || DEFAULT_PLATFORM_CHIP;
@@ -85,7 +88,7 @@ export function SkuIdentity({
   if (variant === 'compact') {
     return (
       <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
-        <span className="font-mono text-sm font-bold tabular-nums text-slate-900">{canonicalSku}</span>
+        <span className="font-mono text-sm font-bold tabular-nums text-text-default">{canonicalSku}</span>
         <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${platformChipClass('zoho')}`}>
           Zoho
         </span>
@@ -99,10 +102,10 @@ export function SkuIdentity({
   return (
     <div className={className}>
       {productTitle && (
-        <p className="text-sm font-semibold leading-snug text-slate-900">{productTitle}</p>
+        <p className="text-sm font-semibold leading-snug text-text-default">{productTitle}</p>
       )}
       <div className={`flex items-baseline gap-2 ${productTitle ? 'mt-1.5' : ''}`}>
-        <span className="font-mono text-2xl font-extrabold tabular-nums tracking-tight text-slate-900">
+        <span className="font-mono text-2xl font-extrabold tabular-nums tracking-tight text-text-default">
           {canonicalSku}
         </span>
         <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${platformChipClass('zoho')}`}>
@@ -124,12 +127,16 @@ function PlatformSkuChip({ mapping, dense = false }: { mapping: SkuPlatformMappi
   const value = (mapping.platformSku && mapping.platformSku.trim()) || mapping.platformItemId || '';
   const sizing = dense ? 'px-1.5 py-0.5 text-micro' : 'px-2 py-0.5 text-xs';
   return (
-    <span
-      title={`${platformLabel(mapping.platform)} · ${value}${mapping.platformItemId ? ` · ${mapping.platformItemId}` : ''}`}
-      className={`inline-flex items-center gap-1 rounded-md border font-medium ${sizing} ${platformChipClass(mapping.platform)}`}
+    <HoverTooltip
+      label={`${platformLabel(mapping.platform)} · ${value}${mapping.platformItemId ? ` · ${mapping.platformItemId}` : ''}`}
+      asChild
     >
-      <span className="font-semibold uppercase tracking-wider">{platformLabel(mapping.platform)}</span>
-      <span className="font-mono tabular-nums">{value}</span>
-    </span>
+      <span
+        className={`inline-flex items-center gap-1 rounded-md border font-medium ${sizing} ${platformChipClass(mapping.platform)}`}
+      >
+        <span className="font-semibold uppercase tracking-wider">{platformLabel(mapping.platform)}</span>
+        <span className="font-mono tabular-nums">{value}</span>
+      </span>
+    </HoverTooltip>
   );
 }

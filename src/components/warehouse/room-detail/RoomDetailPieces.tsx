@@ -1,3 +1,4 @@
+import { Button } from '@/design-system/primitives';
 import { LayoutDashboard, Pencil, Plus } from '@/components/Icons';
 
 // ─── Empty state ────────────────────────────────────────────────────────────
@@ -15,10 +16,10 @@ export function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
         <LayoutDashboard className="h-7 w-7 text-blue-600" />
       </div>
       <div className="space-y-1">
-        <h2 className="text-lg font-bold tracking-tight text-gray-900">
+        <h2 className="text-lg font-bold tracking-tight text-text-default">
           {loading ? 'Loading rooms…' : 'Pick a room to edit'}
         </h2>
-        <p className="max-w-[42ch] text-sm leading-snug text-gray-500">
+        <p className="max-w-[42ch] text-sm leading-snug text-text-soft">
           {loading
             ? 'Fetching room records and bin counts from the database…'
             : roomCount === 0
@@ -27,17 +28,18 @@ export function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
         </p>
       </div>
       {!loading && (
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
+          icon={<Plus />}
           onClick={() => onCreate()}
-          className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98]"
+          className="h-11 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-white shadow-md shadow-blue-600/30"
         >
-          <Plus className="h-4 w-4" />
           {roomCount === 0 ? 'Add your first room' : 'Add a new room'}
-        </button>
+        </Button>
       )}
       {!loading && roomCount > 0 && (
-        <p className="text-[10.5px] uppercase tracking-[0.18em] text-gray-400">
+        <p className="text-[10.5px] uppercase tracking-[0.18em] text-text-faint">
           {roomCount} room{roomCount === 1 ? '' : 's'} on file
         </p>
       )}
@@ -50,7 +52,7 @@ export function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
 export function BigZoneTile({ letter, placeholder }: { letter: string; placeholder: boolean }) {
   if (placeholder || !letter) {
     return (
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 font-mono text-2xl font-semibold text-gray-300 ring-1 ring-gray-200">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 font-mono text-2xl font-semibold text-text-faint ring-1 ring-border-soft">
         <Pencil className="h-5 w-5" />
       </div>
     );
@@ -76,10 +78,10 @@ export function Stat({
   const valueClass =
     tone === 'amber'
       ? 'text-amber-700'
-      : 'text-gray-900';
+      : 'text-text-default';
   return (
-    <div className="rounded-2xl bg-gradient-to-b from-gray-50/70 to-white px-3 py-2.5 ring-1 ring-gray-100">
-      <div className="flex items-center gap-1 text-micro font-semibold uppercase tracking-wider text-gray-500">
+    <div className="rounded-2xl bg-gradient-to-b from-gray-50/70 to-white px-3 py-2.5 ring-1 ring-border-hairline">
+      <div className="flex items-center gap-1 text-micro font-semibold uppercase tracking-wider text-text-soft">
         {icon}
         {label}
       </div>
@@ -107,7 +109,7 @@ export function Tally({
         ? 'bg-red-50 text-red-700 ring-red-200'
         : tone === 'purple'
           ? 'bg-purple-50 text-purple-700 ring-purple-200'
-          : 'bg-slate-50 text-slate-700 ring-slate-200';
+          : 'bg-surface-canvas text-text-muted ring-border-soft';
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-micro font-semibold uppercase tracking-wider ring-1 ${cls}`}

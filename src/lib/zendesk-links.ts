@@ -5,8 +5,9 @@
  * Zendesk attachments. To show them we resolve the ticket's internal entity,
  * then fetch that entity's photos. See migration 2026-06-01_ticket_links.sql.
  */
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getTicket, updateTicket } from './zendesk';
+import { upsertSupportTicket } from '@/lib/support/tickets';
 import { photoContentUrl } from '@/lib/photos/display-url';
 import { listPhotosForEntity } from '@/lib/photos/service';
 import type { PhotoEntityType } from '@/lib/photos/types';
@@ -40,17 +41,67 @@ export async function linkTicket(args: {
   entityType: string;
   entityId: number;
   staffId?: number | null;
-}): Promise<void> {
-  await pool.query(
+}): Promise<{ supportTicketId: number }> {
+  const supportTicket = await upsertSupportTicket({
+    orgId: args.orgId,
+    provider: 'zendesk',
+    externalTicketId: String(args.zendeskTicketId),
+    staffId: args.staffId ?? null,
+  });
+  await tenantQuery(
+    args.orgId,
     `INSERT INTO ticket_links
-       (organization_id, zendesk_ticket_id, entity_type, entity_id, created_by)
-     VALUES ($1, $2, $3, $4, $5)
+       (organization_id, support_ticket_id, zendesk_ticket_id, entity_type, entity_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (organization_id, zendesk_ticket_id) DO UPDATE
-       SET entity_type = EXCLUDED.entity_type,
+       SET support_ticket_id = EXCLUDED.support_ticket_id,
+           entity_type = EXCLUDED.entity_type,
            entity_id   = EXCLUDED.entity_id,
            updated_at  = NOW()`,
-    [args.orgId, args.zendeskTicketId, args.entityType, args.entityId, args.staffId ?? null],
+    [
+      args.orgId,
+      supportTicket.id,
+      args.zendeskTicketId,
+      args.entityType,
+      args.entityId,
+      args.staffId ?? null,
+    ],
   );
+  return { supportTicketId: supportTicket.id };
+}
+
+/**
+ * Link a ticket to a shipment (STN id) so cartons anchored to that tracking
+ * number resolve the ticket via receiving.shipment_id. Skips when the ticket
+ * already has a ticket_links row (one primary entity per ticket).
+ */
+export async function linkTicketToShipment(args: {
+  orgId: string;
+  zendeskTicketId: number;
+  shipmentId: number;
+  staffId?: number | null;
+}): Promise<{ linked: boolean; supportTicketId: number }> {
+  const supportTicket = await upsertSupportTicket({
+    orgId: args.orgId,
+    provider: 'zendesk',
+    externalTicketId: String(args.zendeskTicketId),
+    staffId: args.staffId ?? null,
+  });
+  const res = await tenantQuery(
+    args.orgId,
+    `INSERT INTO ticket_links
+       (organization_id, support_ticket_id, zendesk_ticket_id, entity_type, entity_id, created_by)
+     VALUES ($1, $2, $3, 'SHIPMENT', $4, $5)
+     ON CONFLICT (organization_id, zendesk_ticket_id) DO NOTHING`,
+    [
+      args.orgId,
+      supportTicket.id,
+      args.zendeskTicketId,
+      args.shipmentId,
+      args.staffId ?? null,
+    ],
+  );
+  return { linked: (res.rowCount ?? 0) > 0, supportTicketId: supportTicket.id };
 }
 
 /**
@@ -64,7 +115,8 @@ export async function unlinkTicket(args: {
   entityType: string;
   entityId: number;
 }): Promise<boolean> {
-  const res = await pool.query(
+  const res = await tenantQuery(
+    args.orgId,
     `DELETE FROM ticket_links
       WHERE organization_id = $1
         AND zendesk_ticket_id = $2
@@ -84,15 +136,16 @@ export async function unlinkTicket(args: {
  * Returns true when an external_id was cleared.
  */
 export async function clearTicketExternalIdIfMatches(args: {
+  orgId: string;
   zendeskTicketId: number;
   entityType: string;
   entityId: number;
 }): Promise<boolean> {
   try {
-    const ticket = await getTicket(args.zendeskTicketId);
+    const ticket = await getTicket(args.zendeskTicketId, args.orgId);
     const parsed = parseExternalId(ticket?.external_id as string | undefined);
     if (parsed && parsed.type === args.entityType && parsed.id === args.entityId) {
-      await updateTicket(args.zendeskTicketId, { external_id: null });
+      await updateTicket(args.zendeskTicketId, { external_id: null }, args.orgId);
       return true;
     }
   } catch (err) {
@@ -111,7 +164,8 @@ export async function getTicketEntity(
   zendeskTicketId: number,
 ): Promise<ResolvedTicketEntity | null> {
   // 1. ticket_links (cheapest, authoritative)
-  const links = await pool.query<{ entity_type: string; entity_id: string }>(
+  const links = await tenantQuery<{ entity_type: string; entity_id: string }>(
+    orgId,
     `SELECT entity_type, entity_id FROM ticket_links
       WHERE organization_id = $1 AND zendesk_ticket_id = $2 LIMIT 1`,
     [orgId, zendeskTicketId],
@@ -125,12 +179,13 @@ export async function getTicketEntity(
   }
 
   // 2. external_id off the live ticket (covers tickets created with it but not yet linked)
-  const ticket = await getTicket(zendeskTicketId);
+  const ticket = await getTicket(zendeskTicketId, orgId);
   const parsed = parseExternalId(ticket?.external_id as string | undefined);
   if (parsed) return { ...parsed, source: 'external_id' };
 
   // 3. unfound_overlay — stores zendesk_ticket_id as text ("1234" or "#1234")
-  const ov = await pool.query<{ source_kind: string; source_id: string }>(
+  const ov = await tenantQuery<{ source_kind: string; source_id: string }>(
+    orgId,
     `SELECT source_kind, source_id FROM unfound_overlay
       WHERE organization_id = $1
         AND zendesk_ticket_id IN ($2, $3) LIMIT 1`,
@@ -186,9 +241,10 @@ export async function getEntityPhotos(
         entityId: entity.id,
       }),
     );
-    const parent = await pool.query<{ receiving_id: number | null }>(
-      `SELECT receiving_id FROM receiving_lines WHERE id = $1 LIMIT 1`,
-      [entity.id],
+    const parent = await tenantQuery<{ receiving_id: number | null }>(
+      organizationId,
+      `SELECT receiving_id FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [entity.id, organizationId],
     );
     const receivingId = parent.rows[0]?.receiving_id;
     if (receivingId != null) {

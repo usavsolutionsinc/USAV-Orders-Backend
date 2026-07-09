@@ -20,7 +20,7 @@ interface UnitStatusTone {
 }
 
 const STATUS_TONES: Record<string, UnitStatusTone> = {
-    UNKNOWN: { badge: 'bg-gray-100 text-gray-600', chip: 'bg-gray-100 text-gray-600 ring-gray-200' },
+    UNKNOWN: { badge: 'bg-surface-sunken text-text-muted', chip: 'bg-surface-sunken text-text-muted ring-border-soft' },
     RECEIVED: { badge: 'bg-blue-50 text-blue-700', chip: 'bg-blue-50 text-blue-700 ring-blue-200' },
     TRIAGED: { badge: 'bg-blue-50 text-blue-700', chip: 'bg-blue-50 text-blue-700 ring-blue-200' },
     IN_TEST: { badge: 'bg-indigo-50 text-indigo-700', chip: 'bg-indigo-50 text-indigo-700 ring-indigo-200' },
@@ -34,15 +34,15 @@ const STATUS_TONES: Record<string, UnitStatusTone> = {
     PACKED: { badge: 'bg-purple-50 text-purple-700', chip: 'bg-purple-50 text-purple-700 ring-purple-200' },
     LABELED: { badge: 'bg-purple-50 text-purple-700', chip: 'bg-purple-50 text-purple-700 ring-purple-200' },
     STAGED: { badge: 'bg-purple-50 text-purple-700', chip: 'bg-purple-50 text-purple-700 ring-purple-200' },
-    SHIPPED: { badge: 'bg-gray-100 text-gray-700', chip: 'bg-gray-100 text-gray-700 ring-gray-200' },
+    SHIPPED: { badge: 'bg-surface-sunken text-text-muted', chip: 'bg-surface-sunken text-text-muted ring-border-soft' },
     RETURNED: { badge: 'bg-orange-50 text-orange-700', chip: 'bg-orange-50 text-orange-700 ring-orange-200' },
     RMA: { badge: 'bg-orange-50 text-orange-700', chip: 'bg-orange-50 text-orange-700 ring-orange-200' },
     ON_HOLD: { badge: 'bg-red-50 text-red-700', chip: 'bg-red-50 text-red-700 ring-red-200' },
     SCRAPPED: { badge: 'bg-red-100 text-red-700', chip: 'bg-red-100 text-red-700 ring-red-300' },
 };
 
-const BADGE_FALLBACK = 'bg-gray-100 text-gray-600';
-const CHIP_FALLBACK = 'bg-gray-100 text-gray-700 ring-gray-200';
+const BADGE_FALLBACK = 'bg-surface-sunken text-text-muted';
+const CHIP_FALLBACK = 'bg-surface-sunken text-text-muted ring-border-soft';
 
 /** Plain badge classes (bg + text). Unknown/empty → neutral gray. */
 export function unitStatusBadgeClass(status: string | null | undefined): string {

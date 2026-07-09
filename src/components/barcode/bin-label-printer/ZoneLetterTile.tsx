@@ -1,3 +1,5 @@
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+
 /** The square zone-letter badge (or an amber "?" when no letter is assigned). */
 export function ZoneLetterTile({ letter }: { letter: string | undefined }) {
   if (letter) {
@@ -8,11 +10,10 @@ export function ZoneLetterTile({ letter }: { letter: string | undefined }) {
     );
   }
   return (
-    <div
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200"
-      title="No zone letter assigned yet — go to the Rooms tab"
-    >
-      ?
-    </div>
+    <HoverTooltip label="No zone letter assigned yet — go to the Rooms tab" asChild focusable={false}>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200">
+        ?
+      </div>
+    </HoverTooltip>
   );
 }

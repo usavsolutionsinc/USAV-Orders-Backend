@@ -2,6 +2,7 @@ import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -214,84 +215,84 @@ export default async function EventsExplorerPage({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-canvas">
       <PageHeader backHref="/admin/inventory" title="Inventory events" maxWidth="7xl" />
       <div className="mx-auto max-w-7xl space-y-6 p-8">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-text-muted">
           Global event log. Filters compose; the URL is shareable.
         </p>
 
-        <form action="/admin/inventory/events" method="get" className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:grid-cols-4">
+        <form action="/admin/inventory/events" method="get" className="grid grid-cols-2 gap-3 rounded-lg border border-border-soft bg-surface-card p-4 shadow-sm md:grid-cols-4">
           <div>
-            <label htmlFor="event_type" className="block text-xs font-medium text-gray-600">Event type</label>
-            <select id="event_type" name="event_type" defaultValue={eventType ?? ''} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+            <label htmlFor="event_type" className="block text-xs font-medium text-text-muted">Event type</label>
+            <select id="event_type" name="event_type" defaultValue={eventType ?? ''} className="mt-1 block w-full rounded-md border border-border-default px-2 py-1.5 text-sm">
               <option value="">any</option>
               {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
-            <label htmlFor="station" className="block text-xs font-medium text-gray-600">Station</label>
-            <select id="station" name="station" defaultValue={station ?? ''} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+            <label htmlFor="station" className="block text-xs font-medium text-text-muted">Station</label>
+            <select id="station" name="station" defaultValue={station ?? ''} className="mt-1 block w-full rounded-md border border-border-default px-2 py-1.5 text-sm">
               <option value="">any</option>
               {STATIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label htmlFor="sku" className="block text-xs font-medium text-gray-600">SKU</label>
-            <input id="sku" name="sku" defaultValue={sku ?? ''} placeholder="exact SKU" className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 font-mono text-xs" />
+            <label htmlFor="sku" className="block text-xs font-medium text-text-muted">SKU</label>
+            <input id="sku" name="sku" defaultValue={sku ?? ''} placeholder="exact SKU" className="mt-1 block w-full rounded-md border border-border-default px-2 py-1.5 font-mono text-xs" />
           </div>
           <div>
-            <label htmlFor="unit" className="block text-xs font-medium text-gray-600">Unit id</label>
-            <input id="unit" name="unit" defaultValue={unitId != null ? String(unitId) : ''} placeholder="serial_units.id" className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 font-mono text-xs" />
+            <label htmlFor="unit" className="block text-xs font-medium text-text-muted">Unit id</label>
+            <input id="unit" name="unit" defaultValue={unitId != null ? String(unitId) : ''} placeholder="serial_units.id" className="mt-1 block w-full rounded-md border border-border-default px-2 py-1.5 font-mono text-xs" />
           </div>
           <div>
-            <label htmlFor="actor" className="block text-xs font-medium text-gray-600">Actor</label>
-            <select id="actor" name="actor" defaultValue={actorId != null ? String(actorId) : ''} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+            <label htmlFor="actor" className="block text-xs font-medium text-text-muted">Actor</label>
+            <select id="actor" name="actor" defaultValue={actorId != null ? String(actorId) : ''} className="mt-1 block w-full rounded-md border border-border-default px-2 py-1.5 text-sm">
               <option value="">any</option>
               {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div>
-            <label htmlFor="since" className="block text-xs font-medium text-gray-600">Since (YYYY-MM-DD)</label>
-            <input id="since" name="since" type="date" defaultValue={since ?? ''} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+            <label htmlFor="since" className="block text-xs font-medium text-text-muted">Since (YYYY-MM-DD)</label>
+            <input id="since" name="since" type="date" defaultValue={since ?? ''} className="mt-1 block w-full rounded-md border border-border-default px-2 py-1.5 text-sm" />
           </div>
           <div>
-            <label htmlFor="until" className="block text-xs font-medium text-gray-600">Until (inclusive)</label>
-            <input id="until" name="until" type="date" defaultValue={until ?? ''} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+            <label htmlFor="until" className="block text-xs font-medium text-text-muted">Until (inclusive)</label>
+            <input id="until" name="until" type="date" defaultValue={until ?? ''} className="mt-1 block w-full rounded-md border border-border-default px-2 py-1.5 text-sm" />
           </div>
           <div className="flex items-end gap-2">
-            <button type="submit" className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+            <Button variant="primary" size="sm" type="submit">
               Apply
-            </button>
-            <Link href="/admin/inventory/events" className="rounded-md border border-gray-300 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            </Button>
+            <Link href="/admin/inventory/events" className="rounded-md border border-border-default bg-surface-card px-4 py-1.5 text-sm font-medium text-text-muted hover:bg-surface-hover">
               Clear
             </Link>
           </div>
         </form>
 
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
-            <div className="text-sm text-gray-700">
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-3">
+            <div className="text-sm text-text-muted">
               <span className="font-semibold">{total.toLocaleString()}</span> event{total === 1 ? '' : 's'} match
-              {total > PAGE_SIZE ? <span className="text-gray-500"> · page {page + 1} of {totalPages}</span> : null}
+              {total > PAGE_SIZE ? <span className="text-text-soft"> · page {page + 1} of {totalPages}</span> : null}
             </div>
             {total > PAGE_SIZE ? (
               <nav className="flex items-center gap-2 text-sm">
                 {page > 0 ? (
-                  <Link href={buildPageHref(baseQuery, page - 1)} className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50">← prev</Link>
+                  <Link href={buildPageHref(baseQuery, page - 1)} className="rounded border border-border-default px-3 py-1 hover:bg-surface-hover">← prev</Link>
                 ) : null}
                 {page + 1 < totalPages ? (
-                  <Link href={buildPageHref(baseQuery, page + 1)} className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50">next →</Link>
+                  <Link href={buildPageHref(baseQuery, page + 1)} className="rounded border border-border-default px-3 py-1 hover:bg-surface-hover">next →</Link>
                 ) : null}
               </nav>
             ) : null}
           </header>
           {rows.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">No events match the current filters.</p>
+            <p className="px-6 py-8 text-sm text-text-muted">No events match the current filters.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <table className="min-w-full divide-y divide-border-hairline text-sm">
+                <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium">When</th>
                     <th className="px-4 py-2 text-left font-medium">Event</th>
@@ -303,12 +304,12 @@ export default async function EventsExplorerPage({
                     <th className="px-4 py-2 text-left font-medium">Actor</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border-hairline">
                   {rows.map((e) => (
                     <tr key={e.id}>
-                      <td className="px-4 py-2 text-xs text-gray-500 whitespace-nowrap">{new Date(e.occurred_at).toLocaleString()}</td>
+                      <td className="px-4 py-2 text-xs text-text-soft whitespace-nowrap">{new Date(e.occurred_at).toLocaleString()}</td>
                       <td className="px-4 py-2 font-mono text-xs">{e.event_type}</td>
-                      <td className="px-4 py-2 text-xs text-gray-600">{e.station ?? '—'}</td>
+                      <td className="px-4 py-2 text-xs text-text-muted">{e.station ?? '—'}</td>
                       <td className="px-4 py-2 font-mono text-xs">
                         {e.serial_unit_id ? (
                           <Link href={`/admin/inventory/units/${e.serial_unit_id}`} className="text-blue-600 hover:underline">
@@ -323,11 +324,11 @@ export default async function EventsExplorerPage({
                           </Link>
                         ) : '—'}
                       </td>
-                      <td className="px-4 py-2 text-xs text-gray-600">
+                      <td className="px-4 py-2 text-xs text-text-muted">
                         {e.prev_status && e.next_status ? `${e.prev_status} → ${e.next_status}` : e.next_status ?? '—'}
                       </td>
-                      <td className="px-4 py-2 text-xs text-gray-600">{e.bin_name ?? (e.bin_id ? `#${e.bin_id}` : '—')}</td>
-                      <td className="px-4 py-2 text-xs text-gray-600">{e.actor_name ?? (e.actor_staff_id ? `#${e.actor_staff_id}` : 'system')}</td>
+                      <td className="px-4 py-2 text-xs text-text-muted">{e.bin_name ?? (e.bin_id ? `#${e.bin_id}` : '—')}</td>
+                      <td className="px-4 py-2 text-xs text-text-muted">{e.actor_name ?? (e.actor_staff_id ? `#${e.actor_staff_id}` : 'system')}</td>
                     </tr>
                   ))}
                 </tbody>

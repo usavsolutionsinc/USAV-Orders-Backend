@@ -149,7 +149,7 @@ export default function DesignShowcasePage() {
                     type="button"
                     role="menuitem"
                     onClick={() => setPopoverOpen(false)}
-                    className="rounded-lg px-2.5 py-1.5 text-left text-text-default hover:bg-surface-canvas"
+                    className="ds-raw-button rounded-lg px-2.5 py-1.5 text-left text-text-default hover:bg-surface-canvas"
                   >
                     {label}
                   </button>

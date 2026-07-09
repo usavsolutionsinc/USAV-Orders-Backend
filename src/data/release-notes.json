@@ -1,7 +1,227 @@
 {
-  "generatedAt": "2026-06-25T04:04:57.735Z",
+  "generatedAt": "2026-07-06T04:52:26.490Z",
   "count": 198,
   "commits": [
+    {
+      "sha": "9ff06ae22d4ceb36e0606eca9529e716df56631e",
+      "shortSha": "9ff06ae2",
+      "date": "2026-07-04T15:50:42-07:00",
+      "author": "DENSENSE8",
+      "subject": "Ship AI hybrid search, assistant/MCP, entity signals, and theme system rollout.",
+      "body": "Adds entity search docs with outbox indexing, hybrid retrieval and /search UI, in-app assistant with reversible mutations, signals feed and rollups, Upstash caching, feed-membership projection, serial-unit provenance migrations, receiving rail exclusions, and semantic color tokens with multi-theme support across the app.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Ship AI hybrid search, assistant/MCP, entity signals, and theme system rollout."
+    },
+    {
+      "sha": "95f39f692f043ad25976898f1e017227a979a9fc",
+      "shortSha": "95f39f69",
+      "date": "2026-07-03T11:23:01-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Add universal feed polymorphic linkage plan",
+      "body": "Design doc for feed_links — a generic polymorphic membership table so\ntriage-style sidebar bulk-delete unlinks from the feed without touching\nthe underlying receiving/FBA/repair/order record. Includes the exact\nreceiving_triage state mapping verified against the current fetchers.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Add universal feed polymorphic linkage plan"
+    },
+    {
+      "sha": "997e3c3b5ea1f52158c572fcc40ae02abb758e11",
+      "shortSha": "997e3c3b",
+      "date": "2026-07-02T21:57:35-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Add photo reassignment — move a receiving photo to another PO/line from the UI",
+      "body": "Formalizes the manual \"move photo to another carton\" fix into a proper,\naudited feature: PATCH /api/photos/[id]/reassign re-points a photo's\nprimary entity link and po_ref, gated by receiving.upload_photo and\nrecorded via the PHOTO_REASSIGN audit action. Wires a MovePhotoToPoPanel\ninto the photo gallery/viewer so operators can do this themselves.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016yhRqxMaePRmiMafjoeVXt",
+      "type": "other",
+      "title": "Add photo reassignment — move a receiving photo to another PO/line from the UI"
+    },
+    {
+      "sha": "2b39d809346fcb661581795a28e92006fc4b2f62",
+      "shortSha": "2b39d809",
+      "date": "2026-07-01T17:38:59-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Universal Incoming eBay purchase sync, ShipStation outbound labels, and facts/permission updates",
+      "body": "Wires eBay buyer-side purchase orders into a polymorphic Incoming spine\n(equivalence/merge/mirror + cron sync), adds ShipStation rate-shopping,\nlabel purchase/void, and inbound webhook routes, and extends the\nreceiving facts registry, permission manifest, and integration\ncredentials/connector registry to support both.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016yhRqxMaePRmiMafjoeVXt",
+      "type": "other",
+      "title": "Universal Incoming eBay purchase sync, ShipStation outbound labels, and facts/permission updates"
+    },
+    {
+      "sha": "85535d2584065bc87988cf8b28d844b22052c418",
+      "shortSha": "85535d25",
+      "date": "2026-07-01T08:50:51-07:00",
+      "author": "DENSENSE8",
+      "subject": "Media library, outbound documents, receiving triage, and support tickets.",
+      "body": "Modernize the photo library (saved views, picker, grid density), replace order labels with polymorphic outbound documents, ship receiving triage staging/metrics/done flows, add entity-linked support tickets and RMA disposition/backlog, with migrations and route permissions.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Media library, outbound documents, receiving triage, and support tickets."
+    },
+    {
+      "sha": "d5619b9af9b60957d9343b8d9d3b1d239908acf5",
+      "shortSha": "d5619b9a",
+      "date": "2026-06-30T16:57:21-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "receiving rail updates and more",
+      "body": "",
+      "type": "other",
+      "title": "receiving rail updates and more"
+    },
+    {
+      "sha": "c49ef8ce1ca52d5eec237aa431afbc666aec0d02",
+      "shortSha": "c49ef8ce",
+      "date": "2026-06-30T08:53:53-07:00",
+      "author": "DENSENSE8",
+      "subject": "Receiving: facts spine, unified feed rails, and ops event log.",
+      "body": "Introduce receiving_line_facts tables with dual-write triggers and backfills,\na polymorphic ops_events spine for scan/unbox timelines, declarative ReceivingFeedRail\nfeeds replacing per-rail components, serial-absent reason codes with NoSerialControl,\npacker-log enrichment, virtual shipped sections, and sales-order import API.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Receiving: facts spine, unified feed rails, and ops event log."
+    },
+    {
+      "sha": "3bf959dea08c6ab6098ed08fda383f71ce6eff17",
+      "shortSha": "3bf959de",
+      "date": "2026-06-29T17:53:48-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Receiving: promote paired unmatched cartons + sidebar rail refinements",
+      "body": "Backfill migration to promote paired unmatched cartons, plus receiving\nworkspace, sidebar rail, idempotency, and carton-source-link updates.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01Bdw56Efkf1BspiVEGPccWA",
+      "type": "other",
+      "title": "Receiving: promote paired unmatched cartons + sidebar rail refinements"
+    },
+    {
+      "sha": "55b24d69ec3faf7262b994b16fe63defc98b2ccc",
+      "shortSha": "55b24d69",
+      "date": "2026-06-29T08:54:03-07:00",
+      "author": "DENSENSE8",
+      "subject": "small updated overall ux and UI",
+      "body": "",
+      "type": "other",
+      "title": "small updated overall ux and UI"
+    },
+    {
+      "sha": "9615c8cd54e3e59b3f859bc15a363d09651cfc07",
+      "shortSha": "9615c8cd",
+      "date": "2026-06-29T08:21:42-07:00",
+      "author": "DENSENSE8",
+      "subject": "Tenant isolation backstop, sellable-foundation features, and CI hardening.",
+      "body": "Roll out FORCE tenant-isolation migrations with cross-org canary and IDOR regression tests; tighten route auth manifest and advisory tenancy guard. Add auth email verification, beta waitlist, order amendments/substitution, parts graph, receiving relink/unpair, workflow placement policy, reason-code flow context, and knip dead-code ratchet. Reorganize planning docs into docs/todo and docs/partial.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Tenant isolation backstop, sellable-foundation features, and CI hardening."
+    },
+    {
+      "sha": "0f1352e425a323b9705c4d2900c99883edd8f14f",
+      "shortSha": "0f1352e4",
+      "date": "2026-06-27T10:55:29-07:00",
+      "author": "DENSENSE8",
+      "subject": "Receiving: carton-keyed workspace crossfade + Package Pairing showOpenInUnbox",
+      "body": "- ReceivingRightPane: key the workspace motion.div on the carton (receiving_id)\n  so sibling-line switches re-seed in place instead of remounting/crossfading.\n- LineMatchingSection: rename Smart matching → Package Pairing and add an\n  optional showOpenInUnbox prop so the Open-in-unbox jump is hidden when the\n  card is already rendered in unbox.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Receiving: carton-keyed workspace crossfade + Package Pairing showOpenInUnbox"
+    },
+    {
+      "sha": "620c27f584e4d09bf7ca22148751759501beac6d",
+      "shortSha": "620c27f5",
+      "date": "2026-06-27T10:47:53-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Receiving serial journeys + inline Ecwid search; timeline and triage refinements",
+      "body": "- Add serial journey components (src/components/serial, src/lib/serial,\n  station/receiving/ReceivingSerialJourneys) and wire them into the receiving\n  details/right-pane surfaces.\n- Replace the Ecwid product-search popover with an inline variant\n  (EcwidProductSearchInline) in the unmatched/line-matching flows; drop the old\n  popover and IncomingTodoList.\n- Refine receiving dashboard, email triage, incoming view band, unmatched items,\n  and shipped details; EventTimeline / TimelineSection tweaks; add useEscapeKey.\n- Operations history + local pickup edit updates; google-drive backup doc note.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01SCX9exQ2bTMiwXxazCCXb4",
+      "type": "other",
+      "title": "Receiving serial journeys + inline Ecwid search; timeline and triage refinements"
+    },
+    {
+      "sha": "1559765c6863b6ad03e0533a6545c261ee20ec9f",
+      "shortSha": "1559765c",
+      "date": "2026-06-27T08:53:59-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Make receiving idempotent against retries + concurrent double-fire (BUG-0013/0014)",
+      "body": "BUG-0013: receiveLineUnits now short-circuits on a batch-level idempotency\nguard — if this client_event_id's per-unit events already exist on the line\n(committed by a prior call), return the current state without mutating. The old\nper-unit ordinal suffix (`:unit-N`, N from the moving quantity_received) shifted\non retry, so ON CONFLICT(client_event_id) missed and the counter + non-serial\nledger double-applied; only mark-received-po's qty clamp masked it. Now\nidempotent for any caller; concurrent dups block on the FOR UPDATE lock then\nshort-circuit.\n\nBUG-0014: add reserve-up-front idempotency (claimOrReplay / finalize /\nrelease) so two concurrent requests with the same Idempotency-Key can't both\nrun produce() (which double-called Zoho purchase-receive). The first claims a\npending row; a concurrent second replays the finished response or gets 409\nin-progress. Abandoned claims self-heal after a stale window. Additive — the\nexisting get/save helpers are unchanged (zero blast radius on the other ~34\nroutes); adopted in mark-received-po at its existing claim/finalize/catch spots.\nDB-free unit test covers proceed/replay/in-progress/stale-reclaim/release/5xx.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01SCX9exQ2bTMiwXxazCCXb4",
+      "type": "other",
+      "title": "Make receiving idempotent against retries + concurrent double-fire (BUG-0013/0014)"
+    },
+    {
+      "sha": "65786204b952f606aa217bb3f6711429a67acc2c",
+      "shortSha": "65786204",
+      "date": "2026-06-27T08:25:40-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Org-scope packing-logs cache keys (tenant cache isolation)",
+      "body": "Thread organizationId into both the GET list cache key and the\nprependToPackerLogsCache writer key so a tenant can never be served\nanother org's cached packer logs. Completes the cache-isolation sweep\n(crud.ts / receiving-logs / staff already done); staffId is a global\nserial PK so collisions were unlikely, but this is the consistent\ndefense-in-depth fix in the same family.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01SCX9exQ2bTMiwXxazCCXb4",
+      "type": "other",
+      "title": "Org-scope packing-logs cache keys (tenant cache isolation)"
+    },
+    {
+      "sha": "f229d668ce76b9aec5b2e7a8e201a3171bf908fe",
+      "shortSha": "f229d668",
+      "date": "2026-06-26T17:01:30-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "google drive support and photo library",
+      "body": "",
+      "type": "other",
+      "title": "google drive support and photo library"
+    },
+    {
+      "sha": "6c488811e5ce38b3ea892c1e59d4d4d8889c371d",
+      "shortSha": "6c488811",
+      "date": "2026-06-26T14:21:28-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Harden route auth with CI enforce ratchet; receiving triage/photos and repair intake updates.",
+      "body": "Add audit-route-auth:enforce to block ungated routes, fail-closed internal API tokens with timing-safe compare, email triage and mobile photo galleries for receiving, repair paper ticket/canvas and order-link search, plus org-scoped report views and repair issue templates migrations.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Harden route auth with CI enforce ratchet; receiving triage/photos and repair intake updates."
+    },
+    {
+      "sha": "d4ed2f0bb8b1babf5ef5753f9694c46e3c8987e7",
+      "shortSha": "d4ed2f0b",
+      "date": "2026-06-25T16:58:54-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "nextiva and more support updates, zoho updates as well",
+      "body": "",
+      "type": "other",
+      "title": "nextiva and more support updates, zoho updates as well"
+    },
+    {
+      "sha": "15be28c1b08351dcb080536a6309411bcd74d00b",
+      "shortSha": "15be28c1",
+      "date": "2026-06-25T10:57:29-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Sync receiving Zoho notes and item descriptions bidirectionally with inline feedback.",
+      "body": "Push per-line item descriptions and carton PO header notes to Zoho on save/receive, append SN+condition on receive for serialized lines, and add carton zoho-sync plus shared inline action feedback in the workspace.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Sync receiving Zoho notes and item descriptions bidirectionally with inline feedback."
+    },
+    {
+      "sha": "201cfaa2e23fb88fb64e9a026a85a2e32c078d45",
+      "shortSha": "201cfaa2",
+      "date": "2026-06-25T09:08:00-07:00",
+      "author": "DENSENSE8",
+      "subject": "receiving notes 3-tab + photo lightbox fixes; drop receive UI test button",
+      "body": "- LineNotesTabbedCard: surface overall Zoho PO note as its own \"PO note\" tab\n  instead of a bottom-right expander (Notes / PO note / Checklist)\n- ReceiveFeedbackRegion: remove dev/preview ReceiveUiTestButton + demo scenarios\n- shipped photo gallery: lightbox/viewer fixes and util updates\n- update photo-mobile-lightbox e2e spec\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01KhxJ4swL1EYJCgw99ZMG6z",
+      "type": "other",
+      "title": "receiving notes 3-tab + photo lightbox fixes; drop receive UI test button"
+    },
+    {
+      "sha": "ae0ee2c69268addc5b6912492f152531ab08a045",
+      "shortSha": "ae0ee2c6",
+      "date": "2026-06-25T08:54:40-07:00",
+      "author": "DENSENSE8",
+      "subject": "zoho receiving and photo library and mobile updates",
+      "body": "",
+      "type": "other",
+      "title": "zoho receiving and photo library and mobile updates"
+    },
+    {
+      "sha": "7a1f2ed8a086075c9bb4d6d5aade8ad2f3b82444",
+      "shortSha": "7a1f2ed8",
+      "date": "2026-06-24T21:57:39-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: sync in-flight work — support console rebuild, receiving claim wizard, ops journey, kit parts, packer photos",
+      "body": "Support console (Zendesk) — deleted 8 monolithic components; rebuilt as\nmodular chat/claim/queue architecture under src/components/support/zendesk/;\nadded photo-ticket route, ticket-assign route, zendesk users route, and\nenhanced comment + Zendesk client lib with attachment helpers.\n\nReceiving claim wizard — multi-step flow (compose/confirm/photos/review/seller)\nreplaces single ClaimInternalStep; useReceivingClaimController extended with\nstep machine and photo upload; claim-types updated for new step shape.\n\nOperations — new OperationsSidebarPanel + sidebar/operations/ modules;\nOperationsWorkspace + feature workspace under src/features/operations/;\n/api/operations/journey and /api/operations/saved-views CRUD; useOperationsJourney\n+ useOperationsSavedViews hooks; journey timeline adapter (lib/timeline/journey.ts).\n\nKit parts — /api/sku-catalog/[id]/kit-parts route; KitPartsSection +\nKitPartsWorkspace UI; useSkuKitParts hook; schema lib; Products sidebar + workspace\nwired to ?view=kit mode.\n\nPacker photos — PackerPhotoCaptureSurface + PackerPhotoUploadQueue (mobile);\n/api/packing-photos + /api/packing/policy routes; /api/packerlogs/for-order;\nusePackerPhotosRealtimeRefresh; packing-logs save-photo route extended.\n\nPhoto library — PhotoDateTree, PhotoSortMenu, PhotoStationFolders, PhotoContextMenu;\ndate-tree query lib; deleted PhotoLibrarySidebarNav (consolidated into panel);\nPhotoLibraryPage extended; MobileSwipePhotoViewer rebuilt.\n\nSchema & migrations — receiving lifecycle columns, shipment links, support ticket\nassignments, operations saved views, receiving exceptions, tenant isolation for\nengine/kpi/photos, email-login tokens, staff org email; Drizzle schema updated.\n\nEmail login — /api/auth/email-login/request + /verify routes; signin page gains\nOTP flow.\n\nSettings — LegalSection added; SettingsSidebarPanel + settings-sections wired.\n\nDisplay archetype rules — .claude/rules/contextual-display.md + display/* docs\n(station, workbench, monitor-and-canvas, motion-crossfade, reference-timeline).\n\nOther — global-search expanded; scan/resolve refactored; HorizontalButtonSlider\ngains dense mode; motion-framer.ts new workbenchPane preset; DateGroupHeader +\nEventTimeline + TimelineSection polished; workflow tap additions; sidebar-navigation\ntest + types updated; tenancy coverage docs regenerated; UnshippedShelfBoard;\nIdentifierToggle; OperationsSidebarPanel; MobileSidebarDrawer.\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "sync in-flight work — support console rebuild, receiving claim wizard, ops journey, kit parts, packer photos"
+    },
+    {
+      "sha": "828fd06822e64ca3ab8752da29bd3c32650b24ac",
+      "shortSha": "828fd068",
+      "date": "2026-06-24T16:58:07-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "zoho fixes",
+      "body": "",
+      "type": "other",
+      "title": "zoho fixes"
+    },
     {
       "sha": "e291d44e53c348f7267cfafd5330558c17a84ffe",
       "shortSha": "e291d44e",
@@ -1761,226 +1981,6 @@
       "body": "",
       "type": "other",
       "title": "receiving udpate adn the testing sub page update"
-    },
-    {
-      "sha": "55fd66e4bad66d32c4a0c2c0e20e70e34ef3f5e7",
-      "shortSha": "55fd66e4",
-      "date": "2026-05-26T16:59:57-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "added a testing pipeline to the testing page and updated the receiving pipeline",
-      "body": "",
-      "type": "other",
-      "title": "added a testing pipeline to the testing page and updated the receiving pipeline"
-    },
-    {
-      "sha": "2d3c2f037f3639dd25dc87610ec4d53a65d427b3",
-      "shortSha": "2d3c2f03",
-      "date": "2026-05-26T12:32:47-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "station scan bar updates and dashboard order created at bug from search",
-      "body": "",
-      "type": "other",
-      "title": "station scan bar updates and dashboard order created at bug from search"
-    },
-    {
-      "sha": "f2736f95508575742d87ccf2dcbf469b7164c5ce",
-      "shortSha": "f2736f95",
-      "date": "2026-05-26T10:36:29-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the staff colors",
-      "body": "",
-      "type": "other",
-      "title": "updated the staff colors"
-    },
-    {
-      "sha": "401c0c8eec34ca176094f373ae1dc0527a5948fb",
-      "shortSha": "401c0c8e",
-      "date": "2026-05-26T09:43:51-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the packer to be more supportive of older devices",
-      "body": "",
-      "type": "other",
-      "title": "updated the packer to be more supportive of older devices"
-    },
-    {
-      "sha": "272c0b1387c65895909b0b4c8d5631dee0530ab0",
-      "shortSha": "272c0b13",
-      "date": "2026-05-26T08:48:22-07:00",
-      "author": "DENSENSE8",
-      "subject": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page",
-      "body": "",
-      "type": "other",
-      "title": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page"
-    },
-    {
-      "sha": "0bf84c1f9c664edde138d1ff623b086d3f1a5fb9",
-      "shortSha": "0bf84c1f",
-      "date": "2026-05-26T01:40:38-07:00",
-      "author": "DENSENSE8",
-      "subject": " updated the dashboard region import logic, and the cashing dashboard table, logic products page to be more ease of use receiving pair recent orders, exceptions, and multi serial number barcode component",
-      "body": "",
-      "type": "other",
-      "title": " updated the dashboard region import logic, and the cashing dashboard table, logic products page to be more ease of use receiving pair recent orders, exceptions, and multi serial number barcode component"
-    },
-    {
-      "sha": "7a12428b30ce0c8750dd92d6eec63f44b463122f",
-      "shortSha": "7a12428b",
-      "date": "2026-05-26T00:27:07-07:00",
-      "author": "DENSENSE8",
-      "subject": " updated the receiving side bar for a better display overall and manuals and staff display and sessions staff access",
-      "body": "",
-      "type": "other",
-      "title": " updated the receiving side bar for a better display overall and manuals and staff display and sessions staff access"
-    },
-    {
-      "sha": "0cc4ac89ed663d467b46323a8411b73c7a2d4613",
-      "shortSha": "0cc4ac89",
-      "date": "2026-05-25T23:48:01-07:00",
-      "author": "DENSENSE8",
-      "subject": "update in the mobile page resolver to resolve two data matrix instead of posting to the receiving table and small edits to the manual routes",
-      "body": "",
-      "type": "other",
-      "title": "update in the mobile page resolver to resolve two data matrix instead of posting to the receiving table and small edits to the manual routes"
-    },
-    {
-      "sha": "4fad25cd814541cabf1693e3d35ef7930c9227c3",
-      "shortSha": "4fad25cd",
-      "date": "2026-05-25T22:26:10-07:00",
-      "author": "DENSENSE8",
-      "subject": "Updated the usability of the FBA page and the products page to be easier to use an easier to find items that we need",
-      "body": "",
-      "type": "other",
-      "title": "Updated the usability of the FBA page and the products page to be easier to use an easier to find items that we need"
-    },
-    {
-      "sha": "064d0e764c2d8560e07da8f0ac9048736b4bf828",
-      "shortSha": "064d0e76",
-      "date": "2026-05-25T15:56:22-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updates to the PO main receiving",
-      "body": "",
-      "type": "other",
-      "title": "updates to the PO main receiving"
-    },
-    {
-      "sha": "846ef0c1074d8fdf46175017915a290e30cc0110",
-      "shortSha": "846ef0c1",
-      "date": "2026-05-25T14:48:25-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "ai extract and updates to the unfound receiving orders list",
-      "body": "",
-      "type": "other",
-      "title": "ai extract and updates to the unfound receiving orders list"
-    },
-    {
-      "sha": "23f6295a708c574e3a29a8027e7a18c0a37c0e05",
-      "shortSha": "23f6295a",
-      "date": "2026-05-25T09:08:30-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the TS error fixed and should deploy now",
-      "body": "",
-      "type": "other",
-      "title": "updated the TS error fixed and should deploy now"
-    },
-    {
-      "sha": "4815e12266583da23d63d23f5441957dc9424086",
-      "shortSha": "4815e122",
-      "date": "2026-05-25T01:23:38-07:00",
-      "author": "DENSENSE8",
-      "subject": "chore: rollup of in-flight receiving, repair, operations, and FBA work",
-      "body": "Bundles parallel updates that accumulated alongside the inventory\nsidebar overhaul. No single coherent feature — touches several areas at\nonce, captured here so the working tree clears.\n\n## Receiving + Ecwid\n\n- New /api/ecwid/recent-repair-orders endpoint\n- scripts/sync-ecwid-incoming-repairs updated\n- Receiving workspace: LineEditPanel, ReceivingLineWorkspace,\n  ReceivingClaimModal, ReceivingPoLabelPreview, ProgressStepper,\n  label helpers\n- UnfoundQueueTable + EcwidProductSearchPopover updates\n- Sidebar: ReceivingSidebarPanel, ActiveCartonFeedback,\n  ReceivingRecentRail, receiving-sidebar-shared\n- New UnmatchedItemsSection workspace component\n- Removed UnfoundLineEditPanel (superseded by inline editing)\n- Migration: 2026-05-25_receiving_source_platform_ecwid.sql\n- Migration: 2026-05-25_unfound_queue_drop_linked.sql\n\n## Repair\n\n- RepairDetailsPanel + RepairIntakeForm updates\n- useRepairQueries + repair-service-queries adjustments\n- /api/repair-service/next route changes\n- /api/m/rs/[id] page tweaks\n- Migration: 2026-05-25_repair_drop_incoming_status.sql\n\n## Operations dashboard\n\n- New DataSourcePopover + KpiDetailsModal\n- operations-data-sources catalog\n- Dashboard recomposed: DashboardKPICard, GlobalHeaderBar,\n  LiveFeedCard, SecondaryKPITiles, OperationsDashboard\n- Removed WelcomeHero (replaced by the new header bar)\n\n## FBA\n\n- New board-drag + catalog-key-validation lib helpers\n- FbaBoardDetailPanel + sidebar drag components\n  (ActiveShipments, DraggableLineRow, TrackingBucket,\n  TrackingGroupDisplay, UnallocatedBucket)\n- /fba page wiring\n\n## Shared / misc\n\n- Icons.tsx, HorizontalButtonSlider, StickyActionBar polish\n- New SlideOverBackdrop UI primitive\n- PackerTable, TechDashboard, ShippedSidebar, ShippedDetailsPanel,\n  WorkOrderDetailsPanel, SkuDetailView, SalesDetailsPanel,\n  ReceivingDetailsStack updates\n- Drizzle schema + printReceivingLabel + zendesk-claim-template +\n  scripts/seed-roles updates\n- New docs/skills/* notes (Code Architecture, Feature Interaction Map,\n  Frontend Modernization, UX/UI Analysis plan)\n- app/layout.tsx tweak\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "chore",
-      "title": "rollup of in-flight receiving, repair, operations, and FBA work"
-    },
-    {
-      "sha": "84ed2cce32d6c7ae1f8544d963daacd0cf56dff4",
-      "shortSha": "84ed2cce",
-      "date": "2026-05-25T01:21:51-07:00",
-      "author": "DENSENSE8",
-      "subject": "feat(inventory): tabbed sidebar overhaul + activity inbox in FAB popover",
-      "body": "## Inventory sidebar\n\nReplace the single flat inventory sidebar with a 6-tab structure modeled\nafter the dashboard/shipped sidebar pattern:\n\n- Activity (default landing) · Bins · SKUs · Units · Alerts · Counts\n- Per-tab scoped-search field pills (All / Bin Barcode / Zone / Room /\n  SKU Held; All / SKU / Product Title / Brand; etc.)\n- Multi-select bucket filter chips with server-side counts where the\n  endpoint exposes them\n- 250ms debounced TanStack search with per-tab cache keys\n- Per-tab recent searches in localStorage\n- Cross-tab handoff card surfaces when another tab has more matches for\n  the active query\n- Deep-linkable URL state: `/inventory/<tab>?q=…&field=…&filter=…&open=…`\n- Sub-route pages under /inventory/{activity,bins,skus,units,alerts,counts}\n\n## Detail pane\n\nRow clicks now fill the main right pane (not a slide-in overlay).\nSelection is driven by `?open=<kind>:<publicRef>` so refresh restores\nstate. ESC and `[` / `]` keys close / walk prev-next through the\ncurrent result list.\n\nDetail panels:\n- BinDetailsPanel / SkuDetailsPanel / UnitDetailsPanel reuse existing\n  ByBin / BySku / ByUnit views\n- UnitDetailsPanel adds grade + hold/release action cards on top of the\n  unit timeline\n- AlertDetailsPanel — read-only feed view + Acknowledge button\n- CountCampaignDetailsPanel — campaign progress + status\n\n## API\n\nNew read endpoints:\n- GET /api/inventory/alerts — stock_alerts with bucket counts\n- GET /api/inventory/counts — cycle_count_campaigns with derived status\n  + per-line progress\n\nNew mutation endpoints:\n- POST /api/inventory/alerts/[id]/ack — sets resolved_at, idempotent\n- POST /api/serial-units/[id]/grade — updates condition_grade, appends\n  inventory_event + serial_unit_condition_history (linked via event id)\n\nReuses existing /api/serial-units/[id]/hold + /release for hold actions.\n\nAdds permissions: `stock_alerts.ack`, `serial_units.grade`.\n\n## Activity inbox\n\nRelocate the bottom-left ActivityInboxDock into the Quick Access FAB\npopover as an \"Actions\" row with a Bell icon and a rose-colored unread\nbadge. Click opens a secondary ActivityInboxPopover (same pattern as\nPhone history). ActivityInboxDock export retained for opt-in callers\nbut no longer auto-mounted from ResponsiveLayout.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "feature",
-      "title": "tabbed sidebar overhaul + activity inbox in FAB popover"
-    },
-    {
-      "sha": "1ac48ae07402b9ef692e5b21e66af81105053141",
-      "shortSha": "1ac48ae0",
-      "date": "2026-05-24T13:26:30-07:00",
-      "author": "DENSENSE8",
-      "subject": "updated the main interface and design system, tech pages to be very simple",
-      "body": "",
-      "type": "other",
-      "title": "updated the main interface and design system, tech pages to be very simple"
-    },
-    {
-      "sha": "0f309dafb0fed78f6edb88a661a18a776705de6e",
-      "shortSha": "0f309daf",
-      "date": "2026-05-22T17:04:20-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated a lot",
-      "body": "",
-      "type": "other",
-      "title": "updated a lot"
-    },
-    {
-      "sha": "11476f0c26b9a1cb444061a1bfd1cd9cccd5a7ac",
-      "shortSha": "11476f0c",
-      "date": "2026-05-22T11:59:04-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "feat(electron): Edit menu + draggable top strip",
-      "body": "Two long-missing shell affordances:\n\n1. Edit menu (cut/copy/paste/select-all). The menu was just View + Window,\n   so Cmd+V was never routed through Electron's role-based clipboard\n   handler — meaning paste into embedded <webview> content (the Zoho login\n   form via the new ZohoSplitPane) silently failed. Adding the Edit\n   submenu — plus the standard macOS app submenu — wires Cmd+C / Cmd+V /\n   Cmd+X / Cmd+A into the focused guest page.\n\n2. ElectronDragStrip. titleBarStyle:'hiddenInset' removes the native title\n   bar but the renderer's content covered y=0 with no app-region:drag,\n   leaving the window un-draggable. The new component is a fixed 28px\n   strip at the top: WebkitAppRegion:'drag' with pointer-events:none, so\n   mousedown drags the window while regular clicks pass through to the\n   UI below. On macOS we leave a 78px gap for the traffic-light buttons.\n   Mounted in app/layout.tsx; only renders when desktopApp.isElectron.",
-      "type": "feature",
-      "title": "Edit menu + draggable top strip"
-    },
-    {
-      "sha": "c4452a12e09dbb383d45288af7357ef76201b55d",
-      "shortSha": "c4452a12",
-      "date": "2026-05-22T11:26:23-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "feat(receiving): optimistic receive, idempotent rescans, Zoho slide-in pane",
-      "body": "OVER_RECEIVE → graceful: receiveLineUnits short-circuits when the same serial\nis already on this line, returning already_received instead of throwing. UI\nswaps the over-receive confirm dialog for a success toast in that case.\n\nIdempotency wrapper: scan-serial + mark-received-po now cache responses in\napi_idempotency_responses by (Idempotency-Key | client_event_id, route), so\nnetwork retries replay the same answer instead of re-running.\n\nOptimistic Receive: mark-received-po returns success as soon as local DB\nwrites commit. Lines eager-promote to DONE locally (SoT is here, not Zoho).\ncreatePurchaseReceive + description PUT + DONE-gate moved into after();\nZoho \"already created a receive for all the items\" is treated as success.\nOperator sees 1/1 + green dot immediately; Zoho catches up in the\nbackground.\n\nConnection-pool fix: threaded the receiveLineUnits transaction client into\nthe ledger / tech_serial_numbers / inventory_events writes that previously\nused pool.query — they were grabbing a second connection out of poolMax=3\nin prod and tripping the 30s query_timeout under concurrent receivers.\n\nDot color sync: every receiving status dot (mobile rows + carton sheet +\nstation table + recent rail) now turns emerald when received >= expected,\nmatching the green qty text instead of staying blue on MATCHED.\n\nZoho slide-in: per-line flow header gets an \"Open in Zoho\" action that\nreveals an in-app right-side pane (ZohoSplitPane). Electron mounts the\nembedded webview; browser tabs see an \"Open in Zoho\" link. Draggable\nleft edge resizes; width is persisted to localStorage. No popup windows.\n\nHydration fix: PoLinesAccordion was nesting a <div> chip inside a <p>.",
-      "type": "feature",
-      "title": "optimistic receive, idempotent rescans, Zoho slide-in pane"
-    },
-    {
-      "sha": "5e19cd9197b8ace5573b5c262dd56988fdced00e",
-      "shortSha": "5e19cd91",
-      "date": "2026-05-22T10:18:21-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed ts error",
-      "body": "",
-      "type": "fix",
-      "title": "fixed ts error"
-    },
-    {
-      "sha": "5e9208c97d7143c48c2b3fcd53bbc503842f2569",
-      "shortSha": "5e9208c9",
-      "date": "2026-05-22T08:49:21-07:00",
-      "author": "DENSENSE8",
-      "subject": "feat: receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements",
-      "body": "- Receiving: refactored line workspace, serial scanning, condition pills, photo capture, audit timeline, and mobile receiving flow\n- SKU catalog: new pairing hub with batch pairing, pairing queue, suggestion seeding, and pairing-queries lib\n- PO mailbox: added triage routes/components and LLM-based extraction helper\n- Barcode/labels: new GS1 DataMatrix, location/rack label printers, label room sidebar, and printer store hook\n- Warehouse: rack detail/label workspace, room finder context, room sidebar list\n- Shipped details panel: removed legacy panel and shipping edit card, updated stacks and action bar\n- Mobile: new bottom nav, mobile home/history routes, scan FAB improvements\n- Inventory v2: controls panel, URL state hook, removed moved-banner\n- Misc: barcode routing updates, receiving label helpers, manifest/icon updates, cleanup of unused hooks/components\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "feature",
-      "title": "receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements"
-    },
-    {
-      "sha": "dac10049ce9d7d40b18d879bfe7c99c1c981c139",
-      "shortSha": "dac10049",
-      "date": "2026-05-21T17:00:21-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "sku and receiving and products mutlisku component",
-      "body": "",
-      "type": "other",
-      "title": "sku and receiving and products mutlisku component"
-    },
-    {
-      "sha": "7a7b8108393066d8537b9249fc8dbf53a10b76cd",
-      "shortSha": "7a7b8108",
-      "date": "2026-05-21T13:48:15-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated picker and receiving mobile display",
-      "body": "",
-      "type": "other",
-      "title": "updated picker and receiving mobile display"
     }
   ]
 }

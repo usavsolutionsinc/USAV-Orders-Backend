@@ -7,11 +7,19 @@
  */
 
 import { useState } from 'react';
-import { Copy, ExternalLink, Pencil } from '@/components/Icons';
+import { Copy, ChevronDown, ExternalLink, Pencil } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { CopyChip, type ChipTone } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { RECEIVING_CHIP_EDIT_BTN_CLASS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { normalizeCopyText } from '@/lib/copy-chip-format';
 import { recordCopy } from '@/lib/clipboard-history';
+
+function buildOpenLinksHubHref(links: Array<{ href: string }>): string {
+  // Keep this URL short + robust: JSON array of hrefs in a query param.
+  const qs = new URLSearchParams({ links: JSON.stringify(links.map((l) => l.href)) });
+  return `/open-links?${qs.toString()}`;
+}
 
 export function IdentityLinkChip({
   openHref,
@@ -30,6 +38,7 @@ export function IdentityLinkChip({
   chipAction = 'copy',
   showExternalIcon = false,
   menuFirstAction = 'open',
+  linkOptions,
 }: {
   openHref: string | null | undefined;
   openTitle: string;
@@ -60,6 +69,8 @@ export function IdentityLinkChip({
   showExternalIcon?: boolean;
   /** First menu row. Listing uses Copy; PO/tracking use Open. */
   menuFirstAction?: 'open' | 'copy';
+  /** Additional open targets — when length > 1, the hover menu lists every link. */
+  linkOptions?: Array<{ href: string; label: string; title?: string }>;
 }) {
   const [menuHover, setMenuHover] = useState(false);
   const normalizedValue = normalizeCopyText(value);
@@ -72,7 +83,16 @@ export function IdentityLinkChip({
     void navigator.clipboard.writeText(normalizedValue);
     recordCopy(normalizedValue, { kind: tone, display });
   };
-  const hasMenuActions = actionsInMenu && (!!onEdit || menuFirstAction === 'copy' || !!openHref);
+  const multiLinks = (linkOptions?.length ?? 0) > 1 ? linkOptions! : null;
+  const openAllLinks = () => {
+    if (!multiLinks) return;
+    // Reliable path: open a single hub tab; the user can open all from there
+    // without the hover-menu popup blocker interference.
+    window.open(buildOpenLinksHubHref(multiLinks), '_blank', 'noopener,noreferrer');
+  };
+  const hasMenuActions =
+    actionsInMenu &&
+    (!!onEdit || menuFirstAction === 'copy' || !!openHref || multiLinks != null);
   const showActionMenu = hasMenuActions && !editOpen;
 
   return (
@@ -86,51 +106,55 @@ export function IdentityLinkChip({
       onMouseLeave={() => setMenuHover(false)}
     >
       {!actionsInMenu ? (
-        <button
-          type="button"
-          disabled={!openHref}
-          onClick={openExternal}
-          aria-label={openTitle}
-          title={openHref ? openTitle : 'No link available'}
-          className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:text-slate-300 disabled:opacity-60"
-        >
-          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-        </button>
+        <HoverTooltip label={openHref ? openTitle : 'No link available'} asChild>
+          <IconButton
+            icon={<ExternalLink className="h-3.5 w-3.5 shrink-0" />}
+            ariaLabel={openTitle}
+            disabled={!openHref}
+            onClick={openExternal}
+            tone="accent"
+            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:text-text-faint disabled:opacity-60"
+          />
+        </HoverTooltip>
       ) : null}
-      <CopyChip
-        value={value}
-        display={display}
-        tone={tone}
-        icon={showExternalIcon ? <ExternalLink className="h-4 w-4 shrink-0" /> : undefined}
-        underlineClass={underlineClass}
-        iconClass={iconClass}
-        width={grow ? 'min-w-0 flex-1 max-w-full' : 'w-auto'}
-        outerPad="flush"
-        disableCopy={disableCopy}
-        fitDisplayWidth={!grow}
-        truncateDisplay={grow}
-        onActivate={chipAction === 'open' ? openExternal : undefined}
-        activationLabel={chipAction === 'open' ? openTitle : undefined}
-        activationTitle={
-          chipAction === 'open'
-            ? openHref
-              ? openTitle
-              : 'No link available'
-            : undefined
-        }
-        activationDisabled={chipAction === 'open' && !openHref && !onEdit}
-      />
+      <div className={`flex min-w-0 items-center gap-0.5 ${grow ? 'flex-1' : ''}`}>
+        <CopyChip
+          value={value}
+          display={display}
+          tone={tone}
+          icon={showExternalIcon ? <ExternalLink className="h-4 w-4 shrink-0" /> : undefined}
+          underlineClass={underlineClass}
+          iconClass={iconClass}
+          width={grow ? 'min-w-0 flex-1 max-w-full' : 'w-auto'}
+          outerPad="flush"
+          disableCopy={disableCopy}
+          fitDisplayWidth={!grow}
+          truncateDisplay={grow}
+          onActivate={chipAction === 'open' ? openExternal : undefined}
+          activationLabel={chipAction === 'open' ? openTitle : undefined}
+          activationTitle={
+            chipAction === 'open'
+              ? openHref
+                ? openTitle
+                : 'No link available'
+              : undefined
+          }
+          activationDisabled={chipAction === 'open' && !openHref && !onEdit}
+        />
+        {multiLinks ? (
+          <ChevronDown className="h-3 w-3 shrink-0 text-text-faint" aria-hidden />
+        ) : null}
+      </div>
       {!actionsInMenu && onEdit ? (
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-expanded={editOpen}
-          aria-label={editLabel}
-          title={editOpen ? 'Done editing' : editLabel}
-          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
+        <HoverTooltip label={editOpen ? 'Done editing' : (editLabel ?? '')} asChild>
+          <IconButton
+            icon={<Pencil className="h-3 w-3" />}
+            ariaLabel={editLabel ?? ''}
+            onClick={onEdit}
+            aria-expanded={editOpen}
+            className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+          />
+        </HoverTooltip>
       ) : null}
       {showActionMenu ? (
         <div
@@ -139,8 +163,7 @@ export function IdentityLinkChip({
           // anchored previews (ticket history) are the only panel shown.
           // Hover-only visibility — focus-within kept menus stuck open after a
           // chip click (especially chips on the wrapped second row).
-          // eslint-disable-next-line no-restricted-syntax
-          className={`absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 transition-opacity duration-100 ${
+          className={`absolute left-1/2 top-full z-panelPopover -translate-x-1/2 pt-1 transition-opacity duration-100 ${
             menuHover
               ? 'visible pointer-events-auto opacity-100'
               : 'invisible pointer-events-none opacity-0'
@@ -149,44 +172,80 @@ export function IdentityLinkChip({
           <div
             role="menu"
             aria-label={`${display} actions`}
-            className="min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+            className="min-w-[128px] overflow-hidden rounded-lg border border-border-soft bg-surface-card shadow-lg"
           >
+            {multiLinks ? (
+              <>
+                {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={openAllLinks}
+                  aria-label={`Open all ${display} links`}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                  Open all
+                </button>
+                <div className="border-t border-border-hairline" role="separator" />
+                {multiLinks.map((opt) => (
+                  <HoverTooltip key={opt.href} label={opt.title ?? opt.label} asChild>
+                    {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => window.open(opt.href, '_blank', 'noopener,noreferrer')}
+                      aria-label={`Open ${opt.label}`}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                      <span className="min-w-0 truncate normal-case tracking-normal">{opt.label}</span>
+                    </button>
+                  </HoverTooltip>
+                ))}
+                <div className="border-t border-border-hairline" role="separator" />
+              </>
+            ) : null}
             {menuFirstAction === 'open' ? (
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!openHref}
-                onClick={openExternal}
-                aria-label={openTitle}
-                title={openHref ? openTitle : 'No link available'}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-40"
-              >
-                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-                Open
-              </button>
+              <HoverTooltip label={openHref ? openTitle : 'No link available'} asChild>
+                {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!openHref}
+                  onClick={openExternal}
+                  aria-label={openTitle}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-text-faint disabled:opacity-40"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                  Open
+                </button>
+              </HoverTooltip>
             ) : (
+              // ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button
               <button
                 type="button"
                 role="menuitem"
                 disabled={!canCopy}
                 onClick={copyValue}
                 aria-label={`Copy ${display}`}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Copy className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                <Copy className="h-3.5 w-3.5 shrink-0 text-text-soft" />
                 Copy
               </button>
             )}
             {onEdit ? (
+              // ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button
               <button
                 type="button"
                 role="menuitem"
                 onClick={onEdit}
                 aria-expanded={editOpen}
                 aria-label={editLabel}
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 border-t border-border-hairline px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-text-muted hover:bg-surface-hover"
               >
-                <Pencil className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-text-soft" />
                 Edit
               </button>
             ) : null}

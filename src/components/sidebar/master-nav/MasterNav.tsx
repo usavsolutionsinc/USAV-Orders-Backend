@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   APP_SIDEBAR_NAV,
-  getSidebarNavItems,
   getSidebarPageNav,
   type SidebarNavItem,
   type SidebarPageNav,
 } from '@/lib/sidebar-navigation';
+import { useOrgNavItems } from '@/hooks/useOrgNavItems';
 import { useActiveSidebarMode } from './useActiveSidebarMode';
 import { useSidebarModeNav } from './useSidebarModeNav';
 import { useRecentPages } from './useRecentPages';
@@ -17,7 +17,9 @@ import type { ReactNode } from 'react';
 /** Merge a flat nav item with its mode metadata (if the page has modes). */
 function toPageNav(item: SidebarNavItem): SidebarPageNav {
   const page = getSidebarPageNav(item.id);
-  return page ? { ...page, icon: item.icon } : item;
+  // Carry the flat item's icon AND label so a per-org nav override (which
+  // renames via the flat item) survives the merge for modeful pages too.
+  return page ? { ...page, icon: item.icon, label: item.label } : item;
 }
 
 /**
@@ -87,9 +89,12 @@ export function MasterNav({
     setExpandedKey(null);
   }, [pageId, modeId]);
 
+  // Per-org nav override applied (Phase 4). Falls back to the static defaults
+  // when no override is published — behavior is unchanged until an org opts in.
+  const navItems = useOrgNavItems({ permissions, mobileRestricted });
   const pages = useMemo(
-    () => getSidebarNavItems({ permissions, mobileRestricted }).map(toPageNav).map((page) => filterPageModes(page, permissions)),
-    [permissions, mobileRestricted],
+    () => navItems.map(toPageNav).map((page) => filterPageModes(page, permissions)),
+    [navItems, permissions],
   );
 
   const activePage = useMemo<SidebarPageNav>(() => {

@@ -35,9 +35,9 @@ export async function getOrders(orgId: string): Promise<WorkOrderRow[]> {
            'tracking_number_raw', stn2.tracking_number_raw,
            'is_primary', osl.is_primary
          ) ORDER BY osl.is_primary DESC, stn2.tracking_number_raw)
-         FROM order_shipment_links osl
+         FROM shipment_links osl
          JOIN shipping_tracking_numbers stn2 ON stn2.id = osl.shipment_id
-         WHERE osl.order_row_id = o.id
+         WHERE osl.owner_type = 'ORDER' AND osl.owner_id = o.id
            AND osl.organization_id = $1
        ), '[]'::json) AS tracking_number_rows,
        o.sku,

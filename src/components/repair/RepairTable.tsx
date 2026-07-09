@@ -3,18 +3,20 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, X, PrinterAlt, DollarSign } from '../Icons';
 import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
-import WeekHeader from '@/components/ui/WeekHeader';
+import DateRangeHeader from '@/components/ui/DateRangeHeader';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useRepairsTable } from '@/hooks/useRepairs';
 import { formatPhoneNumber } from '@/utils/phone';
 import { toPSTDateKey } from '@/utils/date';
 import { mobileIconSize } from '@/design-system/tokens/touch';
+import { Button } from '@/design-system/primitives';
 
 interface RepairTableProps {
   filter: RepairTab;
@@ -177,12 +179,12 @@ export function RepairTable({ filter }: RepairTableProps) {
   };
 
   const rowActionButtonClass =
-    'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-gray-50 text-gray-400 transition-colors hover:border-gray-200 disabled:cursor-not-allowed disabled:opacity-40';
+    'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-surface-canvas text-text-faint transition-colors hover:border-border-soft disabled:cursor-not-allowed disabled:opacity-40';
 
   return (
-    <div className="flex h-full w-full bg-white relative">
+    <div className="flex h-full w-full bg-surface-card relative">
       <div className="flex-1 flex flex-col overflow-hidden">
-        <WeekHeader
+        <DateRangeHeader
           count={filteredRepairs.length}
           rightSlot={
             <div className="flex items-center gap-2">
@@ -190,6 +192,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                 <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                   <Search className="w-3 h-3" />
                   <span className="text-eyebrow font-black uppercase tracking-widest">{search}</span>
+                  {/* ds-raw-button: dismiss embedded inside an orange filter chip; inherits the chip hue, not a DS variant */}
                   <button
                     onClick={clearSearch}
                     className="hover:text-orange-900 transition-colors"
@@ -200,12 +203,9 @@ export function RepairTable({ filter }: RepairTableProps) {
                 </div>
               )}
               {selectedRepair && (
-                <button
-                  onClick={() => setSelectedRepair(null)}
-                  className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-eyebrow font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
-                >
+                <Button variant="primary" size="sm" onClick={() => setSelectedRepair(null)}>
                   Close Panel
-                </button>
+                </Button>
               )}
             </div>
           }
@@ -214,7 +214,7 @@ export function RepairTable({ filter }: RepairTableProps) {
         {/* Table Content */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-500">
+            <div className="flex flex-col items-center justify-center py-40 gap-3 text-text-soft">
               <LoadingSpinner size="lg" className="text-blue-600" />
               <p className="text-micro font-black uppercase tracking-widest">Loading Repairs...</p>
             </div>
@@ -225,13 +225,13 @@ export function RepairTable({ filter }: RepairTableProps) {
                   <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Search className="w-8 h-8 text-red-400" />
                   </div>
-                  <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">Repair not found</h3>
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                  <h3 className="text-lg font-black text-text-default uppercase tracking-tight mb-1">Repair not found</h3>
+                  <p className="text-xs text-text-soft font-bold uppercase tracking-widest leading-relaxed">
                     We couldn't find any repairs matching "{search}"
                   </p>
                 </div>
               ) : (
-                <p className="text-gray-500 font-medium italic opacity-20">No repairs found</p>
+                <p className="text-text-soft font-medium italic opacity-20">No repairs found</p>
               )}
             </div>
           ) : (
@@ -262,36 +262,36 @@ export function RepairTable({ filter }: RepairTableProps) {
                         tabIndex={0}
                         aria-pressed={selectedRepair?.id === repair.id}
                         aria-label={`Open repair details for ${repair.product_title || `record ${repair.id}`}`}
-                        className={`grid grid-cols-[1fr_220px] items-center gap-1 pl-4 pr-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
-                          selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                        className={`grid grid-cols-[1fr_220px] items-center gap-1 pl-4 pr-4 py-3 transition-all border-b border-border-hairline cursor-pointer hover:bg-blue-50/50 ${
+                          selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-surface-card' : 'bg-surface-canvas/10'
                         }`}
                       >
                         <div className="flex flex-col min-w-0 gap-1">
-                          <div className="text-sm font-black text-gray-900 truncate leading-tight">
+                          <div className="text-sm font-black text-text-default truncate leading-tight">
                             {repair.product_title || 'Unknown Product'}
                           </div>
-                          <div className="text-caption font-black text-gray-700 truncate leading-tight">
+                          <div className="text-caption font-black text-text-muted truncate leading-tight">
                             {repair.issue || repair.source_tracking_number || 'No issue specified'}
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
                             <div className="text-micro font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
                               {repair.price ? `$${repair.price}` : '---'}
                             </div>
-                            <div className="text-micro font-black text-gray-700 truncate uppercase tracking-tight">
+                            <div className="text-micro font-black text-text-muted truncate uppercase tracking-tight">
                               {repair.customer_name || (() => {
                                 if (!repair.contact_info) return 'No Name';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[0] || 'No Name';
                               })()}
                             </div>
-                            <div className="text-eyebrow font-bold text-gray-500 truncate">
+                            <div className="text-eyebrow font-bold text-text-soft truncate">
                               {formatPhoneNumber(repair.customer_phone || (() => {
                                 if (!repair.contact_info) return '';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[1] || '';
                               })())}
                             </div>
-                            <div className="text-mini font-bold text-gray-900 lowercase truncate">
+                            <div className="text-mini font-bold text-text-default lowercase truncate">
                               {repair.source_tracking_number || repair.customer_email || (() => {
                                 if (!repair.contact_info) return '';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
@@ -314,29 +314,45 @@ export function RepairTable({ filter }: RepairTableProps) {
                               display={getLast4(repair.ticket_number)}
                             />
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
-                            className={`${rowActionButtonClass} hover:bg-blue-50 hover:text-blue-600`}
-                            title="View Repair Document"
-                          >
-                            <PrinterAlt className={mobileIconSize.inline} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void openSquarePayment(repair)}
-                            disabled={!canCreateSquarePayment(repair) || payingRepairId === repair.id}
-                            className={`${rowActionButtonClass} hover:bg-emerald-50 hover:text-emerald-600`}
-                            title={
+                          <HoverTooltip label="View Repair Document" focusable={false} asChild>
+                            {/* ds-raw-button: table row-action icon button — fixed h-8 w-8 keeps the trailing-column alignment */}
+                            <button
+                              type="button"
+                              onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
+                              className={`${rowActionButtonClass} hover:bg-blue-50 hover:text-blue-600`}
+                              aria-label="View Repair Document"
+                            >
+                              <PrinterAlt className={mobileIconSize.inline} />
+                            </button>
+                          </HoverTooltip>
+                          <HoverTooltip
+                            label={
                               !canCreateSquarePayment(repair)
                                 ? 'Set source SKU or valid price to enable Square payment'
                                 : getRepairSourceSku(repair)
                                   ? 'Create Square payment link from matching catalog SKU'
-                                : 'Create Square payment link (price fallback)'
+                                  : 'Create Square payment link (price fallback)'
                             }
+                            focusable={false}
+                            asChild
                           >
-                            <DollarSign className={`${mobileIconSize.inline} ${payingRepairId === repair.id ? 'animate-pulse' : ''}`} />
-                          </button>
+                            {/* ds-raw-button: table row-action icon button — fixed h-8 w-8 keeps the trailing-column alignment */}
+                            <button
+                              type="button"
+                              onClick={() => void openSquarePayment(repair)}
+                              disabled={!canCreateSquarePayment(repair) || payingRepairId === repair.id}
+                              className={`${rowActionButtonClass} hover:bg-emerald-50 hover:text-emerald-600`}
+                              aria-label={
+                                !canCreateSquarePayment(repair)
+                                  ? 'Set source SKU or valid price to enable Square payment'
+                                  : getRepairSourceSku(repair)
+                                    ? 'Create Square payment link from matching catalog SKU'
+                                    : 'Create Square payment link (price fallback)'
+                              }
+                            >
+                              <DollarSign className={`${mobileIconSize.inline} ${payingRepairId === repair.id ? 'animate-pulse' : ''}`} />
+                            </button>
+                          </HoverTooltip>
                         </div>
                       </motion.div>
                     ))}

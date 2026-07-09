@@ -1,6 +1,19 @@
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { buildUnmatchedStubRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { classifyInput, parseScannedUrl } from '@/lib/scan-resolver';
 import { routeScan } from '@/lib/barcode-routing';
+
+/** Minimal carton header from GET /api/receiving/:id — used when lines are empty. */
+type ReceivingCartonHeader = {
+  tracking?: string | null;
+  tracking_number?: string | null;
+  source?: string | null;
+  zoho_purchaseorder_id?: string | null;
+  zoho_purchaseorder_number?: string | null;
+  carrier?: string | null;
+  source_platform?: string | null;
+  intake_type?: string | null;
+};
 
 /**
  * Unit-id format printed by MultiSkuSnBarcode / unit-id.ts:
@@ -37,6 +50,26 @@ export type ForcedTestingType = 'tracking' | 'po' | 'serial' | 'sku';
 export type ResolvedTestingScan =
   | { kind: 'line'; row: ReceivingLineRow; via?: ResolvedVia }
   | { kind: 'multi'; rows: ReceivingLineRow[]; receivingId: number; via?: ResolvedVia }
+  /**
+   * A license-plated box/tray (H-####) scan. Carries the resolved
+   * `handlingUnitId` so a workbench consumer can open the box panel to re-sort
+   * its units; `rows` (the box's receiving lines) are kept so consumers that
+   * only want the lines — the mobile list, the receiving picker — degrade to
+   * the same behaviour as `multi`.
+   */
+  | {
+      kind: 'box';
+      handlingUnitId: number;
+      rows: ReceivingLineRow[];
+      receivingId: number;
+      via: 'lpn';
+    }
+  /**
+   * A preboxed KIT master label (KIT-####). Carries the scanned `manifestRef`
+   * (the manifest_uid) so a workbench consumer can open the manifest detail
+   * panel; the mobile/receiving consumers ignore it (no manifest surface there).
+   */
+  | { kind: 'manifest'; manifestRef: string }
   | { kind: 'not_found'; query: string }
   | { kind: 'error'; message: string };
 
@@ -98,6 +131,57 @@ async function fetchLinesByReceivingId(receivingId: number) {
   if (!res.ok) throw new Error(`receiving-lines fetch failed (${res.status})`);
   const data = await res.json();
   return (data?.receiving_lines ?? []) as ReceivingLineRow[];
+}
+
+async function fetchReceivingCartonHeader(
+  receivingId: number,
+): Promise<ReceivingCartonHeader | null> {
+  const res = await fetch(`/api/receiving/${receivingId}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`receiving fetch failed (${res.status})`);
+  const data = await res.json();
+  if (!data?.success || !data.receiving) return null;
+  return data.receiving as ReceivingCartonHeader;
+}
+
+/**
+ * Synthetic line for a carton that exists but has zero receiving_lines yet —
+ * unfound door scans before the operator adds a SKU via Package Pairing.
+ */
+export function stubRowFromCartonHeader(
+  receivingId: number,
+  scanValue: string,
+  carton: ReceivingCartonHeader,
+): ReceivingLineRow {
+  const tracking =
+    String(carton.tracking ?? carton.tracking_number ?? scanValue).trim() || scanValue;
+  const stub = buildUnmatchedStubRow(receivingId, tracking);
+  const source = String(carton.source ?? '').trim();
+  return {
+    ...stub,
+    carrier: carton.carrier ?? stub.carrier,
+    receiving_source: source === 'unmatched' ? 'unmatched' : source || stub.receiving_source,
+    zoho_purchaseorder_id: carton.zoho_purchaseorder_id ?? stub.zoho_purchaseorder_id,
+    zoho_purchaseorder_number:
+      carton.zoho_purchaseorder_number ?? stub.zoho_purchaseorder_number,
+    source_platform: carton.source_platform ?? stub.source_platform,
+    receiving_type:
+      (carton.intake_type as ReceivingLineRow['receiving_type']) ?? stub.receiving_type,
+    item_name: source === 'unmatched' ? 'Unfound PO' : stub.item_name,
+  };
+}
+
+async function resolveLinelessCartonHandle(
+  receivingId: number,
+  scanValue: string,
+): Promise<ResolvedTestingScan> {
+  const carton = await fetchReceivingCartonHeader(receivingId);
+  if (!carton) return { kind: 'not_found', query: scanValue };
+  return {
+    kind: 'line',
+    row: stubRowFromCartonHeader(receivingId, scanValue, carton),
+    via: 'handle',
+  };
 }
 
 async function fetchLinesByPoNumber(poNumber: string) {
@@ -218,14 +302,15 @@ async function fetchLinesByPartial(
  * (and its Zoho fallback) behind the "Opening your PO" loader.
  */
 export async function fetchLinesByTracking(tracking: string) {
-  // `view=all` + `search` matches against tracking, PO#, serial, sku — the
-  // same dataset the receiving History table uses. Limit small so a typoed
-  // partial doesn't return hundreds of unrelated rows.
+  // Small limit is enough to find the carton already in the system and skip
+  // lookup-po entirely. `include=serials` is cheap at this limit and lets the
+  // testing multi-picker show serial chips on tracking-resolved rows too (the
+  // receiving unbox short-circuit ignores the extra field harmlessly).
   const params = new URLSearchParams({
-    limit: '10',
+    limit: '5',
     offset: '0',
-    include: 'serials',
     view: 'all',
+    include: 'serials',
     search: tracking,
   });
   const res = await fetch(`/api/receiving-lines?${params.toString()}`);
@@ -243,13 +328,16 @@ export async function fetchLinesByTracking(tracking: string) {
 async function fetchLineByUnitId(unitId: string): Promise<ReceivingLineRow | null> {
   // /api/serial-units/[id] accepts either the numeric id or a serial_number
   // string (the unit-id printed under the DataMatrix is stored as the
-  // serial_number for label-minted units). Returns origin_receiving_line_id
-  // which is the back-reference to the receiving scan that minted this unit.
+  // serial_number for label-minted units). Reads current_receiving_line_id —
+  // the unit's CURRENT line (most recent inventory_events touch) — never
+  // origin_receiving_line_id, which freezes to the FIRST-ever receiving line
+  // and would jump to a stale PO once the unit has been returned and
+  // re-received under a different one.
   const res = await fetch(`/api/serial-units/${encodeURIComponent(unitId)}`);
   if (!res.ok) return null;
   const data = await res.json();
   const unit = data?.unit ?? data?.serial_unit ?? data;
-  const receivingLineId = unit?.origin_receiving_line_id;
+  const receivingLineId = unit?.current_receiving_line_id ?? unit?.origin_receiving_line_id;
   if (!receivingLineId) return null;
   return fetchLineById(receivingLineId);
 }
@@ -465,7 +553,7 @@ export async function resolveReceivingCodeToLine(
         const id = Number(routed.redirect?.match(/\/m\/r\/(\d+)$/)?.[1]);
         if (Number.isFinite(id)) {
           const rows = await fetchLinesByReceivingId(id);
-          if (rows.length === 0) return { kind: 'not_found', query: value };
+          if (rows.length === 0) return resolveLinelessCartonHandle(id, value);
           if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'handle' };
           return { kind: 'multi', rows, receivingId: id, via: 'handle' };
         }
@@ -484,17 +572,23 @@ export async function resolveReceivingCodeToLine(
           return row ? { kind: 'line', row, via: 'unit_id' } : { kind: 'not_found', query: value };
         }
       }
-      // H-class — a license-plated box/tray. One scan resolves to every unit in
-      // the box, mapped to their receiving lines → the existing multi-picker.
+      // H-class — a license-plated box/tray. The scan opens the box workbench
+      // (desktop drawer) so the operator can re-sort its units across lines; the
+      // box's receiving `rows` ride along for consumers that only want the lines
+      // (mobile list, receiving picker) and degrade to `multi`-style behaviour.
       if (routed.type === 'handling-unit') {
         const id = Number(routed.redirect?.match(/\/m\/h\/(\d+)$/)?.[1]);
         if (Number.isFinite(id)) {
           const rows = await fetchLinesByHandlingUnit(id);
           if (rows.length === 0) return { kind: 'not_found', query: value };
-          if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'lpn' };
           const receivingId = rows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
-          return { kind: 'multi', rows, receivingId, via: 'lpn' };
+          return { kind: 'box', handlingUnitId: id, rows, receivingId, via: 'lpn' };
         }
+      }
+      // KIT-class — a preboxed kit master label. The whole value is the
+      // manifest_uid; the workbench opens its detail panel (fetched by uid).
+      if (routed.type === 'manifest') {
+        return { kind: 'manifest', manifestRef: value };
       }
     }
 

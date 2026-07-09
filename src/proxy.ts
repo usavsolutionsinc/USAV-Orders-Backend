@@ -33,6 +33,7 @@ const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/m\/enroll\//,
   /^\/invite\/[A-Za-z0-9_-]+(?:$|\/)/,  // org invitation accept (unauthenticated)
   /^\/api\/auth\//,
+  /^\/api\/beta\//,                     // public marketing beta waitlist + spots counter (no auth)
   /^\/api\/health(?:$|\/)/,
   /^\/api\/ready(?:$|\/)/,
   /^\/api\/cron\//,                     // Vercel-cron-fired routes (auth via CRON_SECRET inside handler)
@@ -114,6 +115,27 @@ const REWRITES: ReadonlyArray<{ prefix: string; target: string }> = [
 const MOBILE_UA_REWRITES: ReadonlyMap<string, string> = new Map([
   ['/receiving', '/m/receiving'],
   ['/receiving/', '/m/receiving'],
+  // Unbox + Triage surfaces (operator-surfaces refactor) → the mobile receiving
+  // shell, whose bottom nav already labels itself "Unbox".
+  ['/unbox', '/m/receiving'],
+  ['/unbox/', '/m/receiving'],
+  ['/triage', '/m/receiving'],
+  ['/triage/', '/m/receiving'],
+  ['/incoming', '/m/receiving'],
+  ['/incoming/', '/m/receiving'],
+  // Local Pickup + Receiving History surfaces (operator-surfaces refactor Phase 9)
+  // → the mobile receiving shell (same feed, its bottom nav labels itself).
+  ['/pickup', '/m/receiving'],
+  ['/pickup/', '/m/receiving'],
+  ['/receiving/history', '/m/receiving'],
+  ['/receiving/history/', '/m/receiving'],
+  // Pack surface (operator-surfaces refactor Phase 7) → the redesigned mobile
+  // packing shell. Both the canonical `/pack` and the legacy `/packer` land here
+  // on phones (the bottom nav already labels it "Packing").
+  ['/pack', '/m/pack'],
+  ['/pack/', '/m/pack'],
+  ['/packer', '/m/pack'],
+  ['/packer/', '/m/pack'],
   ['/signin', '/m/signin'],
   ['/signin/', '/m/signin'],
 ]);
@@ -163,6 +185,149 @@ function resolveMobileUaRewrite(pathname: string, ua: string | null): string | n
   // Don't double-rewrite if the client already navigated to /m/*.
   if (pathname.startsWith('/m/')) return null;
   return MOBILE_UA_REWRITES.get(pathname) ?? null;
+}
+
+/**
+ * Surface-migration redirect (Studio-driven operator surfaces refactor). The
+ * Unbox + Triage + Incoming + Pickup + History receiving modes graduated to their
+ * own first-class routes (`/unbox`, `/triage`, `/incoming`, `/pickup`,
+ * `/receiving/history`), so the address bar names the operator's job. Bare
+ * `/receiving` (the Unbox default) and each `/receiving?mode=…` normalize to the
+ * new canonical URL, dropping the now-redundant `mode` param (mode-specific
+ * search params like History's `?q=`/`?field=`/`?scope=` ride along). Exact path
+ * only — sub-routes (`/receiving/lines/[id]`, `/receiving/history`,
+ * `/receiving/unfound`, …) keep their URLs.
+ */
+function resolveReceivingSurfaceRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  if (url.pathname !== '/receiving') return null;
+  const mode = url.searchParams.get('mode');
+  const dest =
+    mode === null || mode === 'receive'
+      ? '/unbox'
+      : mode === 'triage'
+        ? '/triage'
+        : mode === 'incoming'
+          ? '/incoming'
+          : mode === 'pickup'
+            ? '/pickup'
+            : mode === 'history'
+              ? '/receiving/history'
+              : null;
+  if (!dest) return null;
+  const next = url.clone();
+  next.pathname = dest;
+  next.searchParams.delete('mode'); // being on the surface route IS the mode
+  return next;
+}
+
+/**
+ * Pack-surface redirect (operator-surfaces refactor Phase 7). The packing station
+ * graduated from `/packer` to the first-class `/pack` route, so the address bar
+ * names the operator's job. Bare `/packer` (and `/packer/`) normalize to `/pack`,
+ * preserving the `?packMode=` sub-view param. Exact path only — no `/packer`
+ * sub-routes exist, but guard against a future one leaking. Desktop only; phones
+ * fall through to the `/m/pack` UA rewrite computed above.
+ */
+function resolvePackSurfaceRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  if (url.pathname !== '/packer' && url.pathname !== '/packer/') return null;
+  const next = url.clone();
+  next.pathname = '/pack';
+  return next;
+}
+
+/**
+ * Test-surface redirect (operator-surfaces refactor Phase 8). The testing station
+ * graduated from `/tech` to the first-class `/test` route, so the address bar
+ * names the operator's job. `/tech` (and `/tech/`) normalize to `/test`,
+ * preserving the `?view=testing` / `?view=testing-history` sub-mode params (they
+ * ride along unchanged — the Shipping/Testing/History top-mode is param-based).
+ * Exact path only — the `/tech/*` sub-routes (none today) keep their URLs.
+ */
+function resolveTestSurfaceRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  if (url.pathname !== '/tech' && url.pathname !== '/tech/') return null;
+  const next = url.clone();
+  next.pathname = '/test';
+  return next;
+}
+
+// Per-section browse filters — mirrors SYSTEM_SAVED_VIEWS in
+// `src/lib/operations/saved-view-presets.ts`, INLINED here to keep the Edge
+// bundle self-contained (this file's convention; see SESSION_COOKIE_NAME). The
+// `view` marker highlights the matching preset chip on landing.
+const AUDIT_LOG_SECTION_PARAMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  receiving: { stations: 'RECEIVING', sources: 'sal,inventory', view: 'sys:receiving-audit' },
+  packing: { stations: 'PACK', view: 'sys:pack-audit' },
+  tech: { stations: 'TECH', view: 'sys:tech-audit' },
+};
+
+/**
+ * Redirect a legacy `/audit-log/*` URL to its Operations History equivalent
+ * (plan §4.1), preferring a system saved-view preset and carrying record params
+ * across. **Unconditional as of the Phase 7 cutover** — the `/audit-log` route
+ * files are removed, so these URLs (bookmarks / old links) must always land on
+ * History rather than 404. (`/settings/audit` is a distinct route, unaffected.)
+ */
+function resolveAuditLogRedirect(url: NextRequest['nextUrl']): NextRequest['nextUrl'] | null {
+  const p = url.pathname;
+  if (p !== '/audit-log' && !p.startsWith('/audit-log/')) return null;
+
+  const section =
+    p === '/audit-log' || p === '/audit-log/'
+      ? ''
+      : p.slice('/audit-log/'.length).replace(/\/+$/, '');
+  const src = url.searchParams;
+  const next = url.clone();
+  next.pathname = '/operations';
+  const sp = next.searchParams;
+  for (const k of [...sp.keys()]) sp.delete(k); // drop audit-log-specific params
+  sp.set('mode', 'history');
+
+  const preset = AUDIT_LOG_SECTION_PARAMS[section];
+  if (preset) for (const [k, v] of Object.entries(preset)) sp.set(k, v);
+
+  switch (section) {
+    case 'trace': {
+      const serial = src.get('serial');
+      const tracking = src.get('tracking');
+      const order = src.get('order');
+      if (serial) {
+        sp.set('dim', 'serial');
+        sp.set('serial', serial);
+      } else if (tracking) {
+        sp.set('dim', 'tracking');
+        sp.set('tracking', tracking);
+      } else if (order) {
+        sp.set('dim', 'order');
+        sp.set('order', order);
+      }
+      break;
+    }
+    case 'receiving': {
+      const po = src.get('po');
+      if (po) sp.set('q', po);
+      break;
+    }
+    case 'packing': {
+      const tracking = src.get('tracking');
+      if (tracking) {
+        sp.set('dim', 'tracking');
+        sp.set('tracking', tracking);
+      }
+      break;
+    }
+    case 'tech': {
+      const session = src.get('session') ?? src.get('staffId');
+      if (session && /^\d+$/.test(session)) sp.set('staffId', session);
+      break;
+    }
+    case 'sku': {
+      const sku = src.get('sku');
+      if (sku) sp.set('q', sku);
+      break;
+    }
+    // '' (bare /audit-log), 'staff', or any other section → plain History landing.
+  }
+  return next;
 }
 
 /**
@@ -239,6 +404,20 @@ export function proxy(req: NextRequest): NextResponse {
     }
     return applySecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }));
   };
+
+  // Normalize legacy receiving-surface URLs to their first-class routes
+  // (`/receiving` → `/unbox`, `?mode=triage` → `/triage`). Desktop only —
+  // phones fall through to the `/m/*` rewrite computed above (rewriteTarget set).
+  if (!rewriteTarget) {
+    const surfaceRedirect =
+      resolveAuditLogRedirect(req.nextUrl) ??
+      resolveReceivingSurfaceRedirect(req.nextUrl) ??
+      resolvePackSurfaceRedirect(req.nextUrl) ??
+      resolveTestSurfaceRedirect(req.nextUrl);
+    if (surfaceRedirect) {
+      return applySecurityHeaders(NextResponse.redirect(surfaceRedirect));
+    }
+  }
 
   if (isPublic(pathname)) {
     return applyRewriteOrNext();

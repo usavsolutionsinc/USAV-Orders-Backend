@@ -88,7 +88,7 @@ const TONE_BG: Record<StickyActionTone, string> = {
   orange: 'bg-orange-600 hover:bg-orange-700',
   violet: 'bg-violet-700 hover:bg-violet-800',
   red: 'bg-rose-600 hover:bg-rose-700',
-  gray: 'bg-gray-900 hover:bg-gray-800',
+  gray: 'bg-surface-inverse hover:bg-surface-inverse-hover',
 };
 
 const TONE_HOVER_ONLY: Record<StickyActionTone, string> = {
@@ -97,7 +97,7 @@ const TONE_HOVER_ONLY: Record<StickyActionTone, string> = {
   orange: 'hover:bg-orange-700',
   violet: 'hover:bg-violet-800',
   red: 'hover:bg-rose-700',
-  gray: 'hover:bg-gray-800',
+  gray: 'hover:bg-surface-inverse-hover',
 };
 
 /** Solid fill only — split track uses filter hover so chevron + label stay one tone. */
@@ -107,7 +107,7 @@ const TONE_BG_SOLID: Record<StickyActionTone, string> = {
   orange: 'bg-orange-600',
   violet: 'bg-violet-700',
   red: 'bg-rose-600',
-  gray: 'bg-gray-900',
+  gray: 'bg-surface-inverse',
 };
 
 /**
@@ -143,13 +143,13 @@ export function StickyActionBar({
     ? `${primary.toneClasses.bg} ${primary.toneClasses.hover}`
     : TONE_BG[tone];
   const toneClass = primary.disabled
-    ? 'cursor-not-allowed bg-gray-300'
+    ? 'cursor-not-allowed bg-surface-strong'
     : baseTone;
   const hoverOnly = primary.toneClasses
     ? primary.toneClasses.hover
     : TONE_HOVER_ONLY[tone];
   const splitTrackBg = primary.disabled
-    ? 'bg-gray-300'
+    ? 'bg-surface-strong'
     : primary.toneClasses
       ? primary.toneClasses.bg
       : TONE_BG_SOLID[tone];
@@ -201,7 +201,7 @@ export function StickyActionBar({
           type="button"
           onClick={secondary.onClick}
           disabled={secondary.disabled}
-          className={`inline-flex ${secondaryHeight} items-center justify-center gap-1.5 ${secondaryRadius} border border-gray-200 bg-white ${secondaryPadding} ${secondaryText} text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40`}
+          className={`inline-flex ${secondaryHeight} items-center justify-center gap-1.5 ${secondaryRadius} border border-border-soft bg-surface-card ${secondaryPadding} ${secondaryText} text-text-muted shadow-sm transition-colors hover:bg-surface-hover disabled:opacity-40`}
         >
           {secondary.icon}
           <span>{secondary.label}</span>
@@ -232,7 +232,7 @@ export function StickyActionBar({
               <ul
                 role="menu"
                 aria-label={primary.menuLabel ?? 'More actions'}
-                className="min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
+                className="min-w-[12rem] rounded-lg border border-border-soft bg-surface-card py-1 shadow-xl ring-1 ring-border-soft/80"
               >
                 {menu!.map((item) => (
                   <li key={item.label} role="none">
@@ -245,7 +245,7 @@ export function StickyActionBar({
                         e.stopPropagation();
                         item.onClick();
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-black uppercase tracking-wider text-text-default transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       {item.icon}
                       {item.label}
@@ -324,7 +324,7 @@ export function StickyActionBar({
 
   return (
     <div
-      className={`sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 ${wrapperPadding} backdrop-blur ${
+      className={`sticky bottom-0 z-10 border-t border-border-soft bg-surface-card/90 ${wrapperPadding} backdrop-blur ${
         className ?? ''
       }`}
     >
@@ -351,10 +351,10 @@ export function StickyActionBar({
             <div
               className={
                 stackLeadingLayout
-                  ? 'min-w-0 w-full text-xs text-gray-500'
+                  ? 'min-w-0 w-full text-xs text-text-soft'
                   : primaryFullWidth
-                    ? 'min-w-0 flex flex-wrap items-center gap-3 text-xs text-gray-500 sm:flex-1'
-                    : 'hidden min-w-0 flex-1 items-center gap-3 text-xs text-gray-500 sm:flex'
+                    ? 'min-w-0 flex flex-wrap items-center gap-3 text-xs text-text-soft sm:flex-1'
+                    : 'hidden min-w-0 flex-1 items-center gap-3 text-xs text-text-soft sm:flex'
               }
             >
               {leading ?? (
@@ -364,7 +364,7 @@ export function StickyActionBar({
                       key={`${h.key}-${h.label}`}
                       className="inline-flex items-center gap-1.5"
                     >
-                      <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-micro font-bold text-gray-600">
+                      <kbd className="rounded-md border border-border-soft bg-surface-canvas px-1.5 py-0.5 font-mono text-micro font-bold text-text-muted">
                         {h.key}
                       </kbd>
                       <span className="font-semibold uppercase tracking-[0.14em]">

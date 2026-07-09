@@ -366,7 +366,7 @@ export async function getPackingTrackingDetail(
     staffId: filters.staffId,
     eventTypes: [...OUTBOUND_EVENT_TYPES],
     order: 'asc',
-  });
+  }, orgId);
 
   const events: PackingEvent[] = [];
 

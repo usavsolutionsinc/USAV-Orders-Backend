@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 export type SettingsSection =
   | 'hardware' | 'workstation' | 'quick-access' | 'appearance' | 'about'
   | 'security' | 'organization' | 'billing' | 'integrations' | 'team'
-  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog' | 'legal';
+  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog' | 'legal' | 'receiving'
+  | 'ai';
 
 export type SettingsGroup = 'Personal' | 'Organization';
 
@@ -22,6 +23,7 @@ export const SETTINGS_SECTION_OPTIONS: SettingsSectionOption[] = [
   { id: 'workstation',   label: 'Workstation',   description: 'Station, role, location',                          group: 'Personal' },
   { id: 'quick-access',  label: 'Quick Access',  description: 'Bottom-right shortcuts & pins',                    group: 'Personal' },
   { id: 'appearance',    label: 'Appearance',    description: 'Density, text size',                               group: 'Personal' },
+  { id: 'receiving',     label: 'Receiving',     description: 'Unboxing scan, photos & org policy',               group: 'Personal' },
   { id: 'security',      label: 'Security',      description: 'PIN and passkeys',                                 group: 'Personal' },
   { id: 'about',         label: 'About',         description: 'Version & diagnostics',                            group: 'Personal' },
   { id: 'legal',         label: 'Legal & Policies', description: 'Terms, Privacy & DPA',                          group: 'Personal' },
@@ -29,6 +31,7 @@ export const SETTINGS_SECTION_OPTIONS: SettingsSectionOption[] = [
   { id: 'organization',  label: 'Organization',  description: 'Timezone, locale, auth policies, warranty',        group: 'Organization', requires: 'admin.view', href: '/settings/organization' },
   { id: 'billing',       label: 'Billing',       description: 'Plan, entitlements & Stripe portal',               group: 'Organization', requires: 'admin.view', href: '/settings/billing' },
   { id: 'integrations',  label: 'Integrations',  description: 'Connect Amazon, eBay, Zoho, Stripe & more',        group: 'Organization', requires: 'admin.view', href: '/settings/integrations' },
+  { id: 'ai',            label: 'AI & Search',   description: 'AI provider, search usage & pricing',              group: 'Organization', requires: 'admin.view', href: '/settings/ai' },
   { id: 'catalog',       label: 'Platforms & Types', description: 'Sales channels & receiving flow types',          group: 'Organization', requires: 'admin.manage_features' },
   { id: 'team',          label: 'Team',          description: 'Invite teammates, roles, deactivate access',       group: 'Organization', requires: 'admin.manage_staff', href: '/settings/staff' },
   { id: 'roles',         label: 'Roles',         description: 'Define what each role can do',                     group: 'Organization', requires: 'admin.manage_roles', href: '/settings/roles' },
@@ -46,6 +49,7 @@ export function resolveSettingsSectionFromPath(pathname: string | null | undefin
   if (!pathname) return null;
   if (pathname === '/settings/billing') return 'billing';
   if (pathname === '/settings/integrations') return 'integrations';
+  if (pathname === '/settings/ai') return 'ai';
   if (pathname === '/settings/team' || pathname === '/settings/staff') return 'team';
   if (pathname === '/settings/roles') return 'roles';
   if (pathname === '/settings/access') return 'access';

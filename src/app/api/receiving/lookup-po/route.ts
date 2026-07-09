@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { isTestTrackingShortcutAllowed } from '@/lib/tenancy/test-tracking';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 import { formatPSTTimestamp } from '@/utils/date';
 import { getCarrier, extractCanonicalTracking } from '@/lib/tracking-format';
-import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { getOrSet, invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 import { publishReceivingLogChanged, publishPriorityUnbox } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking, findPurchaseOrderByNumber } from '@/lib/zoho';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
@@ -16,7 +18,8 @@ import {
 } from '@/lib/receiving/intake-classification';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
-import { recordReceivingScan } from '@/lib/receiving/record-scan';
+import { recordReceivingScan, type ReceivingIntakeSurface } from '@/lib/receiving/record-scan';
+import { recordUnboxScanOpened } from '@/lib/receiving/unbox-scan-opened';
 import { resolveShipmentForScan } from '@/lib/receiving/resolve-shipment-for-scan';
 import type { ReceivingExceptionCode } from '@/lib/receiving/exception-codes';
 import {
@@ -25,6 +28,12 @@ import {
 } from '@/lib/tracking-exceptions';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import {
+  formatSupportTicketLabel,
+  looksLikeTicketScan,
+  parseTicketScanValue,
+  resolveSupportTicketToReceiving,
+} from '@/lib/support/tickets';
 
 // ── Zoho error classification ────────────────────────────────────────────────
 // Distinguishes "Zoho replied, no match" from "Zoho is unreachable." The former
@@ -84,15 +93,27 @@ async function computePendingOrderSkus(
  * floats the carton to rank-0 in the Prioritize rail AND the tester's queue
  * (RECEIVING_PRIORITY_RANK_SQL) so "urgent to unbox" carries through to test.
  * Idempotent + best-effort — a failure here never blocks the scan response.
+ *
+ * Also auto-routes `priority_lane` (Phase 4, docs/receiving-triage-redesign-plan.md
+ * §6) — the same PO_STOCKOUT/RETURN split `resolveTriageLane` computes client-side
+ * (src/lib/receiving/triage-lane-policy.ts), now actually persisted at the
+ * moment the priority signal fires instead of only ever being a UI hint.
+ * `COALESCE(priority_lane, …)` never overwrites an operator's manual pick — the
+ * same "manual always wins" rule as priority_tier vs is_priority.
  */
-async function markReceivingPriority(receivingId: number | null): Promise<void> {
+async function markReceivingPriority(receivingId: number | null, orgId: string): Promise<void> {
   if (!receivingId || !Number.isFinite(receivingId)) return;
   try {
-    await pool.query(
+    await tenantQuery(
+      orgId,
       // Pending-order match = top urgency: set the manual override to tier 0
       // (Priority) and keep is_priority in lockstep. Idempotent — skip rows
       // already at the top tier.
-      `UPDATE receiving SET is_priority = true, priority_tier = 0, updated_at = NOW()
+      `UPDATE receiving
+          SET is_priority = true,
+              priority_tier = 0,
+              priority_lane = COALESCE(priority_lane, CASE WHEN is_return THEN 'RETURN' ELSE 'PO_STOCKOUT' END),
+              updated_at = NOW()
         WHERE id = $1 AND (priority_tier IS DISTINCT FROM 0 OR is_priority = false)`,
       [receivingId],
     );
@@ -141,8 +162,9 @@ interface ReceivingLineLite {
   image_url: string | null;
 }
 
-async function fetchLines(receivingId: number): Promise<ReceivingLineLite[]> {
-  const result = await pool.query<ReceivingLineLite>(
+async function fetchLines(receivingId: number, orgId: string): Promise<ReceivingLineLite[]> {
+  const result = await tenantQuery<ReceivingLineLite>(
+    orgId,
     `SELECT rl.id, rl.sku, rl.zoho_item_id, rl.zoho_purchaseorder_id,
             rl.quantity_expected, rl.quantity_received, rl.item_name,
             sc.image_url
@@ -164,8 +186,9 @@ interface ReceivingPackage {
   is_return: boolean;
 }
 
-async function fetchReceivingPackage(receivingId: number): Promise<ReceivingPackage | null> {
-  const r = await pool.query<ReceivingPackage>(
+async function fetchReceivingPackage(receivingId: number, orgId: string): Promise<ReceivingPackage | null> {
+  const r = await tenantQuery<ReceivingPackage>(
+    orgId,
     `SELECT received_at::text AS received_at,
             unboxed_at::text AS unboxed_at,
             created_at::text AS created_at,
@@ -194,9 +217,12 @@ async function memoizeLookupHit(
   receivingSource: string,
   staffId: number | null,
   carrier: string,
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<number> {
   const scanSource: 'zoho_po' | 'unmatched' = receivingSource === 'zoho_po' ? 'zoho_po' : 'unmatched';
-  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, scanSource);
+  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, scanSource, {
+    intakeSurface,
+  });
 }
 
 /**
@@ -224,6 +250,7 @@ async function findScanByTracking(
   staffId: number | null,
   carrier: string,
   orgId: string,
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<{ scan_id: number; receiving_id: number } | null> {
   // ── 1. STN exact-normalized (last-8 demoted to a logged fallback) ────────
   const resolved = await resolveShipmentForScan(trackingNumber, orgId);
@@ -234,6 +261,7 @@ async function findScanByTracking(
       resolved.receivingSource ?? 'unmatched',
       staffId,
       carrier,
+      intakeSurface,
     );
     return { scan_id, receiving_id: resolved.receivingId };
   }
@@ -242,7 +270,8 @@ async function findScanByTracking(
   const digits = String(trackingNumber || '').replace(/\D/g, '');
   if (digits.length < 8) return null;
   const last8 = digits.slice(-8);
-  const scanHit = await pool.query<{ scan_id: number; receiving_id: number }>(
+  const scanHit = await tenantQuery<{ scan_id: number; receiving_id: number }>(
+    orgId,
     `SELECT id AS scan_id, receiving_id
        FROM receiving_scans
       WHERE RIGHT(regexp_replace(tracking_number, '\\D', '', 'g'), 8) = $1
@@ -263,29 +292,94 @@ async function findScanByTracking(
  * Matches the shared `_norm` (upper + strip non-alphanumeric) on the
  * receiving_lines PO#, then the mirror PO#/reference#. Returns the Zoho PO id.
  */
-async function resolvePoIdLocally(orderNumber: string): Promise<string | null> {
+async function resolvePoIdLocally(orderNumber: string, orgId: string): Promise<string | null> {
   const norm = orderNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!norm) return null;
-  // 1. receiving_lines (the Incoming table) — newest wins.
-  const rl = await pool.query<{ zoho_purchaseorder_id: string }>(
-    `SELECT zoho_purchaseorder_id
-       FROM receiving_lines
-      WHERE zoho_purchaseorder_number_norm = $1
-        AND zoho_purchaseorder_id IS NOT NULL
-      ORDER BY id DESC
-      LIMIT 1`,
-    [norm],
+  // order#→poId is an immutable mapping once the incoming sync materializes it,
+  // so cache the FOUND result (5 min). A not-found returns null and getOrSet does
+  // NOT cache null → a just-synced PO is never masked. Skips the two-table probe
+  // (and the "Opening your PO" Zoho fallback) on a hit. Org-scoped.
+  return getOrSet<string | null>(
+    CACHE_NS.poByRef,
+    orgId,
+    norm,
+    300,
+    [CACHE_TAGS.poByRef],
+    async () => {
+      // Tenant-scoped via the GUC pool: receiving_lines + zoho_po_mirror are FORCEd,
+      // so RLS constrains resolution to THIS org — a scanned order# can never resolve
+      // to another tenant's PO id.
+      // 1. receiving_lines (the Incoming table) — newest wins.
+      const rl = await tenantQuery<{ zoho_purchaseorder_id: string }>(
+        orgId,
+        `SELECT zoho_purchaseorder_id
+           FROM receiving_lines
+          WHERE zoho_purchaseorder_number_norm = $1
+            AND zoho_purchaseorder_id IS NOT NULL
+          ORDER BY id DESC
+          LIMIT 1`,
+        [norm],
+      );
+      if (rl.rows[0]?.zoho_purchaseorder_id) return String(rl.rows[0].zoho_purchaseorder_id);
+      // 2. zoho_po_mirror — by PO number, else by reference number.
+      const m = await tenantQuery<{ zoho_purchaseorder_id: string }>(
+        orgId,
+        `SELECT zoho_purchaseorder_id
+           FROM zoho_po_mirror
+          WHERE zoho_purchaseorder_number_norm = $1
+             OR NULLIF(upper(regexp_replace(COALESCE(reference_number, ''), '[^A-Za-z0-9]', '', 'g')), '') = $1
+          ORDER BY last_synced_at DESC NULLS LAST
+          LIMIT 1`,
+        [norm],
+      );
+      return m.rows[0]?.zoho_purchaseorder_id ? String(m.rows[0].zoho_purchaseorder_id) : null;
+    },
   );
-  if (rl.rows[0]?.zoho_purchaseorder_id) return String(rl.rows[0].zoho_purchaseorder_id);
-  // 2. zoho_po_mirror — by PO number, else by reference number.
-  const m = await pool.query<{ zoho_purchaseorder_id: string }>(
+}
+
+/**
+ * Tracking → PO id resolution against LOCAL data only — no Zoho. The incoming
+ * Zoho sync (zoho-receiving-sync.ts) registers each PO's Reference# (the
+ * tracking, per the inbound contract) into shipping_tracking_numbers, pre-creates
+ * a `zoho_po` receiving row stamped with the zoho_purchaseorder_id, and writes
+ * its lines as EXPECTED (receiving_id NULL). So a tracking scan of an
+ * incoming-but-unscanned PO can be turned into its PO id entirely locally:
+ *   1. the receiving row findScanByTracking already resolved via STN
+ *      (preassigned) carries the PO id directly, or
+ *   2. the zoho_po_mirror header whose Reference# canonical-matches this tracking.
+ * Returning a PO id here lets the matched path adopt the pre-materialized local
+ * lines and SKIP the live Zoho tracking search — the "Opening your PO" latency.
+ */
+async function resolvePoIdLocallyByTracking(
+  trackingNumber: string,
+  preassignedReceivingId: number | null,
+  orgId: string,
+): Promise<string | null> {
+  // 1. Authoritative: the STN-resolved receiving row already holds the PO id
+  //    (the incoming sync stamped source='zoho_po', zoho_purchaseorder_id).
+  if (preassignedReceivingId != null) {
+    const r = await tenantQuery<{ zoho_purchaseorder_id: string | null }>(
+      orgId,
+      `SELECT zoho_purchaseorder_id FROM receiving
+        WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [preassignedReceivingId, orgId],
+    );
+    const poId = r.rows[0]?.zoho_purchaseorder_id;
+    if (poId) return String(poId);
+  }
+  // 2. Fallback: zoho_po_mirror header whose Reference# carries this tracking.
+  //    Exact canonical match only (no lossy last-8) — Reference# isn't always a
+  //    tracking, so a suffix collision could open the wrong PO.
+  const canon = trackingNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!canon) return null;
+  const m = await tenantQuery<{ zoho_purchaseorder_id: string }>(
+    orgId,
     `SELECT zoho_purchaseorder_id
        FROM zoho_po_mirror
-      WHERE zoho_purchaseorder_number_norm = $1
-         OR NULLIF(upper(regexp_replace(COALESCE(reference_number, ''), '[^A-Za-z0-9]', '', 'g')), '') = $1
+      WHERE NULLIF(upper(regexp_replace(COALESCE(reference_number, ''), '[^A-Za-z0-9]', '', 'g')), '') = $1
       ORDER BY last_synced_at DESC NULLS LAST
       LIMIT 1`,
-    [norm],
+    [canon],
   );
   return m.rows[0]?.zoho_purchaseorder_id ? String(m.rows[0].zoho_purchaseorder_id) : null;
 }
@@ -303,10 +397,12 @@ async function resolvePoIdLocally(orderNumber: string): Promise<string | null> {
 async function verifyPoNumberMatches(
   poId: string,
   orderNumber: string,
+  orgId: string,
 ): Promise<'match' | 'mismatch' | 'unknown'> {
   const norm = orderNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!norm) return 'unknown';
-  const { rows } = await pool.query<{ matches: boolean }>(
+  const { rows } = await tenantQuery<{ matches: boolean }>(
+    orgId,
     `SELECT (
               zoho_purchaseorder_number_norm = $2
               OR NULLIF(upper(regexp_replace(COALESCE(reference_number, ''), '[^A-Za-z0-9]', '', 'g')), '') = $2
@@ -327,8 +423,13 @@ async function verifyPoNumberMatches(
  * unattached lines (receiving_id IS NULL); lines already on another carton are
  * left alone. `updated_at` is trigger-maintained. Returns the count adopted.
  */
-async function linkLocalPoLinesToReceiving(poId: string, receivingId: number): Promise<number> {
-  const res = await pool.query(
+async function linkLocalPoLinesToReceiving(poId: string, receivingId: number, orgId: string): Promise<number> {
+  // Tenant-scoped: only adopt THIS org's unattached lines. receiving_lines is
+  // FORCEd, so under the GUC pool RLS guarantees the UPDATE can never pull
+  // another tenant's lines onto this carton (the prior owner-pool cross-org
+  // adoption leak).
+  const res = await tenantQuery(
+    orgId,
     `UPDATE receiving_lines
         SET receiving_id = $1,
             workflow_status = CASE WHEN workflow_status = 'EXPECTED' THEN 'MATCHED' ELSE workflow_status END
@@ -336,7 +437,7 @@ async function linkLocalPoLinesToReceiving(poId: string, receivingId: number): P
         AND receiving_id IS NULL`,
     [receivingId, poId],
   );
-  await stampInboundHandlingUnit(receivingId);
+  await stampInboundHandlingUnit(receivingId, orgId);
   return res.rowCount ?? 0;
 }
 
@@ -348,14 +449,13 @@ async function linkLocalPoLinesToReceiving(poId: string, receivingId: number): P
  * a no-op (and never touches the new columns) until the migration is applied
  * and the flag is flipped, so an unapplied migration can't error here.
  */
-async function stampInboundHandlingUnit(receivingId: number): Promise<void> {
+async function stampInboundHandlingUnit(receivingId: number, orgId: string): Promise<void> {
   if (!isReceivingUnifiedInbound()) return;
   try {
-    await pool.query(
-      `UPDATE receiving SET lpn = 'RC-' || id::text WHERE id = $1 AND lpn IS NULL`,
-      [receivingId],
-    );
-    await pool.query(
+    // (receiving.lpn dropped 2026-07-05e — it was a dead 'RC-<id>' alias of the
+    // primary key; carton identity is the id / handling_unit_id.)
+    await tenantQuery(
+      orgId,
       `UPDATE receiving_lines rl
           SET shipment_id = r.shipment_id
          FROM receiving r
@@ -378,8 +478,11 @@ async function upsertMatchedReceiving(
   organizationId: string,
 ): Promise<{ receivingId: number; preexisting: boolean }> {
   const now = formatPSTTimestamp();
-  const result = await pool.query<{ id: number; xmax: string }>(
-    `INSERT INTO receiving
+  const result = await tenantQuery<{ id: number; xmax: string }>(
+    organizationId,
+    // Target the base table (not the `receiving` compat view): views cannot do
+    // INSERT ... ON CONFLICT, and xmax is a base-table system column. 2026-07-05d.
+    `INSERT INTO receiving_carton
        (source, zoho_purchaseorder_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at, organization_id)
      VALUES ('zoho_po', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz, $5::uuid)
@@ -393,10 +496,10 @@ async function upsertMatchedReceiving(
        -- the view=scanned predicate (r.received_at IS NOT NULL) and stays
        -- invisible in the Prioritize / unbox Queue feeds. COALESCE keeps the
        -- original scan time + scanner on re-scans (idempotent, never resets).
-       received_at = COALESCE(receiving.received_at, EXCLUDED.received_at),
-       received_by = COALESCE(receiving.received_by, EXCLUDED.received_by),
-       carrier = COALESCE(receiving.carrier, EXCLUDED.carrier),
-       organization_id = COALESCE(receiving.organization_id, EXCLUDED.organization_id)
+       received_at = COALESCE(receiving_carton.received_at, EXCLUDED.received_at),
+       received_by = COALESCE(receiving_carton.received_by, EXCLUDED.received_by),
+       carrier = COALESCE(receiving_carton.carrier, EXCLUDED.carrier),
+       organization_id = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id)
      RETURNING id, xmax::text`,
     [poId, carrier || null, now, staffId, organizationId],
   );
@@ -418,20 +521,33 @@ async function createUnmatchedReceiving(
   // Stamp organization_id explicitly rather than leaning on the column default
   // (the GUC default is NULL on this raw-pool path). Receiving is a tenant-owned
   // table; an unmatched door-scan must land under the scanning operator's org.
-  const result = await pool.query<{ id: number }>(
+  const result = await tenantQuery<{ id: number }>(
+    organizationId,
     `INSERT INTO receiving
-       (source, receiving_tracking_number, shipment_id, carrier, receiving_date_time,
+       (source, shipment_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at, organization_id)
-     VALUES ('unmatched', $1, $2, $3, $4::timestamp, $4::timestamptz, $5, 'PENDING', true, $4::timestamptz, $6::uuid)
+     VALUES ('unmatched', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz, $5::uuid)
      RETURNING id`,
-    [trackingNumber, shipment?.id ?? null, carrier || null, now, staffId, organizationId],
+    [shipment?.id ?? null, carrier || null, now, staffId, organizationId],
   );
   const receivingId = Number(result.rows[0].id);
   // Phase 5: tag the OS&D reason. No carrier resolved → CARRIER_MISMATCH;
   // otherwise it's a scanned box with no matching PO → NO_PO.
   const exceptionCode: ReceivingExceptionCode =
     !carrier || carrier.trim().toUpperCase() === 'UNKNOWN' ? 'CARRIER_MISMATCH' : 'NO_PO';
-  await stampReceivingException(receivingId, exceptionCode);
+  await stampReceivingException(receivingId, exceptionCode, organizationId);
+  // Carton-level "why" signal (plan §2.3 emitter #2 — unfound / carrier
+  // mismatch, decided right here). Fire-and-forget; never breaks the scan.
+  await emitEntitySignalSafe({
+    organizationId,
+    entityType: 'RECEIVING',
+    entityId: receivingId,
+    signalKind: 'exception_why',
+    reasonCode: exceptionCode,
+    notes: 'unmatched door scan',
+    actorStaffId: staffId ?? null,
+    meta: { carrier: carrier || null, shipmentId: shipment?.id ?? null },
+  });
   return {
     receivingId,
     shipmentId: shipment?.id ?? null,
@@ -446,9 +562,10 @@ async function createUnmatchedReceiving(
 async function stampReceivingException(
   receivingId: number,
   code: ReceivingExceptionCode,
+  orgId: string,
 ): Promise<void> {
   try {
-    await pool.query(`UPDATE receiving SET exception_code = $2 WHERE id = $1`, [receivingId, code]);
+    await tenantQuery(orgId, `UPDATE receiving SET exception_code = $2 WHERE id = $1`, [receivingId, code]);
   } catch (err) {
     console.warn(`[lookup-po] exception_code stamp skipped for receiving=${receivingId}:`, err);
   }
@@ -492,7 +609,7 @@ async function createOrGetTestReceiving(
   // the tech testing queue. The testing queue (/api/work-orders) keys on the
   // receiving HEADER's needs_test, which upsertMatchedReceiving sets true for
   // real POs; clear it here (also heals an older test carton on re-scan).
-  await pool.query(`UPDATE receiving SET needs_test = false WHERE id = $1`, [receivingId]);
+  await tenantQuery(organizationId, `UPDATE receiving SET needs_test = false WHERE id = $1`, [receivingId]);
 
   // DO NOTHING on conflict so a re-scan can't wipe the quantity_received /
   // workflow_status the unbox step wrote (order-independence of scan vs unbox).
@@ -501,8 +618,11 @@ async function createOrGetTestReceiving(
   // NOT a testing work-order. The tech testing queue keys on needs_test=true
   // (work-orders route), so flagging it there is what wrongly pulled the test
   // carton into the testing display queue instead of receiving triage.
-  await pool.query(
-    `INSERT INTO receiving_lines
+  await tenantQuery(
+    organizationId,
+    // Base table (not the `receiving_lines` view): ON CONFLICT is unsupported on
+    // auto-updatable views. 2026-07-05d.
+    `INSERT INTO receiving_line
        (receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchaseorder_id,
         item_name, sku, quantity_expected, quantity_received, workflow_status,
         qa_status, disposition_code, condition_grade, needs_test, updated_at, organization_id)
@@ -526,8 +646,11 @@ async function recordScan(
   carrier: string,
   staffId: number | null,
   source: 'zoho_po' | 'unmatched',
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<number> {
-  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, source);
+  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, source, {
+    intakeSurface,
+  });
 }
 
 /**
@@ -540,10 +663,12 @@ async function recordScan(
 async function applyIntakeClassification(
   receivingId: number | null,
   classification: IntakeClassification | null,
+  orgId: string,
 ): Promise<void> {
   if (!receivingId || !classification || classification === 'UNKNOWN') return;
   const cols = classificationToColumns(classification);
-  await pool.query(
+  await tenantQuery(
+    orgId,
     `UPDATE receiving
         SET source_platform = $2, is_return = $3, return_platform = $4, updated_at = NOW()
       WHERE id = $1`,
@@ -556,17 +681,45 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const body = await request.json();
     const rawTracking = String(body?.trackingNumber || '').trim();
     const providedCarrier = String(body?.carrier || '').trim();
-    // Scan route: 'order' resolves a Zoho PO / reference number (local mirror
-    // first), 'tracking' (default) resolves a carrier tracking number.
-    const mode: 'tracking' | 'order' = body?.mode === 'order' ? 'order' : 'tracking';
+    // Scan route. 'order' = explicit PO/reference (operator armed PO# mode);
+    // 'tracking' = explicit carrier tracking (operator armed Tracking mode);
+    // 'ticket' = explicit Zendesk ticket # (operator armed Ticket mode);
+    // 'auto' (default for an un-armed scan) = deep-scan the value as ticket#,
+    // PO#, and tracking# — try each identity before creating an unfound carton.
+    const mode: 'tracking' | 'order' | 'ticket' | 'auto' =
+      body?.mode === 'order'
+        ? 'order'
+        : body?.mode === 'ticket'
+          ? 'ticket'
+          : body?.mode === 'auto'
+            ? 'auto'
+            : 'tracking';
+    // localOnly: resolve from LOCAL data only and never block on a live Zoho
+    // search. The client sends this for the FIRST scan (both modes) so the
+    // carton resolves instantly — matched (local mirror / incoming) or unfound —
+    // with NO "Opening your PO" loader. On a local miss the route returns
+    // `zoho_pending: true` and the client fires a normal (Zoho) follow-up, which
+    // is the ONLY phase that shows the loader. Order mode: a local miss returns
+    // not-found+zoho_pending instead of synchronously hitting Zoho. Tracking
+    // mode: an unfound localOnly result still creates the unfound carton and the
+    // client's background Zoho call promotes it in place (findScanByTracking →
+    // preassigned path below).
+    const localOnly = body?.localOnly === true;
     // Canonicalize carrier scans at the ingestion boundary so a scanned GS1/"96"
     // FedEx barcode (e.g. 9632…382141152045) and a pasted human number
     // (382141152045) — and the Zoho reference# they reconcile against — all land
     // on ONE identical value for storage, display, dedup, and Zoho search. Only
     // in tracking mode: an order-mode value is a PO/reference number, not a
     // carrier barcode, so it must reach findPurchaseOrderByNumber untouched.
+    // PO#/reference resolution matches against the RAW scanned value (untouched);
+    // carrier-tracking resolution matches against the canonical form. In `auto`
+    // the same scan is tried as both, so canonicalize for tracking+auto and keep
+    // the raw value for the PO# phase via `poLookupValue`.
+    const poLookupValue = rawTracking;
     const trackingNumber =
-      mode === 'tracking' ? extractCanonicalTracking(rawTracking) || rawTracking : rawTracking;
+      mode === 'order' || mode === 'ticket'
+        ? rawTracking
+        : extractCanonicalTracking(rawTracking) || rawTracking;
     // Optional door-intake classification (e.g. 'FBA_RETURN'). Maps to the
     // carton's source_platform/is_return/return_platform so the unboxer sees it.
     const classification: IntakeClassification | null = isIntakeClassification(body?.classification)
@@ -574,6 +727,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       : null;
     // Server-trusted actor from the verified session cookie.
     const staffId = ctx.staffId;
+    const intakeSurface = body?.intakeSurface === 'unbox' ? 'unbox' : 'triage';
+    const stampUnboxOpened = async (
+      receivingId: number,
+      scanId: number | null,
+      tracking: string,
+    ) => {
+      if (intakeSurface !== 'unbox') return;
+      await recordUnboxScanOpened(ctx.organizationId, receivingId, staffId, scanId, tracking);
+    };
 
     if (!trackingNumber) {
       return NextResponse.json(
@@ -587,14 +749,115 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         ? providedCarrier
         : getCarrier(trackingNumber);
 
+    // −1. TICKET# — resolve an internal support ticket id to its receiving carton
+    //     (support_tickets + ticket_links). Runs before PO/tracking.
+    const tryTicket =
+      mode === 'ticket' || (mode === 'auto' && looksLikeTicketScan(rawTracking));
+    if (tryTicket) {
+      const ticketId = parseTicketScanValue(rawTracking);
+      if (mode === 'ticket' && ticketId == null) {
+        return NextResponse.json({
+          success: true,
+          matched: false,
+          po_matched: false,
+          not_found: true,
+          po_ids: [],
+          error: `No ticket found for "${rawTracking}"`,
+        });
+      }
+      if (ticketId != null) {
+        const hit = await resolveSupportTicketToReceiving(ctx.organizationId, rawTracking).catch(
+          () => null,
+        );
+        if (hit) {
+          await applyIntakeClassification(hit.receivingId, classification, ctx.organizationId);
+          const [lines, receiving_package] = await Promise.all([
+            fetchLines(hit.receivingId, ctx.organizationId),
+            fetchReceivingPackage(hit.receivingId, ctx.organizationId),
+          ]);
+          const recvSourceRes = await tenantQuery<{ source: string | null }>(
+            ctx.organizationId,
+            `SELECT source FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [hit.receivingId, ctx.organizationId],
+          );
+          const recvSource = String(recvSourceRes.rows[0]?.source || 'unmatched');
+          const scanId = await recordReceivingScan(
+            hit.receivingId,
+            rawTracking,
+            carrier,
+            staffId,
+            recvSource === 'zoho_po' ? 'zoho_po' : 'unmatched',
+            { intakeSurface },
+          );
+          await stampUnboxOpened(hit.receivingId, scanId, rawTracking);
+          const poIdsSet = new Set<string>();
+          for (const l of lines) {
+            if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);
+          }
+          const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
+          if (pendingOrderSkus.length > 0) {
+            await markReceivingPriority(hit.receivingId, ctx.organizationId);
+            after(async () => {
+              try {
+                await publishPriorityUnbox({
+                  organizationId: ctx.organizationId,
+                  staffId,
+                  trackingNumber: rawTracking,
+                  receivingId: hit.receivingId,
+                  skus: pendingOrderSkus,
+                  source: 'receiving.lookup-po.ticket',
+                });
+              } catch (err) {
+                console.warn('lookup-po.ticket: priority-unbox publish failed', errMessage(err));
+              }
+            });
+          }
+          return NextResponse.json({
+            success: true,
+            receiving_id: hit.receivingId,
+            scan_id: scanId,
+            preexisting: true,
+            deduped: false,
+            matched: lines.length > 0,
+            po_matched: lines.length > 0,
+            resolved_via: 'local',
+            unbox_verdict: pendingOrderSkus.length > 0 ? 'expedited' : 'normal',
+            po_ids: Array.from(poIdsSet),
+            pending_order_skus: pendingOrderSkus,
+            receiving_package,
+            lines: lines.map((l) => ({
+              id: l.id,
+              sku: l.sku,
+              item_name: l.item_name,
+              image_url: l.image_url,
+              zoho_item_id: l.zoho_item_id,
+              zoho_purchaseorder_id: l.zoho_purchaseorder_id,
+              quantity_expected: l.quantity_expected,
+              quantity_received: l.quantity_received,
+            })),
+          });
+        }
+        if (mode === 'ticket') {
+          return NextResponse.json({
+            success: true,
+            matched: false,
+            po_matched: false,
+            not_found: true,
+            po_ids: [],
+            error: `No receiving carton linked to ticket ${formatSupportTicketLabel(ticketId)}`,
+          });
+        }
+      }
+    }
+
     // 0. ORDER# mode — resolve a PO / reference number to its receiving carton.
     //    LOCAL incoming mirror first (the PO is almost always already in the
     //    Incoming table, so we adopt its existing lines with no Zoho round-trip);
     //    live Zoho only as a fallback for a PO not yet synced. Runs before the
     //    tracking dedup/Zoho path so an order number that happens to be mostly
     //    digits can't be misread as a tracking suffix.
-    if (mode === 'order') {
-      let poId = await resolvePoIdLocally(trackingNumber);
+    if (mode === 'order' || mode === 'auto') {
+      let poId = await resolvePoIdLocally(poLookupValue, ctx.organizationId);
       let resolvedVia: 'local' | 'zoho' = 'local';
       // Guard the local hit: a normalized-number collision or a mis-synced
       // receiving_line can point at the WRONG purchaseorder_id and open a
@@ -602,23 +865,50 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // says it carries a different number, then fall through to the exact
       // Zoho lookup below.
       if (poId) {
-        const verdict = await verifyPoNumberMatches(poId, trackingNumber).catch((err) => {
+        const verdict = await verifyPoNumberMatches(poId, poLookupValue, ctx.organizationId).catch((err) => {
           console.warn('[lookup-po.order] local verify failed', errMessage(err));
           return 'unknown' as const;
         });
         if (verdict === 'mismatch') {
           console.warn(
-            `[lookup-po.order] local resolve for "${trackingNumber}" pointed at PO ${poId} with a different number — re-resolving via Zoho`,
+            `[lookup-po.order] local resolve for "${poLookupValue}" pointed at PO ${poId} with a different number — re-resolving via Zoho`,
           );
           poId = null;
         }
       }
+      // `auto` also tries the value as a tracking# against LOCAL data (the
+      // zoho_po_mirror Reference# → PO id), so an un-armed tracking scan that is
+      // already a known incoming PO resolves here with no loader, exactly like a
+      // PO# scan. Order mode skips this — an armed PO# is never a tracking.
+      if (!poId && mode === 'auto') {
+        const localByTracking = await resolvePoIdLocallyByTracking(
+          trackingNumber,
+          null,
+          ctx.organizationId,
+        ).catch(() => null);
+        if (localByTracking) {
+          poId = localByTracking;
+          resolvedVia = 'local';
+        }
+      }
+      if (!poId && localOnly && mode === 'order') {
+        // Instant local phase for an EXPLICIT order# scan only. `auto` must fall
+        // through to the carrier-tracking path — returning zoho_pending here
+        // forced every tracking scan through synchronous Zoho + the loader.
+        return NextResponse.json({
+          success: true,
+          matched: false,
+          po_matched: false,
+          not_found: true,
+          zoho_pending: true,
+          po_ids: [],
+        });
+      }
       if (!poId) {
-        // An order-mode scan IS the PO# (or reference number), so require an
-        // EXACT match against Zoho — never adopt a fuzzily-similar PO. Using the
-        // tolerant tracking search here was returning the wrong PO (it took the
-        // first fuzzy `search_text` hit without verifying the number).
-        const po = await findPurchaseOrderByNumber(trackingNumber).catch((err) => {
+        // A PO/reference scan must EXACT-match against Zoho — never adopt a
+        // fuzzily-similar PO. Using the tolerant tracking search here returned
+        // the wrong PO (first fuzzy `search_text` hit, unverified).
+        const po = await findPurchaseOrderByNumber(poLookupValue).catch((err) => {
           console.warn('[lookup-po.order] zoho lookup failed', errMessage(err));
           return null;
         });
@@ -626,22 +916,28 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         resolvedVia = 'zoho';
       }
 
-      if (!poId) {
-        // No local or Zoho match — report not-found WITHOUT spawning a phantom
-        // unmatched carton (an order# typo shouldn't create a box).
+      if (!poId && mode === 'order') {
+        // Explicit order mode, PO# fully missed (local + Zoho) — report not-found
+        // WITHOUT spawning a phantom carton (an order# typo must not create a box).
         return NextResponse.json({
           success: true,
           matched: false,
           po_matched: false,
           not_found: true,
           po_ids: [],
-          error: `No PO found for order number "${trackingNumber}"`,
+          error: `No PO found for order number "${poLookupValue}"`,
         });
       }
 
+      // PO# resolved → open the matched carton. When `auto` missed the PO# (poId
+      // null), this block is skipped and execution falls out to the carrier-
+      // tracking path below — the same value is tried as a tracking before any
+      // unfound carton is created.
+      if (poId) {
+
       const { receivingId } = await upsertMatchedReceiving(poId, carrier, staffId, ctx.organizationId);
       let integrationError: 'zoho_not_connected' | null = null;
-      const linked = await linkLocalPoLinesToReceiving(poId, receivingId);
+      const linked = await linkLocalPoLinesToReceiving(poId, receivingId, ctx.organizationId);
       // Only hit Zoho for line items when there was nothing local to adopt.
       if (linked === 0) {
         await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
@@ -659,12 +955,13 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           }
         });
       }
-      await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
-      await applyIntakeClassification(receivingId, classification);
+      const orderScanId = await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po', intakeSurface);
+      await stampUnboxOpened(receivingId, orderScanId, trackingNumber);
+      await applyIntakeClassification(receivingId, classification, ctx.organizationId);
 
       const [lines, receiving_package] = await Promise.all([
-        fetchLines(receivingId),
-        fetchReceivingPackage(receivingId),
+        fetchLines(receivingId, ctx.organizationId),
+        fetchReceivingPackage(receivingId, ctx.organizationId),
       ]);
       const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
 
@@ -685,7 +982,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           console.warn('[lookup-po.order] realtime publish failed', errMessage(err));
         }
         if (pendingOrderSkus.length > 0) {
-          await markReceivingPriority(receivingId);
+          await markReceivingPriority(receivingId, ctx.organizationId);
           try {
             await publishPriorityUnbox({
               organizationId: ctx.organizationId,
@@ -725,6 +1022,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           quantity_received: l.quantity_received,
         })),
       });
+      } // end if (poId) — auto PO#-miss falls through to the tracking path below
     }
 
     // 1. Dedup short-circuit — scan already logged against a receiving row.
@@ -732,14 +1030,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     //    empty (e.g. receiving_lines was truncated, or the row was created
     //    as 'unmatched' before Zoho synced the PO), fall through to the
     //    Zoho lookup so we can repopulate the PO linkage on this same row.
-    const existingScan = await findScanByTracking(trackingNumber, staffId, carrier, ctx.organizationId);
+    const existingScan = await findScanByTracking(trackingNumber, staffId, carrier, ctx.organizationId, intakeSurface);
     let preassignedReceivingId: number | null = null;
     let preassignedScanId: number | null = null;
     if (existingScan) {
-      await applyIntakeClassification(existingScan.receiving_id, classification);
+      await applyIntakeClassification(existingScan.receiving_id, classification, ctx.organizationId);
       const [lines, receiving_package] = await Promise.all([
-        fetchLines(existingScan.receiving_id),
-        fetchReceivingPackage(existingScan.receiving_id),
+        fetchLines(existingScan.receiving_id, ctx.organizationId),
+        fetchReceivingPackage(existingScan.receiving_id, ctx.organizationId),
       ]);
       if (lines.length > 0) {
         // Re-attribute this dock event to the current operator (dedup path
@@ -750,20 +1048,22 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           [existingScan.receiving_id, ctx.organizationId],
         );
         const recvSource = String(recvSourceRes.rows[0]?.source || 'unmatched');
-        await recordReceivingScan(
+        const dedupScanId = await recordReceivingScan(
           existingScan.receiving_id,
           trackingNumber,
           carrier,
           staffId,
           recvSource === 'zoho_po' ? 'zoho_po' : 'unmatched',
+          { intakeSurface },
         );
+        await stampUnboxOpened(existingScan.receiving_id, dedupScanId, trackingNumber);
         const poIdsSet = new Set<string>();
         for (const l of lines) {
           if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);
         }
         const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
         if (pendingOrderSkus.length > 0) {
-          await markReceivingPriority(existingScan.receiving_id);
+          await markReceivingPriority(existingScan.receiving_id, ctx.organizationId);
           after(async () => {
             try {
               await publishPriorityUnbox({
@@ -812,16 +1112,27 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     // 1b. TEST / demo shortcut — instant matched carton, no Zoho. Lets the
     //     door-scan → unbox flow be tested with a typed tracking like TEST123.
     if (isTestTracking(trackingNumber)) {
+      if (!isTestTrackingShortcutAllowed(ctx.organizationId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'TEST_TRACKING_NOT_ALLOWED',
+            message: 'Synthetic TEST* tracking is disabled outside the QA sandbox org.',
+          },
+          { status: 403 },
+        );
+      }
       const { receivingId, scanId, preexisting, poId } = await createOrGetTestReceiving(
         trackingNumber,
         carrier,
         staffId,
         ctx.organizationId,
       );
-      await applyIntakeClassification(receivingId, classification);
+      await applyIntakeClassification(receivingId, classification, ctx.organizationId);
+      await stampUnboxOpened(receivingId, scanId, trackingNumber);
       const [lines, receiving_package] = await Promise.all([
-        fetchLines(receivingId),
-        fetchReceivingPackage(receivingId),
+        fetchLines(receivingId, ctx.organizationId),
+        fetchReceivingPackage(receivingId, ctx.organizationId),
       ]);
       const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
       after(async () => {
@@ -841,7 +1152,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           console.warn('[lookup-po.test] realtime publish failed', errMessage(err));
         }
         if (pendingOrderSkus.length > 0) {
-          await markReceivingPriority(receivingId);
+          await markReceivingPriority(receivingId, ctx.organizationId);
           try {
             await publishPriorityUnbox({
               organizationId: ctx.organizationId,
@@ -890,10 +1201,25 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const zohoPoIds = new Set<string>();
     let zohoReachable = true;
 
+    // 1c. LOCAL-FIRST tracking → PO. The incoming sync already mirrors this PO's
+    //     header + lines locally (the reported "in the Incoming table but never
+    //     scanned" case), so resolve the PO id from local data and seed it here.
+    //     The matched path below then adopts the pre-materialized local lines and
+    //     the live Zoho tracking search is skipped entirely — instant, no loader.
+    const localPoId = await resolvePoIdLocallyByTracking(
+      trackingNumber,
+      preassignedReceivingId,
+      ctx.organizationId,
+    );
+    if (localPoId) zohoPoIds.add(localPoId);
+
     const digits = trackingNumber.replace(/\D/g, '');
     const last8 = digits.length >= 8 ? digits.slice(-8) : '';
 
-    if (last8) {
+    // Only reach for Zoho when local resolution came up empty — and never in
+    // localOnly mode (the client's instant first phase; the Zoho search happens
+    // on its background follow-up call instead).
+    if (last8 && zohoPoIds.size === 0 && !localOnly) {
       try {
         const receives = await searchPurchaseReceivesByTracking(last8).catch((err) => {
           // Reachability heuristic: HTTP 4xx with a JSON body = Zoho is up and
@@ -997,7 +1323,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         carrier,
         staffId,
         'zoho_po',
+        intakeSurface,
       );
+      await stampUnboxOpened(primaryReceivingId, scanId, trackingNumber);
       // If the scan was attached to a different receiving row (rare race
       // between promote and upsert fallback), re-parent it now. Failure here
       // leaves an orphan scan pointing at the stale receiving row — log it
@@ -1031,7 +1359,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // Track an integration-connectivity failure so a matched-but-empty carton
       // is reported as "Zoho not connected" rather than a silent "No PO found".
       let integrationError: 'zoho_not_connected' | null = null;
-      const linkedPrimary = await linkLocalPoLinesToReceiving(primaryPoId, primaryReceivingId);
+      const linkedPrimary = await linkLocalPoLinesToReceiving(primaryPoId, primaryReceivingId, ctx.organizationId);
       if (linkedPrimary === 0) {
         await importZohoPurchaseOrderToReceiving(ctx.organizationId, primaryPoId, {
           receivingId: primaryReceivingId,
@@ -1063,8 +1391,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             staffId,
             ctx.organizationId,
           );
-          await recordScan(extraReceivingId, trackingNumber, carrier, staffId, 'zoho_po');
-          const linkedSecondary = await linkLocalPoLinesToReceiving(poId, extraReceivingId);
+          await recordScan(extraReceivingId, trackingNumber, carrier, staffId, 'zoho_po', intakeSurface);
+          const linkedSecondary = await linkLocalPoLinesToReceiving(poId, extraReceivingId, ctx.organizationId);
           if (linkedSecondary === 0) {
             await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
               receivingId: extraReceivingId,
@@ -1078,10 +1406,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
       }
 
-      await applyIntakeClassification(primaryReceivingId, classification);
+      await applyIntakeClassification(primaryReceivingId, classification, ctx.organizationId);
       const [lines, receiving_package_matched] = await Promise.all([
-        fetchLines(primaryReceivingId),
-        fetchReceivingPackage(primaryReceivingId),
+        fetchLines(primaryReceivingId, ctx.organizationId),
+        fetchReceivingPackage(primaryReceivingId, ctx.organizationId),
       ]);
 
       const uniqueByKey = new Map<string, { sku: string; zohoItemId: string | null }>();
@@ -1103,7 +1431,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
               await ensureSkuCatalogEntry(sku, {
                 zoho_item_id: zohoItemId ?? undefined,
                 zoho_purchaseorder_id: primaryPoId ?? undefined,
-              });
+              }, ctx.organizationId);
             },
           );
         } catch (err) {
@@ -1162,7 +1490,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
       const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
       if (pendingOrderSkus.length > 0) {
-        await markReceivingPriority(primaryReceivingId);
+        await markReceivingPriority(primaryReceivingId, ctx.organizationId);
         after(async () => {
           try {
             await publishPriorityUnbox({
@@ -1218,15 +1546,35 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     // 3b. UNMATCHED path — Zoho had no hit (or was unreachable). Log it, and
     //     upsert a row into tracking_exceptions so the triage/reconciliation
     //     worker can retry this tracking once Zoho catches up.
-    const { receivingId: unmatchedReceivingId, shipmentId: unmatchedShipmentId } =
-      await createUnmatchedReceiving(trackingNumber, carrier, staffId, ctx.organizationId);
-    const unmatchedScanId = await recordScan(
+    //
+    //     REUSE the preassigned receiving row when one already exists (a re-scan,
+    //     or the instant-unfound localOnly carton this same client is following
+    //     up on) — createUnmatchedReceiving has no dedup, so calling it again
+    //     would create a DUPLICATE unfound carton for the same tracking. Only
+    //     create a fresh row on a genuine first miss.
+    let unmatchedReceivingId: number;
+    let unmatchedShipmentId: number | null;
+    if (preassignedReceivingId != null) {
+      unmatchedReceivingId = preassignedReceivingId;
+      const shipRow = await tenantQuery<{ shipment_id: number | null }>(
+        ctx.organizationId,
+        `SELECT shipment_id FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [preassignedReceivingId, ctx.organizationId],
+      );
+      unmatchedShipmentId = shipRow.rows[0]?.shipment_id ?? null;
+    } else {
+      ({ receivingId: unmatchedReceivingId, shipmentId: unmatchedShipmentId } =
+        await createUnmatchedReceiving(trackingNumber, carrier, staffId, ctx.organizationId));
+    }
+    const unmatchedScanId = preassignedScanId ?? await recordScan(
       unmatchedReceivingId,
       trackingNumber,
       carrier,
       staffId,
       'unmatched',
+      intakeSurface,
     );
+    await stampUnboxOpened(unmatchedReceivingId, unmatchedScanId, trackingNumber);
 
     const exceptionReason = zohoReachable ? 'not_found' : 'zoho_unreachable';
     const exception = await upsertOpenTrackingException({
@@ -1281,8 +1629,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       }
     });
 
-    await applyIntakeClassification(unmatchedReceivingId, classification);
-    const receiving_package_unmatched = await fetchReceivingPackage(unmatchedReceivingId);
+    await applyIntakeClassification(unmatchedReceivingId, classification, ctx.organizationId);
+    const receiving_package_unmatched = await fetchReceivingPackage(unmatchedReceivingId, ctx.organizationId);
 
     return NextResponse.json({
       success: true,
@@ -1297,6 +1645,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       unbox_verdict: 'unfound',
       po_ids: [],
       zoho_reachable: zohoReachable,
+      // Provisional unfound: localOnly skipped the live Zoho search, so the
+      // client should fire a background (Zoho) follow-up that can still promote
+      // this carton to matched in place. A non-localOnly unfound is final.
+      zoho_pending: localOnly,
       receiving_package: receiving_package_unmatched,
       lines: [],
     });

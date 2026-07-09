@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pairEcwidToZoho } from '@/lib/neon/sku-catalog-queries';
 import { withAuth } from '@/lib/auth/withAuth';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 
 /**
  * POST /api/sku-catalog/pair-ecwid
@@ -27,6 +29,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         { status: 404 },
       );
     }
+
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.skuCatalog]);
 
     return NextResponse.json({
       success: true,

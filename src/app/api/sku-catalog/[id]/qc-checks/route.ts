@@ -18,6 +18,8 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 
 const ROUTE_QC_CHECKS_POST = 'sku-catalog.qc-checks.post';
 
@@ -135,6 +137,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       extra: { sku_catalog_id: skuCatalogId },
     });
 
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.qcChecks]);
     const responseBody = { success: true, check };
     if (idemKey) {
       await saveApiIdempotencyResponse(pool, {
@@ -214,6 +217,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
       after: { ...updated },
     });
 
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.qcChecks]);
     return NextResponse.json({ success: true, check: updated });
   } catch (error: any) {
     console.error('Error in PUT /api/sku-catalog/[id]/qc-checks:', error);
@@ -254,6 +258,7 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
         after: null,
       });
     }
+    await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.qcChecks]);
     return NextResponse.json({ success: true, deleted });
   } catch (error: any) {
     console.error('Error in DELETE /api/sku-catalog/[id]/qc-checks:', error);

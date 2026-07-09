@@ -8,8 +8,10 @@ import {
   framerTransitionMobile,
 } from '@/design-system/foundations/motion-framer';
 import { Camera, X, Check } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useCamera } from '@/hooks/useCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import {
   MobileSwipePhotoViewer,
   type SwipePhotoSlide,
@@ -54,6 +56,11 @@ export interface MobilePackerSpamCameraProps {
   priorPhotos?: PriorPhoto[];
   /** Remove a previously saved photo (by DB id) from the swipe gallery. */
   onDeletePrior?: (photoId: number) => void | Promise<void>;
+  /**
+   * When true, render in the route tree (immersive layout) instead of portaling
+   * to document.body. The swipe viewer still portals for z-index stacking.
+   */
+  embedded?: boolean;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -83,6 +90,7 @@ export function MobilePackerSpamCamera({
   header,
   priorPhotos = [],
   onDeletePrior,
+  embedded = false,
 }: MobilePackerSpamCameraProps) {
   const { videoRef, startCamera, stopCamera, cameraError } = useCamera();
   const viewfinderRef = useRef<HTMLDivElement>(null);
@@ -199,10 +207,7 @@ export function MobilePackerSpamCamera({
     const compressed = await compressPhotoForUpload(rawBlob, { source: 'packer-spam' });
     const blob = compressed.blob;
     const previewUrl = URL.createObjectURL(blob);
-    const id =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = safeRandomUUID();
 
     setShots((prev) => [...prev, { id, blob, previewUrl }]);
     setFlash(true);
@@ -306,10 +311,7 @@ export function MobilePackerSpamCamera({
     if (!blob) return;
 
     const previewUrl = URL.createObjectURL(blob);
-    const id =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = safeRandomUUID();
 
     handedOffRef.current = true;
     onDone([{ id, blob, previewUrl }]);
@@ -331,7 +333,7 @@ export function MobilePackerSpamCamera({
       animate={framerPresenceMobile.camera.animate}
       exit={framerPresenceMobile.camera.exit}
       transition={framerTransitionMobile.cameraEnter}
-      className="fixed inset-0 z-modal overflow-hidden bg-black select-none"
+      className={`${embedded ? 'absolute' : 'fixed'} inset-0 z-modal overflow-hidden bg-stage select-none`}
     >
       {/* ── Full-bleed viewfinder ── */}
       <div ref={viewfinderRef} className="absolute inset-0">
@@ -345,7 +347,7 @@ export function MobilePackerSpamCamera({
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-            <div className="h-16 w-16 rounded-full bg-white/10 flex items-center justify-center mb-4">
+            <div className="h-16 w-16 rounded-full bg-glass/10 flex items-center justify-center mb-4">
               <Camera className="h-8 w-8 text-white/50" />
             </div>
             <p className="text-sm font-bold text-white mb-1">Camera unavailable</p>
@@ -354,22 +356,24 @@ export function MobilePackerSpamCamera({
                 ? 'Enable camera access in your browser settings, then tap Try Again.'
                 : 'No camera detected, or the browser blocked access.'}
             </p>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={attemptStart}
-              className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
+              className="h-11 px-5 rounded-xl text-caption font-black uppercase tracking-wider"
             >
               Try Again
-            </button>
+            </Button>
 
             {showTestPhotoButton && (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleUseTestPhoto}
-                className="mt-3 h-11 px-5 rounded-xl bg-amber-500 text-black text-caption font-black uppercase tracking-wider active:bg-amber-600 transition-colors"
+                className="mt-3 h-11 px-5 rounded-xl bg-amber-500 text-black text-caption font-black uppercase tracking-wider hover:bg-amber-600 active:bg-amber-600"
               >
                 Use Test Photo · Dev
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -383,7 +387,7 @@ export function MobilePackerSpamCamera({
             animate={{ opacity: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="absolute inset-0 z-20 bg-black pointer-events-none"
+            className="absolute inset-0 z-20 bg-stage pointer-events-none"
           />
         )}
       </AnimatePresence>
@@ -403,14 +407,13 @@ export function MobilePackerSpamCamera({
               </>
             )}
           </div>
-          <button
+          <IconButton
             type="button"
             onClick={handleCancel}
-            aria-label="Close camera"
-            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm active:bg-black/60 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+            ariaLabel="Close camera"
+            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-full bg-scrim/40 backdrop-blur-sm active:bg-scrim/60 transition-colors"
+            icon={<X className="h-5 w-5 text-white" />}
+          />
         </div>
       </div>
 
@@ -430,12 +433,13 @@ export function MobilePackerSpamCamera({
               (no white ring) and smaller than the shutter, so it reads as a
               thumbnail rather than a second shutter. Hidden until the first shot. */}
           <div className="flex justify-start">
+            {/* ds-raw-button: image/photo thumbnail tile (last-shot gallery bubble) */}
             <button
               type="button"
               onClick={openGallery}
               disabled={gallerySlides.length === 0}
               aria-label="View photos"
-              className="relative h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/40 bg-black/40 shadow-lg active:scale-95 transition-transform disabled:opacity-0 disabled:pointer-events-none"
+              className="relative h-12 w-12 rounded-full overflow-hidden ring-2 ring-glass/40 bg-scrim/40 shadow-lg active:scale-95 transition-transform disabled:opacity-0 disabled:pointer-events-none"
             >
               {lastSlide && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -450,6 +454,7 @@ export function MobilePackerSpamCamera({
 
           {/* Shutter */}
           <div className="flex justify-center">
+            {/* ds-raw-button: camera shutter (bespoke ring-over-fill control) */}
             <button
               type="button"
               onClick={shutter}
@@ -457,21 +462,20 @@ export function MobilePackerSpamCamera({
               aria-label="Capture photo"
               className="h-[72px] w-[72px] rounded-full border-4 border-white bg-transparent active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center"
             >
-              <span className="block h-14 w-14 rounded-full bg-white active:bg-white/80 transition-colors" />
+              <span className="block h-14 w-14 rounded-full bg-stage-contrast active:bg-stage-contrast/80 transition-colors" />
             </button>
           </div>
 
           {/* Done — checkmark only */}
           <div className="flex justify-end">
-            <button
+            <IconButton
               type="button"
               onClick={handleDone}
               disabled={shots.length === 0}
-              aria-label="Done"
-              className="h-14 w-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:bg-emerald-600 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 disabled:active:bg-emerald-500"
-            >
-              <Check className="h-7 w-7" />
-            </button>
+              ariaLabel="Done"
+              className="h-14 w-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg active:bg-emerald-600 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 disabled:active:bg-emerald-500"
+              icon={<Check className="h-7 w-7 text-white" />}
+            />
           </div>
         </div>
       </div>
@@ -486,5 +490,12 @@ export function MobilePackerSpamCamera({
     </motion.div>
   );
 
+  if (embedded) {
+    return (
+      <div className="relative h-full min-h-[100dvh] w-full overflow-hidden">
+        {cameraUi}
+      </div>
+    );
+  }
   return mounted ? createPortal(cameraUi, document.body) : null;
 }

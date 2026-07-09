@@ -26,11 +26,14 @@
  */
 
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { tapWorkflow } from '@/lib/workflow/tap';
 import { applyTransition } from '@/lib/workflow/applyTransition';
-import { isUnifiedEngineApplyTransition } from '@/lib/feature-flags';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
+import { isUnifiedEngineApplyTransition, isUnifiedEngineVerdictConfig } from '@/lib/feature-flags';
+import { parseOrgSettings } from '@/lib/tenancy/settings';
 import type { SerialState } from '@/lib/inventory/state-machine';
 
 /**
@@ -61,6 +64,38 @@ export const VERDICT_TO_STATUS: Record<TestVerdict, VerdictMapping> = {
   TEST_AGAIN: { nextStatus: 'IN_TEST', eventType: 'TEST_START' },
   TESTING_FAILED: { nextStatus: 'ON_HOLD', eventType: 'TEST_FAIL' },
 };
+
+/**
+ * Pure verdict→status resolution: a per-org override (when present) else the
+ * hardcoded default. Testable without a DB. The override is already validated to
+ * the allowed status/event literals by OrgSettingsSchema (workflow.verdictStatus).
+ */
+export function pickVerdictMapping(
+  verdict: TestVerdict,
+  override?: Partial<Record<TestVerdict, VerdictMapping>> | null,
+): VerdictMapping {
+  return override?.[verdict] ?? VERDICT_TO_STATUS[verdict];
+}
+
+/**
+ * Per-org verdict→status mapping (Wave 2 / Class A). Flag OFF (default) returns
+ * the hardcoded map with NO settings read — byte-identical to before. Flag ON
+ * reads the org's workflow.verdictStatus override and falls back per-verdict; any
+ * failure fail-safes to the hardcoded map (a verdict must never fail to resolve).
+ */
+async function resolveVerdictMapping(verdict: TestVerdict, orgId: string | null): Promise<VerdictMapping> {
+  if (!orgId || !isUnifiedEngineVerdictConfig()) return VERDICT_TO_STATUS[verdict];
+  try {
+    const r = await pool.query<{ settings: unknown }>(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [orgId],
+    );
+    const override = r.rows.length ? parseOrgSettings(r.rows[0].settings).workflow?.verdictStatus : null;
+    return pickVerdictMapping(verdict, override ?? null);
+  } catch {
+    return VERDICT_TO_STATUS[verdict];
+  }
+}
 
 export interface TestedUnit {
   id: number;
@@ -103,7 +138,6 @@ export async function recordTestVerdict(
   args: RecordTestVerdictArgs,
 ): Promise<RecordTestVerdictResult | null> {
   const { serialUnitId, verdict } = args;
-  const mapping = VERDICT_TO_STATUS[verdict];
   const notes = args.notes ?? null;
   const actorStaffId = args.actorStaffId ?? null;
   // Tenant scope. When present (every authenticated route call), every read/write
@@ -112,16 +146,22 @@ export async function recordTestVerdict(
   // RLS, is what isolates tenants here. Mirrors transition()'s `orgId ? …` shape;
   // omitting org keeps the legacy unscoped SQL for any caller that lacks one.
   const orgId = args.organizationId ?? null;
+  // Verdict→status mapping — hardcoded by default; per-org override behind
+  // UNIFIED_ENGINE_VERDICT_CONFIG (flag off ⇒ no settings read, identical behavior).
+  const mapping = await resolveVerdictMapping(verdict, orgId);
 
   // 1. Fetch existing unit + its parent receiving_line (org-scoped).
+  // Phase 3: origin line (the frozen birth line) via the reconstruction view.
   const existing = await pool.query<TestedUnit>(
     orgId
-      ? `SELECT id, serial_number, current_status::text AS current_status, sku,
-                origin_receiving_line_id, organization_id
-           FROM serial_units WHERE id = $1 AND organization_id = $2`
-      : `SELECT id, serial_number, current_status::text AS current_status, sku,
-                origin_receiving_line_id, organization_id
-           FROM serial_units WHERE id = $1`,
+      ? `SELECT su.id, su.serial_number, su.current_status::text AS current_status, su.sku,
+                vo.origin_receiving_line_id, su.organization_id
+           FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+          WHERE su.id = $1 AND su.organization_id = $2`
+      : `SELECT su.id, su.serial_number, su.current_status::text AS current_status, su.sku,
+                vo.origin_receiving_line_id, su.organization_id
+           FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+          WHERE su.id = $1`,
     orgId ? [serialUnitId, orgId] : [serialUnitId],
   );
   if (existing.rows.length === 0) return null;
@@ -139,6 +179,12 @@ export async function recordTestVerdict(
   const useChokepoint = isUnifiedEngineApplyTransition();
   let unit = prev;
   let eventId!: number;
+  // True when THIS call produced a brand-new inventory_event; false when the
+  // event already existed (a retry with the same clientEventId — inventory_events
+  // is UNIQUE on client_event_id, so the helper returns the existing row). Used
+  // to skip the testing_results feed insert on a replay so retries don't stack
+  // duplicate feed rows (the event itself is already deduped).
+  let eventCreated = true;
 
   if (useChokepoint) {
     const applied = await applyTransition({
@@ -169,22 +215,25 @@ export async function recordTestVerdict(
     // current_status is the only field that changed; everything else mirrors prev.
     unit = { ...prev, current_status: mapping.nextStatus };
     eventId = applied.eventId;
+    eventCreated = !applied.idempotent;
   } else if (prev.current_status !== mapping.nextStatus) {
-    const updated = await pool.query<TestedUnit>(
+    // Phase 3: origin_receiving_line_id dropped from RETURNING (immutable here,
+    // never read off `unit` downstream) and carried over from prev below.
+    const updated = await pool.query<Omit<TestedUnit, 'origin_receiving_line_id'>>(
       orgId
         ? `UPDATE serial_units
               SET current_status = $2::serial_status_enum, updated_at = NOW()
             WHERE id = $1 AND organization_id = $3
             RETURNING id, serial_number, current_status::text AS current_status,
-                      sku, origin_receiving_line_id, organization_id`
+                      sku, organization_id`
         : `UPDATE serial_units
               SET current_status = $2::serial_status_enum, updated_at = NOW()
             WHERE id = $1
             RETURNING id, serial_number, current_status::text AS current_status,
-                      sku, origin_receiving_line_id, organization_id`,
+                      sku, organization_id`,
       orgId ? [serialUnitId, mapping.nextStatus, orgId] : [serialUnitId, mapping.nextStatus],
     );
-    unit = updated.rows[0];
+    unit = { ...updated.rows[0], origin_receiving_line_id: prev.origin_receiving_line_id };
   }
 
   // 3. Audit row in tech_serial_numbers. Mirrors receive-line.ts' pattern
@@ -216,7 +265,7 @@ export async function recordTestVerdict(
   //    event id is surfaced in the result so callers can cross-reference the
   //    verdict transition back to the timeline entry (mirrors /grade).
   if (!useChokepoint) {
-    const { event } = await appendInventoryEvent({
+    const { event, created } = await appendInventoryEvent({
       eventType: mapping.eventType,
       organizationId: args.organizationId ?? null,
       clientEventId: args.clientEventId ?? null,
@@ -231,61 +280,106 @@ export async function recordTestVerdict(
       payload: { verdict },
     });
     eventId = event.id;
+    eventCreated = created;
   }
 
   // 4b. Recently-Tested feed row. References the unit by id only — serial
   //     number / SKU / condition are JOINed from serial_units at read time
   //     (single source of truth), never copied here. Authoritative state
   //     stays on serial_units, so a write failure here is logged, not fatal.
-  try {
-    await pool.query(
-      `INSERT INTO testing_results
-         (serial_unit_id, receiving_line_id, verdict, unit_status,
-          tested_by, notes, inventory_event_id, organization_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      // org from the unit we already fetched — not a re-SELECT subquery (which
-      // would race a concurrent delete to NULL → wrong fallback org).
-      [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, eventId, unit.organization_id],
-    );
-  } catch (err) {
-    console.warn('[recordTestVerdict] testing_results insert failed (non-fatal):', err);
+  //     Skipped on a replay (eventCreated === false): the first call already
+  //     wrote this feed row, so re-inserting would stack a duplicate. The
+  //     event is deduped by client_event_id, but testing_results has no such
+  //     unique key, so the guard lives here. (Favors no-duplicates over the
+  //     rare partial-crash-then-retry case; the feed is non-authoritative.)
+  if (eventCreated) {
+    try {
+      await pool.query(
+        `INSERT INTO testing_results
+           (serial_unit_id, receiving_line_id, verdict, unit_status,
+            tested_by, notes, inventory_event_id, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        // org from the unit we already fetched — not a re-SELECT subquery (which
+        // would race a concurrent delete to NULL → wrong fallback org).
+        [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, eventId, unit.organization_id],
+      );
+    } catch (err) {
+      console.warn('[recordTestVerdict] testing_results insert failed (non-fatal):', err);
+    }
+
+    // "Why" signal (plan §2.3 emitter #3 — tech test-fail reasons). Only
+    // non-PASS verdicts carry a "why"; TESTING_FAILED weighs 2, TEST_AGAIN 1.
+    // Guarded by eventCreated like its neighbors so a clientEventId replay
+    // never double-emits. Governed verdict-detail reason codes are captured
+    // at the route layer (flow_context=verdict_detail), not here — free-text
+    // tech notes ride `notes`. Fire-and-forget; never fails the verdict.
+    if (verdict !== 'PASS') {
+      await emitEntitySignalSafe({
+        organizationId: unit.organization_id,
+        entityType: 'SERIAL_UNIT',
+        entityId: unit.id,
+        signalKind: 'test_fail_reason',
+        notes: notes ?? null,
+        severity: verdict === 'TESTING_FAILED' ? 2 : 1,
+        actorStaffId,
+        meta: {
+          verdict,
+          nextStatus: mapping.nextStatus,
+          eventType: mapping.eventType,
+          receivingLineId: lineId,
+          inventoryEventId: eventId,
+        },
+      });
+    }
   }
 
   // 5. Line rollup. Only runs when the unit has a parent line.
   let lineRollup: TestLineRollup | null = null;
 
   if (lineId != null) {
-    const tally = await pool.query<{
-      quantity_expected: number | null;
-      total_units: string;
-      tested_units: string;
-      failed_units: string;
-      in_test_units: string;
-    }>(
-      orgId
-        ? `SELECT rl.quantity_expected,
-                  COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
-             FROM receiving_lines rl
-        LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
-            WHERE rl.id = $1 AND rl.organization_id = $2
-            GROUP BY rl.id, rl.quantity_expected`
-        : `SELECT rl.quantity_expected,
-                  COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
-             FROM receiving_lines rl
-        LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
-            WHERE rl.id = $1
-            GROUP BY rl.id, rl.quantity_expected`,
-      orgId ? [lineId, orgId] : [lineId],
-    );
+    // Run the count-then-write rollup inside ONE transaction that locks the
+    // receiving_line FOR UPDATE *before* counting. Without the lock, two
+    // concurrent verdicts on the same line each read a stale tally and the
+    // last writer clobbers the other — leaving e.g. a fully-passed line stuck
+    // IN_TEST (never advances to the claim flow). Steps 1–4 already committed
+    // the unit status atomically, so once the lock is held the sibling units'
+    // committed statuses are visible to the re-read. Scoped by the unit's own
+    // org (always present; the line shares it).
+    const rollupOrg = unit.organization_id;
+    lineRollup = await withTenantTransaction(rollupOrg, async (client) => {
+      // Serialize concurrent rollups on this line. A non-existent / wrong-org
+      // line locks nothing and the tally below returns no row → no rollup.
+      await client.query(
+        `SELECT id FROM receiving_lines
+          WHERE id = $1 AND organization_id = $2
+          FOR UPDATE`,
+        [lineId, rollupOrg],
+      );
 
-    const t = tally.rows[0];
-    if (t) {
+      const tally = await client.query<{
+        quantity_expected: number | null;
+        total_units: string;
+        tested_units: string;
+        failed_units: string;
+        in_test_units: string;
+      }>(
+        `SELECT rl.quantity_expected,
+                COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
+                COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
+                COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
+                COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
+           FROM receiving_lines rl
+      LEFT JOIN serial_unit_provenance p ON p.origin_type = 'RECEIVING_LINE'
+             AND p.origin_id = rl.id AND p.organization_id = rl.organization_id
+      LEFT JOIN serial_units su ON su.id = p.serial_unit_id
+          WHERE rl.id = $1 AND rl.organization_id = $2
+          GROUP BY rl.id, rl.quantity_expected`,
+        [lineId, rollupOrg],
+      );
+
+      const t = tally.rows[0];
+      if (!t) return null;
+
       const expected = Number(t.quantity_expected || 0);
       const tested = Number(t.tested_units || 0);
       const failed = Number(t.failed_units || 0);
@@ -316,7 +410,9 @@ export async function recordTestVerdict(
         nextQa = 'PENDING';
       }
 
-      const params: unknown[] = [lineId, nextWorkflow, nextQa];
+      // $4 is always the org (fixed before the optional disposition at $5),
+      // so the WHERE predicate index is stable.
+      const params: unknown[] = [lineId, nextWorkflow, nextQa, rollupOrg];
       const sets = [
         `workflow_status = $2::inbound_workflow_status_enum`,
         `qa_status = $3::qa_status_enum`,
@@ -325,26 +421,19 @@ export async function recordTestVerdict(
         params.push(nextDisposition);
         sets.push(`disposition_code = $${params.length}::disposition_enum`);
       }
-      // Tenant-scope the rollup write (defense-in-depth; the line is the
-      // org-verified unit's parent).
-      let whereClause = 'id = $1';
-      if (orgId) {
-        params.push(orgId);
-        whereClause += ` AND organization_id = $${params.length}`;
-      }
 
-      const rolled = await pool.query<TestLineRollup>(
+      const rolled = await client.query<TestLineRollup>(
         `UPDATE receiving_lines
             SET ${sets.join(', ')},
                 updated_at = NOW()
-          WHERE ${whereClause}
+          WHERE id = $1 AND organization_id = $4
           RETURNING id, workflow_status::text AS workflow_status,
                     qa_status::text AS qa_status,
                     disposition_code::text AS disposition_code`,
         params,
       );
-      lineRollup = rolled.rows[0] ?? null;
-    }
+      return rolled.rows[0] ?? null;
+    });
   }
 
   // 6. Workflow-engine tap (LEGACY path only — fire-and-forget, never throws).

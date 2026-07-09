@@ -1,5 +1,6 @@
 import { CartonContextCard } from '@/components/receiving/workspace/line-edit/CartonContextCard';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { isLocalPickupFulfillment } from '@/lib/receiving/fulfillment-mode';
 import type { TestingController } from './testing-panel-types';
 
 /**
@@ -27,6 +28,7 @@ export function TestingCartonHeader({
       listingEditorOpen={c.listingEditorOpen}
       setListingEditorOpen={c.setListingEditorOpen}
       listingOpenHref={c.listingOpenHref}
+      listingLinks={c.listingLinks}
       poOpenHref={c.poOpenHref}
       trackingOpenHref={c.trackingOpenHref}
       poDisplay={c.poNumber}
@@ -43,12 +45,14 @@ export function TestingCartonHeader({
       zendeskTrimmed={c.zendeskTrimmed}
       zendeskHref={c.zendeskHref}
       zendeskChipDisplay={c.zendeskChipDisplay}
+      providerTicketId={c.providerTicketId}
       onTicketUnlinked={() => {
         c.setZendesk('');
         dispatchLineUpdated({ id: row.id, zendesk_ticket: null, notes: row.notes });
       }}
       primaryTrackingTrimmed={c.primaryTrackingTrimmed}
       filledExtraTrackingsCount={c.filledExtraTrackingsCount}
+      isLocalPickup={isLocalPickupFulfillment(row)}
       trackingEditorsOpen={c.trackingEditorsOpen}
       onToggleTrackingEditors={c.toggleTrackingEditors}
       trackingEdit={c.trackingEdit}

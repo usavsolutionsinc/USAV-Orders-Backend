@@ -43,6 +43,10 @@ export interface CarrierTrackingResult {
 
 export interface ShipmentRow {
   id: number;
+  // Owning tenant. NULLABLE during the Phase-B transition (un-stamped global
+  // rows exist); a webhook/sync should write downstream effects under THIS
+  // value (falling back to its caller orgId) rather than a hardcoded tenant.
+  organization_id: string | null;
   tracking_number_raw: string;
   tracking_number_normalized: string;
   carrier: string;

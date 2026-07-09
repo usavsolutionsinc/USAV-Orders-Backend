@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { AlertCircle, Clock, Loader2, ShieldCheck } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { Button } from '@/design-system/primitives';
 import { useWarrantyCoverage, useWarrantyUrlState } from '@/hooks/useWarrantyClaims';
 import { WarrantyLogClaimDialog } from '@/components/warranty/WarrantyLogClaimDialog';
 import { WARRANTY_STATUS_LABEL } from '@/lib/warranty/types';
 import { formatDateTimePST } from '@/utils/date';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Read-only warranty-coverage banner for the "on the phone with a customer"
@@ -25,8 +27,8 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 border-b border-gray-100 bg-white px-4 py-3 text-sm text-gray-400">
-        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+      <div className="flex items-center gap-2 border-b border-border-hairline bg-surface-card px-4 py-3 text-sm text-text-faint">
+        <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
         Checking warranty coverage for “{q}”…
       </div>
     );
@@ -34,17 +36,18 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 
   if (!data || !data.found) {
     return (
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3">
-        <p className="text-sm text-gray-500">
-          No shipped order matches “<span className="font-medium text-gray-700">{q}</span>”.
+      <div className="flex items-center justify-between gap-3 border-b border-border-hairline bg-surface-card px-4 py-3">
+        <p className="text-sm text-text-soft">
+          No shipped order matches “<span className="font-medium text-text-muted">{q}</span>”.
         </p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setLogOpen(true)}
-          className="shrink-0 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+          className="shrink-0 text-xs"
         >
           Log claim manually
-        </button>
+        </Button>
         <WarrantyLogClaimDialog open={logOpen} onClose={() => setLogOpen(false)} onCreated={(id) => openClaim(id)} />
       </div>
     );
@@ -56,10 +59,10 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 
   const tone =
     status === 'covered'
-      ? { ring: 'ring-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-700', icon: ShieldCheck }
+      ? { ring: 'ring-border-success', bg: 'bg-surface-success', text: 'text-text-success', icon: ShieldCheck }
       : status === 'expired'
-        ? { ring: 'ring-rose-200', bg: 'bg-rose-50', text: 'text-rose-700', icon: AlertCircle }
-        : { ring: 'ring-amber-200', bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock };
+        ? { ring: 'ring-border-danger', bg: 'bg-surface-danger', text: 'text-text-danger', icon: AlertCircle }
+        : { ring: 'ring-border-warning', bg: 'bg-surface-warning', text: 'text-text-warning', icon: Clock };
   const Icon = tone.icon;
 
   const headline =
@@ -76,33 +79,35 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
   const title = data.productTitle || data.sku || data.serialNumber || data.sourceOrderId || 'Shipped order';
 
   return (
-    <div className={cn('border-b', tone.ring, 'border-gray-100 bg-white')}>
+    <div className={cn('border-b', tone.ring, 'border-border-hairline bg-surface-card')}>
       <div className={cn('m-3 rounded-xl ring-1 ring-inset p-4', tone.ring, tone.bg)}>
         <div className="flex items-start gap-3">
-          <span className={cn('mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-inset', tone.ring, tone.text)}>
+          <span className={cn('mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-card ring-1 ring-inset', tone.ring, tone.text)}>
             <Icon className="h-5 w-5" />
           </span>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className={cn('text-sm font-semibold', tone.text)}>{headline}</span>
-              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset', tone.ring, tone.text, 'bg-white')}>
+              <span className={cn('rounded-full px-2 py-0.5 text-caption font-semibold tabular-nums ring-1 ring-inset', tone.ring, tone.text, 'bg-surface-card')}>
                 {sub}
               </span>
               {provisional && (
-                <span
-                  className="rounded border border-dashed border-amber-300 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700"
-                  title="Provisional — based on packed date + delivery estimate; confirms when the carrier delivered date lands."
+                <HoverTooltip
+                  label="Provisional — based on packed date + delivery estimate; confirms when the carrier delivered date lands."
+                  asChild
                 >
-                  Est.
-                </span>
+                  <span className="rounded border border-dashed border-border-warning px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-text-warning">
+                    Est.
+                  </span>
+                </HoverTooltip>
               )}
-              {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-300" />}
+              {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" />}
             </div>
 
-            <p className="mt-1 truncate text-[15px] font-medium text-gray-900">{title}</p>
+            <p className="mt-1 truncate text-[15px] font-medium text-text-default">{title}</p>
 
-            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px] sm:grid-cols-3">
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-label sm:grid-cols-3">
               <Fact label="Order #" value={data.sourceOrderId} mono />
               <Fact label="Customer" value={data.customerName} />
               <Fact label={provisional ? 'Est. delivered' : 'Delivered'} value={fmt(data.deliveredAt ?? data.warrantyStartsAt)} />
@@ -114,25 +119,27 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {data.existingClaim ? (
                 <>
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => openClaim(data.existingClaim!.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                    className="text-xs"
                   >
                     View claim {data.existingClaim.claimNumber}
-                  </button>
-                  <span className="text-[11px] text-gray-400">
+                  </Button>
+                  <span className="text-caption text-text-faint">
                     Already logged · {WARRANTY_STATUS_LABEL[data.existingClaim.status]}
                   </span>
                 </>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => setLogOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                  className="text-xs"
                 >
                   + Log claim
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -157,9 +164,9 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 function Fact({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] font-medium uppercase tracking-wide text-gray-400">{label}</dt>
-      <dd className={cn('truncate text-gray-700', mono && 'font-mono text-[11px]')}>
-        {value || <span className="text-gray-300">—</span>}
+      <dt className="text-micro font-medium uppercase tracking-wide text-text-faint">{label}</dt>
+      <dd className={cn('truncate text-text-muted', mono && 'font-mono text-caption')}>
+        {value || <span className="text-text-faint">—</span>}
       </dd>
     </div>
   );

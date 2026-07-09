@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,11 +108,11 @@ export default async function CycleCountsAdminPage({
   const campaigns = await loadCampaigns(user.organizationId);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-canvas">
       <PageHeader backHref="/admin/inventory" title="Cycle counts" maxWidth="6xl" />
       <div className="mx-auto max-w-6xl space-y-6 p-8">
-        <p className="text-sm text-gray-600">
-          Campaigns snapshot <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">bin_contents</code>{' '}
+        <p className="text-sm text-text-muted">
+          Campaigns snapshot <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">bin_contents</code>{' '}
           and route counts through the variance-tolerance gate. Within tolerance auto-approves
           on close; outside tolerance lands in admin review.
         </p>
@@ -125,22 +126,22 @@ export default async function CycleCountsAdminPage({
         ) : null}
 
         {/* Create form */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-3">
-            <h2 className="text-base font-medium text-gray-900">Start a new campaign</h2>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="border-b border-border-hairline px-6 py-3">
+            <h2 className="text-base font-medium text-text-default">Start a new campaign</h2>
           </header>
           <form action={createCampaignAction} className="grid grid-cols-1 gap-3 px-6 py-4 md:grid-cols-[2fr_auto_auto]">
             <div>
-              <label htmlFor="name" className="block text-xs font-medium text-gray-600">Name</label>
+              <label htmlFor="name" className="block text-xs font-medium text-text-muted">Name</label>
               <input
                 id="name"
                 name="name"
                 placeholder="e.g. May 2026 month-end"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                className="mt-1 block w-full rounded-md border border-border-default px-3 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label htmlFor="variance_tol" className="block text-xs font-medium text-gray-600">Variance tol (0–1)</label>
+              <label htmlFor="variance_tol" className="block text-xs font-medium text-text-muted">Variance tol (0–1)</label>
               <input
                 id="variance_tol"
                 name="variance_tol"
@@ -149,19 +150,16 @@ export default async function CycleCountsAdminPage({
                 min="0"
                 max="1"
                 defaultValue="0.05"
-                className="mt-1 block w-28 rounded-md border border-gray-300 px-3 py-1.5 font-mono text-xs"
+                className="mt-1 block w-28 rounded-md border border-border-default px-3 py-1.5 font-mono text-xs"
               />
             </div>
             <div className="flex items-end">
-              <button
-                type="submit"
-                className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-              >
+              <Button variant="primary" size="sm" type="submit">
                 Snapshot + create
-              </button>
+              </Button>
             </div>
           </form>
-          <p className="border-t border-gray-100 bg-gray-50 px-6 py-3 text-caption text-gray-600">
+          <p className="border-t border-border-hairline bg-surface-canvas px-6 py-3 text-caption text-text-muted">
             Snapshots every <code>bin_contents</code> row with <code>qty &gt; 0</code> or
             never-counted. Default tolerance 0.05 (5%) — counts within that auto-approve on close;
             beyond it routes to <em>pending review</em>.
@@ -169,16 +167,16 @@ export default async function CycleCountsAdminPage({
         </section>
 
         {/* Campaign list */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
-            <h2 className="text-lg font-medium text-gray-900">Campaigns</h2>
-            <span className="text-xs text-gray-500">last 50</span>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-3">
+            <h2 className="text-lg font-medium text-text-default">Campaigns</h2>
+            <span className="text-xs text-text-soft">last 50</span>
           </header>
           {campaigns.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-600">No campaigns yet. Use the form above to start one.</p>
+            <p className="px-6 py-8 text-sm text-text-muted">No campaigns yet. Use the form above to start one.</p>
           ) : (
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full divide-y divide-border-hairline text-sm">
+              <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">Campaign</th>
                   <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -190,18 +188,18 @@ export default async function CycleCountsAdminPage({
                   <th className="px-4 py-2 text-left font-medium">By</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-hairline">
                 {campaigns.map((c) => (
                   <tr key={c.id}>
                     <td className="px-4 py-2 text-sm">
                       <Link href={`/admin/inventory/cycle-counts/${c.id}`} className="font-semibold text-blue-600 hover:underline">
                         {c.name}
                       </Link>
-                      <div className="text-caption text-gray-500">tol {c.variance_tol}</div>
+                      <div className="text-caption text-text-soft">tol {c.variance_tol}</div>
                     </td>
                     <td className="px-4 py-2">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        c.status === 'open' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                        c.status === 'open' ? 'bg-blue-100 text-blue-700' : 'bg-surface-sunken text-text-muted'
                       }`}>
                         {c.status}
                       </span>
@@ -212,8 +210,8 @@ export default async function CycleCountsAdminPage({
                       {c.pending_review_lines}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums text-green-700">{c.approved_lines}</td>
-                    <td className="px-4 py-2 text-xs text-gray-500">{new Date(c.created_at).toLocaleString()}</td>
-                    <td className="px-4 py-2 text-xs text-gray-600">{c.created_by_name ?? 'system'}</td>
+                    <td className="px-4 py-2 text-xs text-text-soft">{new Date(c.created_at).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-xs text-text-muted">{c.created_by_name ?? 'system'}</td>
                   </tr>
                 ))}
               </tbody>

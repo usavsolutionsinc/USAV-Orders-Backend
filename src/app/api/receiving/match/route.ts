@@ -348,7 +348,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       tenantQuery(
         orgId,
         `SELECT r.id,
-                COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
+                stn.tracking_number_raw AS receiving_tracking_number,
                 COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier,
                 r.zoho_purchase_receive_id,
                 r.zoho_purchaseorder_id,

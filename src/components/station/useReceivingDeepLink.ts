@@ -2,7 +2,8 @@
 
 /**
  * Deep-link selection for the receiving-lines table: a shared URL
- * (`/receiving?recvId=…&lineId=…`) auto-selects the matching row once the list
+ * (`/unbox?recvId=…&lineId=…`; the param is read path-agnostically so the legacy
+ * `/receiving?recvId=…` still works) auto-selects the matching row once the list
  * has loaded. Keyed on `recvId:lineId` so the same link doesn't re-fire on every
  * refresh while a NEW one applied mid-session still lands. Auto-select-on-first-
  * visit is intentionally disabled (the tab shows a "scan to start" empty state);

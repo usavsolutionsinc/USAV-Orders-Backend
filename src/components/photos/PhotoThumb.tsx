@@ -1,24 +1,23 @@
 'use client';
 
-import { useState } from 'react';
-import { useReducedMotion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
+import { zIndex } from '@/design-system/tokens/z-index';
 import { AlertTriangle, Image as ImageIcon } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { cn } from '@/utils/_cn';
 
+/** Prefetch GCS thumbnails shortly before they enter the scrollport. */
+const THUMB_PREFETCH_MARGIN = '400px 0px';
+
 /**
  * The single image primitive for every photo-library tile.
  *
- * GCS thumbnails arrive over signed URLs that can be slow or, once a signature
- * expires, fail outright — so a bare `<img>` flashes empty boxes and broken-image
- * glyphs. This component owns the three states the brand cares about (a calm
- * shimmer while loading, a quiet fade-in on load, a self-explaining fallback on
- * error) so the grid never shows a torn image. Status is communicated with one
- * restrained icon, per the house "icon-first, minimal framing" aesthetic.
- *
- * `ratio="square"` is the dense contact-sheet tile; `ratio="natural"` lets the
- * image set its own height for the masonry browse view (reserving a portrait
- * box until the real height is known, so columns don't jump on first paint).
+ * Thumbnails are signed GCS URLs — we defer the network request until the tile
+ * is near the viewport (IntersectionObserver + native `loading="lazy"`) so a
+ * page of metadata does not pull every object at once.
  */
 export function PhotoThumb({
   src,
@@ -26,28 +25,76 @@ export function PhotoThumb({
   ratio = 'square',
   damage = false,
   className,
+  heroId,
 }: {
   src: string;
   alt: string;
-  /** `square` 1:1 tile · `natural` self-sizing (masonry) · `fill` fills its box. */
-  ratio?: 'square' | 'natural' | 'fill';
+  /**
+   * `square` 1:1 crop · `portrait` phone 9:16 frame, full image (object-contain) ·
+   * `natural` self-sizing masonry · `fill` fills its box.
+   */
+  ratio?: 'square' | 'portrait' | 'natural' | 'fill';
   /** Surfaces a small damage dot — the one status worth flagging on the tile. */
   damage?: boolean;
   className?: string;
+  /**
+   * Shared `layoutId` (from `photoHeroLayoutId`) pairing this tile with the
+   * fullscreen viewer's main image, so opening it morphs THIS tile into the
+   * lightbox rather than crossfading two unrelated elements. Omit to render a
+   * plain (non-shared-layout) tile.
+   */
+  heroId?: string;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const reduce = useReducedMotion();
-  const cover = ratio !== 'natural';
+  const heroTransition = useMotionTransition(framerTransition.photoHeroMorph);
+  const cover = ratio === 'square' || ratio === 'fill';
+  // The hero morph's close-side handoff (viewer → this tile) plays a layout
+  // animation ON this element — its projected box briefly overshoots the tile's
+  // own cell into neighboring rows. Grid siblings paint in DOM order by default,
+  // so a later row would otherwise draw over the still-traveling photo; bump
+  // z-index only for that window so it clears every row, then drop back to flow.
+  const [isMorphing, setIsMorphing] = useState(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || shouldLoad) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: THUMB_PREFETCH_MARGIN, threshold: 0.01 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
+
+  useEffect(() => {
+    if (!shouldLoad) return;
+    setStatus('loading');
+  }, [shouldLoad, src]);
 
   return (
-    <div
+    <motion.div
+      ref={containerRef}
+      layoutId={reduce ? undefined : heroId}
+      transition={heroTransition}
+      onLayoutAnimationStart={() => setIsMorphing(true)}
+      onLayoutAnimationComplete={() => setIsMorphing(false)}
+      style={{ zIndex: isMorphing ? zIndex.raised : undefined }}
       className={cn(
-        'relative overflow-hidden bg-gray-100',
-        // Square tiles are 1:1; fill stretches to its parent; natural tiles
-        // reserve a portrait box only until the image reports its real height.
+        'relative overflow-hidden bg-surface-sunken',
         ratio === 'square' ? 'aspect-square'
+          : ratio === 'portrait' ? 'aspect-[9/16]'
           : ratio === 'fill' ? 'h-full w-full'
-          : status === 'loaded' ? '' : 'aspect-[4/5]',
+          : ratio === 'natural'
+            ? status === 'loaded' ? '' : 'aspect-[4/3]'
+            : status === 'loaded' ? '' : 'aspect-[4/5]',
         className,
       )}
     >
@@ -62,11 +109,11 @@ export function PhotoThumb({
       ) : null}
 
       {status === 'error' ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-50 text-gray-400">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-surface-canvas text-text-faint">
           <ImageIcon className="h-5 w-5" />
           <span className="text-[8.5px] font-bold uppercase tracking-widest">Unavailable</span>
         </div>
-      ) : (
+      ) : shouldLoad ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={src}
@@ -76,13 +123,17 @@ export function PhotoThumb({
           onLoad={() => setStatus('loaded')}
           onError={() => setStatus('error')}
           className={cn(
-            cover ? 'h-full w-full object-cover' : 'block h-auto w-full',
+            ratio === 'portrait'
+              ? 'h-full w-full object-contain'
+              : cover
+                ? 'h-full w-full object-cover'
+                : 'block h-auto w-full',
             'transition-opacity',
             reduce ? 'duration-0' : 'duration-500',
             status === 'loaded' ? 'opacity-100' : 'opacity-0',
           )}
         />
-      )}
+      ) : null}
 
       {damage ? (
         <HoverTooltip label="Damage detected" focusable={false}>
@@ -91,6 +142,6 @@ export function PhotoThumb({
           </span>
         </HoverTooltip>
       ) : null}
-    </div>
+    </motion.div>
   );
 }

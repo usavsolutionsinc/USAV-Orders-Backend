@@ -43,19 +43,19 @@ export function WatchlistPane() {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <h1 className="mb-4 text-xl font-bold text-gray-900">Watchlist <span className="text-gray-400">({rows.length})</span></h1>
+      <h1 className="mb-4 text-xl font-bold text-text-default">Watchlist <span className="text-text-faint">({rows.length})</span></h1>
       <ul className="space-y-2">
         {rows.map((c) => (
-          <li key={c.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
-            {c.image_url ? <img src={c.image_url} alt="" className="h-10 w-10 rounded object-cover" /> : <div className="h-10 w-10 rounded bg-gray-100" />}
+          <li key={c.id} className="flex items-center gap-3 rounded-xl border border-border-soft bg-surface-card p-3">
+            {c.image_url ? <img src={c.image_url} alt="" className="h-10 w-10 rounded object-cover" /> : <div className="h-10 w-10 rounded bg-surface-sunken" />}
             <div className="min-w-0 flex-1">
               <a href={c.url ?? '#'} target="_blank" rel="noreferrer" className="truncate text-sm font-semibold text-blue-700 hover:underline">{c.title}</a>
-              <p className="truncate text-caption text-gray-500">{c.seller_name ?? 'eBay'}{c.condition ? ` · ${c.condition.replace('_', ' ')}` : ''}</p>
+              <p className="truncate text-caption text-text-soft">{c.seller_name ?? 'eBay'}{c.condition ? ` · ${c.condition.replace('_', ' ')}` : ''}</p>
             </div>
-            <span className="w-16 text-right text-caption font-semibold text-gray-700">{formatCents(c.price_cents, c.currency)}</span>
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">{c.status}</span>
+            <span className="w-16 text-right text-caption font-semibold text-text-muted">{formatCents(c.price_cents, c.currency)}</span>
+            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-semibold text-text-muted">{c.status}</span>
             <Button variant="primary" size="sm" loading={importCandidate.isPending} disabled={c.status === 'imported'} onClick={() => doImport(c)}>Import</Button>
-            <button type="button" onClick={() => patch.mutate({ id: c.id, status: 'rejected' })} className="rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100">Reject</button>
+            <Button variant="ghost" size="sm" type="button" onClick={() => patch.mutate({ id: c.id, status: 'rejected' })}>Reject</Button>
           </li>
         ))}
       </ul>

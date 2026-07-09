@@ -48,8 +48,8 @@ test.describe('A · Photo library group-by-ticket', () => {
     const firstFolder = page.getByTestId('photo-folder').first();
     if (await firstFolder.count()) {
       await firstFolder.click();
-      // Breadcrumb path back to all folders appears, and photos render inline.
-      await expect(page.getByRole('button', { name: /all folders/i })).toBeVisible();
+      // Bottom date breadcrumb reflects the drill, and photos render inline.
+      await expect(page.getByRole('navigation', { name: 'Date path' })).toBeVisible();
       const firstTile = page.getByTestId('photo-tile').first();
       await expect(firstTile).toBeVisible();
       await firstTile.click();
@@ -77,9 +77,12 @@ test.describe('A · Photo library group-by-ticket', () => {
     const folders = page.getByTestId('photo-folder');
     if (await folders.count()) {
       await expect(folders.first()).toBeVisible();
-      // Claims are grouped by Zendesk ticket — labels must NOT be PO/Order refs.
+      // Claims are grouped by Zendesk ticket — labels are #1234, not PO/Order refs.
       for (const label of await folders.allInnerTexts()) {
-        expect(label).not.toMatch(/\b(PO|Order)\s/);
+        expect(label).not.toMatch(/\b(PO|Order|Ticket)\s/);
+        if (!label.includes('Unlinked')) {
+          expect(label).toMatch(/#\d+/);
+        }
       }
     }
     expect(pageErrors, `Uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);

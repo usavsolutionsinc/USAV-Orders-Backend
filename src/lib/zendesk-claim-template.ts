@@ -156,8 +156,10 @@ export async function buildReceivingClaimTemplate(
            SELECT BTRIM(su.serial_number) AS serial_number
              FROM serial_units su
             WHERE su.organization_id = $3
-              AND su.origin_receiving_line_id IN (SELECT id FROM lines)
-              AND ($2::int IS NULL OR su.origin_receiving_line_id = $2)
+              AND su.id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                             WHERE p.origin_type = 'RECEIVING_LINE' AND p.organization_id = $3
+                               AND p.origin_id IN (SELECT id FROM lines)
+                               AND ($2::int IS NULL OR p.origin_id = $2))
          ) s
          WHERE BTRIM(COALESCE(serial_number, '')) <> ''
          ORDER BY serial_number
@@ -174,8 +176,10 @@ export async function buildReceivingClaimTemplate(
            UNION
            SELECT BTRIM(su.serial_number) AS serial_number
              FROM serial_units su
-            WHERE su.origin_receiving_line_id IN (SELECT id FROM lines)
-              AND ($2::int IS NULL OR su.origin_receiving_line_id = $2)
+            WHERE su.id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                             WHERE p.origin_type = 'RECEIVING_LINE'
+                               AND p.origin_id IN (SELECT id FROM lines)
+                               AND ($2::int IS NULL OR p.origin_id = $2))
          ) s
          WHERE BTRIM(COALESCE(serial_number, '')) <> ''
          ORDER BY serial_number
@@ -193,10 +197,14 @@ export async function buildReceivingClaimTemplate(
   let lineSummary = '';
   if (lineId) {
     const lineSql = orgId
-      ? `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
-       FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`
-      : `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
-       FROM receiving_lines WHERE id = $1 LIMIT 1`;
+      ? `SELECT rl.item_name, rl.sku, rl.quantity_received, rl.quantity_expected, rlt.condition_grade
+       FROM receiving_lines rl
+       LEFT JOIN receiving_line_testing rlt ON rlt.receiving_line_id = rl.id AND rlt.organization_id = rl.organization_id
+       WHERE rl.id = $1 AND rl.organization_id = $2 LIMIT 1`
+      : `SELECT rl.item_name, rl.sku, rl.quantity_received, rl.quantity_expected, rlt.condition_grade
+       FROM receiving_lines rl
+       LEFT JOIN receiving_line_testing rlt ON rlt.receiving_line_id = rl.id AND rlt.organization_id = rl.organization_id
+       WHERE rl.id = $1 LIMIT 1`;
     const lineResult = orgId
       ? await tenantQuery(orgId, lineSql, [lineId, orgId])
       : await pool.query(lineSql, [lineId]);
@@ -229,6 +237,11 @@ export async function buildReceivingClaimTemplate(
     ? (carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id) as string
     : 'Unfound PO';
   const trackingRef = carton.tracking_number || 'n/a';
+  // Not routed through effectiveIntakeKind (the line-vs-carton-default SoT,
+  // src/lib/receiving/kinds/registry.ts): this carton shape carries no
+  // carton-level default field, and receivingLabelTypeDisplay below must pass
+  // an org-custom type string through verbatim rather than have it silently
+  // coerced to 'PO' by that resolver's strict built-in-kind validation.
   const effectiveReceivingType = (carton.receiving_type || carton.intake_type || 'PO').trim().toUpperCase();
   const platformLabel = sourcePlatformLabel(carton.source_platform);
   const typeLabel = receivingLabelTypeDisplay(effectiveReceivingType);
@@ -251,7 +264,7 @@ export async function buildReceivingClaimTemplate(
   const descriptionLines: string[] = [
     `Issue: ${CLAIM_TYPE_LABEL[claimType]}`,
     ...(hasPo ? [] : [`Purchase Order: ${poRef}`]),
-    lineSummary ? lineSummary : `Scope: package-wide (no specific item)`,
+    ...(lineSummary ? [lineSummary] : hasPo ? [`Scope: package-wide (no specific item)`] : []),
   ];
   if (serials.length) {
     descriptionLines.push(`Serial${serials.length > 1 ? 's' : ''}: ${serials.join(', ')}`);

@@ -6,6 +6,7 @@ import { cn } from '@/utils/_cn';
 import { AnchoredLayer, type AnchoredPlacement } from './AnchoredLayer';
 import { framerPresence, framerTransition } from '../foundations/motion-framer';
 import { useMotionPresence, useMotionTransition } from '../foundations/motion-framer-hooks';
+import type { ZIndexToken } from '../tokens/z-index';
 
 // ─── Popover ─────────────────────────────────────────────────────────────────
 //
@@ -13,7 +14,7 @@ import { useMotionPresence, useMotionTransition } from '../foundations/motion-fr
 // part (portal, rect-tracking, dismissal) but no visual chrome; <Popover> adds
 // the token-driven surface (rounded card, border, elevation) and the shared
 // dropdown enter/exit motion — so callers stop re-rolling the same
-// `rounded-xl border bg-white shadow-lg` + AnimatePresence boilerplate.
+// `rounded-xl border bg-surface-card shadow-lg` + AnimatePresence boilerplate.
 //
 // Motion comes from the SHARED presets (`framerPresence.dropdownPanel` +
 // `framerTransition.dropdownOpen`), run through the reduced-motion-aware hooks.
@@ -45,6 +46,8 @@ export interface PopoverProps
   placement?: AnchoredPlacement;
   /** Gap in px between the trigger and the panel. Default 6. */
   gap?: number;
+  /** Stacking band — use `panelOverlay` inside {@link RightPaneOverlay}. Default `dropdown`. */
+  level?: ZIndexToken;
   /** Match the trigger width (always true for `*-stretch` placements). */
   matchWidth?: boolean;
   /** Inner padding. Default true. */
@@ -60,6 +63,7 @@ export function Popover({
   anchorRef,
   placement = 'bottom-start',
   gap = 6,
+  level = 'dropdown',
   matchWidth = false,
   padded = true,
   className,
@@ -76,6 +80,7 @@ export function Popover({
       anchorRef={anchorRef}
       placement={placement}
       gap={gap}
+      level={level}
       matchWidth={matchWidth}
     >
       <AnimatePresence>

@@ -112,7 +112,7 @@ export function SourcingSidebarPanel() {
           </div>,
         ]}
       >
-        <p className="px-3 py-4 text-caption text-gray-500">
+        <p className="px-3 py-4 text-caption text-text-soft">
           {by === 'serial' ? 'Scan a serial to decode the model.' : 'Find a product or model to see compatible parts and stock.'}
         </p>
       </SidebarShell>
@@ -123,7 +123,7 @@ export function SourcingSidebarPanel() {
   if (mode === 'searches') {
     return (
       <SidebarShell headerRows={[modeRail]}>
-        <p className="px-3 py-4 text-caption text-gray-500">
+        <p className="px-3 py-4 text-caption text-text-soft">
           Standing searches the scour watcher re-runs on a cadence to auto-fill the watchlist. Add one, then run, pause, or remove it.
         </p>
       </SidebarShell>
@@ -157,7 +157,7 @@ export function SourcingSidebarPanel() {
           </div>,
         ]}
       >
-        <p className="px-3 py-4 text-caption text-gray-500">
+        <p className="px-3 py-4 text-caption text-text-soft">
           Sourcing suppliers ranked by spend. Read-only — add or edit suppliers in Admin › Suppliers.
         </p>
       </SidebarShell>
@@ -186,7 +186,7 @@ export function SourcingSidebarPanel() {
         </div>,
       ]}
     >
-      <p className="px-3 py-4 text-caption text-gray-500">
+      <p className="px-3 py-4 text-caption text-text-soft">
         {mode === 'queue'
           ? 'Everything that needs sourcing — EOL, low/no stock, and replenish-on-sold. Resolve or dismiss with a reason.'
           : 'Saved candidates across channels. Import one into inventory to track its cost & condition.'}

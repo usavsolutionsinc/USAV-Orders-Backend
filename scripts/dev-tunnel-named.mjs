@@ -6,14 +6,17 @@
  *   pnpm dev:tunnel:named
  *
  * Auth (pick one — token avoids `cloudflared tunnel login` / cert.pem conflicts):
- *   CLOUDFLARE_TUNNEL_TOKEN=…   in .env.local (recommended)
+ *   CLOUDFLARE_TUNNEL_TOKEN=…   connector token from Zero Trust → Tunnels → Configure
+ *                               (long eyJ… string — NOT the tunnel UUID)
+ *   CLOUDFLARE_TUNNEL_ID=…      optional UUID when using ~/.cloudflared/<id>.json
  *   CLOUDFLARE_DEV_TUNNEL_NAME=…  fallback: `cloudflared tunnel run <name>`
  *
  * Cloudflare dashboard → Published application → Service URL:
  *   http://localhost:3000
  */
 import { spawn, spawnSync } from "node:child_process";
-import { platform } from "node:os";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { homedir, platform, tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
 
@@ -44,12 +47,62 @@ const banner = (title) => {
   log("");
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const cliArgs = process.argv.slice(2).filter((a) => a !== "--");
-const tunnelToken = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim() || "";
+const rawTokenEnv = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim() || "";
+const explicitTunnelId = process.env.CLOUDFLARE_TUNNEL_ID?.trim() || "";
 const tunnelName =
   process.env.CLOUDFLARE_DEV_TUNNEL_NAME?.trim() ||
   cliArgs[0]?.trim() ||
   DEFAULT_TUNNEL;
+
+function isConnectorToken(value) {
+  return value.length > 50 && !UUID_RE.test(value);
+}
+
+function credentialsPathForTunnelId(tunnelId) {
+  return resolve(homedir(), ".cloudflared", `${tunnelId}.json`);
+}
+
+function resolveTunnelAuth() {
+  if (rawTokenEnv && isConnectorToken(rawTokenEnv)) {
+    return { mode: "token", token: rawTokenEnv };
+  }
+
+  const tunnelId =
+    explicitTunnelId || (UUID_RE.test(rawTokenEnv) ? rawTokenEnv : "");
+  if (tunnelId) {
+    const credPath = credentialsPathForTunnelId(tunnelId);
+    if (existsSync(credPath)) {
+      return { mode: "credentials", tunnelId, credPath };
+    }
+    return {
+      mode: "misconfigured",
+      tunnelId,
+      usedUuidAsToken: Boolean(rawTokenEnv && UUID_RE.test(rawTokenEnv)),
+    };
+  }
+
+  if (tunnelName) {
+    return { mode: "name", tunnelName };
+  }
+
+  return { mode: "missing" };
+}
+
+const tunnelAuth = resolveTunnelAuth();
+
+/** Avoid ~/.cloudflared/config.yml (e.g. hermes-mac) hijacking dev tunnel auth. */
+function createIsolatedConfigPath() {
+  const dir = mkdtempSync(resolve(tmpdir(), "usav-cf-tunnel-"));
+  const configPath = resolve(dir, "config.yml");
+  writeFileSync(configPath, "ingress:\n  - service: http_status:404\n");
+  return configPath;
+}
+
+const isolatedConfigPath = createIsolatedConfigPath();
 
 function ensureCloudflared() {
   const check = spawnSync("cloudflared", ["--version"], { encoding: "utf8" });
@@ -76,25 +129,82 @@ function ensureCloudflared() {
 }
 
 function ensureTunnelAuth() {
-  if (tunnelToken) return;
+  if (tunnelAuth.mode === "misconfigured") {
+    log(`${RED}${BOLD}Invalid CLOUDFLARE_TUNNEL_TOKEN.${RESET}`);
+    log("");
+    if (tunnelAuth.usedUuidAsToken) {
+      log(
+        `You set a ${BOLD}tunnel UUID${RESET} (${DIM}${tunnelAuth.tunnelId}${RESET}), not the connector token.`,
+      );
+      log(
+        `cloudflared rejects UUIDs passed to ${CYAN}--token${RESET} with "Provided Tunnel token is not valid."`,
+      );
+      log("");
+    }
+    log(`Get the real connector token:`);
+    log(
+      `  Cloudflare Zero Trust → Networks → Tunnels → ${CYAN}${tunnelName}${RESET} → Configure`,
+    );
+    log(
+      `  Copy the long token from the install command (${CYAN}cloudflared tunnel run --token eyJ…${RESET}).`,
+    );
+    log("");
+    log(`Put it in ${CYAN}.env.local${RESET}:`);
+    log(`  ${CYAN}CLOUDFLARE_TUNNEL_TOKEN=eyJ…${RESET}`);
+    log("");
+    log(`${DIM}Alternative: save credentials JSON as${RESET}`);
+    log(`  ${DIM}${credentialsPathForTunnelId(tunnelAuth.tunnelId)}${RESET}`);
+    log(`${DIM}and set CLOUDFLARE_TUNNEL_ID=${tunnelAuth.tunnelId}${RESET}`);
+    log("");
+    process.exit(1);
+  }
 
-  log(`${YELLOW}No CLOUDFLARE_TUNNEL_TOKEN in .env.local.${RESET}`);
-  log("");
-  log(`Add the connector token from Cloudflare Zero Trust → Tunnels → Configure:`);
-  log(`  ${CYAN}CLOUDFLARE_TUNNEL_TOKEN=<token>${RESET}`);
-  log("");
-  log(
-    `${DIM}Or set ${CYAN}CLOUDFLARE_DEV_TUNNEL_NAME${RESET}${DIM} and use credentials in ~/.cloudflared/config.yml.${RESET}`,
-  );
-  log("");
-  process.exit(1);
+  if (tunnelAuth.mode === "missing") {
+    log(`${YELLOW}No tunnel auth configured in .env.local.${RESET}`);
+    log("");
+    log(`Add the connector token from Cloudflare Zero Trust → Tunnels → Configure:`);
+    log(`  ${CYAN}CLOUDFLARE_TUNNEL_TOKEN=eyJ…${RESET}`);
+    log("");
+    log(
+      `${DIM}Or set ${CYAN}CLOUDFLARE_TUNNEL_ID${RESET}${DIM} with ~/.cloudflared/<uuid>.json, or ${CYAN}CLOUDFLARE_DEV_TUNNEL_NAME${RESET}${DIM} + credentials.${RESET}`,
+    );
+    log("");
+    process.exit(1);
+  }
 }
 
 function tunnelSpawnArgs() {
-  if (tunnelToken) {
-    return ["tunnel", "--no-autoupdate", "run", "--token", tunnelToken];
+  // Token mode is fully remote-managed: cloudflared pulls its ingress/route
+  // from the Cloudflare dashboard (Zero Trust → Tunnels → Published app →
+  // Service URL: http://localhost:3000). Passing a local --config OVERRIDES that
+  // ingress — the old isolated `ingress: http_status:404` config made every
+  // request 404 even once the tunnel connected. So token mode runs clean:
+  //   cloudflared tunnel run --token <token>
+  if (tunnelAuth.mode === "token") {
+    return ["tunnel", "--no-autoupdate", "run", "--token", tunnelAuth.token];
   }
-  return ["tunnel", "--no-autoupdate", "run", tunnelName];
+
+  const base = [
+    "tunnel",
+    "--no-autoupdate",
+    "--config",
+    isolatedConfigPath,
+    "run",
+  ];
+
+  switch (tunnelAuth.mode) {
+    case "credentials":
+      return [
+        ...base,
+        tunnelAuth.tunnelId,
+        "--credentials-file",
+        tunnelAuth.credPath,
+      ];
+    case "name":
+      return [...base, tunnelAuth.tunnelName];
+    default:
+      return base;
+  }
 }
 
 let nextProc = null;
@@ -140,9 +250,12 @@ function startNext() {
 }
 
 function startTunnel() {
-  const authLabel = tunnelToken
-    ? "connector token"
-    : `named tunnel "${tunnelName}"`;
+  const authLabel =
+    tunnelAuth.mode === "token"
+      ? "connector token"
+      : tunnelAuth.mode === "credentials"
+        ? `tunnel ${tunnelAuth.tunnelId}`
+        : `named tunnel "${tunnelAuth.tunnelName}"`;
   banner(`Starting Cloudflare dev tunnel (${authLabel})`);
   log(`${DIM}Route in Zero Trust should point to ${CYAN}http://localhost:${DEV_PORT}${RESET}${DIM}.${RESET}`);
   log(`${DIM}Public URL: ${CYAN}https://${DEFAULT_HOST}${RESET}`);
@@ -182,9 +295,9 @@ function startTunnel() {
   tunnelProc.on("exit", (code) => {
     if (!shuttingDown) {
       log(`${RED}cloudflared exited with code ${code}${RESET}`);
-      if (tunnelToken) {
+      if (tunnelAuth.mode === "token") {
         log(
-          `${YELLOW}Tip:${RESET} refresh ${CYAN}CLOUDFLARE_TUNNEL_TOKEN${RESET} from Cloudflare Zero Trust → Tunnels → Configure.`,
+          `${YELLOW}Tip:${RESET} refresh ${CYAN}CLOUDFLARE_TUNNEL_TOKEN${RESET} from Cloudflare Zero Trust → Tunnels → Configure (use the long ${CYAN}eyJ…${RESET} token, not the tunnel UUID).`,
         );
       } else {
         log(

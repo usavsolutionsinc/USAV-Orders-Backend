@@ -37,7 +37,7 @@ const FBA_TONE: Record<
   HorizontalSliderTone,
   { activeBg: string; activeText: string; ring: string }
 > = {
-  zinc: { activeBg: 'bg-zinc-100', activeText: 'text-zinc-900', ring: 'ring-zinc-300' },
+  zinc: { activeBg: 'bg-surface-sunken', activeText: 'text-text-default', ring: 'ring-border-default' },
   yellow: { activeBg: 'bg-yellow-100', activeText: 'text-black', ring: 'ring-yellow-300' },
   emerald: { activeBg: 'bg-emerald-100', activeText: 'text-black', ring: 'ring-emerald-300' },
   red: { activeBg: 'bg-red-100', activeText: 'text-black', ring: 'ring-red-300' },
@@ -97,8 +97,8 @@ export type HorizontalButtonSliderProps = {
   size?: 'md' | 'lg';
   /**
    * Tighter vertical rhythm for the `nav` variant — drops the scroller's
-   * vertical padding from `py-2` to `py-1` so the row fits a 40px band exactly
-   * (32px pill + 8px). Used by header bands that must align on a 40px grid.
+   * vertical padding to `pt-1 pb-2` so the row fits a ~44px band (32px pill +
+   * shadow bleed). Used by header bands that align on the 40px grid.
    */
   dense?: boolean;
   className?: string;
@@ -151,33 +151,42 @@ export function HorizontalButtonSlider({
   // The `nav` variant uses scale-up + shadow on the active pill. Setting
   // overflow-x-auto forces overflow-y to compute as auto too (CSS spec), so
   // drop shadows get clipped unless the scroller has extra bottom padding.
-  // Dense nav: symmetric py-1 + h-8 pills = 40px band (matches scan/mode rows).
-  // Non-dense keeps extra bottom pad so active-pill shadows aren't clipped.
+  // Dense nav: pt-1 + h-8 pills + pb-2 = 44px band — extra bottom pad so the
+  // active pill's shadow-md isn't clipped by overflow-x-auto (which forces
+  // overflow-y:auto per spec). Non-dense keeps more bottom pad for scale-up bleed.
   const scrollerPadY =
-    variant === 'nav' ? (dense ? 'py-1' : 'pt-2 pb-3') : 'pb-0.5';
+    variant === 'nav' ? (dense ? 'pt-1 pb-2' : 'pt-2 pb-3') : 'pb-0.5';
 
-  // `floating`, `overlay` nav, and `segmented` skip the scroller — floating and
-  // overlay to avoid clipping pill shadows; segmented so flex-1 children stretch.
+  // `floating` and `segmented` skip the scroller — floating so its wrapped
+  // pills can grow the sidebar naturally, segmented so flex-1 children
+  // stretch. Overlay nav USED to skip it unconditionally too (to avoid
+  // overflow-x-auto clipping the active pill's scale-up/shadow bleed), but
+  // every real consumer of `overlay` also passes `dense` — and dense pills
+  // never scale-animate (see `isActive && !isDisabled && !dense` below), so
+  // that bleed never actually happens for `overlay`+`dense`. Skipping the
+  // scroller instead just made the row `flex-wrap` once pills ran out of room
+  // (e.g. a 4th Triage/Prioritize/Unfound/Done tab wrapping to its own line).
+  // Dense overlay nav now scrolls horizontally like every other pill row; a
+  // hypothetical future non-dense overlay still gets the old overflow-visible
+  // treatment so its shadow bleed stays unclipped.
   const isSegmented = variant === 'segmented';
   const isOverlayNav = overlay && variant === 'nav';
-  const useScroller = variant !== 'floating' && !isSegmented && !isOverlayNav;
+  const useScroller = variant !== 'floating' && !isSegmented && !(isOverlayNav && !dense);
   const containerClass = isSegmented
     ? segmentedFlush
       ? // Full-bleed sidebar band: square white fill + bottom hairline (matches header bands).
-        cn('h-full rounded-none bg-white p-0', receivingHeaderHairlineClass)
+        cn('h-full rounded-none bg-surface-card p-0', receivingHeaderHairlineClass)
       : // Recessed gray track (bg-surface-canvas + inset ring) so the active blue
         // pill reads as raised. p-1 + h-8 tabs = 40px in a fixed 40px band.
         'rounded-xl bg-surface-canvas p-1 ring-1 ring-inset ring-border-soft'
     : useScroller
-      ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
-      : isOverlayNav
-        ? 'overflow-visible'
-        : 'overflow-visible py-2';
+      ? `-mx-1 min-w-0 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
+      : 'overflow-visible pt-2 pb-3';
 
   return (
-    <div className={className}>
+    <div className={cn(useScroller && 'min-w-0', className)}>
       {legend ? (
-        <span className="mb-1.5 block text-mini font-black uppercase tracking-widest text-zinc-400">
+        <span className="mb-1.5 block text-mini font-black uppercase tracking-widest text-text-faint">
           {legend}
         </span>
       ) : null}
@@ -242,7 +251,7 @@ export function HorizontalButtonSlider({
               const Icon = item.icon;
               const isDisabled = !!item.disabled;
               // `dense` pills lock to a flat 32px (h-8) with no active scale-up
-              // so they sit cleanly inside a 40px grid row (32 + py-1*2).
+              // so they sit cleanly inside a compact band (32 + pt-1 + pb-2).
               const navSizeCls = navIconOnly
                 ? 'h-8 w-8 min-w-8 shrink-0 justify-center p-0'
                 : dense
@@ -250,10 +259,10 @@ export function HorizontalButtonSlider({
                   : sizeCls;
               const labelClass = Icon ? 'ml-1.5 max-w-[160px]' : 'max-w-[160px]';
               const stateClass = isDisabled
-                ? 'cursor-not-allowed bg-gray-50 text-gray-400 ring-gray-200'
+                ? 'cursor-not-allowed bg-surface-canvas text-text-faint ring-border-soft'
                 : isActive
                   ? 'bg-blue-600 text-white ring-blue-600 shadow-md shadow-blue-600/25'
-                  : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50 hover:text-gray-900 hover:ring-gray-300';
+                  : 'bg-surface-card text-text-soft ring-border-soft hover:bg-surface-hover hover:text-text-default hover:ring-border-default';
               return (
                 <motion.button
                   key={item.id}
@@ -274,15 +283,25 @@ export function HorizontalButtonSlider({
                     <Icon className={`shrink-0 ${navIconOnly ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
                   ) : null}
                   {navIconOnly ? null : (
-                    <span className={`inline-block whitespace-nowrap ${labelClass}`}>{item.label}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <span className={`inline-block whitespace-nowrap ${labelClass}`}>{item.label}</span>
+                      {item.count != null && item.count > 0 ? (
+                        <>
+                          <span
+                            className={`shrink-0 ${isActive ? 'text-white/60' : 'text-text-faint'}`}
+                            aria-hidden
+                          >
+                            •
+                          </span>
+                          <span className="shrink-0 tabular-nums">{item.count}</span>
+                        </>
+                      ) : null}
+                    </span>
                   )}
-                  {!navIconOnly && item.count != null && item.count > 0 ? (
-                    <span className={`ml-1.5 shrink-0 tabular-nums ${isActive ? 'opacity-90' : 'opacity-70'}`}>{item.count}</span>
-                  ) : null}
                   {item.badge === 'dot' ? (
                     <span
                       className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ${
-                        isActive ? 'bg-white ring-blue-600' : 'bg-emerald-500 ring-white'
+                        isActive ? 'bg-surface-card ring-blue-600' : 'bg-emerald-500 ring-white'
                       }`}
                       aria-hidden
                     />
@@ -295,7 +314,7 @@ export function HorizontalButtonSlider({
               const Icon = item.icon;
               const stateClass = isActive
                 ? 'bg-blue-600 text-white shadow-[0_2px_8px_rgba(37,99,235,0.35)]'
-                : 'bg-white text-gray-700 shadow-[0_1px_4px_rgba(15,23,42,0.14)] hover:bg-gray-50';
+                : 'bg-surface-card text-text-muted shadow-[0_1px_4px_rgba(15,23,42,0.14)] hover:bg-surface-hover';
               return (
                 <motion.button
                   key={item.id}
@@ -333,8 +352,8 @@ export function HorizontalButtonSlider({
                   onClick={() => onChange(item.id)}
                   className={`snap-start whitespace-nowrap rounded-full border font-black uppercase transition-colors ${sizeCls} ${
                     isActive
-                      ? 'border-gray-900 bg-gray-900 text-white shadow-md shadow-gray-900/20'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      ? 'border-border-strong bg-surface-inverse text-white shadow-md shadow-gray-900/20'
+                      : 'border-border-soft bg-surface-card text-text-muted hover:border-border-default hover:bg-surface-hover'
                   }`}
                 >
                   {item.label}
@@ -359,7 +378,7 @@ export function HorizontalButtonSlider({
                 className={`snap-start whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${sizeCls} ${
                   isActive
                     ? `${tone.activeBg} ${tone.activeText} ${tone.ring}`
-                    : 'bg-white text-zinc-400 ring-zinc-200 hover:bg-zinc-50 hover:text-zinc-600'
+                    : 'bg-surface-card text-text-faint ring-border-soft hover:bg-surface-hover hover:text-text-muted'
                 }`}
               >
                 {item.label}

@@ -121,6 +121,74 @@ export async function upsertSubscription(input: UpsertSubscriptionInput): Promis
 }
 
 /**
+ * Resolve the org that owns a Stripe subscription/customer via the local mirror.
+ *
+ * Used by webhook events whose payload carries no `organization_id` metadata
+ * (e.g. `invoice.*` — Stripe puts metadata on the subscription, not the
+ * invoice). Prefers the subscription id (1:1 with an org) and falls back to the
+ * customer id. Returns null for a customer/sub we don't mirror (e.g. an invoice
+ * for a subscription created outside our flow).
+ */
+export async function getOrgIdByStripeRef(ref: {
+  subscriptionId?: string | null;
+  customerId?: string | null;
+}): Promise<OrgId | null> {
+  if (ref.subscriptionId) {
+    const r = await pool.query<{ organization_id: string }>(
+      `SELECT organization_id FROM billing_subscriptions WHERE stripe_subscription_id = $1 LIMIT 1`,
+      [ref.subscriptionId],
+    );
+    if (r.rows[0]) return r.rows[0].organization_id as OrgId;
+  }
+  if (ref.customerId) {
+    const r = await pool.query<{ organization_id: string }>(
+      `SELECT organization_id FROM billing_subscriptions WHERE stripe_customer_id = $1 LIMIT 1`,
+      [ref.customerId],
+    );
+    if (r.rows[0]) return r.rows[0].organization_id as OrgId;
+  }
+  return null;
+}
+
+/**
+ * Mirror a subscription status into the local table — the dunning path.
+ *
+ * `invoice.payment_failed` marks `past_due`; the local `status` column already
+ * models it (see 2026-05-22_billing.sql). This does NOT touch
+ * `organizations.plan`/`status`: a failed payment doesn't change the plan, and
+ * `OrgStatus` has no `past_due` value — the subscription mirror is the single
+ * place the dunning state lives, matching how `upsertSubscription` is the only
+ * writer of `billing_subscriptions.status`. Idempotent (setting the same status
+ * twice is a no-op). Returns true when a mirror row was actually updated.
+ */
+export async function markSubscriptionStatus(orgId: OrgId, status: string): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE billing_subscriptions SET status = $2, updated_at = now() WHERE organization_id = $1`,
+    [orgId, status],
+  );
+  invalidateOrgCache(orgId);
+  return (r.rowCount ?? 0) > 0;
+}
+
+/**
+ * Recovery side of dunning: clear a `past_due` mirror back to `active` on
+ * `invoice.payment_succeeded`. Guarded to ONLY flip a row that is currently
+ * `past_due`, so a routine success (or the $0 trial invoice) never clobbers a
+ * more specific status like `trialing` that `customer.subscription.*` owns.
+ * Returns true when a past_due row was cleared.
+ */
+export async function clearPastDue(orgId: OrgId): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE billing_subscriptions
+        SET status = 'active', updated_at = now()
+      WHERE organization_id = $1 AND status = 'past_due'`,
+    [orgId],
+  );
+  invalidateOrgCache(orgId);
+  return (r.rowCount ?? 0) > 0;
+}
+
+/**
  * Idempotent webhook gate. Returns true when the caller SHOULD process this
  * delivery: a brand-new event, OR a previously-recorded event whose handler
  * never completed (processed_at IS NULL → a prior attempt failed and Stripe

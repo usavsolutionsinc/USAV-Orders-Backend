@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { EventTimeline, type TimelineGroupMode } from './EventTimeline';
+import { EventTimeline, type TimelineGroupMode, type TimelineGroupView } from './EventTimeline';
 import type { TimelineItem, TimelineGroupKey } from '@/lib/timeline/types';
 
 /**
@@ -26,6 +26,14 @@ export interface TimelineSectionProps {
   groupMode?: TimelineGroupMode;
   /** Override band bucketing in serial mode, forwarded to {@link EventTimeline}. */
   groupKeyOf?: (item: TimelineItem) => TimelineGroupKey | null;
+  /** Rich (relative + hover-absolute) timestamps, forwarded to {@link EventTimeline}. */
+  richTime?: boolean;
+  /** Serial mode: collapse each band behind a chevron, forwarded to {@link EventTimeline}. */
+  collapsibleGroups?: boolean;
+  /** Serial mode: custom band header, forwarded to {@link EventTimeline}. */
+  renderGroupHeader?: (group: TimelineGroupView) => ReactNode;
+  /** Opt-in row activation (Monitor→detail drill), forwarded to {@link EventTimeline}. */
+  onSelectItem?: (item: TimelineItem) => void;
   /** Outer wrapper classes — spacing/divider live with the caller. */
   className?: string;
 }
@@ -33,15 +41,15 @@ export interface TimelineSectionProps {
 function TimelineSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <ol className="relative animate-pulse" aria-hidden>
-      <span className="absolute left-[5px] top-1 bottom-1 w-px bg-gray-100" />
+      <span className="absolute left-[5px] top-1 bottom-1 w-px bg-surface-sunken" />
       {Array.from({ length: rows }).map((_, i) => (
         <li key={i} className="relative pl-5 pb-4 last:pb-0">
-          <span className="absolute -left-[18px] top-[3px] h-[9px] w-[9px] rounded-full bg-gray-200 ring-[3px] ring-white" />
+          <span className="absolute -left-[18px] top-[3px] h-[9px] w-[9px] rounded-full bg-surface-strong ring-[3px] ring-white" />
           <div className="flex items-baseline justify-between gap-3">
-            <span className="h-2.5 rounded bg-gray-200" style={{ width: `${52 - i * 8}%` }} />
-            <span className="h-2 w-12 rounded bg-gray-100" />
+            <span className="h-2.5 rounded bg-surface-strong" style={{ width: `${52 - i * 8}%` }} />
+            <span className="h-2 w-12 rounded bg-surface-sunken" />
           </div>
-          <span className="mt-1.5 block h-2 w-16 rounded bg-gray-100" />
+          <span className="mt-1.5 block h-2 w-16 rounded bg-surface-sunken" />
         </li>
       ))}
     </ol>
@@ -57,15 +65,19 @@ export function TimelineSection({
   density = 'comfortable',
   groupMode = 'time',
   groupKeyOf,
-  className = 'mx-8 mt-2 border-t border-gray-100 pt-4 pb-8',
+  richTime = false,
+  collapsibleGroups = false,
+  renderGroupHeader,
+  onSelectItem,
+  className = 'mx-8 mt-2 border-t border-border-hairline pt-4 pb-8',
 }: TimelineSectionProps) {
   return (
     <section className={className}>
       <header className="mb-3 flex items-center justify-between">
-        <h3 className="text-eyebrow font-bold uppercase tracking-[0.14em] text-gray-400">
+        <h3 className="text-eyebrow font-bold uppercase tracking-[0.14em] text-text-faint">
           {title}
         </h3>
-        {headerRight ? <div className="text-micro font-medium text-gray-400">{headerRight}</div> : null}
+        {headerRight ? <div className="text-micro font-medium text-text-faint">{headerRight}</div> : null}
       </header>
       {loading ? (
         <TimelineSkeleton />
@@ -76,6 +88,10 @@ export function TimelineSection({
           density={density}
           groupMode={groupMode}
           groupKeyOf={groupKeyOf}
+          richTime={richTime}
+          collapsibleGroups={collapsibleGroups}
+          renderGroupHeader={renderGroupHeader}
+          onSelectItem={onSelectItem}
         />
       )}
     </section>

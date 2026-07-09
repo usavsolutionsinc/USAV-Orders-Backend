@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { receivingSurfaceBasePath } from '@/lib/receiving/surface-path';
 import {
   PaneHeader,
   PaneHeaderTitle,
-  PaneHeaderCount,
   PaneHeaderPagination,
 } from '@/components/ui/pane-header';
 import { INCOMING_PAGE_SIZE } from '@/lib/receiving/receiving-modes';
@@ -32,8 +32,6 @@ export const INCOMING_SORT_LABELS: Record<IncomingSort, string> = {
 export { INCOMING_PAGE_SIZE };
 
 export interface IncomingPaneHeaderProps {
-  /** Visible-row count on the current page (post-filter). */
-  count: number;
   /** Total matching rows across all pages (from `total` in API response). */
   total: number;
   /** Current 1-based page index. */
@@ -48,9 +46,11 @@ export interface IncomingPaneHeaderProps {
  *
  * Uses the same 40px {@link PaneHeader} shell as {@link WeekHeader}.
  */
-export function IncomingPaneHeader({ count, total, page }: IncomingPaneHeaderProps) {
+export function IncomingPaneHeader({ total, page }: IncomingPaneHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const base = receivingSurfaceBasePath(pathname);
 
   const totalPages = Math.max(1, Math.ceil(total / INCOMING_PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -60,21 +60,16 @@ export function IncomingPaneHeader({ count, total, page }: IncomingPaneHeaderPro
       const params = new URLSearchParams(searchParams.toString());
       if (next <= 1) params.delete('page');
       else params.set('page', String(next));
-      router.replace(`/receiving?${params.toString()}`);
+      router.replace(`${base}?${params.toString()}`);
     },
-    [router, searchParams],
+    [router, searchParams, base],
   );
 
   return (
     <PaneHeader
       className="border-b-0"
-      rowClassName="border-b border-gray-300"
-      leftSlot={
-        <>
-          <PaneHeaderTitle>Incoming POs</PaneHeaderTitle>
-          <PaneHeaderCount count={count} />
-        </>
-      }
+      rowClassName="border-b border-border-default"
+      leftSlot={<PaneHeaderTitle>Incoming POs</PaneHeaderTitle>}
       rightSlot={
         <PaneHeaderPagination
           page={safePage}

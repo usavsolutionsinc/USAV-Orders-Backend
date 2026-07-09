@@ -22,39 +22,39 @@ export function WarrantyClaimsTable() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-gray-50">
-        <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
+      <div className="flex flex-1 items-center justify-center bg-surface-canvas">
+        <Loader2 className="h-7 w-7 animate-spin text-text-faint" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-gray-50 p-8 text-sm text-rose-600">
+      <div className="flex flex-1 items-center justify-center bg-surface-canvas p-8 text-sm text-text-danger">
         {error instanceof Error ? error.message : 'Failed to load warranty claims.'}
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-auto bg-gray-50">
+    <div className="flex-1 overflow-auto bg-surface-canvas">
       <div className="min-w-full p-4">
         <table className="min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10">
-            <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-              <th className="bg-gray-50 px-3 py-2">Claim</th>
-              <th className="bg-gray-50 px-3 py-2">Item</th>
-              <th className="bg-gray-50 px-3 py-2">Customer</th>
-              <th className="bg-gray-50 px-3 py-2">Status</th>
-              <th className="bg-gray-50 px-3 py-2">Warranty</th>
-              <th className="bg-gray-50 px-3 py-2">Logged</th>
-              <th className="bg-gray-50 px-3 py-2" aria-label="Support ticket" />
+            <tr className="text-left text-caption font-semibold uppercase tracking-wide text-text-faint">
+              <th className="bg-surface-canvas px-3 py-2">Claim</th>
+              <th className="bg-surface-canvas px-3 py-2">Item</th>
+              <th className="bg-surface-canvas px-3 py-2">Customer</th>
+              <th className="bg-surface-canvas px-3 py-2">Status</th>
+              <th className="bg-surface-canvas px-3 py-2">Warranty</th>
+              <th className="bg-surface-canvas px-3 py-2">Logged</th>
+              <th className="bg-surface-canvas px-3 py-2" aria-label="Support ticket" />
             </tr>
           </thead>
           <tbody>
             {claims.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-16 text-center text-sm text-gray-400">
+                <td colSpan={7} className="px-3 py-16 text-center text-sm text-text-faint">
                   No warranty claims match the current filters.
                 </td>
               </tr>
@@ -68,35 +68,35 @@ export function WarrantyClaimsTable() {
                     onClick={() => openClaim(selected ? null : claim.id)}
                     className={cn(
                       'cursor-pointer transition',
-                      selected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50',
+                      selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'bg-surface-card hover:bg-surface-hover',
                     )}
                   >
-                    <td className="border-b border-gray-100 px-3 py-2 align-top">
-                      <div className="font-mono text-[11px] text-gray-500">{claim.claimNumber}</div>
+                    <td className="border-b border-border-hairline px-3 py-2 align-top">
+                      <div className="font-mono text-caption text-text-soft">{claim.claimNumber}</div>
                       {claim.serialNumber && (
-                        <div className="font-mono text-[11px] text-gray-400">{claim.serialNumber}</div>
+                        <div className="font-mono text-caption text-text-faint">{claim.serialNumber}</div>
                       )}
                     </td>
-                    <td className="border-b border-gray-100 px-3 py-2 align-top">
-                      <div className="max-w-[280px] truncate text-gray-900">{title}</div>
+                    <td className="border-b border-border-hairline px-3 py-2 align-top">
+                      <div className="max-w-[280px] truncate text-text-default">{title}</div>
                       {claim.sku && claim.productTitle && (
-                        <div className="truncate text-[11px] text-gray-400">{claim.sku}</div>
+                        <div className="truncate text-caption text-text-faint">{claim.sku}</div>
                       )}
                     </td>
-                    <td className="border-b border-gray-100 px-3 py-2 align-top text-gray-600">
+                    <td className="border-b border-border-hairline px-3 py-2 align-top text-text-muted">
                       {claim.customerName || '—'}
                     </td>
-                    <td className="border-b border-gray-100 px-3 py-2 align-top">
+                    <td className="border-b border-border-hairline px-3 py-2 align-top">
                       <WarrantyStatusBadge status={claim.status} />
                     </td>
-                    <td className="border-b border-gray-100 px-3 py-2 align-top">
+                    <td className="border-b border-border-hairline px-3 py-2 align-top">
                       <WarrantyClockChip daysRemaining={claim.daysRemaining} basis={claim.clockBasis} />
                     </td>
-                    <td className="border-b border-gray-100 px-3 py-2 align-top text-[11px] text-gray-400">
+                    <td className="border-b border-border-hairline px-3 py-2 align-top text-caption text-text-faint">
                       {formatDateTimePST(claim.createdAt)}
                     </td>
                     <td
-                      className="border-b border-gray-100 px-2 py-1.5 align-top"
+                      className="border-b border-border-hairline px-2 py-1.5 align-top"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <WarrantyTicketButton claimId={claim.id} linked={claim.zendeskTicketId != null} />

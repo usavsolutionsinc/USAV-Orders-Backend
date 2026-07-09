@@ -1,18 +1,23 @@
+'use client';
+
 import React from 'react';
 import { LocationDataMatrix } from '../LocationDataMatrix';
 import { bayHand, gs1LocationAi, noPad, pad2, rackCode, rackToLocation, type RackSegments } from '@/lib/barcode-routing';
+import { useAuth } from '@/contexts/AuthContext';
+import { orgWarehouseLabel } from '@/lib/branding/letterhead';
 
 /**
  * The printed rack label (3″ × 2″ thermal stock). Larger code than the bin
  * label — mounted on the rack upright, read from across the aisle.
  */
 export function RackPrintLabel({ segments, roomName, gln }: { segments: RackSegments; roomName: string; gln: string }) {
+  const { user } = useAuth();
   const code = rackCode(segments);
   const ai = gs1LocationAi(rackToLocation(segments), { gln });
   return (
     <div className="label-print-card" style={labelCardStyle}>
       <div style={labelLeftStyle}>
-        <div style={labelEyebrowStyle}>USAV Warehouse Rack</div>
+        <div style={labelEyebrowStyle}>{orgWarehouseLabel(user?.organizationName || 'Workspace', 'Rack')}</div>
         <div style={labelCodeStyle}>{code}</div>
         {roomName && <div style={labelRoomStyle}>{roomName}</div>}
         <div style={labelHumanStyle}>

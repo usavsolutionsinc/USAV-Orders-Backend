@@ -116,7 +116,7 @@ export function SidebarShell({
       {filter && (
         // Default (glassmorphic pill) variant, floated with the house gutter —
         // matches the /design-demo showroom exactly, not the old flat 40px band.
-        <div className={cn('relative z-30 shrink-0 bg-white py-2', SIDEBAR_GUTTER)}>
+        <div className={cn('relative z-30 shrink-0 bg-surface-card py-2', SIDEBAR_GUTTER)}>
           <FilterRefinementBar {...filter} />
         </div>
       )}

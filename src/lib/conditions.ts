@@ -77,6 +77,28 @@ export function conditionOptions(
 }
 
 /**
+ * One-line meaning for each grade — surfaced as a HoverTooltip on the condition
+ * pills so new staff (and new tenants) learn the grades in place instead of
+ * guessing what A vs B vs C means. Same single-source-of-truth discipline as the
+ * labels: add/adjust wording HERE, never inline a description in a component.
+ */
+export const CONDITION_DESCRIPTIONS: Record<string, string> = {
+  BRAND_NEW:   'Brand new — unused, in original packaging.',
+  LIKE_NEW:    'Like new — open-box; no visible wear, fully functional.',
+  REFURBISHED: 'Refurbished — restored and tested to working condition.',
+  USED_A:      'Used · A — excellent; minimal wear, fully functional.',
+  USED_B:      'Used · B — good; moderate wear, fully functional.',
+  USED_C:      'Used · C — fair; heavy wear but functional.',
+  PARTS:       'For parts — not working / salvage only.',
+};
+
+/** One-line meaning for a grade (for tooltips/help). Empty string for unknown codes. */
+export function conditionDescription(code: string | null | undefined): string {
+  const c = String(code || '').trim().toUpperCase();
+  return CONDITION_DESCRIPTIONS[c] ?? '';
+}
+
+/**
  * Inline-TEXT color for a condition — the substring-matched, lenient style used
  * by the "condition + title" inline text (not chips): new → yellow-500,
  * for-parts → amber-800, else (used/unknown) → black. Single source of truth;

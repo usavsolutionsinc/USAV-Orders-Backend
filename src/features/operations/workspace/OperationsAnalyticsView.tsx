@@ -18,7 +18,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { cn } from '@/utils/_cn';
 import { Button } from '@/design-system/primitives';
-import { Activity, BarChart3, Boxes, Database, Download, Layers, TrendingUp, Warehouse, Zap } from '@/components/Icons';
+import { Activity, BarChart3, Boxes, Database, Download, Layers, Loader2, TrendingUp, Warehouse, Zap } from '@/components/Icons';
 import {
   ANALYTICS_RANGE_LABELS,
   parseAnalyticsRange,
@@ -27,6 +27,8 @@ import {
 import { useOperationsDashboardData } from '@/features/operations/components/useOperationsDashboardData';
 import type { DashboardCategory } from '@/features/operations/types';
 import { useOperationsAnalytics } from './useOperationsAnalytics';
+import { useOperationsRoi } from './useOperationsRoi';
+import { BenchmarksSection } from './BenchmarksSection';
 import { MultiSeriesLineChart, type LineSeries } from './charts/MultiSeriesLineChart';
 import { GaugeDonut } from './charts/GaugeDonut';
 import { DistributionTable, type DistributionRow } from './charts/DistributionTable';
@@ -186,7 +188,7 @@ export function OperationsAnalyticsView() {
   const loading = analytics.isLoading;
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">
+    <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-surface-canvas text-text-default">
       <motion.main
         variants={container}
         initial="hidden"
@@ -200,8 +202,8 @@ export function OperationsAnalyticsView() {
               <BarChart3 className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-gray-900 leading-none">Operations Analytics</h1>
-              <p className="mt-1 text-eyebrow font-bold uppercase tracking-widest text-gray-500">
+              <h1 className="text-2xl font-black tracking-tight text-text-default leading-none">Operations Analytics</h1>
+              <p className="mt-1 text-eyebrow font-bold uppercase tracking-widest text-text-soft">
                 {ANALYTICS_RANGE_LABELS[range]} · live floor + inventory
               </p>
             </div>
@@ -233,8 +235,8 @@ export function OperationsAnalyticsView() {
           {KPI_STRIP.map((k) => {
             const cell = dashboard?.summary?.[k.key];
             return (
-              <div key={k.key} className="rounded-2xl border border-gray-200 bg-white p-4">
-                <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{k.label}</p>
+              <div key={k.key} className="rounded-2xl border border-border-soft bg-surface-card p-4">
+                <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">{k.label}</p>
                 <p className={cn('mt-1.5 text-3xl font-black tabular-nums leading-none', k.tone)}>
                   {cell ? cell.value.toLocaleString() : '0'}
                 </p>
@@ -243,6 +245,9 @@ export function OperationsAnalyticsView() {
             );
           })}
         </motion.section>
+
+        {/* Throughput & ROI — the first-week proof (lead with the big numbers) */}
+        <RoiSection />
 
         {/* hero — throughput */}
         <SectionCard
@@ -275,7 +280,7 @@ export function OperationsAnalyticsView() {
 
           <SectionCard id="sources" icon={Database} eyebrow="Distribution" title="By event type">
             <DistributionTable columns={['Event type', 'Events', '%']} rows={typeRows} emptyMessage="No events in this range." />
-            <p className="mt-4 text-micro leading-5 text-gray-500">
+            <p className="mt-4 text-micro leading-5 text-text-soft">
               Lifecycle events (received → tested → packed → shipped) from the org-scoped event log.
             </p>
           </SectionCard>
@@ -284,7 +289,7 @@ export function OperationsAnalyticsView() {
             {a?.velocityAvailable ? (
               <>
                 <DistributionTable columns={['Tier', 'SKUs', '%']} rows={tierRows} showBar emptyMessage="No SKUs scored." />
-                <p className="mt-4 text-micro leading-5 text-gray-500">
+                <p className="mt-4 text-micro leading-5 text-text-soft">
                   ABC analysis by 30-day outbound movement. Tier A = fastest movers.
                 </p>
               </>
@@ -293,6 +298,11 @@ export function OperationsAnalyticsView() {
             )}
           </SectionCard>
         </div>
+
+        {/* you vs typical — seeded vertical benchmarks (plan §2.5, Phase 1) */}
+        <SectionCard id="benchmarks" icon={BarChart3} eyebrow="Benchmarks" title="You vs typical">
+          <BenchmarksSection rangeDays={range === '24h' ? 1 : range === '7d' ? 7 : 30} />
+        </SectionCard>
 
         {/* activity map + inventory health */}
         <SectionCard id="activity" icon={Activity} eyebrow="When work happens" title="Operations activity map">
@@ -318,7 +328,7 @@ export function OperationsAnalyticsView() {
                 colLabels={heatmap.colLabels}
                 color={paletteTone(0)}
               />
-              <p className="mt-2 text-micro leading-5 text-gray-500">
+              <p className="mt-2 text-micro leading-5 text-text-soft">
                 Each dot is {analytics.granularity === 'daily' ? 'a day' : 'an hour'} of floor activity; brighter = busier.
                 {a?.truncated ? ` Showing the latest ${analytics.eventsLimit.toLocaleString()} events.` : ''}
               </p>
@@ -357,15 +367,15 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+    <div className="inline-flex items-center rounded-lg border border-border-soft bg-surface-canvas p-0.5">
       {options.map((o) => (
         <button
           key={o.id}
           type="button"
           onClick={() => onChange(o.id)}
           className={cn(
-            'rounded-md px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest transition-colors',
-            value === o.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
+            'ds-raw-button rounded-md px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest transition-colors',
+            value === o.id ? 'bg-surface-card text-text-default shadow-sm' : 'text-text-soft hover:text-text-default',
           )}
         >
           {o.label}
@@ -396,20 +406,20 @@ function SectionCard({
     <motion.section
       variants={item}
       id={`ops-analytics-${id}`}
-      className="scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6"
+      className="scroll-mt-6 rounded-2xl border border-border-soft bg-surface-card p-5 sm:p-6"
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-gray-400" />
+          <Icon className="h-4 w-4 text-text-faint" />
           <div>
-            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{eyebrow}</p>
-            <h2 className="text-base font-black tracking-tight text-gray-900 leading-tight">{title}</h2>
+            <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">{eyebrow}</p>
+            <h2 className="text-base font-black tracking-tight text-text-default leading-tight">{title}</h2>
           </div>
         </div>
         {(headline || meta) && (
           <div className="text-right">
-            {headline && <p className="text-2xl font-black tabular-nums leading-none text-gray-900">{headline}</p>}
-            {meta && <p className="mt-1 text-eyebrow font-semibold uppercase tracking-widest text-gray-400">{meta}</p>}
+            {headline && <p className="text-2xl font-black tabular-nums leading-none text-text-default">{headline}</p>}
+            {meta && <p className="mt-1 text-eyebrow font-semibold uppercase tracking-widest text-text-faint">{meta}</p>}
           </div>
         )}
       </div>
@@ -419,7 +429,7 @@ function SectionCard({
 }
 
 function Delta({ delta, invert = false }: { delta: number; invert?: boolean }) {
-  if (!delta) return <p className="mt-1.5 text-eyebrow font-semibold text-gray-400">No change vs. yesterday</p>;
+  if (!delta) return <p className="mt-1.5 text-eyebrow font-semibold text-text-faint">No change vs. yesterday</p>;
   const positive = invert ? delta < 0 : delta > 0;
   return (
     <p
@@ -449,10 +459,10 @@ function HealthTile({
   tone: string;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3">
-      <div className="flex items-center gap-1.5 text-gray-400">
+    <div className="rounded-xl border border-border-soft bg-surface-card p-3">
+      <div className="flex items-center gap-1.5 text-text-faint">
         <Icon className="h-3.5 w-3.5" />
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{label}</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">{label}</p>
       </div>
       <p className={cn('mt-1.5 text-2xl font-black tabular-nums leading-none', tone)}>
         {value === null ? '—' : `${value.toLocaleString()}${suffix}`}
@@ -463,9 +473,185 @@ function HealthTile({
 
 function Locked({ label }: { label: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-caption font-semibold text-gray-400">
+    <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-8 text-center text-caption font-semibold text-text-faint">
       {label}
     </div>
+  );
+}
+
+// ── Throughput & ROI section (first-week proof) ─────────────────────────────────
+
+/** Compact hours readout: <1h → minutes, else 1-dp hours. */
+function formatHours(h: number): string {
+  if (!Number.isFinite(h) || h <= 0) return '—';
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
+}
+
+function RoiDelta({ pct }: { pct: number }) {
+  if (!pct) {
+    return <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">No change vs. last week</span>;
+  }
+  const positive = pct > 0;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 text-caption font-black tabular-nums',
+        positive ? 'text-emerald-600' : 'text-rose-600',
+      )}
+    >
+      <TrendingUp className={cn('h-3.5 w-3.5', pct < 0 && 'rotate-180')} />
+      {pct > 0 ? '+' : ''}
+      {pct}% vs. last week
+    </span>
+  );
+}
+
+function RoiTile({
+  icon: Icon,
+  label,
+  value,
+  tone,
+  footer,
+}: {
+  icon: (p: { className?: string }) => JSX.Element;
+  label: string;
+  value: string;
+  tone: string;
+  footer: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border-soft bg-surface-card p-4">
+      <div className="flex items-center gap-1.5 text-text-faint">
+        <Icon className="h-3.5 w-3.5" />
+        <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">{label}</p>
+      </div>
+      <p className={cn('mt-1.5 text-3xl font-black tabular-nums leading-none', tone)}>{value}</p>
+      <div className="mt-1.5">{footer}</div>
+    </div>
+  );
+}
+
+function RoiSection() {
+  const { data: roi, isLoading } = useOperationsRoi();
+
+  const staffRows = useMemo<DistributionRow[]>(() => {
+    if (!roi) return [];
+    const total = roi.perStaff.reduce((s, p) => s + p.unitsProcessed, 0) || 1;
+    return roi.perStaff.slice(0, 8).map((p, i) => ({
+      key: String(p.staffId),
+      label: p.staffName,
+      sublabel: `${p.unitsPerLaborHour}/hr · ${p.laborHours.toLocaleString()}h`,
+      count: p.unitsProcessed,
+      percent: (p.unitsProcessed / total) * 100,
+      color: paletteTone(i),
+    }));
+  }, [roi]);
+
+  return (
+    <motion.section
+      variants={item}
+      id="ops-analytics-roi"
+      className="scroll-mt-6 rounded-2xl border border-border-soft bg-surface-card p-5 sm:p-6"
+    >
+      <div className="mb-4 flex items-center gap-2">
+        <Zap className="h-4 w-4 text-text-faint" />
+        <div>
+          <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">First-week proof</p>
+          <h2 className="text-base font-black tracking-tight text-text-default leading-tight">Throughput &amp; ROI</h2>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 px-1 py-8 text-caption font-semibold text-text-faint">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading ROI…
+        </div>
+      ) : !roi || !roi.hasData ? (
+        <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-10 text-center">
+          <p className="text-caption font-bold text-text-muted">No throughput captured yet</p>
+          <p className="mx-auto mt-1 max-w-md text-micro leading-5 text-text-soft">
+            As units move through your stations and staff clock in, this fills with units per labor-hour and
+            week-over-week lift — the proof your floor is getting faster.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <RoiTile
+              icon={TrendingUp}
+              label="Units this week"
+              value={roi.unitsThisWeek.toLocaleString()}
+              tone="text-blue-600"
+              footer={<RoiDelta pct={roi.pctChange} />}
+            />
+            <RoiTile
+              icon={Zap}
+              label="Units / labor-hour"
+              value={roi.unitsPerLaborHour.toLocaleString()}
+              tone="text-emerald-600"
+              footer={
+                <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
+                  {roi.unitsProcessed.toLocaleString()} units · {roi.laborHours.toLocaleString()}h clocked
+                </span>
+              }
+            />
+            <RoiTile
+              icon={Layers}
+              label="Units stuck"
+              value={roi.unitsStuck.toLocaleString()}
+              tone={roi.unitsStuck > 0 ? 'text-orange-600' : 'text-text-default'}
+              footer={
+                <span className="text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
+                  Blocked + error now
+                </span>
+              }
+            />
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 text-eyebrow font-black uppercase tracking-widest text-text-soft">
+                Avg cycle time by stage
+              </p>
+              {roi.avgCycleHoursByStage.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-faint">
+                  No completed stage runs in the last 7 days.
+                </div>
+              ) : (
+                <ul className="divide-y divide-border-hairline">
+                  {roi.avgCycleHoursByStage.map((s) => (
+                    <li key={s.stage} className="flex items-center justify-between py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate text-caption font-semibold text-text-default">
+                          {prettyEventType(s.stage)}
+                        </span>
+                        <span className="block text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
+                          {s.samples.toLocaleString()} runs
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-caption font-bold tabular-nums text-text-default">
+                        {formatHours(s.avgCycleHours)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <p className="mb-2 text-eyebrow font-black uppercase tracking-widest text-text-soft">
+                Units / hour by staff
+              </p>
+              <DistributionTable
+                columns={['Staff', 'Units', '%']}
+                rows={staffRows}
+                emptyMessage="No staff throughput yet."
+                showBar
+              />
+            </div>
+          </div>
+        </>
+      )}
+    </motion.section>
   );
 }
 

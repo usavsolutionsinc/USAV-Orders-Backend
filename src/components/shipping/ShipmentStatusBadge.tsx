@@ -32,14 +32,14 @@ export interface ShipmentStatusBadgeProps {
 }
 
 const CATEGORY_STYLE: Record<ShipmentStatusCategory, { cls: string; text: string; icon: React.FC<{ className?: string }>; label: string }> = {
-  LABEL_CREATED:    { cls: 'bg-gray-100 text-gray-700',       text: 'text-gray-500',    icon: Package,      label: 'label created' },
+  LABEL_CREATED:    { cls: 'bg-surface-sunken text-text-muted',       text: 'text-text-soft',    icon: Package,      label: 'label created' },
   ACCEPTED:         { cls: 'bg-blue-50 text-blue-700',        text: 'text-blue-500',    icon: Truck,        label: 'accepted' },
   IN_TRANSIT:       { cls: 'bg-blue-100 text-blue-800',       text: 'text-blue-600',    icon: Truck,        label: 'in transit' },
   OUT_FOR_DELIVERY: { cls: 'bg-amber-100 text-amber-900',     text: 'text-amber-600',   icon: Truck,        label: 'out for delivery' },
   DELIVERED:        { cls: 'bg-emerald-100 text-emerald-800', text: 'text-emerald-600', icon: PackageCheck, label: 'delivered' },
   EXCEPTION:        { cls: 'bg-rose-100 text-rose-800',       text: 'text-rose-600',    icon: AlertTriangle, label: 'exception' },
   RETURNED:         { cls: 'bg-purple-100 text-purple-800',   text: 'text-purple-600',  icon: RotateCcw,    label: 'returned' },
-  UNKNOWN:          { cls: 'bg-gray-50 text-gray-500',        text: 'text-gray-400',    icon: Clock,        label: 'unknown' },
+  UNKNOWN:          { cls: 'bg-surface-canvas text-text-soft',        text: 'text-text-faint',    icon: Clock,        label: 'unknown' },
 };
 
 function normalizeCategory(value: string | null | undefined): ShipmentStatusCategory {
@@ -99,34 +99,41 @@ export function ShipmentStatusBadge({
 
   return (
     <div className={`inline-flex flex-wrap items-center gap-1.5 ${className ?? ''}`}>
-      <span
-        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style.cls}`}
-        title={description ?? style.label}
-      >
-        <Icon className="h-3 w-3" />
-        {carrierLabel ? `${carrierLabel} · ` : ''}
-        {style.label}
-      </span>
+      <HoverTooltip label={description ?? style.label} asChild>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style.cls}`}
+        >
+          <Icon className="h-3 w-3" />
+          {carrierLabel ? `${carrierLabel} · ` : ''}
+          {style.label}
+        </span>
+      </HoverTooltip>
 
       {(exceptionShown || stalled) && (
-        <span
-          className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
-          title={
+        <HoverTooltip
+          label={
             exceptionShown
               ? description || 'Carrier reported an exception'
               : `No carrier scan in ${stallHours}h+`
           }
+          asChild
         >
-          <AlertTriangle className="h-3 w-3" />
-          {exceptionShown ? 'Exception' : 'Stalled'}
-        </span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-white"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            {exceptionShown ? 'Exception' : 'Stalled'}
+          </span>
+        </HoverTooltip>
       )}
 
       {relative && (
-        <span className="whitespace-nowrap text-[11px] text-gray-500" title={latestEventAt ?? undefined}>
-          {relative}
-          {loc ? ` · ${loc}` : ''}
-        </span>
+        <HoverTooltip label={latestEventAt ?? ''} asChild>
+          <span className="whitespace-nowrap text-caption text-text-soft">
+            {relative}
+            {loc ? ` · ${loc}` : ''}
+          </span>
+        </HoverTooltip>
       )}
     </div>
   );

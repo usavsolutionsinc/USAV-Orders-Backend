@@ -67,7 +67,7 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
   const sectionLabel = ADMIN_SECTION_OPTIONS.find((s) => s.value === activeSection)?.label ?? '';
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-white">
+    <div className="h-full flex flex-col overflow-hidden bg-surface-card">
       {isOverview ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <SidebarSectionList
@@ -84,16 +84,16 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
             <button
               type="button"
               onClick={() => onSectionChange('overview')}
-              className="group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+              className="ds-raw-button group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-text-muted hover:bg-surface-sunken transition-colors"
               aria-label="Back to admin overview"
             >
               <ShieldCheck className="h-5 w-5 text-blue-600" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black tracking-tight text-gray-900 uppercase tracking-wider">
+                <p className="truncate text-sm font-black tracking-tight text-text-default uppercase tracking-wider">
                   Admin{sectionLabel ? ` · ${sectionLabel}` : ''}
                 </p>
               </div>
-              <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
+              <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-text-faint" />
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">{sectionPanel}</div>

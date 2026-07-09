@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { unitStatusBadgeTone } from '@/components/station/receiving-constants';
 import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
+import { safeRandomUUID } from '@/lib/safe-uuid';
+import { Button } from '@/design-system/primitives';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,13 @@ interface SerialUnit {
   current_location: string | null;
   condition_grade: string | null;
   origin_receiving_line_id: number | null;
+  /**
+   * The line this unit is CURRENTLY on (most recent inventory_events touch) —
+   * use this for navigation/actions, never origin_receiving_line_id, which
+   * freezes to the first-ever line and would target/link to a stale PO once
+   * the unit has been returned and re-received elsewhere.
+   */
+  current_receiving_line_id: number | null;
   received_at: string | null;
   received_by: number | null;
   received_by_name: string | null;
@@ -41,8 +50,7 @@ interface TimelineEvent {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 function formatAgo(iso: string): string {
@@ -120,11 +128,11 @@ function UnitPageInner() {
 
   const postStatus = useCallback(
     async (eventType: string) => {
-      if (busy || !unit?.origin_receiving_line_id) return;
+      if (busy || !unit?.current_receiving_line_id) return;
       setBusy(eventType);
       try {
         const res = await fetch(
-          `/api/receiving/lines/${unit.origin_receiving_line_id}/status`,
+          `/api/receiving/lines/${unit.current_receiving_line_id}/status`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -155,11 +163,11 @@ function UnitPageInner() {
 
   const submitPutaway = useCallback(async () => {
     const bin = binInput.trim();
-    if (!bin || busy || !unit?.origin_receiving_line_id) return;
+    if (!bin || busy || !unit?.current_receiving_line_id) return;
     setBusy('putaway');
     try {
       const res = await fetch(
-        `/api/receiving/lines/${unit.origin_receiving_line_id}/putaway`,
+        `/api/receiving/lines/${unit.current_receiving_line_id}/putaway`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -188,22 +196,23 @@ function UnitPageInner() {
     }
   }, [binInput, busy, unit, staffId, noteInput, load]);
 
-  const lineHref = unit?.origin_receiving_line_id
-    ? `/m/l/${unit.origin_receiving_line_id}`
+  const lineHref = unit?.current_receiving_line_id
+    ? `/m/l/${unit.current_receiving_line_id}`
     : null;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
+    <div className="min-h-screen bg-surface-canvas flex flex-col">
+      <header className="sticky top-0 z-10 bg-surface-card border-b border-border-soft px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           {lineHref ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => router.push(lineHref)}
-              className="text-xs font-bold text-blue-600 shrink-0"
+              className="shrink-0 text-blue-600"
             >
               ← Line
-            </button>
+            </Button>
           ) : (
             <span />
           )}
@@ -212,25 +221,25 @@ function UnitPageInner() {
         <div className="mt-2 flex justify-end">
           <StatusPill status={unit?.current_status ?? null} />
         </div>
-        <h1 className="mt-2 truncate font-mono text-base font-black text-slate-900">
+        <h1 className="mt-2 truncate font-mono text-base font-black text-text-default">
           {unit?.serial_number || unitParam}
         </h1>
         {unit?.sku && (
-          <p className="mt-1 font-mono text-caption font-bold text-slate-700">
+          <p className="mt-1 font-mono text-caption font-bold text-text-muted">
             {unit.sku}
           </p>
         )}
         {unit?.product_title && (
-          <p className="mt-1 text-caption text-slate-500 line-clamp-2 leading-snug">
+          <p className="mt-1 text-caption text-text-soft line-clamp-2 leading-snug">
             {unit.product_title}
           </p>
         )}
         <div className="mt-2 flex items-center justify-between text-caption font-bold">
-          <span className="text-slate-700">
+          <span className="text-text-muted">
             {unit?.current_location ? `Loc: ${unit.current_location}` : 'No location'}
           </span>
           {unit?.condition_grade && (
-            <span className="text-slate-500">
+            <span className="text-text-soft">
               {unit.condition_grade.replace(/_/g, ' ')}
             </span>
           )}
@@ -251,7 +260,7 @@ function UnitPageInner() {
 
       <main className="flex-1 px-4 py-3 space-y-4 pb-24">
         {loading && (
-          <p className="text-center text-sm font-semibold text-slate-500 py-6">
+          <p className="text-center text-sm font-semibold text-text-soft py-6">
             Loading…
           </p>
         )}
@@ -264,40 +273,41 @@ function UnitPageInner() {
 
         {unit && (
           <>
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Test status
               </p>
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  disabled={!!busy || !unit.origin_receiving_line_id}
+                <Button
+                  variant="primary"
+                  disabled={!!busy || !unit.current_receiving_line_id}
                   onClick={() => postStatus('TEST_START')}
-                  className="rounded-md bg-blue-600 px-3 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
+                  className="h-full w-full"
                 >
                   Start
-                </button>
+                </Button>
+                {/* ds-raw-button: solid-emerald CTA (no green Button variant) */}
                 <button
                   type="button"
-                  disabled={!!busy || !unit.origin_receiving_line_id}
+                  disabled={!!busy || !unit.current_receiving_line_id}
                   onClick={() => postStatus('TEST_PASS')}
                   className="rounded-md bg-emerald-600 px-3 py-3 text-sm font-bold text-white active:bg-emerald-700 disabled:opacity-50"
                 >
                   Pass
                 </button>
-                <button
-                  type="button"
-                  disabled={!!busy || !unit.origin_receiving_line_id}
+                <Button
+                  variant="danger"
+                  disabled={!!busy || !unit.current_receiving_line_id}
                   onClick={() => postStatus('TEST_FAIL')}
-                  className="rounded-md bg-rose-600 px-3 py-3 text-sm font-bold text-white active:bg-rose-700 disabled:opacity-50"
+                  className="h-full w-full"
                 >
                   Fail
-                </button>
+                </Button>
               </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Stash in bin
               </p>
               <div className="flex gap-2">
@@ -311,21 +321,20 @@ function UnitPageInner() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') submitPutaway();
                   }}
-                  className="flex-1 rounded-md border border-slate-300 px-3 py-3 text-base font-mono font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
+                  className="flex-1 rounded-md border border-border-default px-3 py-3 text-base font-mono font-bold text-text-default focus:border-blue-500 focus:outline-none"
                 />
-                <button
-                  type="button"
-                  disabled={!binInput.trim() || !!busy || !unit.origin_receiving_line_id}
+                <Button
+                  variant="brand"
+                  disabled={!binInput.trim() || !!busy || !unit.current_receiving_line_id}
                   onClick={submitPutaway}
-                  className="rounded-md bg-slate-900 px-4 py-3 text-sm font-bold text-white active:bg-slate-800 disabled:opacity-50"
                 >
                   Stash
-                </button>
+                </Button>
               </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Note (optional)
               </p>
               <textarea
@@ -333,34 +342,34 @@ function UnitPageInner() {
                 placeholder="e.g. Power button flaky"
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-border-default px-3 py-2 text-sm text-text-default focus:border-blue-500 focus:outline-none"
               />
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
+            <section className="rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
+              <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-text-soft">
                 Lifecycle
               </p>
               {events.length === 0 ? (
-                <p className="text-caption text-slate-500">No activity yet.</p>
+                <p className="text-caption text-text-soft">No activity yet.</p>
               ) : (
                 <ul className="space-y-2">
                   {events.map((ev) => (
                     <li key={ev.id} className="flex items-start gap-2 text-caption">
-                      <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+                      <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-border-emphasis shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-900">
+                        <p className="font-bold text-text-default">
                           {ev.event_type.replace(/_/g, ' ')}
                           {ev.next_status ? (
-                            <span className="ml-1 text-slate-500">→ {ev.next_status}</span>
+                            <span className="ml-1 text-text-soft">→ {ev.next_status}</span>
                           ) : null}
                         </p>
-                        <p className="text-slate-500">
+                        <p className="text-text-soft">
                           {formatAgo(ev.occurred_at)} ago
                           {ev.station ? ` · ${ev.station}` : ''}
                         </p>
                         {ev.notes && (
-                          <p className="mt-0.5 text-slate-500 italic">{ev.notes}</p>
+                          <p className="mt-0.5 text-text-soft italic">{ev.notes}</p>
                         )}
                       </div>
                     </li>
@@ -377,7 +386,7 @@ function UnitPageInner() {
 
 export default function UnitPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+    <Suspense fallback={<div className="min-h-screen bg-surface-canvas" />}>
       <UnitPageInner />
     </Suspense>
   );

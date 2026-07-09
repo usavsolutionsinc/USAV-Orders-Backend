@@ -50,7 +50,6 @@ The current codebase is centered on:
 - `/tech/[id]`
 - `/packer/[id]`
 - `/support`
-- `/previous-quarters`
 - `/admin`
 
 Sidebar navigation is defined in `src/lib/sidebar-navigation.ts`.

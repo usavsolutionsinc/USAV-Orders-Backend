@@ -33,18 +33,18 @@ export function AppTopBar({ title, onOpenDrawer, trailing, className }: AppTopBa
           type="button"
           onClick={onOpenDrawer}
           aria-label="Open app navigation"
-          className="flex h-full w-full items-center justify-center bg-white text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100"
+          className="flex h-full w-full items-center justify-center bg-surface-card text-text-muted transition-colors hover:bg-surface-hover active:bg-surface-sunken"
         >
           <Menu className="h-5 w-5" />
         </button>
 
-        <div className="flex h-full min-w-0 items-center justify-center bg-white px-3">
-          <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
+        <div className="flex h-full min-w-0 items-center justify-center bg-surface-card px-3">
+          <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-text-muted">
             {title}
           </span>
         </div>
 
-        <div className="flex h-full w-full items-stretch bg-white">{trailing}</div>
+        <div className="flex h-full w-full items-stretch bg-surface-card">{trailing}</div>
       </div>
     </header>
   );

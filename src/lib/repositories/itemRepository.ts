@@ -1,6 +1,7 @@
 import { db } from '@/lib/drizzle/db';
+import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
 import { itemLocationStock, items, zohoLocations } from '@/lib/drizzle/schema';
-import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { syncSkuCatalogFromItems } from '@/lib/neon/sku-catalog-queries';
 
 export interface PaginationParams {
@@ -68,8 +69,11 @@ export interface ItemRepository {
   findBySku(sku: string): Promise<typeof items.$inferSelect | null>;
   upsertMany(rows: InsertItem[]): Promise<void>;
   listActive(pagination: PaginationParams): Promise<PaginatedResult<typeof items.$inferSelect>>;
-  upsertLocations(rows: UpsertLocationInput[]): Promise<void>;
-  findLocationsByZohoIds(zohoIds: string[]): Promise<Array<typeof zohoLocations.$inferSelect>>;
+  upsertLocations(orgId: string, rows: UpsertLocationInput[]): Promise<void>;
+  findLocationsByZohoIds(
+    orgId: string,
+    zohoIds: string[],
+  ): Promise<Array<typeof zohoLocations.$inferSelect>>;
   upsertItemLocationStock(rows: UpsertItemLocationStockInput[]): Promise<void>;
 }
 
@@ -123,9 +127,12 @@ export class DrizzleItemRepository implements ItemRepository {
       },
     });
 
-    // Sync upserted items into sku_catalog hub
+    // Sync upserted items into sku_catalog hub. All rows in one upsertMany call
+    // share an org (InventorySyncService stamps this.organizationId), so derive
+    // the tenant from the batch; skip the (non-blocking) sync if it's absent.
     try {
-      await syncSkuCatalogFromItems(
+      const syncOrgId = rows[0]?.organizationId;
+      if (syncOrgId) await syncSkuCatalogFromItems(
         rows.map((r) => ({
           sku: r.sku,
           name: r.name,
@@ -134,6 +141,7 @@ export class DrizzleItemRepository implements ItemRepository {
           image_url: r.imageUrl,
           status: r.status,
         })),
+        syncOrgId,
       );
     } catch (err) {
       console.error('[itemRepository] sku_catalog sync failed (non-blocking):', err);
@@ -155,29 +163,46 @@ export class DrizzleItemRepository implements ItemRepository {
     };
   }
 
-  async upsertLocations(rows: UpsertLocationInput[]): Promise<void> {
+  async upsertLocations(orgId: string, rows: UpsertLocationInput[]): Promise<void> {
     if (rows.length === 0) return;
-    await db.insert(zohoLocations).values(rows.map((row) => ({
-      organizationId: row.organizationId,
-      zohoLocationId: row.zohoLocationId,
-      name: row.name,
-      isPrimary: row.isPrimary ?? false,
-      address: row.address ?? {},
-      syncedAt: new Date(),
-    }))).onConflictDoUpdate({
-      target: zohoLocations.zohoLocationId,
-      set: {
-        name: sql`excluded.name`,
-        isPrimary: sql`excluded.is_primary`,
-        address: sql`excluded.address`,
-        syncedAt: sql`excluded.synced_at`,
-      },
-    });
+    // GUC-scoped write (RLS-ready) — zoho_locations is FORCE-slated and the
+    // neon-http `db` can't carry the app.current_org GUC. organization_id is
+    // stamped explicitly per row (defense in depth).
+    await withTenantDrizzle(orgId, (tx) =>
+      tx.insert(zohoLocations).values(rows.map((row) => ({
+        organizationId: row.organizationId,
+        zohoLocationId: row.zohoLocationId,
+        name: row.name,
+        isPrimary: row.isPrimary ?? false,
+        address: row.address ?? {},
+        syncedAt: new Date(),
+      }))).onConflictDoUpdate({
+        target: zohoLocations.zohoLocationId,
+        set: {
+          name: sql`excluded.name`,
+          isPrimary: sql`excluded.is_primary`,
+          address: sql`excluded.address`,
+          syncedAt: sql`excluded.synced_at`,
+        },
+      }),
+    );
   }
 
-  async findLocationsByZohoIds(zohoIds: string[]) {
+  async findLocationsByZohoIds(orgId: string, zohoIds: string[]) {
     if (zohoIds.length === 0) return [];
-    return db.select().from(zohoLocations).where(inArray(zohoLocations.zohoLocationId, zohoIds));
+    // GUC-scoped read (RLS-ready); org predicate explicit (defense in depth) so
+    // we only resolve THIS tenant's mirror rows.
+    return withTenantDrizzle(orgId, (tx) =>
+      tx
+        .select()
+        .from(zohoLocations)
+        .where(
+          and(
+            eq(zohoLocations.organizationId, orgId),
+            inArray(zohoLocations.zohoLocationId, zohoIds),
+          ),
+        ),
+    );
   }
 
   async upsertItemLocationStock(rows: UpsertItemLocationStockInput[]): Promise<void> {

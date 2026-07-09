@@ -9,7 +9,7 @@ import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
 import {
   getReceivingPhotoDeleteMeta,
   listReceivingPhotos,
-  sqlReceivingPhotoCount,
+  countReceivingPhotos,
 } from '@/lib/photos/queries/receiving-list';
 import { resolvePoRef } from '@/lib/photos/resolve-po-ref';
 import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
@@ -74,15 +74,6 @@ function mapRow(row: {
   };
 }
 
-async function countReceivingPhotos(organizationId: string, receivingId: number): Promise<number> {
-  const result = await tenantQuery<{ photo_count: number }>(
-    organizationId as OrgId,
-    `SELECT ${sqlReceivingPhotoCount('$2', '$1')}::int AS photo_count`,
-    [organizationId, receivingId],
-  );
-  return Number(result.rows[0]?.photo_count ?? 0);
-}
-
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const params = new URL(req.url).searchParams;
@@ -93,6 +84,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     const lineIdRaw = params.get('receivingLineId');
     const scope = params.get('scope');
+    const photoIntentRaw = params.get('photoIntent');
+    const photoIntent =
+      photoIntentRaw === 'package' || photoIntentRaw === 'item' ? photoIntentRaw : 'all';
 
     const lineId =
       lineIdRaw != null
@@ -110,6 +104,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       receivingId,
       lineId,
       scope: scope === 'po' ? 'po' : 'all',
+      photoIntent,
     });
 
     // Surface when this carton was physically scanned/received so the NAS picker
@@ -225,7 +220,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const entityType = receivingLineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
     const entityId = receivingLineId ?? receivingId;
     const poRef = await resolvePoRef(entityType, entityId);
-    const photoType = caption || (receivingLineId != null ? 'receiving_item' : 'receiving');
+    const photoType =
+      caption ||
+      (receivingLineId != null ? 'receiving_item' : 'receiving_package');
 
     let attached;
     try {

@@ -53,7 +53,7 @@ export default function ReceivingDashboard() {
   const { user } = useAuth();
   const staffId = String(user?.staffId ?? '');
 
-  const { mode, isPickupMode, isTriageMode, isIncomingMode, isTableOnlyMode } =
+  const { mode, isPickupMode, isTriageMode, isIncomingMode, isTableOnlyMode, incomingView } =
     useReceivingDashboardMode();
 
   const { workspace, setWorkspace, nav, setNav, scanInFlight } = useReceivingWorkspacePane();
@@ -111,6 +111,7 @@ export default function ReceivingDashboard() {
         isTableOnlyMode={isTableOnlyMode}
         isTriageMode={isTriageMode}
         isIncomingMode={isIncomingMode}
+        incomingView={incomingView}
         selectMode={selectMode}
         selectedRows={selectedRows}
         bulkActions={bulkActions}

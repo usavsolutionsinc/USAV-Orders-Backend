@@ -1,7 +1,8 @@
 import { DesktopAppDownload } from '@/components/desktop-app/DesktopAppDownload';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
 export const metadata = {
-  title: 'Install USAV Orders desktop app',
+  title: `Install ${PRODUCT_NAME} desktop app`,
 };
 
 export default function DesktopAppPage() {

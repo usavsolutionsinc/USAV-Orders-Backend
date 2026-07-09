@@ -8,7 +8,8 @@
  */
 
 import { useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { stripCrossSurfaceParams } from '@/lib/surface-isolation';
 import { TESTING_SELECTION_SCOPE } from '@/components/tech/TestingHistoryList';
 import {
   useReceivingLineBulkSelection,
@@ -42,6 +43,7 @@ export interface TechTestingSelection {
 
 export function useTechTestingSelection(isTestingHistory: boolean): TechTestingSelection {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const { selectMode, selectedRows, claimRow, setClaimRow, exitSelectMode, bulkActions } =
@@ -52,11 +54,14 @@ export function useTechTestingSelection(isTestingHistory: boolean): TechTestingS
     });
 
   const openTestingLine = useCallback(() => {
-    // Clicking a history row opens it in the workspace → switch to Testing mode.
-    const params = new URLSearchParams(searchParams.toString());
+    const params = stripCrossSurfaceParams(
+      pathname || '/test',
+      new URLSearchParams(searchParams.toString()),
+    );
     params.set('view', 'testing');
-    router.replace(`/tech?${params.toString()}`);
-  }, [router, searchParams]);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname || '/test'}?${qs}` : pathname || '/test');
+  }, [router, pathname, searchParams]);
 
   return {
     testingSelectMode: selectMode,

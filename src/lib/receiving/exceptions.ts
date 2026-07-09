@@ -19,6 +19,7 @@
 
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { emitEntitySignalSafe } from '@/lib/surfaces/record-entity-signal';
 
 export interface ReceivingExceptionRow {
   id: number;
@@ -45,9 +46,11 @@ export interface RecordReceivingExceptionInput {
 
 export interface ReceivingExceptionsDeps {
   query: typeof tenantQuery;
+  /** Optional so pre-existing fakes stay valid; defaults to the real emitter. */
+  emitSignal?: typeof emitEntitySignalSafe;
 }
 
-const defaultDeps: ReceivingExceptionsDeps = { query: tenantQuery };
+const defaultDeps: ReceivingExceptionsDeps = { query: tenantQuery, emitSignal: emitEntitySignalSafe };
 
 /**
  * Record one OPEN line-level exception. Org-scoped (organization_id stamped
@@ -77,7 +80,22 @@ export async function recordReceivingException(
       input.createdBy ?? null,
     ],
   );
-  return { id: r.rows[0].id };
+  const id = r.rows[0].id;
+
+  // Additive "why" signal (plan §2.3 emitter #2, line-level OS&D). Never
+  // fails the exception write — emitEntitySignalSafe swallows all errors.
+  await (deps.emitSignal ?? emitEntitySignalSafe)({
+    organizationId: orgId,
+    entityType: 'RECEIVING_LINE',
+    entityId: input.receivingLineId,
+    signalKind: 'exception_why',
+    reasonCode: input.exceptionCode,
+    notes: input.reason ?? null,
+    actorStaffId: input.createdBy ?? null,
+    meta: { receivingId: input.receivingId ?? null, receivingExceptionId: id },
+  });
+
+  return { id };
 }
 
 /** All exceptions for a line, newest-first (for the Unbox/History detail panes). */

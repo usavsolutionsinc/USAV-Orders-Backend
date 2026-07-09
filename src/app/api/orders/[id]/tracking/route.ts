@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { recomputeEnrichmentForOrders } from '@/lib/neon/packer-log-enrichment';
 import { getOrderById } from '@/lib/neon/orders-queries';
 import { applyOrderTrackingOps, type ApplyOrderTrackingOps } from '@/lib/neon/orders-tracking-queries';
 import { parseBody } from '@/lib/schemas/parse';
@@ -69,18 +70,29 @@ async function runTrackingOps(
   await invalidateCacheTags(['orders', 'shipped', 'orders-next', 'tech-logs', 'packing-logs', 'need-to-order']);
   await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [id], source: 'orders.tracking' });
 
-  const after = await getOrderById(id);
+  const updated = await getOrderById(id);
+
+  // The order↔tracking linkage just changed, which flips the `order_match`
+  // resolution for any already-packed PACK scan on this order. Recompute its
+  // shipped-table read model (best-effort, deferred). No-op unless those scans
+  // exist; the read path degrades gracefully meanwhile.
+  after(() =>
+    recomputeEnrichmentForOrders(pool, [id]).catch((e) =>
+      console.warn('[orders/[id]/tracking] enrichment recompute failed', e),
+    ),
+  );
+
   await recordAudit(pool, ctx, req, {
     source: 'orders-api',
     action: AUDIT_ACTION.ORDER_UPDATE,
     entityType: AUDIT_ENTITY.ORDER,
     entityId: id,
     before: { shipment_id: before.shipment_id ?? null },
-    after: { shipment_id: after?.shipment_id ?? null },
+    after: { shipment_id: updated?.shipment_id ?? null },
     extra: { tracking: ops, createdShipmentIds: result.createdShipmentIds, primaryShipmentId: result.primaryShipmentId },
   });
 
-  return NextResponse.json({ success: true, ...result, order: after });
+  return NextResponse.json({ success: true, ...result, order: updated });
 }
 
 export async function POST(

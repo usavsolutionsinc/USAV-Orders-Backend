@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { useResourceMutation } from '@/hooks';
 import { useAblyClient } from '@/contexts/AblyContext';
@@ -8,8 +8,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { safeChannelName, getStaffStationBridgeChannelName } from '@/lib/realtime/channels';
 import { copyToClipboard } from '@/utils/_dom';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
-import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
+import { useEntitySupportTicket } from '@/hooks/useEntitySupportTicket';
 import { getTrackingUrl, getTrackingUrlByCarrier } from '@/lib/tracking-format';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { useSkuIdentity } from '@/hooks/useSkuIdentity';
+import { collectCartonListingLinks } from '@/lib/receiving/listing-links';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
@@ -52,6 +55,11 @@ export function useReceivingLineCore(
 ) {
   const dispatchLine = opts.dispatchLine ?? dispatchLineUpdated;
   const [zendesk, setZendesk] = useState('');
+  const supportTicketQuery = useEntitySupportTicket({
+    lineId: row.id ?? null,
+    receivingId: row.receiving_id ?? null,
+  });
+  const supportTicket = supportTicketQuery.data ?? null;
   const [listingLink, setListingLink] = useState('');
   const [trackingEdit, setTrackingEdit] = useState(row.tracking_number || '');
   const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
@@ -66,6 +74,7 @@ export function useReceivingLineCore(
     row.priority_tier ?? (row.is_priority ? 0 : null),
   );
   const [auditOpen, setAuditOpen] = useState(false);
+  const [photoNoteOpen, setPhotoNoteOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
   const [phoneSharing, setPhoneSharing] = useState(false);
   const { getClient: getAblyClient } = useAblyClient();
@@ -77,6 +86,20 @@ export function useReceivingLineCore(
   const { sourcePlatform, setSourcePlatform, platformSaving, savePlatform } = useSourcePlatform(
     row,
     { listingLink },
+  );
+  const isUnmatched = row.receiving_source === 'unmatched';
+  const skuIdentity = useSkuIdentity(isUnmatched ? null : row.sku, sourcePlatform || row.source_platform);
+  const listingLinks = useMemo(
+    () =>
+      collectCartonListingLinks({
+        listingLink,
+        syncNotes: row.receiving_zoho_notes ?? null,
+        sku: row.sku,
+        sourcePlatform,
+        isUnmatched,
+        platforms: skuIdentity.platforms,
+      }),
+    [listingLink, row.receiving_zoho_notes, row.sku, sourcePlatform, isUnmatched, skuIdentity.platforms],
   );
   const { intakeType: receivingType, setIntakeType: setReceivingType, saveType } =
     useReceivingType(row);
@@ -118,10 +141,10 @@ export function useReceivingLineCore(
         zendesk: persistZendeskRef.current,
         listing: persistListingRef.current,
         extra_trackings: persistExtraTrackingsRef.current.filter((t) => t.trim().length > 0),
-      });
+      }, orgId);
     }
     prevReceivingIdForFlushRef.current = next ?? null;
-  }, [row.receiving_id]);
+  }, [row.receiving_id, orgId]);
 
   // Restore Zendesk + listing + extra trackings from localStorage when switching
   // cartons (layout phase so the persist effect sees hydrated values).
@@ -134,16 +157,15 @@ export function useReceivingLineCore(
       setTrackingEditorsOpen(false);
       return;
     }
-    const d = readReceivingLineDetailsScratch(row.receiving_id);
-    // DB-persisted ticket # (receiving_lines.zendesk_ticket) wins over the
-    // per-browser scratch; scratch remains the fallback for older rows.
-    setZendesk((row.zendesk_ticket || '').trim() || d.zendesk);
+    const d = readReceivingLineDetailsScratch(row.receiving_id, orgId);
+    // Ticket display comes from support_tickets + ticket_links (not receiving columns).
+    setZendesk(d.zendesk);
     // DB-persisted listing URL wins over the per-browser scratch when present.
     setListingLink((row.receiving_listing_url || '').trim() || d.listing);
     const extras = d.extra_trackings.length > 0 ? d.extra_trackings : [];
     setExtraTrackings(extras);
     setTrackingEditorsOpen(false);
-  }, [row.receiving_id, row.tracking_number]);
+  }, [row.receiving_id, row.tracking_number, orgId]);
 
   /** Listing chip/editor: always start minimized when the selected line/carton changes. */
   useLayoutEffect(() => {
@@ -167,8 +189,8 @@ export function useReceivingLineCore(
       zendesk,
       listing: listingLink,
       extra_trackings: extraTrackings.map((t) => t.trim()).filter(Boolean),
-    });
-  }, [zendesk, listingLink, extraTrackings, row.receiving_id]);
+    }, orgId);
+  }, [zendesk, listingLink, extraTrackings, row.receiving_id, orgId]);
 
   // NOTE: the Zendesk ticket link is owned end-to-end by the claim modal
   // (create / link-existing) and the ReceivingTicketChip's Unlink action, which
@@ -272,7 +294,7 @@ export function useReceivingLineCore(
     [row.receiving_id, row.id, row.notes, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id],
   );
 
-  const { zohoSyncing, syncWithZoho } = useZohoSync(row, {
+  const { zohoSyncing, syncWithZoho, syncCartonFromZoho } = useZohoSync(row, {
     staffId,
     listingLink,
     zendesk,
@@ -379,6 +401,16 @@ export function useReceivingLineCore(
     }
   }, [row.receiving_id, row.zoho_purchaseorder_number, row.tracking_number, staffId, orgId, getAblyClient]);
 
+  const ticketLabel = supportTicket?.label ?? '';
+  const ticketChipDisplay =
+    supportTicket?.providerTicketId != null
+      ? String(supportTicket.providerTicketId)
+      : supportTicket
+        ? String(supportTicket.id)
+        : '';
+  const ticketHref = supportTicket?.openUrl ?? null;
+  const providerTicketId = supportTicket?.providerTicketId ?? null;
+
   const handleCopyAll = useCallback(async () => {
     if (!row.receiving_id) {
       toast.error('No receiving package linked yet');
@@ -394,7 +426,7 @@ export function useReceivingLineCore(
         carton: data?.success ? data.receiving : null,
         lines,
         scratch: {
-          zendesk,
+          zendesk: ticketLabel || zendesk,
           listing: listingLink,
           extraTrackings: extraTrackings.filter((t) => t.trim().length > 0),
         },
@@ -409,25 +441,25 @@ export function useReceivingLineCore(
     } finally {
       setCopyingAll(false);
     }
-  }, [row, zendesk, listingLink, extraTrackings]);
+  }, [row, zendesk, ticketLabel, listingLink, extraTrackings]);
 
   // ── Derived identity values shared by the carton chip row ──────────────────
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-  const listingOpenHref = listingUrlForOpen(listingLink);
+  // Listing link: an explicit pasted URL wins; otherwise derive from catalog
+  // platform rows + storefront search by SKU (collectCartonListingLinks).
+  const listingOpenHref =
+    listingLinks[0]?.href ??
+    (listingUrlForOpen(listingLink) ||
+      (isUnmatched ? null : getExternalUrlByItemNumber(row.sku)));
   const poOpenHref = (() => {
     const id = (row.zoho_purchaseorder_id || '').trim();
     if (id) return `https://inventory.zoho.com/app#/purchaseorders/${encodeURIComponent(id)}`;
     if (poNumber) return `https://inventory.zoho.com/app#/purchaseorders?search_text=${encodeURIComponent(poNumber)}`;
     return null;
   })();
-  const zendeskTrimmed = zendesk.trim();
-  const zendeskHref = zendeskTicketUrl(zendeskTrimmed);
-  const zendeskChipDisplay = (() => {
-    const raw = zendeskTrimmed.replace(/^#/, '').trim();
-    const fromUrl = raw.match(/tickets\/(\d+)/);
-    if (fromUrl) return fromUrl[1];
-    return raw.length > 12 ? raw.slice(0, 12) : raw;
-  })();
+  const zendeskTrimmed = ticketLabel;
+  const zendeskHref = ticketHref;
+  const zendeskChipDisplay = ticketChipDisplay;
   const primaryTrackingTrimmed = trackingEdit.trim();
   const filledExtraTrackingsCount = extraTrackings.filter((t) => t.trim().length > 0).length;
   const trackingOpenHref = primaryTrackingTrimmed
@@ -446,21 +478,24 @@ export function useReceivingLineCore(
     extraTrackings, setExtraTrackings,
     priorityTier,
     auditOpen, setAuditOpen,
+    photoNoteOpen, setPhotoNoteOpen,
     copyingAll,
     phoneSharing,
     // composed carton hooks
     poEditorOpen, setPoEditorOpen, poNumberEdit, setPoNumberEdit, persistPoNumber,
     sourcePlatform, setSourcePlatform, platformSaving, savePlatform,
     receivingType, setReceivingType, saveType,
-    zohoSyncing, syncWithZoho,
+    zohoSyncing, syncWithZoho, syncCartonFromZoho,
     // line patch
     patch, saving,
     // actions
     handlePrioritySelect, attachExtraBox,
     handleShare, handleSharePhone, handleCopyAll,
     // derived
-    poNumber, listingOpenHref, poOpenHref,
+    poNumber, listingOpenHref, listingLinks, poOpenHref,
     zendeskTrimmed, zendeskHref, zendeskChipDisplay,
+    supportTicket, providerTicketId,
+    invalidateSupportTicket: () => void supportTicketQuery.refetch(),
     primaryTrackingTrimmed, filledExtraTrackingsCount, trackingOpenHref,
   };
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Layer } from '@/design-system';
+import { Button, IconButton } from '@/design-system/primitives';
 import { Check, Loader2, X } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReasonCodePicker, type ReasonCode } from '@/components/sku/ReasonCodePicker';
@@ -12,6 +13,7 @@ import {
   type CapturedShot,
 } from '@/components/mobile/station/MobilePackerSpamCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -39,10 +41,7 @@ interface BinStockNumpadSheetProps {
 type Mode = 'minus' | 'plus';
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 const KEYS: ReadonlyArray<string | number> = [
@@ -261,84 +260,84 @@ export function BinStockNumpadSheet({
       role="dialog"
       aria-modal="true"
       aria-label="Edit stock"
-      className="fixed inset-0 flex flex-col bg-slate-50"
+      className="fixed inset-0 flex flex-col bg-surface-canvas"
     >
       {/* ── Header ── */}
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
-        <button
+      <header className="flex items-center gap-2 border-b border-border-soft bg-surface-card px-3 py-3">
+        <IconButton
           type="button"
           onClick={onClose}
-          aria-label="Back"
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          ←
-        </button>
+          ariaLabel="Back"
+          icon={<span className="text-sm font-bold text-text-muted">←</span>}
+          className="h-11 w-11 rounded-md border border-border-default bg-surface-card active:bg-surface-hover"
+        />
         <div className="min-w-0 flex-1 text-center">
-          <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.18em] text-text-soft">
             Edit stock
           </p>
-          <p className="truncate font-mono text-sm font-black text-slate-900">
+          <p className="truncate font-mono text-sm font-black text-text-default">
             {row.sku}
           </p>
         </div>
-        <button
+        <IconButton
           type="button"
           onClick={onOpenDetails}
-          aria-label="Details"
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          ⋯
-        </button>
+          ariaLabel="Details"
+          icon={<span className="text-sm font-bold text-text-muted">⋯</span>}
+          className="h-11 w-11 rounded-md border border-border-default bg-surface-card active:bg-surface-hover"
+        />
       </header>
 
       {/* ── Body ── */}
       <main className="flex-1 overflow-auto px-4 py-5 space-y-5">
         {title && (
-          <p className="text-center text-label leading-snug font-bold text-slate-600">
+          <p className="text-center text-label leading-snug font-bold text-text-muted">
             {title}
           </p>
         )}
 
         {/* Mode toggle */}
-        <div className="mx-auto grid w-full max-w-sm grid-cols-2 overflow-hidden rounded-lg border border-slate-300 bg-white">
-          <button
+        <div className="mx-auto grid w-full max-w-sm grid-cols-2 overflow-hidden rounded-lg border border-border-default bg-surface-card">
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => setMode('minus')}
             aria-pressed={mode === 'minus'}
-            className={`py-3 text-base font-black ${
+            className={`h-auto w-full justify-center rounded-none py-3 text-base font-black ${
               mode === 'minus'
                 ? 'bg-rose-600 text-white'
-                : 'bg-white text-slate-700'
+                : 'bg-surface-card text-text-muted'
             }`}
           >
             − TAKE
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => setMode('plus')}
             aria-pressed={mode === 'plus'}
-            className={`py-3 text-base font-black ${
+            className={`h-auto w-full justify-center rounded-none py-3 text-base font-black ${
               mode === 'plus'
                 ? 'bg-emerald-600 text-white'
-                : 'bg-white text-slate-700'
+                : 'bg-surface-card text-text-muted'
             }`}
           >
             + PUT
-          </button>
+          </Button>
         </div>
 
         {/* Current vs projected */}
-        <div className="mx-auto grid w-full max-w-sm grid-cols-3 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
+        <div className="mx-auto grid w-full max-w-sm grid-cols-3 items-center gap-2 rounded-lg border border-border-soft bg-surface-card px-4 py-4 shadow-sm">
           <div className="text-center">
-            <p className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
               On hand
             </p>
-            <p className="mt-1 font-mono text-3xl font-black text-slate-900">
+            <p className="mt-1 font-mono text-3xl font-black text-text-default">
               {row.qty}
             </p>
           </div>
           <div className="text-center">
-            <p className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
               Change
             </p>
             <p
@@ -351,17 +350,17 @@ export function BinStockNumpadSheet({
             </p>
           </div>
           <div className="text-center">
-            <p className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">
               After
             </p>
-            <p className="mt-1 font-mono text-3xl font-black text-slate-900">
+            <p className="mt-1 font-mono text-3xl font-black text-text-default">
               {projected}
             </p>
           </div>
         </div>
 
         {/* Reason + optional note */}
-        <div className="mx-auto w-full max-w-sm space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="mx-auto w-full max-w-sm space-y-2 rounded-lg border border-border-soft bg-surface-card p-3 shadow-sm">
           <ReasonCodePicker
             direction={mode === 'minus' ? 'out' : 'in'}
             value={reason?.id ?? null}
@@ -375,15 +374,16 @@ export function BinStockNumpadSheet({
               placeholder="Reason note (required)"
               value={noteDraft}
               onChange={(e) => setNoteDraft(e.target.value)}
-              className="w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-label font-bold text-slate-900 placeholder:font-medium placeholder:text-amber-700/70 focus:border-amber-500 focus:outline-none"
+              className="w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-label font-bold text-text-default placeholder:font-medium placeholder:text-amber-700/70 focus:border-amber-500 focus:outline-none"
             />
           )}
           {reason?.requires_photo && (
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setCameraOpen(true)}
-                className={`flex-1 rounded-md px-2 py-2 text-caption font-black uppercase tracking-widest ${
+                className={`h-auto flex-1 justify-center rounded-md px-2 py-2 text-caption font-black uppercase tracking-widest ${
                   pendingShots.length > 0
                     ? 'bg-emerald-600 text-white'
                     : 'border border-amber-400 bg-amber-100 text-amber-800'
@@ -392,10 +392,11 @@ export function BinStockNumpadSheet({
                 {pendingShots.length > 0
                   ? `📷 ${pendingShots.length} photo${pendingShots.length === 1 ? '' : 's'} ready`
                   : '📷 Take photo (required)'}
-              </button>
+              </Button>
               {pendingShots.length > 0 && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => {
                     pendingShots.forEach((s) => {
                       try {
@@ -406,11 +407,11 @@ export function BinStockNumpadSheet({
                     });
                     setPendingShots([]);
                   }}
-                  aria-label="Discard photos"
-                  className="rounded-md border border-slate-300 bg-white px-2 py-2 text-caption font-bold text-slate-700"
+                  ariaLabel="Discard photos"
+                  className="h-auto justify-center rounded-md border border-border-default bg-surface-card px-2 py-2 text-caption font-bold text-text-muted"
                 >
                   Clear
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -427,19 +428,20 @@ export function BinStockNumpadSheet({
                 ? '⌫'
                 : String(key);
             return (
-              <button
+              <Button
                 key={String(key)}
                 type="button"
+                variant="ghost"
                 onClick={() => pressKey(key)}
-                aria-label={typeof key === 'string' ? key : `digit ${key}`}
-                className={`h-16 rounded-lg text-3xl font-black active:scale-95 transition-transform ${
+                ariaLabel={typeof key === 'string' ? key : `digit ${key}`}
+                className={`h-16 w-full justify-center rounded-lg text-3xl font-black ${
                   isAction
-                    ? 'bg-slate-200 text-slate-700'
-                    : 'bg-white border border-slate-300 text-slate-900'
+                    ? 'bg-surface-strong text-text-muted'
+                    : 'bg-surface-card border border-border-default text-text-default'
                 }`}
               >
                 {label}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -460,23 +462,25 @@ export function BinStockNumpadSheet({
       )}
 
       {/* ── Footer / confirm ── */}
-      <footer className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3">
-        <button
+      <footer className="sticky bottom-0 border-t border-border-soft bg-surface-card px-4 py-3">
+        <Button
           type="button"
+          variant="primary"
+          size="lg"
           onClick={confirm}
           disabled={busy || numericDraft <= 0}
-          className={`w-full rounded-lg py-4 text-lg font-black text-white shadow-md active:scale-[0.99] transition-transform ${
+          className={`h-auto w-full justify-center rounded-lg py-4 text-lg font-black text-white shadow-md ${
             mode === 'minus'
               ? 'bg-rose-600 active:bg-rose-700'
               : 'bg-emerald-600 active:bg-emerald-700'
-          } disabled:opacity-40`}
+          }`}
         >
           {busy ? (
             <Loader2 className="mx-auto h-5 w-5 animate-spin" />
           ) : (
             <>Confirm {mode === 'minus' ? `−${numericDraft || 0}` : `+${numericDraft || 0}`}</>
           )}
-        </button>
+        </Button>
       </footer>
 
       {cameraOpen && (

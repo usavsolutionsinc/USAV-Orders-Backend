@@ -18,6 +18,8 @@
 import { cookies } from 'next/headers';
 import pool from '@/lib/db';
 import { loadSession, SESSION_COOKIE_NAME, type SessionRow } from './session';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 import { computeEffectivePermissions, type PermissionString, type StaffRole } from './permissions-shared';
 import { loadRolesForStaff, type RoleRow } from './role-store';
 import {
@@ -50,16 +52,30 @@ interface StaffOverrideRow {
   mobile_display_config: unknown;
 }
 
-async function loadStaffOverrides(staffId: number): Promise<StaffOverrideRow | null> {
+async function loadStaffOverrides(staffId: number, orgId: string): Promise<StaffOverrideRow | null> {
+  // Auth hot path: read on every authenticated request. L2-Redis-only (no
+  // per-instance L1) + short TTL so a staff PATCH's purge takes effect
+  // fleet-wide immediately — a permission revocation must never linger in a
+  // per-instance Map. Not-found returns null and getOrSet does not cache null,
+  // so a deleted staff row is never negatively cached.
   try {
-    const r = await pool.query(
-      `SELECT name, role, permissions_added, permissions_removed, mobile_display_config
-         FROM staff
-        WHERE id = $1
-        LIMIT 1`,
-      [staffId],
+    return await getOrSet<StaffOverrideRow | null>(
+      CACHE_NS.staffOverrides,
+      orgId,
+      String(staffId),
+      30,
+      [CACHE_TAGS.staffOverrides],
+      async () => {
+        const r = await pool.query(
+          `SELECT name, role, permissions_added, permissions_removed, mobile_display_config
+             FROM staff
+            WHERE id = $1
+            LIMIT 1`,
+          [staffId],
+        );
+        return (r.rows[0] as StaffOverrideRow | undefined) ?? null;
+      },
     );
-    return (r.rows[0] as StaffOverrideRow | undefined) ?? null;
   } catch {
     return null;
   }
@@ -87,7 +103,7 @@ function mergePermissions(
 async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser | null> {
   if (!session) return null;
   const [overrides, roles] = await Promise.all([
-    loadStaffOverrides(session.staffId),
+    loadStaffOverrides(session.staffId, session.organizationId),
     loadRolesForStaff(session.staffId),
   ]);
   // Primary role: first row from loadRolesForStaff (already position-ordered).
@@ -106,7 +122,12 @@ async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser
   return {
     session,
     staffId: session.staffId,
-    name: overrides?.name ?? 'Unknown',
+    // `??` alone lets an empty-string `staff.name` (or a failed override load)
+    // reach the client as '', which renders as a bare dot avatar + "Staff #id"
+    // everywhere. Coalesce blank/whitespace to a stable `Staff #id` so the
+    // session envelope is always a usable display name — the single source of
+    // truth read synchronously by every surface (no per-surface name fetch).
+    name: overrides?.name?.trim() || `Staff #${session.staffId}`,
     organizationId: session.organizationId,
     role,
     roles,

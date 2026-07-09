@@ -71,8 +71,8 @@ export function WebTab({
   return (
     <>
       {hint ? <HintBanner text={hint} /> : null}
-      <div className="border-b border-gray-50 px-2 pb-2 pt-2">
-        <span className={`${microBadge} mb-1.5 block px-1 text-gray-400`}>eBay / web</span>
+      <div className="border-b border-border-hairline px-2 pb-2 pt-2">
+        <span className={`${microBadge} mb-1.5 block px-1 text-text-faint`}>eBay / web</span>
         <SearchBar
           value={query}
           onChange={setQuery}
@@ -107,9 +107,9 @@ export function WebTab({
             ))}
           </ul>
         ) : searched && !loading ? (
-          <p className="px-2 py-3 text-label text-gray-400">No web results.</p>
+          <p className="px-2 py-3 text-label text-text-faint">No web results.</p>
         ) : (
-          <p className="px-2 py-3 text-label text-gray-400">Type a query and press Enter to search eBay.</p>
+          <p className="px-2 py-3 text-label text-text-faint">Type a query and press Enter to search eBay.</p>
         )}
       </div>
     </>

@@ -7,6 +7,12 @@ export function buildGcsObjectKey(opts: {
   photoId: number;
   poRef?: string | null;
   unitUid?: string | null;
+  /**
+   * Custom image-type GCS prefix (see `lib/photos/image-types.ts`). When set it
+   * REPLACES the entity-derived flow: `{org}/{prefix}/{yyyy}/{mm}/[PO-{po}/]{id}.jpg`.
+   * Built-in types pass it undefined and keep their existing layout.
+   */
+  prefix?: string | null;
   now?: Date;
 }): { objectKey: string; thumbObjectKey: string } {
   const now = opts.now ?? new Date();
@@ -15,6 +21,19 @@ export function buildGcsObjectKey(opts: {
   const safePo = sanitizePathSegment(opts.poRef || 'unknown');
   const baseName = `${opts.photoId}.jpg`;
   const thumbName = `${opts.photoId}_thumb.jpg`;
+
+  // Custom image type → its own bucket path, date-partitioned, PO segment only
+  // when the photo carries a poRef.
+  const customPrefix = opts.prefix ? sanitizePathSegment(opts.prefix) : null;
+  if (customPrefix) {
+    const poSeg = opts.poRef ? `PO-${safePo}/` : '';
+    const segment = `${customPrefix}/${yyyy}/${mm}/${poSeg}${baseName}`;
+    const prefix = opts.organizationId;
+    return {
+      objectKey: `${prefix}/${segment}`,
+      thumbObjectKey: `${prefix}/${segment.replace(/\.jpg$/i, '_thumb.jpg')}`,
+    };
+  }
 
   let segment: string;
   switch (opts.entityType) {

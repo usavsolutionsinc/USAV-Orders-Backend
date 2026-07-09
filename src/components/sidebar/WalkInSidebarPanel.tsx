@@ -19,7 +19,7 @@ export function WalkInSidebarPanel({ embedded = false, hideSectionHeader = false
   const mode: WalkInMode = searchParams.get('mode') === 'sales' ? 'sales' : 'repairs';
 
   const content = (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-card">
       <div className="flex-1 overflow-hidden">
         {mode === 'repairs' ? (
           <RepairSidebarPanel embedded hideSectionHeader />
@@ -31,10 +31,10 @@ export function WalkInSidebarPanel({ embedded = false, hideSectionHeader = false
   );
 
   if (embedded) {
-    return <div className="h-full overflow-hidden bg-white">{content}</div>;
+    return <div className="h-full overflow-hidden bg-surface-card">{content}</div>;
   }
 
   return (
-    <aside className="h-full overflow-hidden border-r border-gray-200 bg-white">{content}</aside>
+    <aside className="h-full overflow-hidden border-r border-border-soft bg-surface-card">{content}</aside>
   );
 }

@@ -65,7 +65,7 @@ interface NodeConfigFormProps {
 }
 
 const INPUT_CLASS =
-  'w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700';
+  'w-full rounded-md border border-border-soft bg-surface-card px-2 py-1 text-xs font-medium text-text-muted';
 
 function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
@@ -112,7 +112,7 @@ export function NodeConfigForm({
   const fieldKeys = properties ? Object.keys(properties) : [];
 
   if (!properties || fieldKeys.length === 0) {
-    return <p className="text-[11px] text-slate-400">No configuration for this node type.</p>;
+    return <p className="text-caption text-text-faint">No configuration for this node type.</p>;
   }
 
   return (
@@ -129,22 +129,22 @@ export function NodeConfigForm({
           <div key={key} className="space-y-1">
             <label
               htmlFor={`nodecfg-${nodeId}-${key}`}
-              className="block text-[10px] font-bold uppercase tracking-wider text-slate-400"
+              className="block text-micro font-bold uppercase tracking-wider text-text-faint"
             >
               {title}
             </label>
 
             {type === 'boolean' ? (
-              <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+              <label className="flex items-center gap-2 text-xs font-medium text-text-muted">
                 <input
                   id={`nodecfg-${nodeId}-${key}`}
                   type="checkbox"
                   checked={value === true}
                   onChange={(e) => onChange(nodeId, { [key]: e.target.checked ? true : null })}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-400"
+                  className="h-3.5 w-3.5 rounded border-border-default text-blue-600 focus:ring-blue-400"
                   aria-label={title}
                 />
-                <span className="text-[11px] text-slate-500">{value === true ? 'On' : 'Off'}</span>
+                <span className="text-caption text-text-soft">{value === true ? 'On' : 'Off'}</span>
               </label>
             ) : type === 'number' ? (
               <input
@@ -187,7 +187,7 @@ export function NodeConfigForm({
             )}
 
             {renderFieldHint?.(key, value)}
-            {description && <p className="text-[11px] text-slate-400">{description}</p>}
+            {description && <p className="text-caption text-text-faint">{description}</p>}
           </div>
         );
       })}

@@ -1,17 +1,24 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { AnchoredLayer } from '@/design-system';
-import { ArrowUpDown, Check } from '@/components/Icons';
-import { cn } from '@/utils/_cn';
+import { useRef, useState, type KeyboardEvent } from 'react';
+import { ChevronDown, ChevronUp } from '@/components/Icons';
+import { photoLibraryControlButtonClass } from '@/components/photos/photo-library-controls';
+import { Popover } from '@/design-system';
 import type { PhotoLibrarySortMode } from '@/lib/photos/library-filter-state';
+import { cn } from '@/utils/_cn';
 
-const OPTIONS: { value: PhotoLibrarySortMode; label: string }[] = [
-  { value: 'recent', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
+const OPTIONS: {
+  value: PhotoLibrarySortMode;
+  label: string;
+  icon: typeof ChevronDown;
+}[] = [
+  { value: 'recent', label: 'Newest', icon: ChevronUp },
+  { value: 'oldest', label: 'Oldest', icon: ChevronDown },
 ];
 
-/** Right-pane "Sort by" control (the brief: sort lives in the main panel, not the sidebar). */
+const SORT_MENU_WIDTH = 'w-[4.75rem]';
+
+/** Right-pane sort dropdown — click trigger, pick an option. */
 export function PhotoSortMenu({
   sort,
   onSortChange,
@@ -20,44 +27,106 @@ export function PhotoSortMenu({
   onSortChange: (s: PhotoLibrarySortMode) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const current = OPTIONS.find((o) => o.value === sort) ?? OPTIONS[0];
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const activeOption = OPTIONS.find((o) => o.value === sort) ?? OPTIONS[0];
+  const ActiveIcon = activeOption.icon;
+
+  const handleSelect = (value: PhotoLibrarySortMode) => {
+    if (value !== sort) onSortChange(value);
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  const handleButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setOpen(true);
+    }
+  };
+
+  const handleOptionKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      listRef.current
+        ?.querySelector<HTMLButtonElement>(`[data-option-index="${(index + 1) % OPTIONS.length}"]`)
+        ?.focus();
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      listRef.current
+        ?.querySelector<HTMLButtonElement>(`[data-option-index="${(index - 1 + OPTIONS.length) % OPTIONS.length}"]`)
+        ?.focus();
+    }
+  };
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        title="Sort photos"
-        aria-label="Sort photos"
-        className="flex h-7 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-micro font-bold text-gray-600 transition-colors hover:bg-gray-50"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Sort: ${activeOption.label}`}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={handleButtonKeyDown}
+        className={cn(
+          'ds-raw-button',
+          photoLibraryControlButtonClass(true, cn(SORT_MENU_WIDTH, 'justify-start gap-1 whitespace-nowrap pl-1.5 pr-1')),
+        )}
       >
-        <ArrowUpDown className="h-3.5 w-3.5 text-gray-400" />
-        <span className="hidden sm:inline">{current.label}</span>
+        <ActiveIcon className="h-3.5 w-3.5 shrink-0" />
+        {activeOption.label}
       </button>
 
-      <AnchoredLayer open={open} onClose={() => setOpen(false)} anchorRef={ref} placement="bottom-end" gap={4}>
-        <div className="w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-xl">
-          <p className="px-2 pb-1 pt-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">Sort by</p>
-          {OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => {
-                onSortChange(o.value);
-                setOpen(false);
-              }}
-              className={cn(
-                'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12px] font-semibold transition hover:bg-gray-50',
-                o.value === sort ? 'text-blue-700' : 'text-gray-700',
-              )}
-            >
-              {o.label}
-              {o.value === sort ? <Check className="h-3.5 w-3.5" /> : null}
-            </button>
-          ))}
-        </div>
-      </AnchoredLayer>
-    </div>
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={buttonRef}
+        placement="bottom-start"
+        gap={4}
+        matchWidth
+        padded={false}
+        role="listbox"
+        aria-label="Sort photos"
+        className="min-w-0 rounded-lg p-0.5 shadow-md"
+      >
+        <ul ref={listRef} className="list-none">
+          {OPTIONS.map((o, index) => {
+            const active = sort === o.value;
+            const Icon = o.icon;
+            return (
+              <li key={o.value} role="none">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  data-option-index={index}
+                  onClick={() => handleSelect(o.value)}
+                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                  className={cn(
+                    'ds-raw-button flex w-full items-center justify-start gap-1.5 rounded-md py-1.5 pl-1.5 pr-1 text-micro font-semibold transition-colors',
+                    active
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-text-muted hover:bg-surface-sunken hover:text-text-default',
+                  )}
+                >
+                  <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-blue-600' : 'text-text-default')} />
+                  {o.label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Popover>
+    </>
   );
 }

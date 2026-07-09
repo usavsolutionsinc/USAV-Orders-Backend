@@ -4,8 +4,8 @@ import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types'
 /** A pending FBA plan card model (alias kept for readability across the sidebar). */
 export type PendingPlan = FbaPlanQueueItem;
 
-// Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
-export const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
+// Match TechSidebarPanel secondary bands (header-shell uses border-border-hairline)
+export const sidebarSubBandClass = 'shrink-0 border-b border-border-hairline bg-surface-card';
 
 /** Open the admin "Add FNSKU catalog row" dialog. */
 export function emitOpenAddFba(): void {

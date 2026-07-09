@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from '@/components/Icons';
-import { cn } from '@/utils/_cn';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useWarrantyMutations } from '@/hooks/useWarrantyMutations';
 
 interface WarrantyLogClaimDialogProps {
@@ -81,78 +81,76 @@ export function WarrantyLogClaimDialog({ open, onClose, onCreated, initial }: Wa
     });
   };
 
-  const input = 'w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm';
+  const input = 'w-full rounded-md border border-border-soft px-2.5 py-1.5 text-sm';
 
   return createPortal(
-    <div className="fixed inset-0 z-panelPopover flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-panelPopover flex items-center justify-center bg-scrim/30 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-xl bg-white shadow-2xl"
+        className="w-full max-w-md rounded-xl bg-surface-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Log warranty claim</h2>
-          <button
-            type="button"
+        <header className="flex items-center justify-between border-b border-border-hairline px-5 py-3">
+          <h2 className="text-sm font-semibold text-text-default">Log warranty claim</h2>
+          <IconButton
             onClick={onClose}
-            className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            className="rounded-full p-1.5 hover:bg-surface-sunken"
+            ariaLabel="Close"
+            icon={<X className="h-4 w-4" />}
+          />
         </header>
 
         <div className="space-y-3 px-5 py-4">
           {create.error && (
-            <p className="text-xs text-rose-600">
+            <p className="text-xs text-text-danger">
               {create.error instanceof Error ? create.error.message : 'Failed to log claim.'}
             </p>
           )}
           <div>
-            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">Serial number</label>
+            <label className="mb-1 block text-caption font-medium uppercase tracking-wide text-text-faint">Serial number</label>
             <input className={input} value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="e.g. SN-12345" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">Order # (internal id)</label>
+              <label className="mb-1 block text-caption font-medium uppercase tracking-wide text-text-faint">Order # (internal id)</label>
               <input className={input} value={orderId} onChange={(e) => setOrderId(e.target.value)} inputMode="numeric" placeholder="e.g. 8421" />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">SKU</label>
+              <label className="mb-1 block text-caption font-medium uppercase tracking-wide text-text-faint">SKU</label>
               <input className={input} value={sku} onChange={(e) => setSku(e.target.value)} />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">Product title</label>
+            <label className="mb-1 block text-caption font-medium uppercase tracking-wide text-text-faint">Product title</label>
             <input className={input} value={productTitle} onChange={(e) => setProductTitle(e.target.value)} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">Notes</label>
+            <label className="mb-1 block text-caption font-medium uppercase tracking-wide text-text-faint">Notes</label>
             <textarea className={input} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
-          <p className="text-[11px] text-gray-400">
+          <p className="text-caption text-text-faint">
             Provide a serial, order #, or SKU. The warranty clock + customer are resolved from the order when available.
           </p>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
-          <button
-            type="button"
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+        <footer className="flex justify-end gap-2 border-t border-border-hairline px-5 py-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-xs"
             onClick={onClose}
             disabled={create.isPending}
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            className={cn(
-              'rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50',
-            )}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            className="text-xs"
             disabled={!hasIdentifier || create.isPending}
             onClick={submit}
           >
             {create.isPending ? 'Logging…' : 'Log claim'}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>,

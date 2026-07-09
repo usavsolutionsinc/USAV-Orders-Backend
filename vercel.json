@@ -9,6 +9,14 @@
       "schedule": "45 0 * * *"
     },
     {
+      "path": "/api/cron/signal-insight-rollup",
+      "schedule": "50 0 * * *"
+    },
+    {
+      "path": "/api/cron/feed-membership-projection",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/integrations/reconcile",
       "schedule": "0 4 * * *"
     },
@@ -55,6 +63,10 @@
     {
       "path": "/api/cron/zoho/orders-ingest-drain",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/search-outbox",
+      "schedule": "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
     },
     {
       "path": "/api/cron/amazon/orders-sync",
@@ -105,6 +117,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/ebay/purchase-sync",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/cron/integrations/sync?providers=ebay,square",
       "schedule": "*/15 * * * *"
     },
@@ -119,6 +135,18 @@
     {
       "path": "/api/cron/photos/nas-mirror?limit=25",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/documents/nas-mirror?limit=25",
+      "schedule": "45 4 * * *"
+    },
+    {
+      "path": "/api/cron/photos/drive-mirror?limit=25",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/signals/buyer-notes-heal",
+      "schedule": "15 9 * * *"
     }
   ]
 }

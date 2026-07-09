@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
 
@@ -9,14 +9,17 @@ export const GET = withAuth(async (_req, ctx) => {
   try {
     const orgId = ctx.organizationId;
 
+    // Run under the tenant GUC so the photo_storage / photo_analysis / photo_jobs
+    // reads are RLS-subject (defense-in-depth) on top of the explicit org filters.
     const [totals, byMonth, jobs] = await Promise.all([
-      pool.query<{
+      tenantQuery<{
         total: string;
         gcs: string;
         nas_mirror: string;
         analyzed: string;
         pending_mirror: string;
       }>(
+        orgId,
         `SELECT
            COUNT(*)::text AS total,
            COUNT(*) FILTER (
@@ -48,7 +51,8 @@ export const GET = withAuth(async (_req, ctx) => {
         WHERE p.organization_id = $1`,
         [orgId],
       ),
-      pool.query<{ month: string; count: string }>(
+      tenantQuery<{ month: string; count: string }>(
+        orgId,
         `SELECT to_char(date_trunc('month', p.created_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS month,
                 COUNT(*)::text AS count
            FROM photos p
@@ -58,7 +62,8 @@ export const GET = withAuth(async (_req, ctx) => {
           LIMIT 12`,
         [orgId],
       ),
-      pool.query<{ pending: string; failed: string }>(
+      tenantQuery<{ pending: string; failed: string }>(
+        orgId,
         `SELECT
            COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
            COUNT(*) FILTER (WHERE status = 'failed')::text AS failed

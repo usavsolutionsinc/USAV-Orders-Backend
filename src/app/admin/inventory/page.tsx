@@ -39,12 +39,12 @@ export default async function InventoryAdminPage() {
   const data = await loadInventoryAdminData(user.organizationId);
 
   return (
-    <div className="min-h-screen w-full bg-gray-50">
+    <div className="min-h-screen w-full bg-surface-canvas">
       <PageHeader title="Inventory" maxWidth="7xl" />
       <div className="mx-auto max-w-7xl space-y-8 p-8">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-text-muted">
           Operations dashboard for the state-machine inventory migration. Read-only.
-          See <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">context/inventory_system_upgrade_plan.md</code> for the full plan.
+          See <code className="rounded bg-surface-sunken px-1.5 py-0.5 text-xs">context/inventory_system_upgrade_plan.md</code> for the full plan.
         </p>
 
         <LookupForms />
@@ -59,9 +59,9 @@ export default async function InventoryAdminPage() {
         <AllocationsSection allocations={data.allocations} />
         <RecentEventsSection events={data.events} />
 
-        <footer className="pt-2 text-xs text-gray-500">
+        <footer className="pt-2 text-xs text-text-soft">
           <p>
-            To flip a flag, set the corresponding env var to <code className="rounded bg-gray-100 px-1 py-0.5">true</code>
+            To flip a flag, set the corresponding env var to <code className="rounded bg-surface-sunken px-1 py-0.5">true</code>
             on Vercel and redeploy. The flag reads on every request — no warm-up needed.
           </p>
         </footer>

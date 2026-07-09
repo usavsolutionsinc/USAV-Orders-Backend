@@ -2,9 +2,9 @@ import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { SummaryTotals } from './types';
 
 function SummaryCell({ label, value, tone = 'gray' }: { label: string; value: number; tone?: 'gray' | 'emerald' }) {
-  const valueClass = tone === 'emerald' ? 'text-emerald-700' : 'text-gray-900';
+  const valueClass = tone === 'emerald' ? 'text-emerald-700' : 'text-text-default';
   return (
-    <div className="border border-gray-200 bg-white px-3 py-2.5">
+    <div className="border border-border-soft bg-surface-card px-3 py-2.5">
       <p className={sectionLabel}>{label}</p>
       <p className={`mt-1 text-xl font-black tracking-tight ${valueClass}`}>{value}</p>
     </div>

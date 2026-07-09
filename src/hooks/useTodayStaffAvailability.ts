@@ -86,7 +86,9 @@ export function useTodayStaffAvailability() {
     queryKey: qk.staff.availabilityToday,
     queryFn: fetchAvailability,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // Realtime Ably invalidation (above) is the primary freshness path; this
+    // poll is a fallback, so 120s is ample and halves idle query volume.
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
 
@@ -94,7 +96,9 @@ export function useTodayStaffAvailability() {
     queryKey: ['staff', 'active', 'today-availability'],
     queryFn: () => fetchStaff('/api/staff?active=true'),
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // Realtime Ably invalidation (above) is the primary freshness path; this
+    // poll is a fallback, so 120s is ample and halves idle query volume.
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
 
@@ -102,7 +106,9 @@ export function useTodayStaffAvailability() {
     queryKey: ['staff', 'present-today', 'today-availability'],
     queryFn: () => fetchStaff('/api/staff?active=true&presentToday=true'),
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // Realtime Ably invalidation (above) is the primary freshness path; this
+    // poll is a fallback, so 120s is ample and halves idle query volume.
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
 

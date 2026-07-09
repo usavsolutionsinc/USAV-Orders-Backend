@@ -7,7 +7,7 @@ export default function InventoryBinsPage() {
         <div className="flex h-full min-h-0 flex-col">
             <Suspense
                 fallback={
-                    <div className="flex h-full w-full items-center justify-center bg-gray-50">
+                    <div className="flex h-full w-full items-center justify-center bg-surface-canvas">
                         <LoadingSpinner size="lg" className="text-blue-600" />
                     </div>
                 }

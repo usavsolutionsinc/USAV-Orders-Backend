@@ -109,6 +109,28 @@ export function mergeJourney(events: JourneyEvent[]): MergedJourney {
 }
 
 /**
+ * Ship/return round-trip counts for a merged journey (§1 success metric of the
+ * returns-unification plan: "how many times it has been returned and shipped
+ * out"). Two counts, not one combined "trips" figure — a unit can ship more
+ * times than it's returned (the latest trip may still be out), so pairing
+ * them would either be wrong or need an arbitrary tie-break; two counts stay
+ * exactly as literal as the ask.
+ *
+ * Keyed on `TimelineItem.sourceEventType` (only `inventoryEventsToTimeline`
+ * sets it) — never the display `title` string, which is free to change
+ * without warning. A unit with no ship/return history yields {0, 0}.
+ */
+export function countRoundTrips(items: TimelineItem[]): { shippedCount: number; returnedCount: number } {
+  let shippedCount = 0;
+  let returnedCount = 0;
+  for (const item of items) {
+    if (item.sourceEventType === 'SHIPPED') shippedCount += 1;
+    else if (item.sourceEventType === 'RETURNED') returnedCount += 1;
+  }
+  return { shippedCount, returnedCount };
+}
+
+/**
  * Build the `groupKeyOf` selector for {@link EventTimeline} that buckets each row
  * into its order / serial / tracking journey band. Rows missing the active
  * dimension's key are forced into the trailing "Other events" band rather than

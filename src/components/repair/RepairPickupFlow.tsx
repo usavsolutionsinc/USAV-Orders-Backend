@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, X, Camera } from '../Icons';
 import { SignaturePad, type SignatureData } from './SignaturePad';
 import { getSidebarIntakeSubmitButtonClass } from '@/design-system/components';
+import { Button } from '@/design-system/primitives';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 
@@ -100,28 +101,29 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
   const receiptUrl = `/api/repair-service/print/${repair.id}`;
 
   return (
-    <div className="fixed inset-0 z-panelOverlay flex flex-col overflow-hidden bg-white">
+    <div className="fixed inset-0 z-panelOverlay flex flex-col overflow-hidden bg-surface-card">
       {step === 'sign' && (
         <>
-          <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div className="shrink-0 flex items-center justify-between border-b border-border-hairline px-6 py-4">
             <div>
-              <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
+              <h2 className="text-sm font-black uppercase tracking-tight text-text-default">
                 Pickup Confirmation
               </h2>
-              <p className="mt-0.5 text-micro font-bold text-gray-500">
+              <p className="mt-0.5 text-micro font-bold text-text-soft">
                 {rsCode} — {firstName} — {repair.product_title || 'Repair'} —{' '}
                 <span className="text-emerald-600">${repair.price || '0'}</span>
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={onClose}
-                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-eyebrow font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                icon={<ChevronLeft className="h-3 w-3" />}
+                className="text-eyebrow font-black uppercase tracking-wide text-text-muted"
               >
-                <ChevronLeft className="h-3 w-3" />
                 Back
-              </button>
+              </Button>
+              {/* ds-raw-button: solid-orange intake-submit CTA driven by the shared getSidebarIntakeSubmitButtonClass helper */}
               <button
                 type="button"
                 onClick={handleSubmitSignature}
@@ -140,10 +142,10 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
             </div>
           </div>
 
-          <div className="shrink-0 border-b border-gray-100 px-6 py-3">
-            <p className="text-caption text-gray-500 italic leading-relaxed">
+          <div className="shrink-0 border-b border-border-hairline px-6 py-3">
+            <p className="text-caption text-text-soft italic leading-relaxed">
               {PICKUP_TERMS}
-              <span className="ml-2 font-black text-gray-900 not-italic uppercase text-micro">
+              <span className="ml-2 font-black text-text-default not-italic uppercase text-micro">
                 30-Day Warranty
               </span>
             </p>
@@ -162,15 +164,15 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
             </p>
           </div>
 
-          <div className="shrink-0 border-t border-gray-100 px-6 py-3 flex items-center justify-center">
-            <button
-              type="button"
+          <div className="shrink-0 border-t border-border-hairline px-6 py-3 flex items-center justify-center">
+            <Button
+              variant="ghost"
               onClick={handleDecline}
               disabled={isDeclining || isSubmitting}
-              className="text-micro font-black uppercase tracking-wide text-red-500 hover:text-red-700 disabled:opacity-50"
+              className="h-auto px-0 text-micro font-black uppercase tracking-wide text-rose-600 hover:bg-transparent hover:text-rose-700 disabled:opacity-50"
             >
               {isDeclining ? 'Recording…' : 'Customer declined to sign'}
-            </button>
+            </Button>
           </div>
 
           {error && (
@@ -183,33 +185,34 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
 
       {step === 'receipt' && (
         <>
-          <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-6 py-4 bg-emerald-50">
+          <div className="shrink-0 flex items-center justify-between border-b border-border-hairline px-6 py-4 bg-emerald-50">
             <div className="flex items-center gap-3">
               <Camera className="h-5 w-5 text-emerald-600" />
               <div>
-                <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
+                <h2 className="text-sm font-black uppercase tracking-tight text-text-default">
                   Take a photo of this receipt to keep a copy
                 </h2>
-                <p className="mt-0.5 text-micro font-bold text-gray-500">
+                <p className="mt-0.5 text-micro font-bold text-text-soft">
                   {rsCode} — {firstName} — pickup complete
                 </p>
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="brand"
               onClick={onClose}
-              className="flex items-center gap-1 rounded-xl bg-gray-900 px-4 py-2.5 text-micro font-black uppercase tracking-wide text-white transition-colors hover:bg-gray-700"
+              icon={<X className="h-3 w-3" />}
+              className="bg-surface-inverse bg-none text-micro font-black uppercase tracking-wide hover:bg-surface-inverse-hover"
             >
-              <X className="h-3 w-3" />
               Done
-            </button>
+            </Button>
           </div>
 
-          <div className="flex-1 min-h-0 bg-gray-100 overflow-hidden">
+          <div className="flex-1 min-h-0 bg-surface-sunken overflow-hidden">
+            {/* ds-allow-title: iframe title is the required accessible name, not a hover tooltip */}
             <iframe
               src={receiptUrl}
               title={`Repair receipt ${rsCode}`}
-              className="h-full w-full border-0 bg-white"
+              className="h-full w-full border-0 bg-surface-card"
             />
           </div>
         </>

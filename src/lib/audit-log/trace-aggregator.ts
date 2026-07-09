@@ -108,10 +108,12 @@ export async function getSerialTrace(
   const raw = String(rawInput || '').trim();
   if (!raw) return { found: false, unit: null, order: null, events: [] };
 
-  const SELECT_COLS = `id, serial_number, normalized_serial, sku,
-              unit_uid, current_status::text AS current_status,
-              current_location, condition_grade::text AS condition_grade,
-              origin_source, received_at, received_by`;
+  // Phase 3: origin_source from the reconstruction view (semantic label).
+  const SELECT_COLS = `su.id, su.serial_number, su.normalized_serial, su.sku,
+              su.unit_uid, su.current_status::text AS current_status,
+              su.current_location, su.condition_grade::text AS condition_grade,
+              vo.origin_source, su.received_at, su.received_by`;
+  const SELECT_FROM = `FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id`;
 
   // Resolve in order: numeric id → normalized serial → minted unit_uid. Each is
   // an indexed, org-scoped lookup — a serial never resolves another tenant's
@@ -120,7 +122,7 @@ export async function getSerialTrace(
   if (/^\d+$/.test(raw)) {
     const r = await tenantQuery(
       orgId,
-      `SELECT ${SELECT_COLS} FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.id = $1 AND su.organization_id = $2 LIMIT 1`,
       [Number(raw), orgId],
     );
     row = r.rows[0] ?? null;
@@ -128,7 +130,7 @@ export async function getSerialTrace(
   if (!row) {
     const r = await tenantQuery(
       orgId,
-      `SELECT ${SELECT_COLS} FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) AND organization_id = $2 LIMIT 1`,
+      `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.normalized_serial = UPPER(TRIM($1)) AND su.organization_id = $2 LIMIT 1`,
       [raw, orgId],
     );
     row = r.rows[0] ?? null;
@@ -136,7 +138,7 @@ export async function getSerialTrace(
   if (!row) {
     const r = await tenantQuery(
       orgId,
-      `SELECT ${SELECT_COLS} FROM serial_units WHERE unit_uid = $1 AND organization_id = $2 LIMIT 1`,
+      `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.unit_uid = $1 AND su.organization_id = $2 LIMIT 1`,
       [raw, orgId],
     );
     row = r.rows[0] ?? null;

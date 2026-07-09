@@ -23,7 +23,7 @@ import { getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/orde
  */
 
 export interface StationChipColumnsOpts {
-  /** Platform label (already resolved via getOrderPlatformLabel). */
+  /** Platform label (already resolved via the catalog-aware useOrderChannelLabel). */
   plat: string;
   /** External product URL; gates the platform chip's click + color. */
   productUrl: string | null | undefined;
@@ -52,7 +52,7 @@ export function buildStationChipColumns({
         <PlatformChip
           label={plat}
           underlineClass={getOrderPlatformBorderColor(plat)}
-          iconClass={plat && productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
+          iconClass={plat && productUrl ? getOrderPlatformColor(plat) : 'text-text-soft'}
           onClick={() => {
             if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
           }}

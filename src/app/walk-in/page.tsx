@@ -44,14 +44,14 @@ function WalkInPageContent() {
 
     if (redirecting) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-white">
+            <div className="flex h-full w-full items-center justify-center bg-surface-card">
                 <LoadingSpinner size="lg" className="text-orange-500" />
             </div>
         );
     }
 
     return (
-        <div className="flex h-full w-full bg-white">
+        <div className="flex h-full w-full bg-surface-card">
             <RouteShell
                 actions={<WalkInSidebarPanel embedded hideSectionHeader />}
                 history={
@@ -69,7 +69,7 @@ function WalkInPageContent() {
 export default function WalkInPage() {
     return (
         <Suspense fallback={
-            <div className="flex h-full w-full items-center justify-center bg-gray-50">
+            <div className="flex h-full w-full items-center justify-center bg-surface-canvas">
                 <LoadingSpinner size="lg" className="text-emerald-600" />
             </div>
         }>

@@ -12,4 +12,4 @@ export const runtime = 'nodejs';
  */
 export const POST = withAuth(async () => {
   return NextResponse.json({ session_id: randomUUID() });
-}, { permission: 'dashboard.view' });
+}, { permission: 'dashboard.view', feature: 'aiChat' });

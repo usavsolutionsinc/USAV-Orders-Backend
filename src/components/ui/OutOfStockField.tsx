@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pencil, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { dmSans } from '@/lib/fonts';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
@@ -68,14 +69,13 @@ export function OutOfStockField({
             >
               Saved
             </span>
-            <button
+            <IconButton
               type="button"
               onClick={onCancel}
-              className="flex h-5 w-5 items-center justify-center text-red-400 transition-colors hover:text-red-600"
-              aria-label="Cancel"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              className="flex h-5 w-5 items-center justify-center text-red-400 hover:text-red-600"
+              ariaLabel="Cancel"
+              icon={<X className="h-3.5 w-3.5" />}
+            />
           </div>
         </div>
 
@@ -92,7 +92,7 @@ export function OutOfStockField({
           }}
           placeholder="Describe missing parts..."
           autoFocus={autoFocus}
-          className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}
+          className={`w-full bg-transparent text-sm font-normal text-text-default outline-none placeholder:text-text-soft ${dmSans.className}`}
         />
       </div>
     );
@@ -105,19 +105,21 @@ export function OutOfStockField({
           What needs to be ordered?
         </span>
         {onEdit ? (
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={onEdit}
-            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-micro font-black uppercase tracking-[0.18em] text-red-700 transition-colors hover:border-red-300 hover:bg-red-100"
-            aria-label="Edit need-to-order note"
+            icon={<Pencil className="h-3 w-3" />}
+            ariaLabel="Edit need-to-order note"
+            className="h-auto gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-micro font-black uppercase tracking-[0.18em] text-red-700 ring-0 hover:border-red-300 hover:bg-red-100"
           >
-            <Pencil className="h-3 w-3" />
             Edit Note
-          </button>
+          </Button>
         ) : null}
       </div>
 
-      <p className={`text-sm font-medium text-gray-800 ${dmSans.className}`}>
+      <p className={`text-sm font-medium text-text-default ${dmSans.className}`}>
         {value || 'N/A'}
       </p>
     </div>

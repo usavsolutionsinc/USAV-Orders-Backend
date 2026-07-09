@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Check, Loader2, Truck, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
 import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { CarrierCode, NormalizedShipmentStatus } from '@/lib/shipping/types';
 import type {
   CarrierSyncResult,
@@ -43,7 +45,7 @@ function statusDot(status: SyncTaskStatus) {
   if (status === 'running') return <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />;
   if (status === 'done') return <Check className="w-3.5 h-3.5 text-emerald-600" />;
   if (status === 'error') return <AlertTriangle className="w-3.5 h-3.5 text-red-500" />;
-  return <span className="block w-2 h-2 rounded-full bg-gray-300" />;
+  return <span className="block w-2 h-2 rounded-full bg-surface-strong" />;
 }
 
 function statusLabel(status: SyncTaskStatus, summary?: string) {
@@ -55,23 +57,23 @@ function statusLabel(status: SyncTaskStatus, summary?: string) {
 
 // NormalizedShipmentStatus → short label + tone for the prev/new status chips.
 const STATUS_META: Record<NormalizedShipmentStatus, { label: string; cls: string }> = {
-  LABEL_CREATED: { label: 'Label', cls: 'bg-gray-50 text-gray-600 ring-gray-200' },
+  LABEL_CREATED: { label: 'Label', cls: 'bg-surface-canvas text-text-muted ring-border-soft' },
   ACCEPTED: { label: 'Accepted', cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
   IN_TRANSIT: { label: 'In transit', cls: 'bg-blue-50 text-blue-700 ring-blue-200' },
   OUT_FOR_DELIVERY: { label: 'Out for delivery', cls: 'bg-violet-50 text-violet-700 ring-violet-200' },
   DELIVERED: { label: 'Delivered', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   EXCEPTION: { label: 'Exception', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
   RETURNED: { label: 'Returned', cls: 'bg-rose-50 text-rose-700 ring-rose-200' },
-  UNKNOWN: { label: 'Unknown', cls: 'bg-gray-50 text-gray-500 ring-gray-200' },
+  UNKNOWN: { label: 'Unknown', cls: 'bg-surface-canvas text-text-soft ring-border-soft' },
 };
 
 function StatusChip({ status }: { status: NormalizedShipmentStatus | null }) {
   if (!status) {
-    return <span className="font-mono text-[11px] text-gray-400">—</span>;
+    return <span className="font-mono text-caption text-text-faint">—</span>;
   }
   const meta = STATUS_META[status] ?? STATUS_META.UNKNOWN;
   return (
-    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${meta.cls}`}>
+    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold ring-1 ring-inset ${meta.cls}`}>
       {meta.label}
     </span>
   );
@@ -81,10 +83,10 @@ function kindBadge(kind: CarrierSyncShipmentDetail['kind']) {
   const map: Record<CarrierSyncShipmentDetail['kind'], string> = {
     delivered: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     updated: 'bg-blue-50 text-blue-700 ring-blue-200',
-    unchanged: 'bg-gray-50 text-gray-500 ring-gray-200',
+    unchanged: 'bg-surface-canvas text-text-soft ring-border-soft',
     error: 'bg-red-50 text-red-700 ring-red-200',
   };
-  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
+  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
 }
 
 function countByKind(rows: CarrierSyncShipmentDetail[], kind: CarrierSyncShipmentDetail['kind']) {
@@ -103,7 +105,7 @@ function SummaryStat({
   const toneMap = {
     emerald: 'border-emerald-200 bg-emerald-50/60 text-emerald-700',
     blue: 'border-blue-200 bg-blue-50/60 text-blue-700',
-    gray: 'border-gray-200 bg-gray-50/60 text-gray-700',
+    gray: 'border-border-soft bg-surface-canvas/60 text-text-muted',
     red: 'border-red-200 bg-red-50/60 text-red-700',
   } as const;
   return (
@@ -117,7 +119,7 @@ function SummaryStat({
 function CarrierTab({ tab, label }: { tab: CarrierTabState; label: string }) {
   if (tab.status === 'idle') {
     return (
-      <div className="flex h-full flex-col items-center justify-center py-12 text-gray-400">
+      <div className="flex h-full flex-col items-center justify-center py-12 text-text-faint">
         <p className={fieldLabel}>No active {label} shipments to re-poll.</p>
       </div>
     );
@@ -151,17 +153,17 @@ function CarrierTab({ tab, label }: { tab: CarrierTabState; label: string }) {
       </div>
 
       {tab.status === 'running' ? (
-        <p className={`${fieldLabel} text-gray-500`}>
+        <p className={`${fieldLabel} text-text-soft`}>
           Polling {label} · {tab.rows.length}/{tab.total} done{remaining > 0 ? ` · ${remaining} to go` : ''}…
         </p>
       ) : null}
 
       {tab.rows.length === 0 ? (
-        <p className={`${fieldLabel} text-gray-500`}>
+        <p className={`${fieldLabel} text-text-soft`}>
           {tab.status === 'running' ? `Contacting ${label}…` : 'No shipments polled.'}
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200">
+        <div className="overflow-hidden rounded-xl border border-border-soft">
           <ShipmentTable rows={tab.rows} />
         </div>
       )}
@@ -181,8 +183,8 @@ function ShipmentTable({ rows }: { rows: CarrierSyncShipmentDetail[] }) {
   return (
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
-          <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+        <thead className="sticky top-0 z-10 bg-surface-canvas text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
+          <tr className="text-micro uppercase tracking-wide text-text-soft">
             <th className="px-3 py-2 font-semibold">Tracking</th>
             <th className="px-3 py-2 font-semibold">Was</th>
             <th className="px-3 py-2 font-semibold">Now</th>
@@ -190,14 +192,14 @@ function ShipmentTable({ rows }: { rows: CarrierSyncShipmentDetail[] }) {
             <th className="px-3 py-2 font-semibold text-right">Result</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border-hairline">
           {sorted.map((row) => (
-            <tr key={row.shipmentId} className="hover:bg-gray-50/60">
+            <tr key={row.shipmentId} className="hover:bg-surface-canvas/60">
               <td className="px-3 py-2 align-top">
                 {row.tracking ? (
                   <TrackingChip value={row.tracking} display={getLast4(row.tracking)} />
                 ) : (
-                  <span className="font-mono text-xs text-gray-400">#{row.shipmentId}</span>
+                  <span className="font-mono text-xs text-text-faint">#{row.shipmentId}</span>
                 )}
               </td>
               <td className="px-3 py-2 align-top">
@@ -205,14 +207,16 @@ function ShipmentTable({ rows }: { rows: CarrierSyncShipmentDetail[] }) {
               </td>
               <td className="px-3 py-2 align-top">
                 {row.kind === 'error' ? (
-                  <span className="text-[11px] text-red-600" title={row.error}>
-                    {row.error ? row.error.slice(0, 40) : 'Poll failed'}
-                  </span>
+                  <HoverTooltip label={row.error ?? ''} asChild>
+                    <span className="text-caption text-red-600">
+                      {row.error ? row.error.slice(0, 40) : 'Poll failed'}
+                    </span>
+                  </HoverTooltip>
                 ) : (
                   <StatusChip status={row.newStatus} />
                 )}
               </td>
-              <td className="px-3 py-2 text-right align-top tabular-nums text-gray-700">
+              <td className="px-3 py-2 text-right align-top tabular-nums text-text-muted">
                 {row.kind === 'error' ? '—' : row.eventsInserted || '—'}
               </td>
               <td className="px-3 py-2 text-right align-top">
@@ -271,7 +275,7 @@ export function CarrierSyncDialog({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={framerTransition.overlayScrim}
-      className="fixed inset-0 z-panelPopover flex items-center justify-center bg-gray-950/40 px-4 py-6"
+      className="fixed inset-0 z-panelPopover flex items-center justify-center bg-scrim/40 px-4 py-6"
       onClick={() => {
         if (!isRunning) onClose();
       }}
@@ -282,14 +286,14 @@ export function CarrierSyncDialog({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: 'spring', damping: 26, stiffness: 320, mass: 0.55 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-gray-200"
+        className="relative flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-surface-card shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-border-soft"
       >
-        <header className="flex items-start gap-3 border-b border-gray-200 px-5 py-3.5">
+        <header className="flex items-start gap-3 border-b border-border-soft px-5 py-3.5">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Truck className={`h-4 w-4 text-blue-600 ${isRunning ? 'animate-pulse' : ''}`} />
             <div className="min-w-0">
-              <p className={`${microBadge} text-gray-500`}>Carrier Sync</p>
-              <h2 className={`${sectionLabel} text-gray-900 mt-0.5`}>
+              <p className={`${microBadge} text-text-soft`}>Carrier Sync</p>
+              <h2 className={`${sectionLabel} text-text-default mt-0.5`}>
                 {isRunning ? 'Re-polling carrier tracking' : result?.throttled ? 'Showing latest tracking' : 'Sync complete'}
               </h2>
             </div>
@@ -304,27 +308,26 @@ export function CarrierSyncDialog({
               {(elapsedMs / 1000).toFixed(1)}s
             </motion.span>
             {isRunning && onCancel ? (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onCancel}
-                className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition hover:bg-red-100"
+                className="bg-red-50 text-red-700 ring-red-200 ring-inset hover:bg-red-100"
               >
                 Cancel
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
+            <IconButton
+              icon={<X className="w-4 h-4" />}
+              ariaLabel="Close"
               onClick={onClose}
               disabled={isRunning}
-              className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
+              className="rounded-lg p-1.5 hover:bg-surface-sunken"
+            />
           </div>
         </header>
 
-        <nav className="flex items-end gap-1 border-b border-gray-200 px-3 pt-2">
+        <nav className="flex items-end gap-1 border-b border-border-soft px-3 pt-2">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const meta = tabBadges[tab.id];
@@ -334,18 +337,19 @@ export function CarrierSyncDialog({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
-                  isActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                /* ds-raw-button: segmented tab with animated layoutId underline — not a Button shape */
+                className={`ds-raw-button relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
+                  isActive ? 'text-text-default' : 'text-text-soft hover:text-text-muted'
                 }`}
               >
                 <span>{tab.label}</span>
                 <span className="inline-flex h-4 w-4 items-center justify-center">{statusDot(meta.status)}</span>
                 {meta.count > 0 ? (
-                  <span className="ml-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-700">
+                  <span className="ml-0.5 rounded bg-surface-sunken px-1.5 py-0.5 text-micro font-bold tabular-nums text-text-muted">
                     {meta.count}
                   </span>
                 ) : total > 0 ? (
-                  <span className="ml-0.5 rounded bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-400">
+                  <span className="ml-0.5 rounded bg-surface-canvas px-1.5 py-0.5 text-micro font-semibold tabular-nums text-text-faint">
                     {total}
                   </span>
                 ) : null}
@@ -375,11 +379,11 @@ export function CarrierSyncDialog({
           </AnimatePresence>
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-2.5">
-          <div className="flex items-center gap-3 text-xs text-gray-600">
+        <footer className="flex items-center justify-between gap-3 border-t border-border-soft bg-surface-canvas px-5 py-2.5">
+          <div className="flex items-center gap-3 text-xs text-text-muted">
             {TABS.map((tab, i) => (
               <span key={tab.id} className="inline-flex items-center gap-1.5">
-                {i > 0 ? <span className="text-gray-300">·</span> : null}
+                {i > 0 ? <span className="text-text-faint">·</span> : null}
                 {statusDot(carriers[tab.id].status)}{' '}
                 <span>
                   {tab.label} {statusLabel(carriers[tab.id].status, carriers[tab.id].summary)}
@@ -387,14 +391,9 @@ export function CarrierSyncDialog({
               </span>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isRunning}
-            className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
-          >
+          <Button variant="brand" size="sm" onClick={onClose} disabled={isRunning}>
             {isRunning ? 'Running…' : 'Close'}
-          </button>
+          </Button>
         </footer>
       </motion.div>
     </motion.div>

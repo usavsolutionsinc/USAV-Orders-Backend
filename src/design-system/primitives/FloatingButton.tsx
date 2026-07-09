@@ -46,7 +46,13 @@ export interface FloatingButtonProps {
   /** Stretch the pill to fill `maxWidth`. Default `false` — a compact,
    *  auto-width pill centered within the container. */
   fullWidth?: boolean;
-  /** Extra class on the sticky outer wrapper (override z-index, padding, etc.). */
+  /** Render as an in-flow docked band (`shrink-0`, transparent — no backing)
+   *  instead of the default click-through `absolute` float. Use when the host is
+   *  always full-height and OTHER bands (receive feedback, label preview) dock
+   *  above it — the `absolute` float would otherwise paint on top of them. The
+   *  pill keeps its own shadow so it still reads as floating. Default `false`. */
+  docked?: boolean;
+  /** Extra class on the outer wrapper (override z-index, padding, etc.). */
   className?: string;
 }
 
@@ -56,7 +62,7 @@ const TONE_BG_SOLID: Record<FloatingButtonTone, string> = {
   orange: 'bg-orange-600',
   violet: 'bg-violet-700',
   red: 'bg-rose-600',
-  gray: 'bg-gray-900',
+  gray: 'bg-surface-inverse',
 };
 
 const spring = { type: 'spring', stiffness: 520, damping: 36 } as const;
@@ -71,7 +77,9 @@ const spring = { type: 'spring', stiffness: 520, damping: 36 } as const;
  * (where `sticky` would fall back to mid-flow).
  *
  * - Click-through wrapper (`pointer-events-none`) so it never blocks content;
- *   the pill itself re-enables clicks.
+ *   the pill itself re-enables clicks. (In `docked` mode the wrapper is instead
+ *   an in-flow `shrink-0` band — no backing — so it stacks below other docked
+ *   bands rather than floating over them, while the pill still reads as floating.)
  * - Centered within `maxWidth` so it lines up with the host content column
  *   (pass the same `max-w-*` token the column uses). Set `fullWidth` to stretch
  *   the pill across that width, or leave it for a compact centered pill.
@@ -95,13 +103,14 @@ export function FloatingButton({
   menu,
   menuLabel,
   menuTitle,
-  maxWidth = 'max-w-3xl',
+  maxWidth = 'max-w-[720px]',
   fullWidth = false,
+  docked = false,
   className,
 }: FloatingButtonProps) {
   const isDisabled = disabled || loading;
   const solidBg = isDisabled
-    ? 'bg-gray-300'
+    ? 'bg-surface-strong'
     : toneClasses
       ? toneClasses.bg
       : TONE_BG_SOLID[tone];
@@ -112,13 +121,20 @@ export function FloatingButton({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6',
+        docked
+          ? // In-flow docked band — stacks below any receive-feedback / label
+            // bands instead of floating over them. No backing/border/backdrop:
+            // the pill's own shadow reads as a floating action; the band is pure
+            // spacing so the content behind it shows through.
+            'shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6'
+          : 'pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6',
         className,
       )}
     >
       <div
         className={cn(
-          'pointer-events-auto mx-auto flex w-full',
+          'mx-auto flex w-full',
+          docked ? '' : 'pointer-events-auto',
           maxWidth,
           fullWidth ? '' : 'justify-center',
         )}
@@ -135,12 +151,18 @@ export function FloatingButton({
             )}
           >
             <div className="group/split-menu relative flex shrink-0 self-stretch">
+              {/* The chevron stays interactive even when the PRIMARY CTA is
+                  disabled — each menu item carries its own `disabled`, and a
+                  disabled <button> here would suppress pointer events over the
+                  chevron, so `group-hover` never fires and the menu can't open
+                  at all (the classic "hover does nothing" bug). Only an in-flight
+                  action (`loading`) locks it. */}
               <button
                 type="button"
                 aria-haspopup="menu"
                 aria-label={menuLabel ?? 'More actions'}
                 title={menuTitle}
-                disabled={isDisabled}
+                disabled={loading}
                 className="flex h-12 items-center justify-center rounded-l-2xl border-r border-white/20 bg-transparent px-3 text-white outline-none transition-[filter] focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ChevronDown className="h-4 w-4 opacity-95" />
@@ -152,7 +174,7 @@ export function FloatingButton({
                 <ul
                   role="menu"
                   aria-label={menuLabel ?? 'More actions'}
-                  className="min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
+                  className="min-w-[12rem] rounded-lg border border-border-soft bg-surface-card py-1 shadow-xl ring-1 ring-border-soft/80"
                 >
                   {menu!.map((item) => (
                     <li key={item.label} role="none">
@@ -165,7 +187,7 @@ export function FloatingButton({
                           e.stopPropagation();
                           item.onClick();
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-black uppercase tracking-wider text-text-default transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
                       >
                         {item.icon}
                         {item.label}

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { ConnectionLogEntryInput } from '@/components/sidebar/ConnectionsSidebarPanel';
 import { ZohoManagementPage } from '@/components/admin/connections/ZohoManagementPage';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
+import { Button } from '@/design-system/primitives';
 
 interface ConnectionLogEntry extends ConnectionLogEntryInput {
   id: string;
@@ -63,18 +64,19 @@ export function ConnectionsManagementTab() {
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col border border-gray-200 bg-white">
+    <section className="flex h-full min-h-0 w-full flex-col border border-border-soft bg-surface-card">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className="truncate text-caption font-black uppercase tracking-[0.2em] text-gray-900">Connection Activity</p>
-          <div className="flex items-center gap-4 text-micro font-black uppercase tracking-widest text-gray-500">
-            <button
-              type="button"
+          <p className="truncate text-caption font-black uppercase tracking-[0.2em] text-text-default">Connection Activity</p>
+          <div className="flex items-center gap-4 text-micro font-black uppercase tracking-widest text-text-soft">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigateTo('zoho-management')}
-              className="hidden border-b border-gray-900 py-1 text-micro font-black uppercase tracking-widest text-gray-900 sm:inline-block"
+              className="hidden h-auto rounded-none border-b border-border-strong px-0 py-1 text-micro font-black uppercase tracking-widest text-text-default hover:text-text-default sm:inline-flex"
             >
               Open Zoho Tools
-            </button>
+            </Button>
             <span>Success {groupedSummary.success}</span>
             <span>Errors {groupedSummary.error}</span>
             <span>Total {logs.length}</span>
@@ -83,50 +85,51 @@ export function ConnectionsManagementTab() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        <div className="mb-4 border border-gray-200 bg-gray-50 px-4 py-3">
-          <p className={`${sectionLabel} text-gray-900`}>Recent Activity</p>
-          <p className="mt-1 text-caption font-bold text-gray-500">
+        <div className="mb-4 border border-border-soft bg-surface-canvas px-4 py-3">
+          <p className={`${sectionLabel} text-text-default`}>Recent Activity</p>
+          <p className="mt-1 text-caption font-bold text-text-soft">
             Every sync, import, and upload run from the sidebar writes a result here so you can confirm what happened.
           </p>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => navigateTo('zoho-management')}
-            className="mt-3 inline-flex border-b border-gray-900 py-1 text-micro font-black uppercase tracking-widest text-gray-900 sm:hidden"
+            className="mt-3 h-auto rounded-none border-b border-border-strong px-0 py-1 text-micro font-black uppercase tracking-widest text-text-default hover:text-text-default sm:hidden"
           >
             Open Zoho Tools
-          </button>
+          </Button>
         </div>
 
         {logs.length === 0 ? (
-          <div className="border border-dashed border-gray-200 px-5 py-10 text-center">
-            <p className="text-caption font-black uppercase tracking-[0.24em] text-gray-500">No Connection Activity Yet</p>
-            <p className="mt-2 text-caption font-bold text-gray-500">
+          <div className="border border-dashed border-border-soft px-5 py-10 text-center">
+            <p className="text-caption font-black uppercase tracking-[0.24em] text-text-soft">No Connection Activity Yet</p>
+            <p className="mt-2 text-caption font-bold text-text-soft">
               Run a sync or upload from the sidebar to see results here.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200 border border-gray-200">
+          <div className="divide-y divide-border-soft border border-border-soft">
             {logs.map((log) => (
               <div key={log.id} className="grid gap-3 px-4 py-4 md:grid-cols-[120px_minmax(0,1fr)_140px] md:items-start">
                 <div>
-                  <p className="text-micro font-black uppercase tracking-[0.24em] text-gray-500">{log.group}</p>
+                  <p className="text-micro font-black uppercase tracking-[0.24em] text-text-soft">{log.group}</p>
                   <p
                     className={`mt-1 text-micro font-black uppercase tracking-widest ${
                       log.status === 'success'
                         ? 'text-green-700'
                         : log.status === 'error'
                           ? 'text-red-700'
-                          : 'text-gray-700'
+                          : 'text-text-muted'
                     }`}
                   >
                     {log.status}
                   </p>
                 </div>
                 <div>
-                  <p className="text-caption font-black uppercase tracking-widest text-gray-900">{log.title}</p>
-                  <p className="mt-1 text-caption font-bold leading-relaxed text-gray-600">{log.detail}</p>
+                  <p className="text-caption font-black uppercase tracking-widest text-text-default">{log.title}</p>
+                  <p className="mt-1 text-caption font-bold leading-relaxed text-text-muted">{log.detail}</p>
                 </div>
-                <div className="text-micro font-bold uppercase tracking-wide text-gray-500 md:text-right">
+                <div className="text-micro font-bold uppercase tracking-wide text-text-soft md:text-right">
                   {log.createdAt}
                 </div>
               </div>

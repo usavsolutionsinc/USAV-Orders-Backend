@@ -2,6 +2,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { Copy, ExternalLink } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { getTrackingUrl, getTrackingUrlByCarrier } from '@/lib/tracking-format';
 
@@ -62,32 +64,31 @@ export function TrackingNumberRow({
     : null;
 
   const actions = (
-    <div className="flex items-center gap-1.5 text-gray-400">
+    <div className="flex items-center gap-1.5 text-text-faint">
       {trackingUrl ? (
-        <a
-          href={trackingUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="transition-colors hover:text-blue-600"
-          aria-label={`Track ${label} on the carrier site`}
-          title={`Open ${label} on the carrier site for full tracking updates`}
-        >
-          <ExternalLink className={iconClassName} />
-        </a>
+        <HoverTooltip label={`Open ${label} on the carrier site for full tracking updates`} asChild>
+          <a
+            href={trackingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="transition-colors hover:text-blue-600"
+            aria-label={`Track ${label} on the carrier site`}
+          >
+            <ExternalLink className={iconClassName} />
+          </a>
+        </HoverTooltip>
       ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          if (!displayValue) return;
-          navigator.clipboard.writeText(displayValue);
-        }}
-        className="transition-colors hover:text-gray-900"
-        aria-label={`Copy ${label}`}
-        title={`Copy ${label}`}
-      >
-        <Copy className={iconClassName} />
-      </button>
+      <HoverTooltip label={`Copy ${label}`} asChild>
+        <IconButton
+          ariaLabel={`Copy ${label}`}
+          onClick={() => {
+            if (!displayValue) return;
+            navigator.clipboard.writeText(displayValue);
+          }}
+          icon={<Copy className={iconClassName} />}
+        />
+      </HoverTooltip>
     </div>
   );
 
@@ -101,7 +102,7 @@ export function TrackingNumberRow({
     <DetailsPanelRow
       label={label}
       headerAccessory={headerAccessory ? (
-        <span className={headerAccessoryClassName || 'text-micro font-black uppercase tracking-wide text-gray-500'}>
+        <span className={headerAccessoryClassName || 'text-micro font-black uppercase tracking-wide text-text-soft'}>
           {headerAccessory}
         </span>
       ) : null}
@@ -120,14 +121,14 @@ export function TrackingNumberRow({
           }}
           placeholder={placeholder}
           autoFocus
-          className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0"
+          className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-text-default outline-none ring-0"
         />
       ) : allowEdit ? (
-        <button type="button" onClick={() => setIsEditing(true)} className="block w-full py-0 text-left">
-          <p className="truncate text-sm font-bold text-gray-900">{displayValue || placeholder}</p>
+        <button type="button" onClick={() => setIsEditing(true)} className="ds-raw-button block w-full py-0 text-left">
+          <p className="truncate text-sm font-bold text-text-default">{displayValue || placeholder}</p>
         </button>
       ) : (
-        <p className="truncate text-sm font-bold text-gray-900">{displayValue || placeholder}</p>
+        <p className="truncate text-sm font-bold text-text-default">{displayValue || placeholder}</p>
       )}
     </DetailsPanelRow>
   );

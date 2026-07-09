@@ -28,8 +28,8 @@ function PoMailboxAdminSectionInner() {
   const [view, setView] = useState<'queue' | 'connection'>(oauthReturn ? 'connection' : 'queue');
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-gray-200 bg-white px-3 py-2">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-border-soft bg-surface-card px-3 py-2">
         <SubTab active={view === 'queue'} onClick={() => setView('queue')}>Queue</SubTab>
         <SubTab active={view === 'connection'} onClick={() => setView('connection')}>Connection</SubTab>
       </div>
@@ -37,7 +37,7 @@ function PoMailboxAdminSectionInner() {
       <div className="min-h-0 flex-1 overflow-hidden">
         {view === 'queue' ? (
           <div className="flex h-full min-h-0 w-full flex-col overflow-hidden md:flex-row">
-            <aside className="shrink-0 overflow-y-auto border-b border-gray-200 bg-white md:w-72 md:border-b-0 md:border-r">
+            <aside className="shrink-0 overflow-y-auto border-b border-border-soft bg-surface-card md:w-72 md:border-b-0 md:border-r">
               <UnfoundQueueSidebarToolbar />
             </aside>
             <div className="min-h-0 flex-1 overflow-hidden">
@@ -54,12 +54,13 @@ function PoMailboxAdminSectionInner() {
 
 function SubTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
+    // ds-raw-button: segmented sub-tab toggle (aria-pressed, conditional active fill), not a single DS variant
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={`rounded-md px-3 py-1.5 text-sm font-bold transition-colors ${
-        active ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+        active ? 'bg-surface-inverse text-white' : 'text-text-muted hover:bg-surface-sunken'
       }`}
     >
       {children}

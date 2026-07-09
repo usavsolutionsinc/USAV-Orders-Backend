@@ -54,7 +54,7 @@ export function StepValueControl({
             onSubmit(e.target.value);
           }}
           disabled={busy}
-          className="rounded-md border border-gray-200 px-2 py-1 text-caption font-medium text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+          className="rounded-md border border-border-soft px-2 py-1 text-caption font-medium text-text-default focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
         >
           <option value="">—</option>
           {(step.value_enum ?? []).map((o) => (
@@ -77,17 +77,17 @@ export function StepValueControl({
             }}
             placeholder={isNumeric ? step.value_unit || (kind === 'PERCENT' ? '%' : 'value') : 'value'}
             disabled={busy}
-            className="w-24 rounded-md border border-gray-200 px-2 py-1 text-caption font-medium text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+            className="w-24 rounded-md border border-border-soft px-2 py-1 text-caption font-medium text-text-default placeholder:text-text-faint focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
           />
           {step.value_unit ? (
-            <span className="text-micro font-semibold text-gray-400">{step.value_unit}</span>
+            <span className="text-micro font-semibold text-text-faint">{step.value_unit}</span>
           ) : null}
         </>
       )}
       {band ? (
-        <span className="text-micro font-medium uppercase tracking-wide text-gray-400">pass {band}</span>
+        <span className="text-micro font-medium uppercase tracking-wide text-text-faint">pass {band}</span>
       ) : null}
-      {busy ? <Loader2 className="h-3 w-3 animate-spin text-gray-400" /> : null}
+      {busy ? <Loader2 className="h-3 w-3 animate-spin text-text-faint" /> : null}
     </div>
   );
 }

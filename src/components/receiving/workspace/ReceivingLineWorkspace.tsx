@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { LineEditPanel } from './LineEditPanel';
+import { TriagePanel } from '../triage/TriagePanel';
 import { ReceivingProgressStepper } from './ReceivingProgressStepper';
-import type { ReceivingWorkspaceVariant } from './workspace-capabilities';
+import { TriageProgressStepper } from './TriageProgressStepper';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+
+/** Which de-coupled right-pane panel to render. */
+type ReceivingWorkspaceVariant = 'unbox' | 'triage';
 
 const LABEL_PRINTED_KEY = (lineId: number) => `receiving-label-printed:${lineId}`;
 
@@ -94,42 +96,52 @@ export function ReceivingLineWorkspace({
   }, [row.id, row.receiving_id]);
 
   return (
-    <motion.div
-      key={row.id}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 4 }}
-      transition={{ duration: 0.22, ease: motionBezier.easeOut }}
-      className="flex h-full w-full flex-col bg-gray-50"
+    // Plain wrapper — NO per-line key/crossfade. Switching between sibling lines
+    // of the same carton must be an in-place update, not a remount: the outer
+    // ReceivingRightPane crossfade is keyed on the CARTON (receiving_id), and the
+    // controller re-seeds its per-line state on `row.id` change via effects. A
+    // `key={row.id}` + enter animation here re-mounted the whole workspace on
+    // every line click (the "re-rendering the whole page" jank). Carton→carton
+    // transitions still crossfade via the outer AnimatePresence.
+    <div
+      className="flex h-full w-full flex-col bg-surface-canvas"
+      data-testid="receiving-workspace"
+      // E2E hook: distinguishes a matched-PO carton ('zoho_po') from an unfound
+      // intake carton ('unmatched'), so the scan-resolution spec can assert a
+      // scanned PO# opens the PO workspace and never the Unfound flow.
+      data-receiving-source={String(row.receiving_source ?? '')}
     >
       {/* Step-by-step progress stepper — first row in the workspace now that
           the PO identity hero has been removed. The global header carries the
           PO identity; this stepper + the action bar below it form the second
-          and third rows. */}
-      <ReceivingProgressStepper
-        row={row}
-        photoCount={Math.max(0, Number(row.photo_count ?? 0))}
-        serialCount={Array.isArray(row.serials) ? row.serials.length : 0}
-        isComplete={
-          String(row.workflow_status || '').toUpperCase() === 'DONE' ||
-          String(row.workflow_status || '').toUpperCase() === 'PASSED'
-        }
-        labelPrinted={labelPrinted}
-      />
-
-      {/* ── Body — LineEditPanel handles both matched (Zoho PO) and
-          unmatched (Ecwid-pick) cartons. Branches internally on
-          row.receiving_source so the chrome (header, chips, sticky bar,
-          print, audit, claim) stays identical across the two flows. */}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <LineEditPanel
+          and third rows. Triage and unbox are different stations with
+          different jobs (docs/receiving-triage-redesign-plan.md §3.2) — each
+          gets its own stepper rather than sharing the unbox one. */}
+      {variant === 'triage' ? (
+        <TriageProgressStepper row={row} />
+      ) : (
+        <ReceivingProgressStepper
           row={row}
-          staffId={staffId}
-          itemTotal={nav?.total}
-          variant={variant}
-          onClose={onClose}
+          photoCount={Math.max(0, Number(row.photo_count ?? 0))}
+          serialCount={Array.isArray(row.serials) ? row.serials.length : 0}
+          labelPrinted={labelPrinted}
+          scanDriven={scanDriven}
+          siblingLineCount={nav?.total ?? 1}
         />
+      )}
+
+      {/* ── Body — two de-coupled panels, one per archetype. Triage (the
+          identify-before-unbox pass) is its own lean composition; Unbox is the
+          full editor that handles both matched (Zoho PO) and unmatched
+          (Ecwid-pick) cartons, branching internally on row.receiving_source so
+          its chrome stays identical across those two flows. */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {variant === 'triage' ? (
+          <TriagePanel key="triage" row={row} staffId={staffId} onClose={onClose} />
+        ) : (
+          <LineEditPanel key="unbox" row={row} staffId={staffId} itemTotal={nav?.total} />
+        )}
       </div>
-    </motion.div>
+    </div>
   );
 }

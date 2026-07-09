@@ -74,7 +74,7 @@ export function FbaDraggableLineRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={selected ? 'bg-gray-50/80' : undefined}
+      className={selected ? 'bg-surface-canvas/80' : undefined}
     >
       <FbaSelectedLineRow
         {...rowProps}
@@ -105,7 +105,7 @@ export function FbaDraggableLineRow({
               type="button"
               draggable={html5SidebarDragActive}
               onDragStart={html5SidebarDragActive ? handleNativeDragStart : undefined}
-              className="flex h-4 w-4 cursor-grab items-center justify-center rounded text-gray-300 transition-colors hover:text-gray-500 active:cursor-grabbing"
+              className="ds-raw-button flex h-4 w-4 cursor-grab items-center justify-center rounded text-text-faint transition-colors hover:text-text-soft active:cursor-grabbing"
               aria-label="Drag to move item"
               {...listeners}
               {...attributes}

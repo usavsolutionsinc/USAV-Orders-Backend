@@ -2,6 +2,7 @@ import Ably from 'ably';
 import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import pool from '@/lib/db';
 import {
+  getAiAssistChannelName,
   getAiAssistSessionChannelName,
   getDashboardChannelName,
   getFbaChannelName,
@@ -74,6 +75,13 @@ type ReceivingLogChangedPayload = {
   rowId?: string;
   row?: Record<string, unknown>;
   source: string;
+  /**
+   * Terminal Zoho purchase-receive verdict for this line, emitted from the
+   * mark-received-po background sync so the inline receive checklist can
+   * reconcile its optimistic green checks: 'ok' confirms, 'failed' flips the
+   * card to a retryable failure. Omitted for non-receive updates.
+   */
+  zohoReceive?: 'ok' | 'failed' | 'skipped';
 };
 
 type ReceivingPhotoChangedPayload = {
@@ -146,6 +154,34 @@ async function publishEvent(channel: string, name: string, data: Record<string, 
 export async function publishDashboardUpdate(payload: DashboardUpdatePayload) {
   await publishEvent(getDashboardChannelName(payload.organizationId), payload.type, {
     ...payload,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+export type VoiceEventPayload = {
+  organizationId: string;
+  /** What changed, so the client knows which query keys to invalidate. */
+  kind: 'call' | 'voicemail';
+  /** 'created' | 'updated' — voicemail follow-up resolution also rides 'updated'. */
+  change: 'created' | 'updated';
+  callEventId?: number | null;
+  voicemailId?: number | null;
+};
+
+/**
+ * Nudge the Support page that a call/voicemail landed or changed, so the
+ * Voicemail Workbench and Call Log Monitor refetch (they invalidate
+ * `['voicemails']` / `['call-events']` on receipt). Broadcast on the org
+ * dashboard channel — there is no per-user targeting here (the bell
+ * notification for an assigned follow-up rides publishStaffMessage instead).
+ */
+export async function publishVoiceEvent(payload: VoiceEventPayload) {
+  await publishEvent(getDashboardChannelName(payload.organizationId), 'voice_event', {
+    type: 'voice_event',
+    kind: payload.kind,
+    change: payload.change,
+    callEventId: payload.callEventId ?? null,
+    voicemailId: payload.voicemailId ?? null,
     timestamp: formatPSTTimestamp(),
   });
 }
@@ -544,6 +580,25 @@ export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
   });
 }
 
+/** AI write path (universal-feed plan §2.6): apply/propose/revert of an
+ *  agent_mutation, so the assistant dock's AI-edits tray repaints live. */
+export async function publishAssistantMutation(payload: {
+  organizationId: string;
+  mutationId: number;
+  mutationKind: string;
+  action: string;
+  targetRef: string | null;
+}) {
+  await publishEvent(getAiAssistChannelName(payload.organizationId), 'assistant.mutation', {
+    type: 'assistant.mutation',
+    mutationId: payload.mutationId,
+    mutationKind: payload.mutationKind,
+    action: payload.action,
+    targetRef: payload.targetRef,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
 export async function publishStaffScheduleChanged(payload: StaffScheduleChangedPayload) {
   await publishEvent(getStaffChannelName(payload.organizationId), 'staff.schedule.changed', {
     type: 'staff.schedule.changed',
@@ -663,6 +718,7 @@ export async function publishReceivingLogChanged(payload: ReceivingLogChangedPay
     rowId: payload.rowId,
     row: payload.row,
     source: payload.source,
+    ...(payload.zohoReceive ? { zohoReceive: payload.zohoReceive } : {}),
     timestamp: formatPSTTimestamp(),
   });
 }

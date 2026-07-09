@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Package, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { printHandlingUnitLabel } from '@/lib/print/printHandlingUnitLabel';
 import { toast } from '@/lib/toast';
 import { type AssignedBox, type OpenBox } from './carton-add-types';
@@ -147,31 +148,33 @@ export function BoxTab({
   return (
     <>
       <div className="px-3 pt-3">
-        <button
-          type="button"
-          onClick={() => void mintNew()}
+        <Button
+          variant="primary"
+          size="md"
+          icon={<Plus />}
+          loading={busyId === 'new'}
           disabled={busyId != null || noUnits}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-3 py-2.5 text-label font-bold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => void mintNew()}
+          className="w-full bg-teal-600 hover:bg-teal-700"
         >
-          {busyId === 'new' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           New box &amp; print label · {unitIds.length} {unitIds.length === 1 ? 'unit' : 'units'}
-        </button>
+        </Button>
         {noUnits ? (
-          <p className="mt-1.5 text-center text-micro text-gray-400">
+          <p className="mt-1.5 text-center text-micro text-text-faint">
             Scan a serial first — a box groups the carton&apos;s units.
           </p>
         ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <p className="mb-1.5 text-eyebrow font-black uppercase tracking-widest text-gray-400">Or add to an open box</p>
+        <p className="mb-1.5 text-eyebrow font-black uppercase tracking-widest text-text-faint">Or add to an open box</p>
         {loading ? (
           <div className="flex h-20 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
           </div>
         ) : error ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-800">{error}</div>
         ) : openBoxes.length === 0 ? (
-          <p className="px-1 py-2 text-label text-gray-400">No open boxes yet.</p>
+          <p className="px-1 py-2 text-label text-text-faint">No open boxes yet.</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {openBoxes.map((b) => (
@@ -180,15 +183,15 @@ export function BoxTab({
                   type="button"
                   onClick={() => void assignExisting(b)}
                   disabled={busyId != null || noUnits}
-                  className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-left transition-colors hover:border-teal-300 hover:bg-teal-50/60 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="ds-raw-button flex w-full items-center gap-2 rounded-lg border border-border-soft px-3 py-2 text-left transition-colors hover:border-teal-300 hover:bg-teal-50/60 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Package className="h-4 w-4 shrink-0 text-teal-600" />
-                  <span className="flex-1 truncate text-label font-bold text-gray-900">{b.code}</span>
-                  <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+                  <span className="flex-1 truncate text-label font-bold text-text-default">{b.code}</span>
+                  <span className="text-micro font-semibold uppercase tracking-wider text-text-soft">
                     {b.unit_count} {b.unit_count === 1 ? 'unit' : 'units'}
                     {b.location_name ? ` · ${b.location_name}` : ''}
                   </span>
-                  {busyId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> : null}
+                  {busyId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" /> : null}
                 </button>
               </li>
             ))}

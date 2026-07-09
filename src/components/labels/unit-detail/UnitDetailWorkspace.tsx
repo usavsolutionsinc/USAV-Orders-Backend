@@ -44,7 +44,7 @@ export function UnitDetailWorkspace() {
   const activeAllocation = allocations.find((a) => a.state !== 'RELEASED') ?? null;
 
   return (
-    <div className="flex h-full flex-col bg-gray-50">
+    <div className="flex h-full flex-col bg-surface-canvas">
       <UnitDetailHeader
         unit={unit}
         stock={data.stock}

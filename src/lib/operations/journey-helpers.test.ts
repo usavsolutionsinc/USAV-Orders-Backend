@@ -7,10 +7,13 @@ import {
   decodeCursor,
   mapStationsToSpines,
   resolveSources,
+  resolveBrowseSources,
+  redactAuditDiffs,
   buildBrowseQuery,
   windowBounds,
   JOURNEY_SOURCES,
   type JourneyCursor,
+  type JourneyEvent,
 } from './journey-helpers';
 
 const ORG = '00000000-0000-0000-0000-000000000001' as unknown as OrgId;
@@ -59,6 +62,76 @@ test('resolveSources: default all, sources filter, station/type narrowing', () =
   assert.deepEqual(resolveSources({ types: ['TEST_PASS'] }), ['sal', 'inventory', 'audit']);
   // carrier+warranty get pruned entirely under a station filter.
   assert.deepEqual(resolveSources({ sources: ['carrier', 'warranty'], stations: ['TECH'] }), []);
+});
+
+test('resolveBrowseSources: audit spine is admin-only in browse (plan §3.2 Option B)', () => {
+  // Admin: request passes through untouched (undefined still means "all spines").
+  assert.deepEqual(resolveBrowseSources(undefined, true), { forbidden: false, sources: undefined });
+  assert.deepEqual(resolveBrowseSources(['sal', 'audit'], true), {
+    forbidden: false,
+    sources: ['sal', 'audit'],
+  });
+
+  // Non-admin, no explicit sources → audit silently dropped, feed still served.
+  assert.deepEqual(resolveBrowseSources(undefined, false), {
+    forbidden: false,
+    sources: ['sal', 'inventory', 'carrier', 'warranty'],
+  });
+
+  // Non-admin explicitly asking for the audit spine (alone or among others) → 403.
+  assert.deepEqual(resolveBrowseSources(['audit'], false), { forbidden: true });
+  assert.deepEqual(resolveBrowseSources(['sal', 'audit'], false), { forbidden: true });
+
+  // Non-admin non-audit subset → passes through unchanged.
+  assert.deepEqual(resolveBrowseSources(['sal', 'carrier'], false), {
+    forbidden: false,
+    sources: ['sal', 'carrier'],
+  });
+
+  // Dropping audit must not mutate the shared JOURNEY_SOURCES constant.
+  resolveBrowseSources(undefined, false);
+  assert.deepEqual([...JOURNEY_SOURCES], ['sal', 'inventory', 'audit', 'carrier', 'warranty']);
+});
+
+test('redactAuditDiffs: nulls audit before_data for non-admins only, immutably', () => {
+  const group = {
+    orderId: 1,
+    orderNumber: 'O1',
+    serialNumber: null,
+    trackingNumber: null,
+    station: null,
+  };
+  const events = [
+    {
+      source: 'audit',
+      id: 'audit:5',
+      at: '2026-07-05T00:00:00.000Z',
+      group,
+      raw: {
+        id: 5,
+        created_at: '2026-07-05T00:00:00.000Z',
+        action: 'orders.update',
+        before_data: { s: 'a' },
+        after_data: { s: 'b' },
+        metadata: null,
+        actor_name: 'X',
+      },
+    },
+    { source: 'sal', id: 'sal:9', at: '2026-07-05T00:00:00.000Z', group, raw: { id: 9 } },
+  ] as unknown as JourneyEvent[];
+
+  // Admin: passthrough (same array), values intact.
+  const asAdmin = redactAuditDiffs(events, true);
+  assert.equal(asAdmin, events);
+
+  // Non-admin: audit before_data nulled, after_data kept, non-audit untouched.
+  const asFloor = redactAuditDiffs(events, false);
+  assert.equal((asFloor[0].raw as { before_data: unknown }).before_data, null);
+  assert.deepEqual((asFloor[0].raw as { after_data: unknown }).after_data, { s: 'b' });
+  assert.deepEqual(asFloor[1].raw as unknown, { id: 9 });
+
+  // Immutability: the original event's before_data is not mutated.
+  assert.deepEqual((events[0].raw as { before_data: unknown }).before_data, { s: 'a' });
 });
 
 test('buildBrowseQuery: includes every active spine + keyset, org param first', () => {

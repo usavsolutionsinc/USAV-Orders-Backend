@@ -18,7 +18,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PhotoPeekFan, type PeekCard } from './PhotoPeekFan';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
-import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { receivingPhotosQueryKey, refreshReceivingPhotos } from '@/lib/queries/receiving-queries';
+import { unboxingPhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 
 interface PhotoRow {
   id: number;
@@ -45,19 +46,32 @@ const DEMO_CARDS: PeekCard[] = [
 export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
   receivingId,
   staffId,
+  poRef,
+  photoIntent = 'all',
 }: {
   receivingId: number;
   staffId: number;
+  /** PO# for the info panel source ref + library deep link. */
+  poRef?: string | null;
+  /** Triage shows package/box shots; unbox shows item interior shots. */
+  photoIntent?: 'package' | 'item' | 'all';
 }) {
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => ['receiving-photos', receivingId] as const, [receivingId]);
+  const queryKey = useMemo(
+    () => [...receivingPhotosQueryKey(receivingId), photoIntent] as const,
+    [receivingId, photoIntent],
+  );
 
   const { data } = useQuery<PhotosPayload>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`, { cache: 'no-store' });
+      const params = new URLSearchParams({
+        receivingId: String(receivingId),
+        photoIntent,
+      });
+      const res = await fetch(`/api/receiving-photos?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -65,10 +79,12 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
     staleTime: 10_000,
   });
 
-  const refresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
-    invalidateReceivingFeeds(queryClient);
-  }, [queryClient, queryKey]);
+  const refresh = useCallback(
+    (deletedPhotoId?: number) => {
+      refreshReceivingPhotos(queryClient, receivingId, deletedPhotoId);
+    },
+    [queryClient, receivingId],
+  );
 
   useReceivingPhotosRealtimeRefresh(receivingId, staffId, refresh, staffId > 0 && !!orgId);
 
@@ -82,8 +98,13 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
         .filter((p) => !!p.photoUrl?.trim())
         .slice()
         .sort((a, b) => (Date.parse(b.createdAt) || b.id) - (Date.parse(a.createdAt) || a.id))
-        .map((p) => ({ id: String(p.id), imgUrl: p.photoUrl, alt: p.caption || `Carton photo ${p.id}` })),
-    [data],
+        .map((p) => ({
+          id: String(p.id),
+          imgUrl: p.photoUrl,
+          alt: p.caption || `Carton photo ${p.id}`,
+          meta: unboxingPhotoMeta({ poRef, caption: p.caption, createdAt: p.createdAt }),
+        })),
+    [data, poRef],
   );
 
   const [demoShown, setDemoShown] = useState(2);
@@ -96,7 +117,7 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
 
   const cards = demo ? DEMO_CARDS.slice(0, demoShown) : realCards;
 
-  return <PhotoPeekFan cards={cards} onPhotoDeleted={refresh} />;
+  return <PhotoPeekFan cards={cards} receivingId={receivingId} onPhotoDeleted={(photoId) => refresh(photoId)} />;
 });
 
 export default ReceivingPhotoPeek;

@@ -42,17 +42,49 @@ export function useZohoSync(
 ) {
   const [zohoSyncing, setZohoSyncing] = useState(false);
 
+  /**
+   * Pull-from-Zoho for the whole carton: re-imports the linked PO so
+   * receiving.zoho_notes (PO header notes), receiving_lines.unit_price (price),
+   * and receiving_lines.zoho_notes (item descriptions) all refresh from Zoho.
+   * Returns the freshly-synced carton notes so a caller (the Zoho Notes tab)
+   * can update its draft. No-op without a receiving id.
+   */
+  const syncCartonFromZoho = useCallback(async (): Promise<string | null> => {
+    if (!row.receiving_id) return null;
+    try {
+      const res = await fetch(`/api/receiving/${row.receiving_id}/zoho-sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = (await res.json().catch(() => null)) as { zoho_notes?: string | null } | null;
+
+      // Re-fetch the line so the sidebar/table/panel pick up price + notes.
+      try {
+        const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
+        const lineData = await lineRes.json();
+        if (lineData?.success && lineData.receiving_line) {
+          dispatchLine(lineData.receiving_line as ReceivingLineRow);
+        }
+      } catch { /* line refetch best-effort */ }
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+
+      return (data?.zoho_notes ?? null) as string | null;
+    } catch {
+      return null;
+    }
+  }, [row.receiving_id, row.id, dispatchLine]);
+
   const syncWithZoho = useCallback(async () => {
     if (zohoSyncing) return;
     const tracking = (row.tracking_number || '').trim();
-    if (!tracking) return;
     setZohoSyncing(true);
     try {
       const knownPoId = (row.zoho_purchaseorder_id || '').trim();
 
-      // Fast path: PO ID already known — skip the slow find-po search and
-      // go straight to the single-PO fetch for notes/listing prefill.
-      if (knownPoId) {
+      // Fast path: PO id already known, OR no tracking to search by — skip the
+      // find-po search and just refresh the line, prefill from the PO, and pull
+      // the carton (notes + price + descriptions) from Zoho.
+      if (knownPoId || !tracking) {
         // Re-fetch the line to pick up any server-side changes.
         const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
         const lineData = await lineRes.json();
@@ -60,19 +92,24 @@ export function useZohoSync(
           dispatchLine(lineData.receiving_line as ReceivingLineRow);
         }
 
-        // Fetch full PO for notes → prefill listing / zendesk.
-        try {
-          const poRes = await fetch(
-            `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(knownPoId)}`,
-          );
-          const poData = await poRes.json();
-          if (poData?.success && poData.purchaseorder) {
-            const poNotes = (poData.purchaseorder as { notes?: string | null }).notes ?? '';
-            const parsed = parseZendeskListingFromPoNotes(poNotes);
-            if (!listingLink.trim() && parsed.listing) setListingLink(parsed.listing);
-            if (!zendesk.trim() && parsed.zendesk) setZendesk(parsed.zendesk);
-          }
-        } catch { /* PO fetch failed — fields stay as-is */ }
+        // Fetch full PO for notes → prefill listing / zendesk (PO id required).
+        if (knownPoId) {
+          try {
+            const poRes = await fetch(
+              `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(knownPoId)}`,
+            );
+            const poData = await poRes.json();
+            if (poData?.success && poData.purchaseorder) {
+              const poNotes = (poData.purchaseorder as { notes?: string | null }).notes ?? '';
+              const parsed = parseZendeskListingFromPoNotes(poNotes);
+              if (!listingLink.trim() && parsed.listing) setListingLink(parsed.listing);
+              if (!zendesk.trim() && parsed.zendesk) setZendesk(parsed.zendesk);
+            }
+          } catch { /* PO fetch failed — fields stay as-is */ }
+        }
+
+        // Pull notes + price + descriptions from Zoho into the local carton.
+        await syncCartonFromZoho();
         return;
       }
 
@@ -148,6 +185,10 @@ export function useZohoSync(
           }
         } catch { /* PO fetch failed — fields stay as-is */ }
       }
+
+      // Now that the PO link is established, pull notes + price + descriptions
+      // from Zoho into the local carton.
+      await syncCartonFromZoho();
     } catch {
       /* silent — user can retry */
     } finally {
@@ -165,6 +206,7 @@ export function useZohoSync(
     zendesk,
     setListingLink,
     setZendesk,
+    syncCartonFromZoho,
   ]);
 
   // Workspace header's Refresh button dispatches this so we don't need a
@@ -175,5 +217,5 @@ export function useZohoSync(
     return () => window.removeEventListener('receiving-workspace-refresh-line', handler);
   }, [syncWithZoho]);
 
-  return { zohoSyncing, syncWithZoho };
+  return { zohoSyncing, syncWithZoho, syncCartonFromZoho };
 }

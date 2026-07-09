@@ -27,20 +27,20 @@ export function Calendar({ className, classNames, ...props }: CalendarProps) {
         months: 'flex flex-col sm:flex-row gap-4',
         month: 'space-y-3',
         month_caption: 'flex justify-center pt-1 relative items-center',
-        caption_label: 'text-sm font-semibold text-slate-900',
+        caption_label: 'text-sm font-semibold text-text-default',
         nav: 'flex items-center justify-between absolute inset-x-1 top-1',
         button_previous:
-          'inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors',
+          'inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-sunken hover:text-text-default transition-colors',
         button_next:
-          'inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors',
+          'inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-sunken hover:text-text-default transition-colors',
         month_grid: 'w-full border-collapse space-y-1',
         weekdays: 'flex',
         weekday:
-          'w-9 text-eyebrow font-black uppercase tracking-wider text-slate-400 rounded-md',
+          'w-9 text-eyebrow font-black uppercase tracking-wider text-text-faint rounded-md',
         week: 'flex w-full mt-1',
         day: 'h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20',
         day_button:
-          'inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors aria-selected:bg-blue-600 aria-selected:text-white aria-selected:hover:bg-blue-700',
+          'inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:bg-blue-50 hover:text-blue-700 transition-colors aria-selected:bg-blue-600 aria-selected:text-white aria-selected:hover:bg-blue-700',
         range_start:
           'rounded-l-md bg-blue-100 [&_button]:bg-blue-600 [&_button]:text-white',
         range_end:

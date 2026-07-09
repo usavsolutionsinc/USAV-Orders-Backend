@@ -14,6 +14,8 @@
  *   - customer.subscription.updated
  *   - customer.subscription.deleted
  *   - checkout.session.completed (links the org to the new sub)
+ *   - invoice.payment_failed    (dunning: mark the mirror past_due)
+ *   - invoice.payment_succeeded (recovery: clear past_due back to active)
  *
  * Everything else is ack-logged and dropped so we don't accidentally
  * mutate state on an event we don't model yet.
@@ -21,7 +23,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyStripeSignature } from '@/lib/billing/stripe';
-import { recordStripeEvent, markStripeEventProcessed, upsertSubscription } from '@/lib/billing/subscriptions';
+import {
+  recordStripeEvent, markStripeEventProcessed, upsertSubscription,
+  getOrgIdByStripeRef, markSubscriptionStatus, clearPastDue,
+} from '@/lib/billing/subscriptions';
 import { setOrgStripeIds } from '@/lib/tenancy';
 import type { OrgId } from '@/lib/tenancy/constants';
 
@@ -58,6 +63,29 @@ interface StripeCheckoutSessionPayload {
   customer: string;
   subscription: string | null;
   metadata?: { organization_id?: string };
+}
+
+interface StripeInvoicePayload {
+  id: string;
+  customer: string | null;
+  // `subscription` is top-level on the API version we pin; newer versions moved
+  // it under `parent.subscription_details.subscription` / the line items. Read
+  // all shapes defensively so a version drift never drops the dunning signal.
+  subscription?: string | null;
+  parent?: { subscription_details?: { subscription?: string | null } | null } | null;
+  lines?: { data?: Array<{ subscription?: string | null }> };
+  metadata?: { organization_id?: string };
+}
+
+/** Best-effort extraction of the subscription id from any invoice payload shape. */
+function invoiceSubscriptionId(inv: StripeInvoicePayload): string | null {
+  if (typeof inv.subscription === 'string') return inv.subscription;
+  const nested = inv.parent?.subscription_details?.subscription;
+  if (typeof nested === 'string') return nested;
+  for (const line of inv.lines?.data ?? []) {
+    if (typeof line.subscription === 'string') return line.subscription;
+  }
+  return null;
 }
 
 interface StripeEvent {
@@ -132,6 +160,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const session = event.data.object as StripeCheckoutSessionPayload;
         if (orgId && session.customer && session.subscription) {
           await setOrgStripeIds(orgId, session.customer, session.subscription);
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed':
+      case 'invoice.payment_succeeded': {
+        // Dunning. Invoices carry no org metadata (Stripe puts it on the
+        // subscription), so resolve the org from the mirror by sub/customer id.
+        const invoice = event.data.object as StripeInvoicePayload;
+        const subscriptionId = invoiceSubscriptionId(invoice);
+        const customerId = typeof invoice.customer === 'string' ? invoice.customer : null;
+        // One-off invoices with no subscription have no dunning state to mirror.
+        if (!subscriptionId && !customerId) break;
+        const invoiceOrgId = orgId ?? await getOrgIdByStripeRef({ subscriptionId, customerId });
+        if (!invoiceOrgId) break; // Invoice for a customer/sub we don't mirror.
+
+        if (event.type === 'invoice.payment_failed') {
+          await markSubscriptionStatus(invoiceOrgId, 'past_due');
+        } else {
+          await clearPastDue(invoiceOrgId);
         }
         break;
       }

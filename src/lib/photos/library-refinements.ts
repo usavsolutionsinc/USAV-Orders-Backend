@@ -32,37 +32,20 @@ export function buildPhotoLibraryRefinements(
 ): FilterRefinement[] {
   const out: FilterRefinement[] = [];
 
-  const datePreset = datePresetFromFilters(filters);
-  if (datePreset !== 'all') {
-    out.push({
-      id: 'date',
-      label: DATE_PRESET_LABELS[datePreset],
-      onRemove: () => actions.setDatePreset('all'),
-    });
-  }
-
-  if (filters.poRef) {
-    out.push({
-      id: 'poRef',
-      label: `PO ${filters.poRef}`,
-      onRemove: () => actions.patch({ poRef: undefined }),
-    });
-  }
-
-  if (filters.receivingId) {
-    out.push({
-      id: 'receivingId',
-      label: `Receiving #${filters.receivingId}`,
-      onRemove: () => actions.patch({ receivingId: undefined }),
-    });
-  }
-
   if (filters.staffId) {
     const staffLabel = context.staffNameForId?.(filters.staffId) ?? `Staff #${filters.staffId}`;
     out.push({
       id: 'staffId',
       label: staffLabel,
       onRemove: () => actions.patch({ staffId: undefined }),
+    });
+  }
+
+  if (filters.label) {
+    out.push({
+      id: 'label',
+      label: `Label: ${filters.label}`,
+      onRemove: () => actions.patch({ label: undefined }),
     });
   }
 

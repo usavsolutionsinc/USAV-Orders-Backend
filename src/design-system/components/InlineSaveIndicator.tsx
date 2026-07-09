@@ -1,11 +1,13 @@
 'use client';
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 interface InlineSaveIndicatorProps {
   state: SaveState;
   errorLabel?: string;
   idleLabel?: string | null;
+  savingLabel?: string;
+  savedLabel?: string;
   className?: string;
 }
 
@@ -13,14 +15,16 @@ export function InlineSaveIndicator({
   state,
   errorLabel = 'Save failed',
   idleLabel = null,
+  savingLabel = 'Saving...',
+  savedLabel = 'Saved',
   className = '',
 }: InlineSaveIndicatorProps) {
   if (state === 'idle' && !idleLabel) return null;
 
   const label = state === 'saving'
-    ? 'Saving...'
+    ? savingLabel
     : state === 'saved'
-      ? 'Saved'
+      ? savedLabel
       : state === 'error'
         ? errorLabel
         : idleLabel;
@@ -31,10 +35,13 @@ export function InlineSaveIndicator({
       ? 'text-emerald-600'
       : state === 'error'
         ? 'text-red-600'
-        : 'text-gray-400';
+        : 'text-text-faint';
 
   return (
-    <span className={`shrink-0 text-eyebrow font-black uppercase tracking-[0.10rem] leading-none ${toneClassName} ${className}`.trim()}>
+    <span
+      role="status"
+      className={`shrink-0 text-eyebrow font-black uppercase tracking-[0.10rem] leading-none ${toneClassName} ${className}`.trim()}
+    >
       {label}
     </span>
   );

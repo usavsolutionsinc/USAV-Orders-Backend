@@ -6,6 +6,7 @@ import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
 import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
 import { recordInventoryEvent } from '@/lib/inventory/events';
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
+import { recordLabelPrintJob } from '@/lib/labels/print-jobs';
 
 /**
  * POST /api/post-multi-sn — issue label(s) for a SKU + record the audit trail.
@@ -87,6 +88,8 @@ export const POST = withAuth(
     const condition: ConditionGrade = (VALID_CONDITIONS as readonly string[]).includes(conditionRaw)
       ? (conditionRaw as ConditionGrade)
       : 'BRAND_NEW';
+    const clientEventId =
+      typeof body.clientEventId === 'string' ? body.clientEventId.trim() || null : null;
     const gtin = typeof body.gtin === 'string' ? body.gtin.trim() || null : null;
     const qrPayload = typeof body.qrPayload === 'string' ? body.qrPayload.trim() || null : null;
     const symbology =
@@ -223,6 +226,30 @@ export const POST = withAuth(
         }, undefined, ctx.organizationId);
       } catch (err) {
         console.warn('[post-multi-sn] recordInventoryEvent failed (non-fatal)', err);
+      }
+
+      // 5. Immutable print-ledger row (audit-grade serial↔label pairing). Records
+      //    the exact DataMatrix payload + the unit_uid snapshot for THIS unit.
+      //    A relabel of an already-LABELED unit is marked is_reprint. Idempotent
+      //    per (org, clientEventId:serial) so a retry is a no-op. Non-fatal —
+      //    the label already printed client-side; the ledger records it.
+      try {
+        await recordLabelPrintJob(
+          {
+            jobType: 'UNIT',
+            serialUnitId,
+            unitUid: effectiveUid,
+            qrPayload: qrPayload ?? effectiveUid ?? serial,
+            symbology: symbology ?? 'datamatrix',
+            templateId: 'product',
+            isReprint: upserted.prior_status === 'LABELED',
+            actorStaffId: actorId,
+            clientEventId: clientEventId ? `${clientEventId}:${serial}` : null,
+          },
+          orgId,
+        );
+      } catch (err) {
+        console.warn('[post-multi-sn] label_print_jobs insert failed (non-fatal)', err);
       }
     }
 

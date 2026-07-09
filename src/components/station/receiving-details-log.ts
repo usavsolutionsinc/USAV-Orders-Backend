@@ -30,6 +30,10 @@ export interface ReceivingDetailsLog {
   tracking_scanned_at?: string | null;
   tracking_scanned_by?: number | null;
   tracking_scanned_by_name?: string | null;
+  /** Carton opened via a scan on the Unbox workspace (`receiving.unbox_opened_at`). */
+  unbox_opened_at?: string | null;
+  unbox_opened_by?: number | null;
+  unbox_opened_by_name?: string | null;
   unboxed_by_name?: string | null;
   received_by_name?: string | null;
   zoho_purchase_receive_id?: string | null;

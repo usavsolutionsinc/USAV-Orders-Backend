@@ -98,6 +98,11 @@ const CALL_SITES = [
   '../tech/insertTechSerialForTracking.ts',
   '../tech/insertTechSerialForSalContext.ts',
   '../../app/api/post-multi-sn/route.ts',
+  // Legacy Google-Sheets importer: the tech-sheet TSN write now routes through
+  // the helper too (relational-reuse plan §2 raw-writer migration). Its sibling
+  // sheet syncs (execute-script / receiving/serials) stay raw by design — see
+  // the plan §2.3 for why each is not a clean drop-in.
+  '../../app/api/sync-sheets/route.ts',
 ];
 
 for (const rel of CALL_SITES) {

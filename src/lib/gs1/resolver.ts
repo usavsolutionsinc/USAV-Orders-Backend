@@ -43,11 +43,12 @@ export interface ResolverResult {
   matchedAi?: string;
 }
 
-/** Lookup surface — overridable for tests. */
+/** Lookup surface — overridable for tests. Each fn accepts the caller's org
+ *  (undefined for anonymous/public scans, which never reach resolveInternal). */
 export interface LookupDeps {
-  getLocationByBarcode: (barcode: string) => Promise<{ id: number } | null>;
-  findByNormalizedSerial: (serial: string) => Promise<{ id: number } | null>;
-  getSkuCatalogByGtin: (gtin: string) => Promise<{ sku: string } | null>;
+  getLocationByBarcode: (barcode: string, orgId?: string) => Promise<{ id: number } | null>;
+  findByNormalizedSerial: (serial: string, orgId?: string) => Promise<{ id: number } | null>;
+  getSkuCatalogByGtin: (gtin: string, orgId?: string) => Promise<{ sku: string } | null>;
 }
 
 const defaultDeps: LookupDeps = {
@@ -82,9 +83,10 @@ export function resolvePublic(_ctx: Gs1Context): ResolverResult {
 export async function resolveInternal(
   ctx: Gs1Context,
   deps: LookupDeps = defaultDeps,
+  orgId?: string,
 ): Promise<ResolverResult> {
   if (ctx.locationCode) {
-    const row = await deps.getLocationByBarcode(ctx.locationCode).catch(() => null);
+    const row = await deps.getLocationByBarcode(ctx.locationCode, orgId).catch(() => null);
     return {
       kind: 'location',
       redirect: `/inventory?bin=${encodeURIComponent(ctx.locationCode)}`,
@@ -94,7 +96,7 @@ export async function resolveInternal(
   }
 
   if (ctx.serial) {
-    const row = await deps.findByNormalizedSerial(ctx.serial).catch(() => null);
+    const row = await deps.findByNormalizedSerial(ctx.serial, orgId).catch(() => null);
     return {
       kind: 'serial-unit',
       redirect: `/serial/${encodeURIComponent(ctx.serial)}`,
@@ -104,7 +106,7 @@ export async function resolveInternal(
   }
 
   if (ctx.gtin) {
-    const row = await deps.getSkuCatalogByGtin(ctx.gtin).catch(() => null);
+    const row = await deps.getSkuCatalogByGtin(ctx.gtin, orgId).catch(() => null);
     if (row?.sku) {
       return {
         kind: 'sku',
@@ -129,7 +131,7 @@ export async function resolveInternal(
  */
 export async function resolveGs1(
   rawInput: string,
-  opts: { isInternal: boolean; deps?: LookupDeps },
+  opts: { isInternal: boolean; deps?: LookupDeps; orgId?: string },
 ): Promise<ResolverResult> {
   const ctx = parseGs1DigitalLink(rawInput);
   if (!ctx) {
@@ -138,6 +140,6 @@ export async function resolveGs1(
       : { kind: 'public', redirect: PUBLIC_LANDING_URL };
   }
   return opts.isInternal
-    ? resolveInternal(ctx, opts.deps ?? defaultDeps)
+    ? resolveInternal(ctx, opts.deps ?? defaultDeps, opts.orgId)
     : resolvePublic(ctx);
 }

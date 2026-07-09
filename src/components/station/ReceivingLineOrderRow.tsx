@@ -19,6 +19,7 @@ import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentity
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { DeliveryStateIcon } from '@/components/station/ReceivingDeliveryStateIcon';
 import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   dashboardOrderRowChipsClass,
   dashboardOrderRowShellClass,
@@ -92,8 +93,8 @@ export function ReceivingLineOrderRow({
       aria-checked={selectMode ? isSelected : undefined}
       aria-pressed={selectMode ? undefined : isSelected}
       aria-label={`Select receiving line ${row.id}`}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
-        isSelected ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-border-hairline px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+        isSelected ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-surface-canvas/40' : 'bg-surface-card'
       }`}
     >
       <div className="flex min-w-0 flex-col">
@@ -102,7 +103,7 @@ export function ReceivingLineOrderRow({
             selectMode ? (
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                  isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                  isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-border-default bg-surface-card'
                 }`}
               >
                 {isSelected && <Check className="h-3 w-3" />}
@@ -125,20 +126,19 @@ export function ReceivingLineOrderRow({
           indent={selectMode ? `calc(${META_COL.indentWide} + 1.5rem)` : META_COL.indentWide}
           qtyCol={META_COL.qtyColWide}
           qty={
-            <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-500'}>
+            <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-text-soft'}>
               {quantityText}
             </span>
           }
-          condition={<span className={condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-gray-400'}>{conditionLabel}</span>}
+          condition={<span className={condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-text-faint'}>{conditionLabel}</span>}
           rest={
             <div className="flex items-center gap-2">
               {/* History timeline: door-scan ("scanned at") and unbox times +
                   who. Gated on data so incoming/expected rows stay clean.
                   Desktop-only — the mobile table isn't the history surface. */}
               {!isIncoming && (row.scanned_at || row.received_at || row.unboxed_at) ? (
-                <span
-                  className="hidden items-center gap-1.5 text-eyebrow font-semibold text-gray-400 sm:inline-flex"
-                  title={[
+                <HoverTooltip
+                  label={[
                     fmtShortTs(row.scanned_at ?? row.received_at)
                       ? `Scanned ${fmtShortTs(row.scanned_at ?? row.received_at)}${row.scanned_by_name ? ` by ${row.scanned_by_name}` : ''}`
                       : '',
@@ -146,14 +146,18 @@ export function ReceivingLineOrderRow({
                       ? `Unboxed ${fmtShortTs(row.unboxed_at)}${row.unboxed_by_name ? ` by ${row.unboxed_by_name}` : ''}`
                       : '',
                   ].filter(Boolean).join(' · ')}
+                  asChild
+                  focusable={false}
                 >
-                  {fmtShortTs(row.scanned_at ?? row.received_at) ? (
-                    <span>↓ {fmtShortTs(row.scanned_at ?? row.received_at)}{row.scanned_by_name ? ` · ${row.scanned_by_name}` : ''}</span>
-                  ) : null}
-                  {fmtShortTs(row.unboxed_at) ? (
-                    <span>📦 {fmtShortTs(row.unboxed_at)}{row.unboxed_by_name ? ` · ${row.unboxed_by_name}` : ''}</span>
-                  ) : null}
-                </span>
+                  <span className="hidden items-center gap-1.5 text-eyebrow font-semibold text-text-faint sm:inline-flex">
+                    {fmtShortTs(row.scanned_at ?? row.received_at) ? (
+                      <span>↓ {fmtShortTs(row.scanned_at ?? row.received_at)}{row.scanned_by_name ? ` · ${row.scanned_by_name}` : ''}</span>
+                    ) : null}
+                    {fmtShortTs(row.unboxed_at) ? (
+                      <span>📦 {fmtShortTs(row.unboxed_at)}{row.unboxed_by_name ? ` · ${row.unboxed_by_name}` : ''}</span>
+                    ) : null}
+                  </span>
+                </HoverTooltip>
               ) : null}
               {/* Workflow status icon: shown in the active receive workspace,
                   hidden in History (received is implied; EXPECTED doesn't apply
@@ -173,6 +177,7 @@ export function ReceivingLineOrderRow({
       </div>
 
       <ReceivingIdentityChips
+        row={row}
         po={poValue}
         sku={skuValue}
         tracking={trackingValue}

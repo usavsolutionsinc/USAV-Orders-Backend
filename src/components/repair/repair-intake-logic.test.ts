@@ -5,6 +5,11 @@ import {
   buildInitialFormData,
   formatPhone,
   isContactFieldValid,
+  canSubmitRepairIntake,
+  getRepairSubmitBlockReason,
+  hasRepairIssue,
+  isContactComplete,
+  isProductSelected,
 } from './repair-intake-logic';
 
 // ─── buildInitialFormData ─────────────────────────────────────────────────────
@@ -47,6 +52,31 @@ test('isContactFieldValid: extras require a serial (price defaults to 130)', () 
 
 test('isContactFieldValid: email is always optional', () => {
   assert.equal(isContactFieldValid('email', baseForm), true);
+});
+
+test('canSubmitRepairIntake: requires product, issue, contact, and signature', () => {
+  const complete = {
+    ...baseForm,
+    product: { type: 'Bose Repair Service', model: 'QC45', sourceSku: 'SKU-RS' },
+    repairNotes: 'No power',
+    customer: { name: 'Jo', phone: '555-123-4567', email: '' },
+    serialNumber: 'SN1',
+    price: '130',
+  };
+  assert.equal(canSubmitRepairIntake(complete, true), true);
+  assert.equal(canSubmitRepairIntake(complete, false), false);
+  assert.equal(canSubmitRepairIntake({ ...complete, repairNotes: '', repairReasons: [] }, true), false);
+  assert.equal(canSubmitRepairIntake({ ...complete, product: { type: '', model: '', sourceSku: null } }, true), false);
+  assert.equal(canSubmitRepairIntake({ ...complete, serialNumber: '' }, true), false);
+});
+
+test('getRepairSubmitBlockReason: names the first missing requirement', () => {
+  assert.equal(getRepairSubmitBlockReason(baseForm, false), 'Select a repair product to submit');
+  const withProduct = {
+    ...baseForm,
+    product: { type: 'Bose Repair Service', model: 'QC45', sourceSku: null },
+  };
+  assert.equal(getRepairSubmitBlockReason(withProduct, false), 'Issue or repair notes required to submit');
 });
 
 // ─── formatPhone ──────────────────────────────────────────────────────────────

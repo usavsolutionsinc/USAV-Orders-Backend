@@ -29,7 +29,7 @@ test.describe('Testing mode — SKU pre-pack scan', () => {
   test('testing scan bar exposes a SKU route and arms it like the receiving modes', async ({
     page,
   }) => {
-    await page.goto('/tech?view=testing');
+    await page.goto('/test?view=testing');
 
     // Stable chrome: the testing scan input band carries data-testing-scan.
     const scanBand = page.locator('[data-testing-scan]');
@@ -54,7 +54,7 @@ test.describe('Testing mode — SKU pre-pack scan', () => {
   test('a SKU scan resolves to its pre-packed line (best-effort prefill)', async ({
     page,
   }) => {
-    await page.goto('/tech?view=testing');
+    await page.goto('/test?view=testing');
 
     const scanBand = page.locator('[data-testing-scan]');
     await expect(scanBand).toBeVisible({ timeout: BOOT_TIMEOUT });
@@ -82,5 +82,42 @@ test.describe('Testing mode — SKU pre-pack scan', () => {
 
     // No crash: the scan band stays mounted and interactive after resolution.
     await expect(scanBand).toBeVisible();
+  });
+
+  test('multi-match picker rows preview the matched serial chips (best-effort)', async ({
+    page,
+  }) => {
+    await page.goto('/test?view=testing');
+
+    const scanBand = page.locator('[data-testing-scan]');
+    await expect(scanBand).toBeVisible({ timeout: BOOT_TIMEOUT });
+
+    // Phase 0 acknowledgement contract: when a scan resolves to MULTIPLE lines
+    // (duplicate SKUs on a PO / a shared serial), the disambiguation picker must
+    // show a serial-chip preview on every row whose serials are loaded — so the
+    // operator can see WHICH serial matched which line before picking.
+    //
+    // Surfacing a multi-match picker needs seeded data (a PO with duplicate SKUs)
+    // the unseeded test DB may lack, so this is best-effort in this file's style:
+    // if the picker surfaces with serial-loaded rows, at least one serial chip
+    // (`[data-serial-chip]`) must render; otherwise the test skips cleanly. The
+    // selector contract itself is what this guards against regression.
+    const skuRoute = scanBand.getByRole('button', { name: /Arm SKU|SKU armed/i });
+    await skuRoute.click();
+    await scanBand.getByRole('textbox').fill('PREPACK-SMOKE-SKU');
+    await scanBand.getByRole('textbox').press('Enter');
+
+    const picker = page.locator('[data-testing-picker]');
+    const hasPicker = await picker
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (!hasPicker) {
+      test.skip(true, 'no multi-match picker in this environment (needs duplicate-SKU seed)');
+    }
+
+    // If any picker row carries loaded serials, the preview chips must be present.
+    const chipCount = await picker.locator('[data-serial-chip]').count();
+    expect(chipCount).toBeGreaterThan(0);
   });
 });

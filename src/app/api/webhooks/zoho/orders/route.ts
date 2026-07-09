@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestOrder, type OrderIntakeLine } from '@/lib/inventory/order-intake';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { safeStrEqual } from '@/lib/security/safe-compare';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
     );
   }
   const provided = request.headers.get('x-zoho-webhook-secret');
-  if (provided !== expected) {
+  if (!provided || !safeStrEqual(provided, expected)) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 

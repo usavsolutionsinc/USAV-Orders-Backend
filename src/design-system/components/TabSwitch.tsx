@@ -35,7 +35,7 @@ const colorTextMap: Record<string, { active: string; shadow: string }> = {
   purple:  { active: 'text-purple-600',  shadow: '0 1px 4px 0 rgb(147 51 234 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
   green:   { active: 'text-emerald-600', shadow: '0 1px 4px 0 rgb(16 185 129 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
   yellow:  { active: 'text-amber-600',   shadow: '0 1px 4px 0 rgb(217 119 6 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
-  gray:    { active: 'text-gray-600',    shadow: '0 1px 4px 0 rgb(0 0 0 / 0.08), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.05)' },
+  gray:    { active: 'text-text-muted',    shadow: '0 1px 4px 0 rgb(0 0 0 / 0.08), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.05)' },
   red:     { active: 'text-red-600',     shadow: '0 1px 4px 0 rgb(220 38 38 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
   teal:    { active: 'text-teal-600',    shadow: '0 1px 4px 0 rgb(20 184 166 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
 };
@@ -48,17 +48,17 @@ const upNextLabelTextClass: Record<string, { active: string; inactive: string }>
   orange:  { active: 'text-orange-600',  inactive: 'text-orange-500 hover:text-orange-600' },
   purple:  { active: 'text-purple-600',  inactive: 'text-purple-500 hover:text-purple-600' },
   yellow:  { active: 'text-amber-600',   inactive: 'text-amber-500 hover:text-amber-600' },
-  gray:    { active: 'text-gray-600',    inactive: 'text-gray-500 hover:text-gray-700' },
+  gray:    { active: 'text-text-muted',    inactive: 'text-text-soft hover:text-text-muted' },
   red:     { active: 'text-red-600',     inactive: 'text-red-500 hover:text-red-600' },
   teal:    { active: 'text-teal-600',    inactive: 'text-teal-500 hover:text-teal-600' },
 };
 
 const upNextRailBaseClass =
-  'rounded-xl bg-neutral-300 p-1.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.14)]';
+  'rounded-xl bg-surface-strong p-1.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.14)]';
 
 /** Shared chrome for sidebar order/view TabSwitch rows (dashboard, repair, etc.). */
 export function SidebarTabSwitchChrome({ children }: { children: ReactNode }) {
-  return <div className="border-b border-gray-300 px-4 py-3">{children}</div>;
+  return <div className="border-b border-border-default px-4 py-3">{children}</div>;
 }
 
 export function TabSwitch({
@@ -73,12 +73,12 @@ export function TabSwitch({
   stationChromeOutlineClassName,
 }: TabSwitchProps) {
   const upNext = variant === 'upNext';
-  const upNextOutline = stationChromeOutlineClassName ?? 'border border-neutral-300';
+  const upNextOutline = stationChromeOutlineClassName ?? 'border border-border-default';
   const defaultRailClass = upNext
     ? `${upNextRailBaseClass} ${upNextOutline}`
     : highContrast
-      ? 'rounded-xl bg-neutral-300 p-1.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.08)]'
-      : 'bg-gray-100 rounded-xl p-1';
+      ? 'rounded-xl bg-surface-strong p-1.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.08)]'
+      : 'bg-surface-sunken rounded-xl p-1';
   const railCombined = railClassName ?? defaultRailClass;
   const railRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -151,7 +151,7 @@ export function TabSwitch({
       >
         <motion.div
           aria-hidden
-          className={`pointer-events-none absolute z-0 rounded-lg bg-white ${
+          className={`pointer-events-none absolute z-0 rounded-lg bg-surface-card ${
             upNext ? upNextOutline : ''
           }`}
           style={{
@@ -189,8 +189,8 @@ export function TabSwitch({
                   : isActive
                     ? colors.active
                     : highContrast
-                      ? 'text-neutral-800 hover:text-neutral-950'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'text-text-default'
+                      : 'text-text-soft hover:text-text-muted'
               }`}
             >
               <motion.span
@@ -214,8 +214,8 @@ export function TabSwitch({
                         : isActive
                           ? 'bg-current/[0.12] text-current'
                           : highContrast
-                            ? 'bg-neutral-600/20 text-neutral-900'
-                            : 'bg-gray-300/70 text-gray-600'
+                            ? 'bg-surface-inverse-soft/20 text-text-default'
+                            : 'bg-surface-strong/70 text-text-muted'
                     }`}
                   >
                     {tab.count > 99 ? '99+' : tab.count}

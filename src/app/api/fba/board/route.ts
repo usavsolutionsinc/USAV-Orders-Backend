@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 /**
  * GET /api/fba/board
@@ -14,6 +16,15 @@ import { withAuth } from '@/lib/auth/withAuth';
  */
 export const GET = withAuth(async (_request: NextRequest, ctx) => {
   try {
+    // Heavy per-scan board aggregation → short-TTL cache; every FBA write busts
+    // fba-board/fba-stage-counts (org-scoped) so the board stays fresh.
+    const pending = await getOrSet<unknown[]>(
+      CACHE_NS.fbaBoard,
+      ctx.organizationId,
+      'board',
+      20,
+      [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaStageCounts],
+      async () => {
     const result = await tenantQuery(
       ctx.organizationId,
       `WITH pending_rows AS (
@@ -126,8 +137,9 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
          c.fnsku ASC`,
       [ctx.organizationId]
     );
-
-    const pending = result.rows;
+    return result.rows;
+      },
+    );
 
     return NextResponse.json({
       success: true,

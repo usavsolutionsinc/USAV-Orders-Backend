@@ -3,7 +3,12 @@ import { randomBytes } from 'crypto';
 import { withAuth } from '@/lib/auth/withAuth';
 import { assertIntegrationKmsConfigured, encryptIntegrationPayload } from '@/lib/integrations/crypto';
 import { getEbayAppCreds } from '@/lib/ebay/credentials';
-import { ebayAuthDomain, ebayScopeString, EBAY_OAUTH_STATE_COOKIE } from '@/lib/ebay/oauth-config';
+import {
+  ebayAuthDomain,
+  ebayScopeStringForRole,
+  normalizeEbayRole,
+  EBAY_OAUTH_STATE_COOKIE,
+} from '@/lib/ebay/oauth-config';
 
 const STATE_COOKIE_MAX_AGE = 600; // 10 min — matches the callback TTL window
 
@@ -19,6 +24,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const accountName = searchParams.get('accountName');
+    // The purchasing-account difference starts here: role=buyer requests the
+    // buyer scope set and is persisted as ebay_accounts.account_role by the callback.
+    const role = normalizeEbayRole(searchParams.get('role'));
 
     if (!accountName?.trim()) {
       return NextResponse.json({ error: 'accountName is required' }, { status: 400 });
@@ -42,6 +50,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       organizationId: ctx.organizationId,
       accountName: accountName.trim(),
       environment: creds.environment,
+      role,
       createdBy: ctx.staffId,
       nonce,
       issuedAt: Date.now(),
@@ -52,7 +61,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       `?client_id=${encodeURIComponent(creds.appId)}` +
       `&redirect_uri=${encodeURIComponent(creds.ruName)}` +
       `&response_type=code` +
-      `&scope=${encodeURIComponent(ebayScopeString())}` +
+      `&scope=${encodeURIComponent(ebayScopeStringForRole(role))}` +
       `&state=${encodeURIComponent(state)}` +
       `&prompt=login`;
 

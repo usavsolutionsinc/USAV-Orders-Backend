@@ -3,7 +3,7 @@
 /**
  * Scan-band presentational components for the receiving sidebar.
  *
- * `ScanBandShell` is the shared animated container (staff-tinted halo + slide-in
+ * `ScanBandShell` is the shared animated container (staff-tinted halo + fade-in
  * entrance). `TriageScanBand` is the tracking-only entry used by the Receiving
  * (triage) surface; `UnboxScanBand` is the mode-toggling entry used by Unbox.
  * Both are thin: they own no scan logic — submit/value are handed down from the
@@ -28,15 +28,15 @@ interface ScanBandShellProps {
 }
 
 /**
- * Animated, staff-tinted container for a scan bar. Entrance is a snappy fade +
- * slide-in from the left so a mode flip feels like the bar is *arriving*.
+ * Animated, staff-tinted container for a scan bar. Opacity-only entrance so
+ * the band is not clipped by sidebar `overflow-hidden` ancestors.
  */
 export function ScanBandShell({ themeColor, children }: ScanBandShellProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       className={cn(receivingScanBandClass, scanBandHaloClass(themeColor), SIDEBAR_GUTTER)}
     >
       {children}
@@ -81,7 +81,7 @@ export function TriageScanBand({
         inputBorderClassName={inputBorderClassName}
         hasRightContent={isResolving}
         rightContent={
-          isResolving ? <Loader2 className="h-4 w-4 animate-spin text-gray-700" /> : null
+          isResolving ? <Loader2 className="h-4 w-4 animate-spin text-text-muted" /> : null
         }
       />
     </ScanBandShell>
@@ -92,7 +92,7 @@ interface UnboxScanBandProps {
   themeColor: StationTheme;
   value: string;
   onChange: (next: string) => void;
-  onSubmit: (mode?: UnboxScanMode) => void;
+  onSubmit: (mode: UnboxScanMode | 'auto') => void;
   inputRef: React.Ref<HTMLInputElement>;
   isResolving: boolean;
   staffId: string;

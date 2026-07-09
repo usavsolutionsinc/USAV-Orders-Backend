@@ -14,6 +14,7 @@
  */
 
 import { useRef } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface RoleColorPickerProps {
   value: string;
@@ -52,49 +53,52 @@ export function RoleColorPicker({ value, onChange, disabled }: RoleColorPickerPr
       {PRESETS.map((p) => {
         const selected = eq(p.hex, value);
         return (
-          <button
-            key={p.hex}
-            type="button"
-            onClick={() => onChange(p.hex)}
-            disabled={disabled}
-            aria-label={`${p.label} (${p.hex})${selected ? ' — selected' : ''}`}
-            title={p.label}
-            className={`relative h-7 w-7 rounded-full ring-2 transition disabled:cursor-not-allowed ${
-              selected ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-gray-300'
-            }`}
-            style={{ backgroundColor: p.hex }}
-          />
+          <HoverTooltip key={p.hex} label={p.label} asChild>
+            {/* ds-raw-button */}
+            <button
+              type="button"
+              onClick={() => onChange(p.hex)}
+              disabled={disabled}
+              aria-label={`${p.label} (${p.hex})${selected ? ' — selected' : ''}`}
+              className={`relative h-7 w-7 rounded-full ring-2 transition disabled:cursor-not-allowed ${
+                selected ? 'ring-border-strong ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
+              }`}
+              style={{ backgroundColor: p.hex }}
+            />
+          </HoverTooltip>
         );
       })}
 
       {/* Custom — opens native color picker for anything off-palette. */}
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={disabled}
-        aria-label="Pick a custom color"
-        title="Custom"
-        className={`relative h-7 w-7 overflow-hidden rounded-full ring-2 transition disabled:cursor-not-allowed ${
-          isCustom ? 'ring-gray-900 ring-offset-2 ring-offset-white' : 'ring-white hover:ring-gray-300'
-        }`}
-        style={{
-          background: isCustom
-            ? value
-            : 'conic-gradient(from 90deg, #ef4444, #f59e0b, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444)',
-        }}
-      >
-        <input
-          ref={inputRef}
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+      <HoverTooltip label="Custom" asChild>
+        {/* ds-raw-button */}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
           disabled={disabled}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          aria-hidden
-        />
-      </button>
+          aria-label="Pick a custom color"
+          className={`relative h-7 w-7 overflow-hidden rounded-full ring-2 transition disabled:cursor-not-allowed ${
+            isCustom ? 'ring-border-strong ring-offset-2 ring-offset-white' : 'ring-white hover:ring-border-default'
+          }`}
+          style={{
+            background: isCustom
+              ? value
+              : 'conic-gradient(from 90deg, #ef4444, #f59e0b, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444)',
+          }}
+        >
+          <input
+            ref={inputRef}
+            type="color"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            className="absolute inset-0 cursor-pointer opacity-0"
+            aria-hidden
+          />
+        </button>
+      </HoverTooltip>
 
-      <code className="rounded-md bg-gray-100 px-1.5 py-0.5 text-micro font-mono text-gray-700">{value}</code>
+      <code className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-micro font-mono text-text-muted">{value}</code>
     </div>
   );
 }

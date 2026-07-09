@@ -1,7 +1,23 @@
 /**
  * Zendesk integration utility for creating repair service tickets via the
  * Zendesk REST API.
+ *
+ * Credentials are per-tenant. Every credential-resolving function takes an
+ * OPTIONAL trailing `orgId`:
+ *   - orgId given  → resolve from the encrypted org vault
+ *     (getIntegrationCredentials(orgId, 'zendesk')). For the USAV org that
+ *     vault read transparently falls back to the ZENDESK_* env vars; any other
+ *     tenant without a vault row resolves to "not configured" (it NEVER silently
+ *     falls back to USAV's Zendesk).
+ *   - orgId omitted → read the ZENDESK_* env vars directly (legacy single-tenant
+ *     path; keeps existing callers compiling + working unchanged).
  */
+
+import {
+    getIntegrationCredentials,
+    type ZendeskCredentials,
+} from '@/lib/integrations/credentials';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 interface RepairTicketData {
     repairServiceId: number;
@@ -55,6 +71,26 @@ function getZendeskAuthConfig(): ZendeskAuthConfig | null {
     return { subdomain, user, apiToken };
 }
 
+/**
+ * Resolve the Zendesk auth config for a tenant.
+ *   - orgId given  → read the org vault (provider 'zendesk'). The vault layer
+ *     itself env-fallbacks ONLY for USAV_ORG_ID, so a non-USAV tenant without a
+ *     vault row resolves to null — never USAV's creds.
+ *   - orgId omitted → legacy env-only path (getZendeskAuthConfig).
+ * Returns null when neither yields a complete credential set, so callers can
+ * degrade gracefully instead of POSTing to the wrong Zendesk.
+ */
+async function resolveZendeskAuthConfig(orgId?: OrgId): Promise<ZendeskAuthConfig | null> {
+    if (orgId == null) {
+        return getZendeskAuthConfig();
+    }
+    const creds = await getIntegrationCredentials<ZendeskCredentials>(orgId, 'zendesk');
+    if (!creds || !creds.subdomain || !creds.email || !creds.apiToken) {
+        return null;
+    }
+    return { subdomain: creds.subdomain, user: creds.email, apiToken: creds.apiToken };
+}
+
 async function zendeskRequest(config: ZendeskAuthConfig, path: string): Promise<any> {
     const auth = Buffer.from(`${config.user}/token:${config.apiToken}`).toString('base64');
     const response = await fetch(`https://${config.subdomain}.zendesk.com${path}`, {
@@ -74,10 +110,13 @@ async function zendeskRequest(config: ZendeskAuthConfig, path: string): Promise<
     return response.json().catch(() => ({}));
 }
 
-export async function getZendeskSupportOverview(limit = 10): Promise<ZendeskSupportOverview> {
-    const config = getZendeskAuthConfig();
-    const fallbackSubdomain = process.env.ZENDESK_SUBDOMAIN || 'usav';
-    const agentUrl = `https://${fallbackSubdomain}.zendesk.com/agent/filters`;
+export async function getZendeskSupportOverview(limit = 10, orgId?: OrgId): Promise<ZendeskSupportOverview> {
+    const config = await resolveZendeskAuthConfig(orgId);
+    // Derive the agent URL from the resolved tenant subdomain. Only fall back to
+    // env (legacy USAV single-tenant) when no orgId was supplied; a non-USAV org
+    // that isn't configured gets a null agentUrl rather than a link to USAV's.
+    const agentSubdomain = config?.subdomain ?? (orgId == null ? process.env.ZENDESK_SUBDOMAIN : undefined);
+    const agentUrl = agentSubdomain ? `https://${agentSubdomain}.zendesk.com/agent/filters` : null;
 
     if (!config) {
         return {
@@ -170,6 +209,7 @@ function calculateDueDate(startDate: Date): string {
 export async function createZendeskTicket(
     data: RepairTicketData,
     opts: { idempotencyKey?: string } = {},
+    orgId?: OrgId,
 ): Promise<string | null> {
     const {
         repairServiceId,
@@ -232,7 +272,7 @@ export async function createZendeskTicket(
         tags: ['repair_service', 'walk_in'],
         external_id: `repair:${repairServiceId}`,
         ...(customerEmail ? { requester: { name: customerName, email: customerEmail } } : {}),
-    }, opts);
+    }, opts, orgId);
 
     return `#${ticket.id}`;
 }
@@ -244,10 +284,10 @@ export async function createZendeskTicket(
  * Script bridge — these helpers talk to the Zendesk REST API directly using
  * the same Basic-auth (email + API token) config as getZendeskSupportOverview.
  *
- * Credentials come from env (ZENDESK_SUBDOMAIN / ZENDESK_EMAIL /
- * ZENDESK_API_TOKEN). To move to the per-org encrypted credential vault
- * later, swap getZendeskAuthConfig() for getIntegrationCredentials(orgId,
- * 'zendesk') — the call shapes below don't change.
+ * Credentials are resolved per-tenant via resolveZendeskAuthConfig(orgId):
+ * the org vault (getIntegrationCredentials(orgId, 'zendesk')) when an orgId is
+ * passed, else the ZENDESK_* env vars. Pass the trailing optional `orgId` on
+ * each helper below to scope the call to a tenant.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /** Thrown when the Zendesk API credentials are not configured. Routes map this to 503. */
@@ -266,12 +306,22 @@ export class ZendeskApiError extends Error {
     }
 }
 
+/**
+ * Synchronous env-only configured check. Kept sync (and env-only) for
+ * backward-compatible callers. For a per-tenant check, await
+ * isZendeskConfiguredForOrg(orgId).
+ */
 export function isZendeskConfigured(): boolean {
     return getZendeskAuthConfig() !== null;
 }
 
-function requireZendeskConfig(): ZendeskAuthConfig {
-    const config = getZendeskAuthConfig();
+/** Per-tenant configured check (vault, USAV env-fallback). */
+export async function isZendeskConfiguredForOrg(orgId?: OrgId): Promise<boolean> {
+    return (await resolveZendeskAuthConfig(orgId)) !== null;
+}
+
+async function requireZendeskConfig(orgId?: OrgId): Promise<ZendeskAuthConfig> {
+    const config = await resolveZendeskAuthConfig(orgId);
     if (!config) throw new ZendeskNotConfiguredError();
     return config;
 }
@@ -280,8 +330,9 @@ function requireZendeskConfig(): ZendeskAuthConfig {
 async function zendeskApiRequest<T = any>(
     path: string,
     init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+    orgId?: OrgId,
 ): Promise<T> {
-    const config = requireZendeskConfig();
+    const config = await requireZendeskConfig(orgId);
     const auth = Buffer.from(`${config.user}/token:${config.apiToken}`).toString('base64');
     const response = await fetch(`https://${config.subdomain}.zendesk.com${path}`, {
         method: init.method ?? 'GET',
@@ -362,14 +413,14 @@ function clampPerPage(perPage?: number): number {
 }
 
 /** List tickets, newest first by default. */
-export async function listTickets(params: ListTicketsParams = {}): Promise<PaginatedTickets> {
+export async function listTickets(params: ListTicketsParams = {}, orgId?: OrgId): Promise<PaginatedTickets> {
     const qs = new URLSearchParams({
         page: String(clampPage(params.page)),
         per_page: String(clampPerPage(params.perPage)),
         sort_by: params.sortBy ?? 'created_at',
         sort_order: params.sortOrder ?? 'desc',
     });
-    const data = await zendeskApiRequest<any>(`/api/v2/tickets.json?${qs.toString()}`);
+    const data = await zendeskApiRequest<any>(`/api/v2/tickets.json?${qs.toString()}`, {}, orgId);
     return {
         tickets: Array.isArray(data?.tickets) ? data.tickets : [],
         count: Number.isFinite(Number(data?.count)) ? Number(data.count) : 0,
@@ -382,6 +433,7 @@ export async function listTickets(params: ListTicketsParams = {}): Promise<Pagin
 export async function searchTickets(
     query: string,
     params: { page?: number; perPage?: number } = {},
+    orgId?: OrgId,
 ): Promise<{ results: ZendeskTicket[]; count: number; next_page: string | null }> {
     const fullQuery = /\btype:/.test(query) ? query : `type:ticket ${query}`.trim();
     const qs = new URLSearchParams({
@@ -391,7 +443,7 @@ export async function searchTickets(
         page: String(clampPage(params.page)),
         per_page: String(clampPerPage(params.perPage)),
     });
-    const data = await zendeskApiRequest<any>(`/api/v2/search.json?${qs.toString()}`);
+    const data = await zendeskApiRequest<any>(`/api/v2/search.json?${qs.toString()}`, {}, orgId);
     const results = (Array.isArray(data?.results) ? data.results : []).filter(
         (r: any) => String(r?.result_type || 'ticket') === 'ticket',
     );
@@ -403,9 +455,9 @@ export async function searchTickets(
 }
 
 /** Fetch a single ticket. Returns null on 404. */
-export async function getTicket(id: number): Promise<ZendeskTicket | null> {
+export async function getTicket(id: number, orgId?: OrgId): Promise<ZendeskTicket | null> {
     try {
-        const data = await zendeskApiRequest<any>(`/api/v2/tickets/${id}.json`);
+        const data = await zendeskApiRequest<any>(`/api/v2/tickets/${id}.json`, {}, orgId);
         return data?.ticket ?? null;
     } catch (err) {
         if (err instanceof ZendeskApiError && err.status === 404) return null;
@@ -426,6 +478,12 @@ export interface CreateTicketInput {
     assignee_id?: number;
     group_id?: number;
     external_id?: string;
+    /**
+     * CC collaborators to add at ticket creation (see {@link ZendeskEmailCc}).
+     * Zendesk only emails CCs on a PUBLIC comment, so pair this with
+     * `comment.public: true` when you want the recipients notified.
+     */
+    email_ccs?: ZendeskEmailCc[];
 }
 
 /**
@@ -445,8 +503,9 @@ export async function uploadFileToZendesk(
     filename: string,
     bytes: Uint8Array,
     contentType = 'application/octet-stream',
+    orgId?: OrgId,
 ): Promise<string> {
-    const config = requireZendeskConfig();
+    const config = await requireZendeskConfig(orgId);
     const auth = Buffer.from(`${config.user}/token:${config.apiToken}`).toString('base64');
     const response = await fetch(
         `https://${config.subdomain}.zendesk.com/api/v2/uploads.json?filename=${encodeURIComponent(filename)}`,
@@ -475,12 +534,13 @@ export async function uploadFileToZendesk(
 export async function createTicket(
     input: CreateTicketInput,
     opts: { idempotencyKey?: string } = {},
+    orgId?: OrgId,
 ): Promise<ZendeskTicket> {
     const data = await zendeskApiRequest<any>(`/api/v2/tickets.json`, {
         method: 'POST',
         body: { ticket: input },
         headers: opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : undefined,
-    });
+    }, orgId);
     return data.ticket;
 }
 
@@ -517,12 +577,13 @@ export interface UpdateTicketInput {
 export async function updateTicket(
     id: number,
     input: UpdateTicketInput,
+    orgId?: OrgId,
 ): Promise<ZendeskTicket | null> {
     try {
         const data = await zendeskApiRequest<any>(`/api/v2/tickets/${id}.json`, {
             method: 'PUT',
             body: { ticket: input },
-        });
+        }, orgId);
         return data?.ticket ?? null;
     } catch (err) {
         if (err instanceof ZendeskApiError && err.status === 404) return null;
@@ -531,9 +592,9 @@ export async function updateTicket(
 }
 
 /** Soft-delete a ticket (Zendesk moves it to the deleted tickets view). Returns false on 404. */
-export async function deleteTicket(id: number): Promise<boolean> {
+export async function deleteTicket(id: number, orgId?: OrgId): Promise<boolean> {
     try {
-        await zendeskApiRequest<void>(`/api/v2/tickets/${id}.json`, { method: 'DELETE' });
+        await zendeskApiRequest<void>(`/api/v2/tickets/${id}.json`, { method: 'DELETE' }, orgId);
         return true;
     } catch (err) {
         if (err instanceof ZendeskApiError && err.status === 404) return false;
@@ -545,6 +606,7 @@ export async function deleteTicket(id: number): Promise<boolean> {
 export async function listTicketComments(
     id: number,
     params: { page?: number; perPage?: number } = {},
+    orgId?: OrgId,
 ): Promise<{ comments: ZendeskComment[]; count: number; next_page: string | null }> {
     const qs = new URLSearchParams({
         page: String(clampPage(params.page)),
@@ -552,6 +614,8 @@ export async function listTicketComments(
     });
     const data = await zendeskApiRequest<any>(
         `/api/v2/tickets/${id}/comments.json?${qs.toString()}`,
+        {},
+        orgId,
     );
     return {
         comments: Array.isArray(data?.comments) ? data.comments : [],
@@ -569,12 +633,13 @@ export async function addTicketComment(
     id: number,
     comment: { body: string; html_body?: string; public?: boolean; uploads?: string[] },
     opts: { emailCcs?: ZendeskEmailCc[] } = {},
+    orgId?: OrgId,
 ): Promise<ZendeskTicket | null> {
     const emailCcs = opts.emailCcs?.filter((cc) => cc.user_email?.trim());
     return updateTicket(id, {
         comment,
         ...(emailCcs?.length ? { email_ccs: emailCcs } : {}),
-    });
+    }, orgId);
 }
 
 export interface ZendeskAgent {
@@ -589,18 +654,22 @@ export interface ZendeskAgent {
  * List agents + admins (the people a ticket can be assigned to). Powers the
  * assignee dropdown. Cached in-process for 5 min — the roster rarely changes.
  */
-let agentCache: { at: number; agents: ZendeskAgent[] } | null = null;
+let agentCache: { at: number; agents: ZendeskAgent[]; scope: OrgId | '__env__' } | null = null;
 const AGENT_CACHE_MS = 5 * 60 * 1000;
 
-export async function listAgents(force = false): Promise<ZendeskAgent[]> {
-    requireZendeskConfig();
+export async function listAgents(force = false, orgId?: OrgId): Promise<ZendeskAgent[]> {
+    await requireZendeskConfig(orgId);
     const now = Date.now();
-    if (!force && agentCache && now - agentCache.at < AGENT_CACHE_MS) {
+    // Cache is scoped per-tenant so one org's roster can't be served to another.
+    const cacheScope = orgId ?? '__env__';
+    if (!force && agentCache && agentCache.scope === cacheScope && now - agentCache.at < AGENT_CACHE_MS) {
         return agentCache.agents;
     }
     // role[]=agent&role[]=admin returns assignable staff only.
     const data = await zendeskApiRequest<any>(
         `/api/v2/users.json?role[]=agent&role[]=admin&per_page=100`,
+        {},
+        orgId,
     );
     const agents: ZendeskAgent[] = (Array.isArray(data?.users) ? data.users : []).map(
         (u: any) => ({
@@ -611,7 +680,7 @@ export async function listAgents(force = false): Promise<ZendeskAgent[]> {
             photo: u?.photo?.content_url ?? null,
         }),
     );
-    agentCache = { at: now, agents };
+    agentCache = { at: now, agents, scope: cacheScope };
     return agents;
 }
 
@@ -630,8 +699,8 @@ export interface ZendeskUser {
  * end users) otherwise have no identity beyond their numeric id. Chunked to
  * Zendesk's 100-ids-per-call limit; returns whatever resolves (best-effort).
  */
-export async function getUsers(ids: number[]): Promise<ZendeskUser[]> {
-    requireZendeskConfig();
+export async function getUsers(ids: number[], orgId?: OrgId): Promise<ZendeskUser[]> {
+    await requireZendeskConfig(orgId);
     const unique = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
     if (!unique.length) return [];
 
@@ -640,6 +709,8 @@ export async function getUsers(ids: number[]): Promise<ZendeskUser[]> {
         const chunk = unique.slice(i, i + 100);
         const data = await zendeskApiRequest<any>(
             `/api/v2/users/show_many.json?ids=${chunk.join(',')}`,
+            {},
+            orgId,
         );
         for (const u of Array.isArray(data?.users) ? data.users : []) {
             out.push({

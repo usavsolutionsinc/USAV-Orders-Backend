@@ -13,6 +13,8 @@ import { query } from '@/lib/neon-client';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { publishScanLog } from '@/lib/realtime/publish';
+import { getOrSet } from '@/lib/cache/upstash-cache';
+import { CACHE_NS, CACHE_TAGS } from '@/lib/cache/tags';
 
 /**
  * GET|POST /api/scan/resolve
@@ -245,15 +247,26 @@ async function resolveSkuByGtin(gtin: string, organizationId: string): Promise<s
   try {
     const cleaned = gtin.replace(/\D/g, '');
     if (!cleaned) return null;
-    const { rows } = await tenantQuery<{ sku: string | null }>(
+    // gtin→sku is stable reference data; cache per (org, gtin), busted by any
+    // sku_catalog write (tag sku-catalog). Negative results aren't cached.
+    return await getOrSet<string | null>(
+      CACHE_NS.skuByGtin,
       organizationId,
-      `SELECT sku FROM sku_catalog
-       WHERE gtin = $1
-         AND organization_id = $2
-       LIMIT 1`,
-      [cleaned, organizationId],
+      cleaned,
+      1800,
+      [CACHE_TAGS.skuCatalog],
+      async () => {
+        const { rows } = await tenantQuery<{ sku: string | null }>(
+          organizationId,
+          `SELECT sku FROM sku_catalog
+           WHERE gtin = $1
+             AND organization_id = $2
+           LIMIT 1`,
+          [cleaned, organizationId],
+        );
+        return rows[0]?.sku ?? null;
+      },
     );
-    return rows[0]?.sku ?? null;
   } catch {
     return null;
   }

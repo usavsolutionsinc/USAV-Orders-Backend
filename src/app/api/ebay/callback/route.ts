@@ -9,8 +9,10 @@ import {
   ebayIdentityEndpoint,
   ebayTokenEndpoint,
   normalizeEbayEnvironment,
+  normalizeEbayRole,
   EBAY_OAUTH_STATE_COOKIE,
 } from '@/lib/ebay/oauth-config';
+import { syncEbayAccountsToPlatformAccounts } from '@/lib/neon/catalog-queries';
 
 /** State freshness window — aligned with the connect cookie's maxAge (10 min). */
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -19,6 +21,8 @@ interface EbayOauthState {
   organizationId: string;
   accountName: string;
   environment?: string;
+  /** 'seller' | 'buyer' — the purchasing-account discriminator (default seller). */
+  role?: string;
   createdBy?: number | null;
   nonce?: string;
   issuedAt?: number;
@@ -65,6 +69,8 @@ export async function GET(req: NextRequest) {
     if (!organizationId || !accountName || !nonce) {
       return finish('error=ebay_incomplete_oauth_state');
     }
+    // Purchasing-account difference: buyer connections are stamped account_role='buyer'.
+    const accountRole = normalizeEbayRole(parsed.role);
 
     // Freshness — reject stale/replayed authorize requests.
     if (!issuedAt || Date.now() - issuedAt > STATE_TTL_MS) {
@@ -136,9 +142,9 @@ export async function GET(req: NextRequest) {
       organizationId,
       `INSERT INTO ebay_accounts (
         organization_id, account_name, ebay_user_id, access_token, refresh_token,
-        token_expires_at, refresh_token_expires_at, marketplace_id, platform, is_active, updated_at
+        token_expires_at, refresh_token_expires_at, marketplace_id, platform, account_role, is_active, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'EBAY', true, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'EBAY', $9, true, NOW())
       ON CONFLICT (organization_id, account_name) DO UPDATE
       SET ebay_user_id            = EXCLUDED.ebay_user_id,
           access_token            = EXCLUDED.access_token,
@@ -146,6 +152,7 @@ export async function GET(req: NextRequest) {
           token_expires_at        = EXCLUDED.token_expires_at,
           refresh_token_expires_at = EXCLUDED.refresh_token_expires_at,
           platform                = 'EBAY',
+          account_role            = EXCLUDED.account_role,
           is_active               = true,
           updated_at              = NOW()`,
       [
@@ -157,8 +164,20 @@ export async function GET(req: NextRequest) {
         tokenExpiresAt,
         refreshTokenExpiresAt,
         'EBAY_US',
+        accountRole,
       ],
     );
+
+    // Keep platform_accounts (catalog + Incoming account chip) aligned with the
+    // new seller row — seedOrgCatalog only runs at org creation, not on connect.
+    try {
+      await syncEbayAccountsToPlatformAccounts(organizationId);
+    } catch (syncErr: unknown) {
+      console.warn(
+        '[ebay/callback] platform_accounts sync failed:',
+        syncErr instanceof Error ? syncErr.message : syncErr,
+      );
+    }
 
     // Audit (no auth context — pass org/actor overrides, the documented path).
     try {
@@ -169,7 +188,7 @@ export async function GET(req: NextRequest) {
         entityId: accountName,
         organizationIdOverride: organizationId,
         actorStaffIdOverride: createdBy ?? null,
-        after: { ebayUserId: ebayUserId || null, environment },
+        after: { ebayUserId: ebayUserId || null, environment, accountRole },
       });
     } catch (auditErr: any) {
       console.warn('[ebay/callback] audit write failed:', auditErr?.message || auditErr);

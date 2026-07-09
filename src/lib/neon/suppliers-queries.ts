@@ -2,12 +2,14 @@ import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 
 // ─── Tenancy note ────────────────────────────────────────────────────────────
-// `suppliers` has no `organization_id` column yet (tenant-owned-NEEDS-COL in
-// docs/tenancy/org-id-coverage.generated.md) and no parent FK to scope through,
-// so there is no column-level predicate to add here. Every statement is run via
-// `tenantQuery`/`withTenantTransaction` so it executes under the per-request
-// `app.current_org` GUC (the RLS backstop) once the suppliers table is given an
-// org column + FORCE in a later phase. Callers must thread the request's orgId.
+// `suppliers` is tenant-owned with `organization_id NOT NULL` + RLS FORCE + a
+// tenant_isolation policy (live catalog, docs/tenancy/org-id-coverage.generated.md).
+// Every statement runs via `tenantQuery`/`withTenantTransaction` so it executes
+// under the per-request `app.current_org` GUC — RLS is the primary enforcement.
+// The by-id read/update/delete ALSO carry an explicit `organization_id = $org`
+// predicate (defense-in-depth) so a cross-org id is a no-op even if a future
+// caller runs on the BYPASSRLS owner pool. INSERTs auto-stamp org from the GUC
+// (loud-fail default). Callers must thread the request's orgId.
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -133,8 +135,8 @@ export async function getSupplierListWithStats(params: {
 export async function getSupplierById(id: number, orgId: OrgId): Promise<SupplierRow | null> {
   const result = await tenantQuery<SupplierRow>(
     orgId,
-    `SELECT * FROM suppliers WHERE id = $1 LIMIT 1`,
-    [id],
+    `SELECT * FROM suppliers WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, orgId],
   );
   return result.rows[0] ?? null;
 }
@@ -144,8 +146,8 @@ export async function getSupplierByEbaySellerId(ebaySellerId: string, orgId: Org
   if (!trimmed) return null;
   const result = await tenantQuery<SupplierRow>(
     orgId,
-    `SELECT * FROM suppliers WHERE ebay_seller_id = $1 LIMIT 1`,
-    [trimmed],
+    `SELECT * FROM suppliers WHERE ebay_seller_id = $1 AND organization_id = $2 LIMIT 1`,
+    [trimmed, orgId],
   );
   return result.rows[0] ?? null;
 }
@@ -252,10 +254,13 @@ export async function updateSupplier(
   if (sets.length === 0) return getSupplierById(id, orgId);
   sets.push(`updated_at = NOW()`);
   values.push(id);
+  const idParam = idx++;
+  values.push(orgId);
+  const orgParam = idx;
 
   const result = await tenantQuery<SupplierRow>(
     orgId,
-    `UPDATE suppliers SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+    `UPDATE suppliers SET ${sets.join(', ')} WHERE id = $${idParam} AND organization_id = $${orgParam} RETURNING *`,
     values,
   );
   return result.rows[0] ?? null;
@@ -266,9 +271,9 @@ export async function softDeleteSupplier(id: number, orgId: OrgId): Promise<Supp
     orgId,
     `UPDATE suppliers
         SET is_active = false, updated_at = NOW()
-      WHERE id = $1 AND is_active = true
+      WHERE id = $1 AND organization_id = $2 AND is_active = true
       RETURNING *`,
-    [id],
+    [id, orgId],
   );
   return result.rows[0] ?? null;
 }

@@ -28,6 +28,10 @@ export function IncomingAttachTrackingButton({
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
+          // ds-allow-title: this button is the `trigger` of IncomingAttachTrackingPopover,
+          // which does cloneElement(trigger, { onClick }) to wire open-on-click. Wrapping it
+          // in HoverTooltip (a fragment-returning component) would make the popover clone the
+          // tooltip instead of the button, dropping the open handler. Keep native title here.
           title="Attach a tracking number to this PO before the box arrives"
           // Sits in the empty tracking chip slot — the shared AddValueChipFace
           // (dashed underline = "nothing here yet, click to add"). Same face the
@@ -35,7 +39,9 @@ export function IncomingAttachTrackingButton({
           // `px-1.5` mirrors CopyChip's `outerPad='chip'` gutter so this empty
           // state lines up flush with the filled TrackingChip below it in the
           // ChipColumns grid (whose `-mr-1.5` cancels that same trailing gutter).
-          className="inline-flex shrink-0 items-center px-1.5 transition-colors"
+          // ds-raw-button: passed as `trigger` to IncomingAttachTrackingPopover, which
+          // cloneElement()s it to wire open-on-click — must stay a native <button>.
+          className="ds-raw-button inline-flex shrink-0 items-center px-1.5 transition-colors"
         >
           <AddValueChipFace label="+ TRK#" icon={<Link2 className="h-3.5 w-3.5 shrink-0" />} size="chip" />
         </button>

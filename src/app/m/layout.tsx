@@ -1,16 +1,16 @@
 'use client';
 
+import { PhotoUploadToaster } from '@/components/mobile/receiving/PhotoUploadToaster';
+
 /**
- * Layout shared by every /m/* route. 
- * Updated to use the 2026 Mobile Design System Shell.
+ * Root mobile layout — shared services only. Tab chrome lives in (shell);
+ * fullscreen photo flows live in (immersive).
  */
-
-import { RedesignedMobileShell } from '@/components/mobile/redesign/MobileShell';
-
-export default function MobileLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return <RedesignedMobileShell>{children}</RedesignedMobileShell>;
+export default function MobileRootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {children}
+      <PhotoUploadToaster />
+    </>
+  );
 }

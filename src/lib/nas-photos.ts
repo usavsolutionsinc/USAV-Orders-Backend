@@ -260,13 +260,16 @@ export function buildNasLabelUrl(opts: {
   folder: string;
   orderRef: string;
   filename: string;
+  /** Eyeball-distinct doc-kind prefix. Defaults to 'LABEL' for the original
+   * shipping-label caller; outbound packing slips pass 'SLIP'. */
+  kindPrefix?: string;
 }): string {
-  const { baseUrl, folder, orderRef, filename } = opts;
+  const { baseUrl, folder, orderRef, filename, kindPrefix = 'LABEL' } = opts;
   const sanitized = (orderRef ?? '')
     .trim()
     .replace(/[^A-Za-z0-9._-]+/g, '_')
     .replace(/^_+|_+$/g, '');
-  const prefix = `LABEL_${sanitized || 'order'}__`;
+  const prefix = `${kindPrefix}_${sanitized || 'order'}__`;
   const segments: string[] = [];
   const cleanFolder = (folder || '').replace(/^\/+|\/+$/g, '');
   if (cleanFolder) segments.push(...cleanFolder.split('/'));

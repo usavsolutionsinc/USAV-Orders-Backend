@@ -69,7 +69,7 @@ export function GaugeDonut({
     <div className={cn('flex flex-col items-center', className)}>
       <svg width={size} height={height} role="img" aria-label={`${centerLabel} gauge`}>
         {/* track */}
-        <g className="text-gray-200">
+        <g className="text-surface-strong">
           <path
             d={arcPath(cx, cy, r, 180, 360)}
             fill="none"
@@ -92,13 +92,13 @@ export function GaugeDonut({
           />
         ))}
         {/* center readout — currentColor so it inherits the dark-mode remap */}
-        <g className="text-gray-900">
+        <g className="text-text-default">
           <text x={cx} y={cy - r * 0.18} textAnchor="middle" fill="currentColor" className="text-2xl font-black tabular-nums">
             {sum.toLocaleString()}
           </text>
         </g>
-        <g className="text-gray-400">
-          <text x={cx} y={cy + 4} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-[0.18em]">
+        <g className="text-text-faint">
+          <text x={cx} y={cy + 4} textAnchor="middle" fill="currentColor" className="text-micro font-bold uppercase tracking-[0.18em]">
             {centerLabel}
           </text>
         </g>

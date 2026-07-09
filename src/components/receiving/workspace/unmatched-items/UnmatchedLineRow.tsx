@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { Trash2 } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { toast } from '@/lib/toast';
 import { SerialCard, SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 import {
@@ -11,8 +12,9 @@ import {
 } from '@/components/receiving/workspace/SerialMatchResult';
 import { markConditionSet } from '@/components/receiving/workspace/ReceivingProgressStepper';
 import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
-import { SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
-import { ConditionBadge, ProgressBadge } from '@/components/receiving/workspace/PoLinesAccordion';
+import { ConditionGradeChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
+import { ProgressBadge } from '@/components/receiving/workspace/PoLinesAccordion';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { UnfoundLine, UnmatchedLineRenderHelpers } from './unmatched-items-shared';
 
 interface UnmatchedLineRowProps {
@@ -138,26 +140,25 @@ export function UnmatchedLineRow({
           />
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-label font-bold text-gray-900">
+          <div className="truncate text-label font-bold text-text-default">
             {line.item_name ?? line.sku ?? `Line ${line.id}`}
           </div>
-          {/* Meta row — EXACTLY PoLinesAccordion's second row (qty ·
-              condition · sku chip · serial chips, shared badge components)
-              so an unfound / auto-generated-from-serial line reads the same
-              as a matched PO item. */}
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
+          {/* Meta row — indented under title when a leading track exists
+              (PoLinesAccordion uses META_COL.indentWide); unfound rows have
+              no chevron so meta starts flush left. */}
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-text-soft">
             <ProgressBadge
               received={line.quantity_received ?? 0}
               expected={line.quantity_expected ?? 1}
             />
-            <span aria-hidden>·</span>
-            <ConditionBadge grade={line.condition_grade} />
             {line.sku ? (
               <>
                 <span aria-hidden>·</span>
                 <SkuScanRefChip value={line.sku} display={getLast4(line.sku)} />
               </>
             ) : null}
+            <span aria-hidden>·</span>
+            <ConditionGradeChip grade={line.condition_grade} />
             {saved.length > 0 ? (
               <>
                 <span aria-hidden>·</span>
@@ -182,15 +183,14 @@ export function UnmatchedLineRow({
         </div>
         {/* Right-edge trash — removes the line via DELETE /api/receiving-lines.
             Confirms before deleting so an accidental tap doesn't lose work. */}
-        <button
-          type="button"
-          onClick={() => void onRemove(line.id)}
-          aria-label="Remove item"
-          title="Remove item"
-          className="shrink-0 self-start rounded-md p-1.5 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <HoverTooltip label="Remove item" asChild>
+          <IconButton
+            icon={<Trash2 className="h-4 w-4" />}
+            onClick={() => void onRemove(line.id)}
+            ariaLabel="Remove item"
+            className="shrink-0 self-start rounded-md p-1.5 text-text-faint hover:bg-rose-50 hover:text-rose-600"
+          />
+        </HoverTooltip>
       </div>
       <div className="mt-3 border-t border-blue-200/60 pt-3">
         <div

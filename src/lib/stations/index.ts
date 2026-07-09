@@ -14,6 +14,8 @@
 import { registerBuiltinDataSources } from './data-sources';
 import { registerBuiltinActions } from './actions';
 import { registerChecklistBlock } from './blocks/checklist.block';
+import { registerScanBandBlock } from './blocks/scan-band.block';
+import { registerRailFeedBlock } from './blocks/rail-feed.block';
 
 let builtinsRegistered = false;
 export function registerStationBuiltins(): void {
@@ -22,6 +24,8 @@ export function registerStationBuiltins(): void {
   registerBuiltinDataSources();
   registerBuiltinActions();
   registerChecklistBlock();
+  registerScanBandBlock();
+  registerRailFeedBlock();
 }
 
 // Side-effect registration on import — consumers just import and read.
@@ -48,3 +52,11 @@ export {
   actionsForSource,
 } from './actions';
 export * from './contract';
+
+// ─── Operator surfaces (Studio-driven operator surfaces refactor) ────────────
+// Surface keys/registry (capability declaration), the archetype decision, and
+// the legacy-vs-composed resolver. Surfaces are CODE (the closed set the app can
+// render); per-org compositions are DATA (station_definitions rows).
+export * from './archetype';
+export * from './surface-keys';
+export * from './surface-resolver';

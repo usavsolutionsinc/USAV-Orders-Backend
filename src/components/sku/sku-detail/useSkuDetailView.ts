@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { deactivateSkuCatalog, fetchSkuDetail, patchSkuStock } from './sku-detail-api';
 import type { SkuDetailData, SkuDetailViewProps } from './sku-detail-types';
+import { useReasonVocabulary } from '@/hooks/useReasonVocabulary';
+import { SKU_STOCK_REASONS } from '@/lib/sku/sku-stock-reasons';
+import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 
 /**
  * Controller for the SKU detail view: loads the SKU's stock/catalog/ecwid/history
@@ -24,12 +27,20 @@ export function useSkuDetailView({ sku, variant = 'page', onClose }: SkuDetailVi
   const [showSetMode, setShowSetMode] = useState(false);
   const [absoluteQty, setAbsoluteQty] = useState('');
 
+  // Tenant SKU-stock adjust reasons (reason_codes, flow_context='inventory_adjust').
+  // Codes stay system (the replenish trigger keys on 'SOLD'); labels are relabelable.
+  const reasonRows = useReasonVocabulary('inventory_adjust');
+  const reasonOptions = reasonRows && reasonRows.length > 0 ? reasonRows : SKU_STOCK_REASONS;
+
   // Location
   const [editingLocation, setEditingLocation] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState('');
 
-  // Photo lightbox
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Photo lightbox — the shared fullscreen viewer (read-only: url-only inputs
+  // keep the delete affordance off, matching the old single-image lightbox).
+  const gallery = usePhotoGallery({
+    photos: (data?.photos ?? []).map((photo) => ({ url: photo.url })),
+  });
 
   // Copied feedback
   const [copiedField, setCopiedField] = useState('');
@@ -124,6 +135,7 @@ export function useSkuDetailView({ sku, variant = 'page', onClose }: SkuDetailVi
     setAdjustDelta,
     adjustReason,
     setAdjustReason,
+    reasonOptions,
     showSetMode,
     setShowSetMode,
     absoluteQty,
@@ -132,8 +144,8 @@ export function useSkuDetailView({ sku, variant = 'page', onClose }: SkuDetailVi
     setEditingLocation,
     selectedLocation,
     setSelectedLocation,
-    lightboxUrl,
-    setLightboxUrl,
+    gallery,
+    openPhoto: gallery.openViewer,
     copiedField,
     handleCopy,
     deactivateError,

@@ -29,7 +29,7 @@ export function usePhotoItems(photos: PhotoGalleryInput[]): UsePhotoItems {
     photosFingerprintRef.current = fingerprint;
 
     setPhotoItems(
-      parsed.map((p, index) => ({ id: p.id, url: p.url, status: 'loading', index, meta: p.meta })),
+      parsed.map((p, index) => ({ id: p.id, url: p.url, thumbUrl: p.thumbUrl, status: 'loading', index, meta: p.meta })),
     );
   }, [photos]);
 

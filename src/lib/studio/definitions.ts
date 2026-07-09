@@ -27,6 +27,7 @@ import type { OrgId } from '@/lib/tenancy/constants';
 // statically imports it so the registry is populated by the time the real deps
 // run. Tests inject fakes for getNode/hasNode and never touch the registry.
 import { getNode, hasNode } from '@/lib/workflow/registry';
+import { validateNodeConfig } from '@/lib/workflow/validate-config';
 import { runDiagnostics, type Diagnostic } from '@/lib/workflow/diagnostics';
 import { summarizeStations } from '@/lib/studio/station-diagnostics';
 import { STATIONS } from '@/components/admin/workflow/operations-catalog';
@@ -256,7 +257,21 @@ export async function publishDefinition(
       stationRows.map((r) => ({ workflowNodeId: r.workflow_node_id, label: r.label, config: r.config })),
     ),
   });
-  const blocking = diagnostics.filter((d) => d.severity === 'error');
+  // Config-schema gate: a node whose jsonb `config` violates its type's
+  // configSchema blocks publish, the same way a granular write is rejected —
+  // this catches any config that reached the draft by a path other than the
+  // guarded draftUpdate/ReplaceNodeConfig writers (validate-config.ts).
+  const configDiagnostics: Diagnostic[] = nodes.rows.flatMap((n) =>
+    validateNodeConfig(n.type, n.config ?? {}).errors.map((message, i) => ({
+      id: `invalid-config:${n.id}:${i}`,
+      severity: 'error' as const,
+      rule: 'invalid-config' as const,
+      nodeId: n.id,
+      message,
+      fix: 'Correct the node config to match its type before publishing.',
+    })),
+  );
+  const blocking = [...configDiagnostics, ...diagnostics].filter((d) => d.severity === 'error');
   if (blocking.length > 0) {
     return {
       status: 422 as const,

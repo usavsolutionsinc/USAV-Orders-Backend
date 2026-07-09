@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
+import { recomputeEnrichmentForOrders } from '@/lib/neon/packer-log-enrichment';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -17,8 +18,8 @@ import {
   updateShipmentTrackingById,
   createAdditionalShipmentLink,
   deleteShipmentTrackingLink,
-  isMissingOrderShipmentLinksRelation,
 } from '@/lib/neon/orders-tracking-queries';
+import { linkShipment } from '@/lib/shipping/shipment-links';
 
 type QueryClient = {
   query: PoolClient['query'];
@@ -276,20 +277,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           `UPDATE orders SET shipment_id = $1 WHERE id = ANY($2::int[])`,
           [resolvedPrimaryId, idsToUpdate]
         );
-        try {
-          await client.query(
-            `UPDATE order_shipment_links SET is_primary = false WHERE order_row_id = ANY($1::int[])`,
-            [idsToUpdate]
+        for (const orderId of idsToUpdate) {
+          await linkShipment(
+            ctx.organizationId,
+            { ownerType: 'ORDER', ownerId: orderId, shipmentId: resolvedPrimaryId, direction: 'OUTBOUND', isPrimary: true, role: 'ORDER_PRIMARY', source: 'orders.assign' },
+            client,
           );
-          await client.query(
-            `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
-             SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign', $3::uuid
-             ON CONFLICT (order_row_id, shipment_id) DO UPDATE
-               SET is_primary = true, source = 'orders.assign', updated_at = NOW()`,
-            [idsToUpdate, resolvedPrimaryId, ctx.organizationId]
-          );
-        } catch (error) {
-          if (!isMissingOrderShipmentLinksRelation(error)) throw error;
         }
       }
 
@@ -440,9 +433,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             reason: trimmedOutOfStock,
             changedBy: 'staff',
             forceFullQuantity: true,
-          });
+          }, ctx.organizationId);
         } else {
-          await clearReplenishmentForOrder(orderId, 'staff');
+          await clearReplenishmentForOrder(orderId, 'staff', ctx.organizationId);
         }
       }
     }
@@ -452,6 +445,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     } catch (cacheErr) {
       console.warn('[orders/assign] cache invalidation failed (non-critical):', cacheErr);
     }
+    // Tracking/SKU changes here can flip a packed scan's order match — refresh the
+    // shipped-table read model for affected PACK scans (deferred, best-effort).
+    after(() =>
+      recomputeEnrichmentForOrders(pool, idsToUpdate).catch((e) =>
+        console.warn('[orders/assign] enrichment recompute failed', e),
+      ),
+    );
     try {
       await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: idsToUpdate, source: 'orders.assign' });
     } catch (realtimeErr) {

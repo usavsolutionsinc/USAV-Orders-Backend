@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera } from '@/components/Icons';
 import { StationScanBar } from '@/components/station/StationScanBar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStationTheme } from '@/hooks/useStationTheme';
@@ -94,20 +95,21 @@ export function ScanInput({
         inputBorderClassName={inputBorder}
         inputClassName="!pr-11"
         rightContent={
-          <button
-            type="button"
-            onClick={() => setCameraActive((v) => !v)}
-            aria-pressed={cameraActive}
-            aria-label={cameraActive ? 'Close camera scanner' : 'Open camera scanner'}
-            title={cameraActive ? 'Close camera' : 'Scan with camera'}
-            className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 ${
-              cameraActive
-                ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-            }`}
-          >
-            <Camera className="h-3.5 w-3.5" />
-          </button>
+          <HoverTooltip label={cameraActive ? 'Close camera' : 'Scan with camera'} asChild>
+            <button
+              type="button"
+              onClick={() => setCameraActive((v) => !v)}
+              aria-pressed={cameraActive}
+              aria-label={cameraActive ? 'Close camera scanner' : 'Open camera scanner'}
+              className={`ds-raw-button flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 ${
+                cameraActive
+                  ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  : 'text-text-soft hover:bg-surface-sunken hover:text-text-muted'
+              }`}
+            >
+              <Camera className="h-3.5 w-3.5" />
+            </button>
+          </HoverTooltip>
         }
       />
 
@@ -127,7 +129,7 @@ export function ScanInput({
               muted
             />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className={`relative ${boxSize} rounded-[32px] border-2 border-white/40 bg-white/5 backdrop-blur-[1px]`}>
+              <div className={`relative ${boxSize} rounded-[32px] border-2 border-glass/40 bg-glass/5 backdrop-blur-[1px]`}>
                 <motion.div
                   animate={{ top: ['5%', '95%', '5%'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}

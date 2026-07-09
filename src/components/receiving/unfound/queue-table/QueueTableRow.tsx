@@ -2,6 +2,8 @@
 
 import { useCallback, useRef } from 'react';
 import { ExternalLink } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { PoChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { DEBOUNCE_MS, splitPoContext, type PatchBody, type QueueRow } from './unfound-queue-shared';
 
@@ -53,7 +55,7 @@ export function QueueTableRow({
     <tr
       onClick={handleRowClick}
       className={`cursor-pointer align-top transition-colors hover:bg-blue-50/40 ${
-        row.checked ? 'bg-gray-50/60 text-gray-500' : 'text-gray-900'
+        row.checked ? 'bg-surface-canvas/60 text-text-soft' : 'text-text-default'
       }`}
     >
       <td className="px-3 py-2 font-mono text-label">
@@ -99,7 +101,7 @@ export function QueueTableRow({
             <>
               <div className="text-left">{row.product_title || '—'}</div>
               {row.context && (
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro font-normal text-gray-500">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro font-normal text-text-soft">
                   {row.kind === 'unmatched_receiving' ? (
                     <TrackingChip
                       value={row.context}
@@ -157,16 +159,18 @@ export function QueueTableRow({
             Synced
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => void onPush(row)}
-            disabled={pushing}
-            title="Create a Zendesk ticket from this row"
-            className="flex items-center gap-1 rounded-md border border-blue-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ExternalLink className="h-3 w-3" />
-            {pushing ? '…' : 'Push'}
-          </button>
+          <HoverTooltip label="Create a Zendesk ticket from this row" asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<ExternalLink />}
+              onClick={() => void onPush(row)}
+              disabled={pushing}
+              className="gap-1 rounded-md border border-blue-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
+            >
+              {pushing ? '…' : 'Push'}
+            </Button>
+          </HoverTooltip>
         )}
       </td>
     </tr>

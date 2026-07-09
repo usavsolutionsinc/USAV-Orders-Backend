@@ -47,21 +47,21 @@ export function InventorySidebarPanel() {
     // `?open=` / `?sku=` (the sidebar-mode contract).
     if (pathname?.startsWith('/inventory/graph')) {
         return (
-            <div className="flex h-full flex-col overflow-hidden bg-white">
+            <div className="flex h-full flex-col overflow-hidden bg-surface-card">
                 <InventoryGraphSidebar />
             </div>
         );
     }
     if (pathname?.startsWith('/inventory/triage')) {
         return (
-            <div className="flex h-full flex-col overflow-hidden bg-white">
+            <div className="flex h-full flex-col overflow-hidden bg-surface-card">
                 <InventoryTriageSidebar />
             </div>
         );
     }
     if (pathname?.startsWith('/inventory/pulse')) {
         return (
-            <div className="flex h-full flex-col overflow-hidden bg-white">
+            <div className="flex h-full flex-col overflow-hidden bg-surface-card">
                 <InventoryPulseSidebar />
             </div>
         );
@@ -80,7 +80,7 @@ export function InventorySidebarPanel() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-white">
+        <div className="flex h-full flex-col overflow-hidden bg-surface-card">
             {!masterNavEnabled && (
                 <div className={sidebarHeaderPillRowClass}>
                     <HorizontalButtonSlider

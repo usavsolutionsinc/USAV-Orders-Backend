@@ -90,3 +90,27 @@ export const SkuCatalogFlagMissingBody = z
     source: trimmed.min(1).max(64).optional(),
   })
   .strict();
+
+// ─── /api/pending-skus (the "create in Zoho" to-do queue) ───────────────────
+
+/** Mirrors PendingSkuStatus in src/lib/inventory/pending-skus.ts. */
+const pendingSkuStatusEnum = z.enum(['PENDING', 'CREATED', 'IGNORED', 'DUPLICATE']);
+
+/**
+ * Query filter for GET /api/pending-skus. `status` defaults to PENDING in the
+ * lib; `limit` is clamped to 1..1000 there, so we only validate shape here.
+ */
+export const PendingSkuListQuery = z
+  .object({
+    status: pendingSkuStatusEnum.optional(),
+    limit: z.coerce.number().int().positive().max(1000).optional(),
+  })
+  .strict();
+
+/** Steward action: drop a junk SKU from the to-do list (PATCH /api/pending-skus). */
+export const PendingSkuIgnoreBody = z
+  .object({
+    id: z.coerce.number().int().positive(),
+    notes: optNullableText,
+  })
+  .strict();

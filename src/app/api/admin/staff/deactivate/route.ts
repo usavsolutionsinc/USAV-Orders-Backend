@@ -16,6 +16,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/withAuth';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 
 const Body = z.object({
@@ -61,6 +63,7 @@ export const POST = withAuth(async (req, ctx) => {
   });
 
   if (!result) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+  await invalidateCacheTags(ctx.organizationId, [CACHE_TAGS.staffOverrides]);
   return NextResponse.json({ status: 'deactivated', staff: result });
 }, {
   permission: 'admin.manage_staff',

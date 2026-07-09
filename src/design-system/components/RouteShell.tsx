@@ -82,14 +82,14 @@ export function RouteShell({
         >
           {history}
         </motion.div>
-        {bottomDock ? <div className="shrink-0 border-t border-gray-100 bg-white">{bottomDock}</div> : null}
+        {bottomDock ? <div className="shrink-0 border-t border-border-hairline bg-surface-card">{bottomDock}</div> : null}
       </div>
     );
   }
 
   return (
-    <div className={cn('flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-white', className)}>
-      <div className="shrink-0 border-b border-gray-100 px-2 py-1.5">
+    <div className={cn('flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-card', className)}>
+      <div className="shrink-0 border-b border-border-hairline px-2 py-1.5">
         <HorizontalButtonSlider
           items={tabs}
           value={activeView}
@@ -124,7 +124,7 @@ export function RouteShell({
         )}
       </div>
 
-      {bottomDock ? <div className="shrink-0 border-t border-gray-100 bg-white">{bottomDock}</div> : null}
+      {bottomDock ? <div className="shrink-0 border-t border-border-hairline bg-surface-card">{bottomDock}</div> : null}
     </div>
   );
 }

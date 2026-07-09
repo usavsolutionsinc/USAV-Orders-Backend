@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isZendeskConfigured, listAgents, ZendeskApiError, ZendeskNotConfiguredError } from '@/lib/zendesk';
+import { isZendeskConfiguredForOrg, listAgents, ZendeskApiError, ZendeskNotConfiguredError } from '@/lib/zendesk';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,12 +19,12 @@ function notConfigured(context: string): NextResponse {
 }
 
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     const context = 'GET /api/zendesk/agents';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
       const force = req.nextUrl.searchParams.get('refresh') === '1';
-      const agents = await listAgents(force);
+      const agents = await listAgents(force, ctx.organizationId);
       return NextResponse.json({ success: true, agents });
     } catch (err) {
       if (err instanceof ZendeskNotConfiguredError) return notConfigured(context);

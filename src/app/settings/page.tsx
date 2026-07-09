@@ -11,6 +11,7 @@ import { SecuritySection } from '@/components/settings/sections/SecuritySection'
 import { SessionsSection } from '@/components/settings/sections/SessionsSection';
 import { CatalogSection } from '@/components/settings/sections/CatalogSection';
 import { LegalSection } from '@/components/settings/sections/LegalSection';
+import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { getActiveSettingsSection } from '@/components/settings/settings-sections';
 
 const LEGACY_REDIRECTS: Record<string, string> = {
@@ -42,13 +43,14 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-gray-50">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface-canvas">
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-6 py-8 sm:px-10">
           {active === 'hardware' && <HardwareSection />}
           {active === 'workstation' && <WorkstationSection />}
           {active === 'quick-access' && <QuickAccessSection />}
           {active === 'appearance' && <AppearanceSection />}
+          {active === 'receiving' && <SettingsPanel page="receiving" />}
           {active === 'security' && <SecuritySection />}
           {active === 'sessions' && <SessionsSection />}
           {active === 'catalog' && <CatalogSection />}

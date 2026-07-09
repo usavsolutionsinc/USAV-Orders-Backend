@@ -81,6 +81,24 @@ test('happy path EXPECTED → MATCHED: writes status + coarse SCANNED + event', 
   assert.equal(calls.event?.input.client_event_id, 'ce-1');
 });
 
+test('skipEvent: guarded UPDATE runs but NO inventory_event is emitted (caller owns it)', async () => {
+  const { db, deps, calls } = fakes({ workflow_status: 'MATCHED', receiving_id: 42, sku: 'ABC' });
+  const res = await transitionReceivingLine(
+    { receivingLineId: 7, to: 'PASSED', actorStaffId: 9, skipEvent: true },
+    db,
+    undefined,
+    deps,
+  );
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+  // The lifecycle UPDATE still happened…
+  assert.ok(calls.updateSql, 'workflow_status UPDATE should still run');
+  assert.ok(calls.updateParams?.includes('PASSED'));
+  // …but the chokepoint did NOT write an event (eventId sentinel -1, recordEvent uncalled).
+  assert.equal(res.eventId, -1);
+  assert.equal(calls.event, null);
+});
+
 test('404 when the line does not exist', async () => {
   const { db, deps } = fakes(null);
   const res = await transitionReceivingLine({ receivingLineId: 999, to: 'MATCHED' }, db, undefined, deps);

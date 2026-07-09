@@ -26,7 +26,7 @@ function deadlineOf(o: ShippedOrder): string | null {
 
 /** Status dot bg by days late — mirrors getDaysLateTone (red/yellow/emerald/gray). */
 function dotTone(daysLate: number | null): string {
-  if (daysLate === null) return 'bg-gray-300';
+  if (daysLate === null) return 'bg-surface-strong';
   if (daysLate > 1) return 'bg-rose-500';
   if (daysLate === 1) return 'bg-amber-500';
   return 'bg-emerald-500';
@@ -53,7 +53,7 @@ export function PendingOrderRow({
       ? 'text-yellow-600'
       : conditionLabel === 'PARTS'
         ? 'text-amber-800'
-        : 'text-gray-500';
+        : 'text-text-soft';
 
   const daysLate = getDaysLateNullable(deadlineOf(row));
 
@@ -77,7 +77,7 @@ export function PendingOrderRow({
           className="!mt-0 shrink-0"
           indent={META_COL.indentWide}
           qtyCol={META_COL.qtyColWide}
-          qty={<span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-900'}>{quantity}</span>}
+          qty={<span className={quantity > 1 ? 'text-yellow-600' : 'text-text-default'}>{quantity}</span>}
           condition={<span className={condColor}>{conditionLabel}</span>}
           rest={
             daysLate !== null ? (

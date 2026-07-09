@@ -16,6 +16,9 @@ export interface EcwidProductSelection {
 /** How the unmatched-items workspace opened this popover (parent supplies when visible). */
 export type EcwidProductPopoverMode = 'search' | 'repair_service';
 
+/** Server fetch scope for `/api/ecwid/recent-repair-orders` in repair_service mode. */
+export type EcwidOrderScope = 'repair_rs' | 'all';
+
 export interface EcwidProductSearchPopoverProps {
   /**
    * Receiving id is included in the selection callback so callers can wire
@@ -33,8 +36,25 @@ export interface EcwidProductSearchPopoverProps {
    * unfound-carton behaviour (Ecwid title / SKU toggle).
    */
   searchFieldOverride?: 'zoho_catalog';
+  /**
+   * Relax the repair-service list to include NORMAL orders too (not just -RS
+   * SKUs) — appends include_normal=1 to /api/ecwid/recent-repair-orders. Used by
+   * the triage Smart-Matching inline "Link repair service" list.
+   * @deprecated Use `initialOrderScope="all"` — operators toggle scope via chip row.
+   */
+  relaxRepairToAllOrders?: boolean;
+  /**
+   * Starting scope for the repair_service order list (`all` = every recent order,
+   * `repair_rs` = -RS SKUs only). Defaults to `all`. Operators toggle via chip row.
+   */
+  initialOrderScope?: EcwidOrderScope;
   onSelect: (selection: EcwidProductSelection) => void | Promise<void>;
   onClose: () => void;
+  /**
+   * Focus the filter/search input on mount. Default true — triage Package Pairing
+   * passes false so the station tracking scan bar keeps keyboard focus.
+   */
+  autoFocusSearch?: boolean;
 }
 
 export interface PlatformIdRef {
@@ -55,6 +75,8 @@ export interface SearchItem {
   order_id?: string;
   order_date?: string;
   product_url?: string | null;
+  /** True when the line SKU ends in `-RS` (repair service). */
+  is_repair_service?: boolean;
 }
 
 export interface SearchResponse {

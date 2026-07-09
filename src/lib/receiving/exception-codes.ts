@@ -13,6 +13,7 @@ export const RECEIVING_EXCEPTION_CODES = [
   'OVER',
   'DAMAGED',
   'WRONG_ITEM',
+  'RETURN_NO_ORDER',
 ] as const;
 
 export type ReceivingExceptionCode = (typeof RECEIVING_EXCEPTION_CODES)[number];
@@ -31,7 +32,7 @@ interface ExceptionMeta {
 export const RECEIVING_EXCEPTION_META: Record<ReceivingExceptionCode, ExceptionMeta> = {
   NO_PO: {
     label: 'No PO',
-    tone: 'bg-slate-100 text-slate-600 ring-slate-200',
+    tone: 'bg-surface-sunken text-text-muted ring-border-soft',
     description: 'Scanned carton with no matching Zoho purchase order.',
   },
   CARRIER_MISMATCH: {
@@ -58,6 +59,11 @@ export const RECEIVING_EXCEPTION_META: Record<ReceivingExceptionCode, ExceptionM
     label: 'Wrong item',
     tone: 'bg-orange-100 text-orange-700 ring-orange-200',
     description: "Received SKU doesn't match the PO line.",
+  },
+  RETURN_NO_ORDER: {
+    label: 'Return · no order',
+    tone: 'bg-amber-100 text-amber-700 ring-amber-200',
+    description: 'Returned unit with no matching sales order — logged for investigation.',
   },
 };
 

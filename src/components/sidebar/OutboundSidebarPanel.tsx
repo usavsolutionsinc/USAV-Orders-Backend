@@ -16,7 +16,7 @@ export function OutboundSidebarPanel() {
   const masterNavEnabled = useMasterNavEnabled();
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-card">
       {!masterNavEnabled && (
         <div className={sidebarHeaderPillRowClass}>
           <HorizontalButtonSlider

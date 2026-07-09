@@ -26,8 +26,13 @@ export async function uploadPhotoClient(input: ClientUploadInput): Promise<Clien
   if (input.poRef) form.append('poRef', input.poRef);
 
   const res = await fetch('/api/photos/upload', { method: 'POST', body: form });
-  const data = (await res.json().catch(() => null)) as ClientUploadResult & { error?: string };
-  if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`);
+  const data = (await res.json().catch(() => null)) as ClientUploadResult & {
+    error?: string;
+    details?: string;
+  };
+  // Prefer `details` — for a 500 the route returns { error: 'Internal server
+  // error', details: '<real cause>' }, so the operator sees the actual reason.
+  if (!res.ok) throw new Error(data?.details || data?.error || `Upload failed (${res.status})`);
   return data;
 }
 

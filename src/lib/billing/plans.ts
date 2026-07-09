@@ -22,7 +22,14 @@ export interface Entitlements {
   features: {
     fba: boolean;
     repair: boolean;
+    // Walk-in / point-of-sale (Square-backed). Growth+.
     walkIn: boolean;
+    // Sourcing / acquisition engine (saved searches, candidates, alerts). Growth+.
+    sourcing: boolean;
+    // Support console (Zendesk overview tile + console). Growth+.
+    support: boolean;
+    // AI chat / copilot assistant surface (/ai-chat + /api/ai/*). Growth+.
+    aiChat: boolean;
     aiCopilot: boolean;
     advancedRoles: boolean;          // editable roles + per-staff overrides
     automations: boolean;            // workflow builder (future)
@@ -31,6 +38,13 @@ export interface Entitlements {
     auditLogExport: boolean;
     prioritySupport: boolean;
     customBranding: boolean;
+    // Receiving photos written browser-direct to the office NAS over WebDAV
+    // (beyond the always-on background mirror). The Settings Registry gates the
+    // `receiving.nasBackup = direct` option on this. Growth+.
+    nasArchive: boolean;
+    // Advanced receiving vision tuning — the label-OCR consensus / scan-interval
+    // / send-resolution knobs (Settings Registry `receiving.vision.*`). Pro+.
+    advancedVision: boolean;
     // Operations Studio capability (entitlement tiers — Part-2 Track 2).
     //
     // For now this is a single boolean that simply EXISTS so the studio gate
@@ -56,7 +70,12 @@ export interface Entitlements {
 const STARTER_FEATURES: Entitlements['features'] = {
   fba: false,
   repair: false,
-  walkIn: true,
+  // Trial + Starter share this set. Walk-in / sourcing / support / AI chat are
+  // paid features unlocked at Growth+ (see GROWTH_FEATURES).
+  walkIn: false,
+  sourcing: false,
+  support: false,
+  aiChat: false,
   aiCopilot: false,
   advancedRoles: false,
   automations: false,
@@ -65,6 +84,8 @@ const STARTER_FEATURES: Entitlements['features'] = {
   auditLogExport: false,
   prioritySupport: false,
   customBranding: false,
+  nasArchive: false,
+  advancedVision: false,
   // Studio is granted on EVERY plan by default (it spreads up through
   // GROWTH/PRO/ENTERPRISE) so turning the mechanism on never revokes Studio
   // from an existing trial/internal org. Tighten per-tier later if/when the
@@ -79,6 +100,13 @@ const GROWTH_FEATURES: Entitlements['features'] = {
   advancedRoles: true,
   aiCopilot: true,
   customBranding: true,
+  // Growth+ unlocks the paid feature set gated out of trial/starter.
+  walkIn: true,
+  sourcing: true,
+  support: true,
+  aiChat: true,
+  // Growth unlocks NAS direct-write (the background mirror is free on all plans).
+  nasArchive: true,
 };
 
 const PRO_FEATURES: Entitlements['features'] = {
@@ -86,6 +114,8 @@ const PRO_FEATURES: Entitlements['features'] = {
   automations: true,
   webhooksOut: true,
   auditLogExport: true,
+  // Pro unlocks the advanced receiving vision tuning knobs.
+  advancedVision: true,
 };
 
 const ENTERPRISE_FEATURES: Entitlements['features'] = {

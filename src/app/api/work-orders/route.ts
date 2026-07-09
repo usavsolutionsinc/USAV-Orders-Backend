@@ -133,7 +133,7 @@ async function getReceiving(orgId: string): Promise<WorkOrderRow[]> {
   const result = await tenantQuery(orgId,
     `SELECT
        r.id,
-       COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
+       stn.tracking_number_raw AS receiving_tracking_number,
        COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier,
        r.is_return,
        r.target_channel,
@@ -182,7 +182,8 @@ async function getReceiving(orgId: string): Promise<WorkOrderRow[]> {
                 NOT EXISTS (SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id AND rl.organization_id = $1)
                 OR EXISTS (
                   SELECT 1 FROM receiving_lines rl
-                   WHERE rl.receiving_id = r.id AND rl.organization_id = $1 AND COALESCE(rl.needs_test, true) = true
+                   LEFT JOIN receiving_line_testing rlt ON rlt.receiving_line_id = rl.id AND rlt.organization_id = rl.organization_id
+                   WHERE rl.receiving_id = r.id AND rl.organization_id = $1 AND COALESCE(rlt.needs_test, true) = true
                 )
               )
             )

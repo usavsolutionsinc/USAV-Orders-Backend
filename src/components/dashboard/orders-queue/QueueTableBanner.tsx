@@ -26,21 +26,21 @@ export function QueueTableBanner({
       <div className={rowClass}>
         {compact ? (
           <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-            <span className={`${sectionLabel} shrink-0 text-blue-700`}>{title}</span>
+            <span className={`${sectionLabel} shrink-0 text-text-accent`}>{title}</span>
             {subtitle ? (
-              <span className={`${fieldLabel} truncate text-gray-600`}>{subtitle}</span>
+              <span className={`${fieldLabel} truncate text-text-muted`}>{subtitle}</span>
             ) : null}
           </div>
         ) : (
           <div>
-            <p className={`${sectionLabel} text-blue-700`}>{title}</p>
+            <p className={`${sectionLabel} text-text-accent`}>{title}</p>
             {subtitle ? (
-              <p className={`${fieldLabel} mt-0.5 text-gray-500`}>{subtitle}</p>
+              <p className={`${fieldLabel} mt-0.5 text-text-soft`}>{subtitle}</p>
             ) : null}
           </div>
         )}
         <div className="min-w-[18px] flex items-center justify-end">
-          {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
+          {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" /> : null}
         </div>
       </div>
     </div>

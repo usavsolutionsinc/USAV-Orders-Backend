@@ -26,7 +26,7 @@ export const GET = withAuth(
   async (req: NextRequest, ctx) => {
     const rawUrl = req.nextUrl.searchParams.get('url') ?? '';
     const isInternal = ctx.staffId !== null;
-    const result = await resolveGs1(rawUrl, { isInternal });
+    const result = await resolveGs1(rawUrl, { isInternal, orgId: ctx.organizationId ?? undefined });
 
     // Audit internal resolutions that actually matched something. We
     // skip 'fallback' so the audit table isn't flooded by random

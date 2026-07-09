@@ -1,10 +1,18 @@
 import type { TimelineItem, TimelineTone } from './types';
+import { diffChanges } from './audit-diff';
 
 /** One audit_logs row for an order, as returned by /api/orders/[id]/timeline. */
 export interface OrderAuditRow {
   id: number;
   created_at: string | null;
   action: string;
+  /**
+   * Prior snapshot for the field-level diff. Optional: only the operations
+   * journey selects it (and only exposes it to `admin.view_logs`, redacting it
+   * to null otherwise). The order-details timeline omits it ⇒ no diff, exactly
+   * as before.
+   */
+  before_data?: Record<string, unknown> | null;
   after_data: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
   actor_name: string | null;
@@ -68,6 +76,11 @@ export function orderAuditToTimeline(rows: OrderAuditRow[]): TimelineItem[] {
       subtitle = changedKeys.join(', ');
     }
 
+    // Field-level before→after diff (edit-style rows only). `diffChanges`
+    // returns [] unless BOTH snapshots are present — so a redacted (non-admin)
+    // or one-sided row shows no values. Undefined ⇒ no diff block.
+    const changes = diffChanges(r.before_data, r.after_data);
+
     items.push({
       id: r.id,
       at: r.created_at,
@@ -76,6 +89,7 @@ export function orderAuditToTimeline(rows: OrderAuditRow[]): TimelineItem[] {
       subtitle,
       ref,
       actor: r.actor_name ?? undefined,
+      changes: changes.length ? changes : undefined,
     });
   }
   return items;

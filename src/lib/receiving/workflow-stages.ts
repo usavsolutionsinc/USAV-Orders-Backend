@@ -50,7 +50,7 @@ export interface WorkflowStageMeta {
 export const WORKFLOW_STAGES: Record<string, WorkflowStageMeta> = {
   EXPECTED: {
     status: 'EXPECTED', order: 0, phase: 'INBOUND', label: 'Incoming',
-    dot: 'bg-gray-300', badge: 'bg-gray-100 text-gray-500',
+    dot: 'bg-surface-strong', badge: 'bg-surface-sunken text-text-soft',
     description: 'On a PO, vendor issued it — not yet scanned at the dock.',
   },
   ARRIVED: {
@@ -95,7 +95,7 @@ export const WORKFLOW_STAGES: Record<string, WorkflowStageMeta> = {
   },
   SCRAP: {
     status: 'SCRAP', order: 7, phase: 'TERMINAL', label: 'Scrap',
-    dot: 'bg-slate-600', badge: 'bg-slate-200 text-slate-600',
+    dot: 'bg-slate-600', badge: 'bg-surface-strong text-text-muted', // ds-allow-raw-neutral: identity/tone hue — SCRAP's slate dot among colored lifecycle dots
     description: 'Scrapped / claimed — removed from sellable stock.',
   },
   DONE: {
@@ -108,7 +108,7 @@ export const WORKFLOW_STAGES: Record<string, WorkflowStageMeta> = {
 /** Fallback for unknown / legacy NULL statuses. */
 export const UNKNOWN_STAGE: WorkflowStageMeta = {
   status: 'UNKNOWN', order: -1, phase: 'INBOUND', label: 'Unknown',
-  dot: 'bg-gray-400', badge: 'bg-gray-100 text-gray-600',
+  dot: 'bg-border-emphasis', badge: 'bg-surface-sunken text-text-muted',
   description: 'No workflow status recorded.',
 };
 

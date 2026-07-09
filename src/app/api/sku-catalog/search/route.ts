@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { escapeLike } from '@/lib/sql-like';
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
@@ -73,12 +74,12 @@ async function searchFromPlatform(
   }
 
   if (excludeSkuSuffix) {
-    params.push(`%${excludeSkuSuffix}`);
+    params.push(`%${escapeLike(excludeSkuSuffix)}`);
     filterClauses.push(`sp.platform_sku NOT ILIKE $${params.length}`);
   }
 
   if (q) {
-    params.push(`%${q}%`);
+    params.push(`%${escapeLike(q)}%`);
     const likeIdx = params.length;
     if (searchField === 'title') {
       filterClauses.push(`sp.display_name ILIKE $${likeIdx}`);

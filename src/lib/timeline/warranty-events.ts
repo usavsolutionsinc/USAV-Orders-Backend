@@ -11,6 +11,7 @@ export interface WarrantyEventRow {
   fromStatus: string | null;
   toStatus: string | null;
   createdAt: string | null;
+  actorName?: string | null;
 }
 
 /**
@@ -58,6 +59,7 @@ export function warrantyEventsToTimeline(rows: WarrantyEventRow[]): TimelineItem
       title,
       tone,
       subtitle,
+      actor: r.actorName ?? undefined,
     };
   });
 }

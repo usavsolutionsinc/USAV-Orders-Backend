@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminEmptyDetail } from './shared';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 type StationFilter = 'ALL' | 'TECH' | 'PACK';
 type RangeFilter = 7 | 14 | 30;
@@ -25,7 +26,7 @@ function getProgress(actual: number, goal: number) {
 }
 
 function getPerformanceTone(progress: number) {
-  if (progress <= 0) return { label: 'Not Started', textClass: 'text-slate-400', barClass: 'bg-slate-300' };
+  if (progress <= 0) return { label: 'Not Started', textClass: 'text-text-faint', barClass: 'bg-surface-strong' };
   if (progress > 1) return { label: 'Above Goal', textClass: 'text-cyan-700', barClass: 'bg-cyan-600' };
   if (progress === 1) return { label: 'Hit Goal', textClass: 'text-emerald-700', barClass: 'bg-emerald-600' };
   if (progress >= 0.75) return { label: 'On the Way', textClass: 'text-blue-700', barClass: 'bg-blue-600' };
@@ -126,16 +127,17 @@ export function GoalsAnalyticsTab() {
   const tone = getPerformanceTone(latestMetrics.progress);
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-soft bg-surface-card px-6 py-4">
         <div className="min-w-0">
-          <p className="text-micro font-bold uppercase tracking-widest text-gray-500">
+          <p className="text-micro font-bold uppercase tracking-widest text-text-soft">
             {staffSummary.role} · {staffSummary.station}
           </p>
-          <h2 className="mt-0.5 truncate text-lg font-bold text-gray-900">{staffSummary.name}</h2>
+          <h2 className="mt-0.5 truncate text-lg font-bold text-text-default">{staffSummary.name}</h2>
         </div>
         <div className="flex items-center gap-1">
           {RANGE_OPTIONS.map((option) => (
+            // ds-raw-button: segmented two-state range toggle (conditional active fill), not a single DS variant
             <button
               key={option.value}
               type="button"
@@ -152,7 +154,7 @@ export function GoalsAnalyticsTab() {
           <select
             value={stationFilter}
             onChange={(e) => setStationFilter(e.target.value as StationFilter)}
-            className="ml-2 rounded-md border border-gray-300 px-2 py-1 text-caption"
+            className="ml-2 rounded-md border border-border-default px-2 py-1 text-caption"
           >
             <option value="ALL">All stations</option>
             <option value="TECH">Tech</option>
@@ -186,8 +188,8 @@ export function GoalsAnalyticsTab() {
             <DetailCard label="Last snapshot" value={formatShortDate(staffSummary.latest.logged_date)} />
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-micro font-bold uppercase tracking-widest text-gray-500">Trend</p>
+          <div className="rounded-xl border border-border-soft bg-surface-card p-4">
+            <p className="text-micro font-bold uppercase tracking-widest text-text-soft">Trend</p>
             <div className="mt-3 flex items-end gap-2">
               {[...staffSummary.recent].reverse().map((entry) => {
                 const metrics = getProgress(entry.actual, entry.goal);
@@ -196,13 +198,14 @@ export function GoalsAnalyticsTab() {
                 return (
                   <div key={entry.logged_date} className="flex flex-col items-center gap-1">
                     <div className="flex h-16 items-end">
-                      <div
-                        className={`w-4 rounded-sm ${entryTone.barClass}`}
-                        style={{ height: `${height}px` }}
-                        title={`${entry.logged_date}: ${entry.actual}/${entry.goal}`}
-                      />
+                      <HoverTooltip label={`${entry.logged_date}: ${entry.actual}/${entry.goal}`} asChild>
+                        <div
+                          className={`w-4 rounded-sm ${entryTone.barClass}`}
+                          style={{ height: `${height}px` }}
+                        />
+                      </HoverTooltip>
                     </div>
-                    <span className="text-eyebrow font-medium text-gray-400">
+                    <span className="text-eyebrow font-medium text-text-faint">
                       {formatShortDate(entry.logged_date).split(' ')[1]}
                     </span>
                   </div>
@@ -211,8 +214,8 @@ export function GoalsAnalyticsTab() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-gray-200 px-4 py-2.5 text-micro font-bold uppercase tracking-widest text-gray-500">
+          <div className="rounded-xl border border-border-soft bg-surface-card">
+            <div className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-border-soft px-4 py-2.5 text-micro font-bold uppercase tracking-widest text-text-soft">
               <p>Date</p>
               <p className="text-right">Actual</p>
               <p className="text-right">Goal</p>
@@ -224,11 +227,11 @@ export function GoalsAnalyticsTab() {
               return (
                 <div
                   key={entry.logged_date}
-                  className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-gray-100 px-4 py-2.5 text-label last:border-b-0"
+                  className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-border-hairline px-4 py-2.5 text-label last:border-b-0"
                 >
-                  <p className="text-gray-700">{formatShortDate(entry.logged_date)}</p>
-                  <p className="text-right tabular-nums text-gray-900">{entry.actual}</p>
-                  <p className="text-right tabular-nums text-gray-900">{entry.goal}</p>
+                  <p className="text-text-muted">{formatShortDate(entry.logged_date)}</p>
+                  <p className="text-right tabular-nums text-text-default">{entry.actual}</p>
+                  <p className="text-right tabular-nums text-text-default">{entry.goal}</p>
                   <p className={`text-right tabular-nums font-semibold ${entryTone.textClass}`}>
                     {metrics.percent}%
                   </p>
@@ -252,10 +255,10 @@ function DetailCard({
   hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3">
-      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">{label}</p>
-      <div className="mt-1 text-base font-bold text-gray-900">{value}</div>
-      {hint ? <p className="mt-0.5 text-micro text-gray-500">{hint}</p> : null}
+    <div className="rounded-xl border border-border-soft bg-surface-card p-3">
+      <p className="text-micro font-bold uppercase tracking-widest text-text-soft">{label}</p>
+      <div className="mt-1 text-base font-bold text-text-default">{value}</div>
+      {hint ? <p className="mt-0.5 text-micro text-text-soft">{hint}</p> : null}
     </div>
   );
 }

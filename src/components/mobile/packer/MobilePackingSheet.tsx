@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { Camera } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
+import { OrderPackChecklist } from '@/components/packing/OrderPackChecklist';
+import { useOrderPackChecklist } from '@/hooks/useOrderPackChecklist';
+import { usePackingPolicy } from '@/hooks/usePackingPolicy';
 import {
   OrderIdChip,
   SkuScanRefChip,
@@ -44,6 +47,16 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
   const trackingValue = (row.shipping_tracking_number || row.scan_ref || '').trim();
   const serialValue = (row.serial_number || '').trim();
   const photos = Array.isArray(row.packer_photos_url) ? row.packer_photos_url : [];
+  const orderRowId = row.order_row_id ?? null;
+
+  const { data: packingPolicy } = usePackingPolicy();
+  const { data: packChecklist, isLoading: checklistLoading } = useOrderPackChecklist({
+    orderRowId,
+    sku: skuValue || null,
+    condition: row.condition,
+    productTitle: productTitle,
+    enabled: open && (orderRowId != null || Boolean(skuValue)),
+  });
 
   // Carry the real order number so packer photos file under it in the library.
   const photosHref = packerLogId
@@ -56,14 +69,14 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
         <div className="flex flex-col gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className={`h-2 w-2 shrink-0 rounded-full ${getSourceDotBg(row)}`} />
-            <div className="line-clamp-2 text-sm font-bold text-gray-900">
+            <div className="line-clamp-2 text-sm font-bold text-text-default">
               {productTitle}
             </div>
           </div>
 
           <div className="flex items-center gap-2 pl-4">
             <span className="shrink-0 text-caption font-black uppercase tracking-widest">
-              <span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-700'}>
+              <span className={quantity > 1 ? 'text-yellow-600' : 'text-text-muted'}>
                 {quantity}
               </span>
             </span>
@@ -77,8 +90,16 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
           </div>
         </div>
 
+        <OrderPackChecklist
+          lines={packChecklist?.lines ?? []}
+          enforcement={packingPolicy?.enforcement ?? packChecklist?.enforcement ?? 'advisory'}
+          resetKey={orderRowId ? `row-${orderRowId}` : skuValue}
+          isLoading={checklistLoading}
+          variant="mobile"
+        />
+
         {photos.length > 0 ? (
-          <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3">
+          <div className="rounded-2xl border border-border-hairline bg-surface-canvas/60 p-3">
             <PhotoGallery photos={photos} orderId={orderId} compact launcherTitle={`${photos.length} pack photo${photos.length === 1 ? '' : 's'}`} />
           </div>
         ) : (

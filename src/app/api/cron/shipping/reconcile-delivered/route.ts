@@ -15,6 +15,13 @@
  *
  * Cadence (vercel.json): hourly — cheap, and keeps the delivered surface honest
  * between the 15-min carrier sweeps.
+ *
+ * Tenancy (Phase D category B — global, org-agnostic reconcile): all three
+ * sub-jobs are pure set-based SQL keyed by shipment / event-log / claim
+ * surrogate ids, not by org, and they derive any stamped org from the parent
+ * row (e.g. clock-sweep reads warranty_claims.organization_id) — so they never
+ * misroute to one tenant. Runs cross-org on the owner pool. Phase E follow-up:
+ * GUC-scope or shard per org once the tables move under the FORCE-enforced role.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

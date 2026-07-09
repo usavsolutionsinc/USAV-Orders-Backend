@@ -114,4 +114,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'admin.manage_features' });
+}, { permission: 'admin.manage_features', feature: 'walkIn' });

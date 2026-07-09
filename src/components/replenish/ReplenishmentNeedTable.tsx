@@ -6,6 +6,7 @@ import { Loader2 } from '@/components/Icons';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { CopyChip, HashIcon } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { PlatformChip } from '@/components/ui/CopyChip';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
@@ -29,8 +30,8 @@ function SkuChip({ sku }: { sku: string }) {
       value={sku}
       display={display}
       icon={<HashIcon />}
-      underlineClass="border-gray-500"
-      iconClass="text-gray-500"
+      underlineClass="border-border-emphasis"
+      iconClass="text-text-soft"
       truncateDisplay={false}
     />
   );
@@ -66,17 +67,17 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
 
   if (query.isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="flex-1 flex items-center justify-center bg-surface-canvas">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading...</p>
+          <p className="text-sm font-semibold text-text-muted">Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-w-0 flex-1 bg-white relative">
+    <div className="flex h-full min-w-0 flex-1 bg-surface-card relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className={mainStickyHeaderClass}>
           <div className={mainStickyHeaderRowClass}>
@@ -98,7 +99,7 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
           {rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                <p className="text-gray-500 font-semibold italic opacity-40">
+                <p className="text-text-soft font-semibold italic opacity-40">
                   {skuSearch ? `No items match "${skuSearch}"` : 'Nothing to order right now'}
                 </p>
               </div>
@@ -120,20 +121,22 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
                     key={row.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-default hover:bg-blue-50/50 ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-border-hairline cursor-default hover:bg-blue-50/50 ${
+                      index % 2 === 0 ? 'bg-surface-card' : 'bg-surface-canvas/10'
                     }`}
                   >
                     {/* Left: two-line info */}
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" title="Needs reorder" />
-                        <div className="text-label font-bold text-gray-900 truncate">
+                        <HoverTooltip label="Needs reorder" asChild>
+                          <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                        </HoverTooltip>
+                        <div className="text-label font-bold text-text-default truncate">
                           {row.item_name || 'Unknown Item'}
                         </div>
                       </div>
                       <div className="mt-0.5 flex items-center gap-2">
-                        <div className="text-micro font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
+                        <div className="text-micro font-bold text-text-soft uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
                           <span className="text-red-600">{qtyToOrder}</span>
                           {' • '}
                           {row.vendor_name || 'No Vendor'}
@@ -152,8 +155,8 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
                       {sku && (
                         <PlatformChip
                           label={sku}
-                          underlineClass="border-gray-400"
-                          iconClass="text-gray-500"
+                          underlineClass="border-border-emphasis"
+                          iconClass="text-text-soft"
                           onClick={(e) => {
                             e.stopPropagation();
                             const url = getExternalUrlByItemNumber(sku);

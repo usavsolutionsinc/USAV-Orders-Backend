@@ -9,6 +9,7 @@ import {
   AdminPickerRow,
   useAdminUrlState,
 } from '@/components/admin/shared';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { getStaffColorHex } from '@/utils/staff-colors';
 
 type StaffViewMode = 'all' | 'active' | 'inactive' | 'technician' | 'packer';
@@ -134,9 +135,9 @@ export function StaffScheduleSidebarPanel() {
       }
     >
       {isLoading ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">Loading staff…</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">Loading staff…</div>
       ) : filtered.length === 0 ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">No matches.</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">No matches.</div>
       ) : (
         <ul className="space-y-1.5">
           {filtered.map((row) => (
@@ -160,10 +161,11 @@ export function StaffScheduleSidebarPanel() {
                 title={row.name}
                 subtitle={row.role.replace(/_/g, ' ')}
                 trailing={
-                  <span
-                    title={row.active ? 'Active' : 'Inactive'}
-                    className={`h-2 w-2 rounded-full ${row.active ? 'bg-emerald-500' : 'bg-gray-400'}`}
-                  />
+                  <HoverTooltip label={row.active ? 'Active' : 'Inactive'} asChild focusable={false}>
+                    <span
+                      className={`h-2 w-2 rounded-full ${row.active ? 'bg-emerald-500' : 'bg-border-emphasis'}`}
+                    />
+                  </HoverTooltip>
                 }
               />
             </li>

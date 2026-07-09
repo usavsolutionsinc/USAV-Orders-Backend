@@ -33,16 +33,16 @@ export function ScoutPane() {
   return (
     <div className="mx-auto max-w-4xl p-6">
       <header className="mb-5">
-        <h1 className="text-xl font-bold text-gray-900">{data.model.model_name}</h1>
-        <p className="text-caption text-gray-500">
+        <h1 className="text-xl font-bold text-text-default">{data.model.model_name}</h1>
+        <p className="text-caption text-text-soft">
           Model #{data.model.model_number}{data.model.family ? ` · ${data.model.family}` : ''}
-          {data.resolvedBy ? <span className="ml-2 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">matched by {data.resolvedBy.replace('_', ' ')}</span> : null}
+          {data.resolvedBy ? <span className="ml-2 rounded-full bg-surface-sunken px-1.5 py-0.5 text-micro font-semibold text-text-soft">matched by {data.resolvedBy.replace('_', ' ')}</span> : null}
         </p>
       </header>
 
-      <h2 className="mb-2 text-sm font-bold text-gray-900">Compatible parts ({data.parts.length})</h2>
+      <h2 className="mb-2 text-sm font-bold text-text-default">Compatible parts ({data.parts.length})</h2>
       {data.parts.length === 0 ? (
-        <p className="text-caption text-gray-400">No compatible parts linked. Add them in Admin › Models.</p>
+        <p className="text-caption text-text-faint">No compatible parts linked. Add them in Admin › Models.</p>
       ) : (
         <ul className="space-y-2">
           {data.parts.map((p) => <PartRow key={p.compatibility_id} part={p} modelId={data.model!.id} />)}
@@ -95,14 +95,14 @@ function PartRow({ part, modelId }: { part: CompatiblePart; modelId: number }) {
   const out = part.on_hand <= 0;
 
   return (
-    <li className="rounded-xl border border-gray-200 bg-white p-3">
+    <li className="rounded-xl border border-border-soft bg-surface-card p-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-gray-900">{part.product_title}</p>
-          <p className="truncate text-caption text-gray-500">{part.sku}</p>
+          <p className="truncate text-sm font-semibold text-text-default">{part.product_title}</p>
+          <p className="truncate text-caption text-text-soft">{part.sku}</p>
         </div>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{part.part_role}</span>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${out || (eol && part.on_hand < 2) ? 'bg-red-50 text-red-700' : eol ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+        <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-text-muted">{part.part_role}</span>
+        <span className={`rounded-full px-2 py-0.5 text-micro font-semibold ${out || (eol && part.on_hand < 2) ? 'bg-red-50 text-red-700' : eol ? 'bg-amber-50 text-amber-700' : 'bg-surface-sunken text-text-muted'}`}>
           {out ? '0 in stock' : `${part.on_hand} in stock`}{eol ? ` · ${part.lifecycle_status}` : ''}
         </span>
         <Button variant="secondary" size="sm" loading={search.isPending} onClick={() => search.mutate()}>Find on eBay</Button>
@@ -118,17 +118,17 @@ function PartRow({ part, modelId }: { part: CompatiblePart; modelId: number }) {
       ) : null}
 
       {results ? (
-        <div className="mt-3 border-t border-gray-100 pt-3">
+        <div className="mt-3 border-t border-border-hairline pt-3">
           {results.length === 0 ? (
-            <p className="text-caption text-gray-400">No eBay results.</p>
+            <p className="text-caption text-text-faint">No eBay results.</p>
           ) : (
             <ul className="space-y-1.5">
               {results.slice(0, 6).map((c, i) => (
                 <li key={c.externalId ?? i} className="flex items-center gap-2 text-sm">
                   <a href={c.url ?? '#'} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-medium text-blue-700 hover:underline">{c.title}</a>
-                  {c.condition ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${conditionTone[c.condition] ?? 'bg-gray-100 text-gray-600'}`}>{c.condition.replace('_', ' ')}</span> : null}
-                  <span className="w-16 text-right text-caption font-semibold text-gray-700">{formatCents(c.priceCents, c.currency)}</span>
-                  <button type="button" onClick={() => save.mutate(c)} className="rounded-md px-2 py-1 text-caption font-semibold text-emerald-700 hover:bg-emerald-50">Save</button>
+                  {c.condition ? <span className={`rounded-full px-1.5 py-0.5 text-micro font-semibold ${conditionTone[c.condition] ?? 'bg-surface-sunken text-text-muted'}`}>{c.condition.replace('_', ' ')}</span> : null}
+                  <span className="w-16 text-right text-caption font-semibold text-text-muted">{formatCents(c.priceCents, c.currency)}</span>
+                  <Button variant="ghost" size="sm" type="button" onClick={() => save.mutate(c)} className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700">Save</Button>
                 </li>
               ))}
             </ul>

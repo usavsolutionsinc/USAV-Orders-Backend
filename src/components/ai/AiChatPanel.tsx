@@ -15,6 +15,8 @@ import AiAnswerCard from '@/components/ai/AiAnswerCard';
 import AiPromptChips from '@/components/ai/AiPromptChips';
 import type { AiChatMode, AiChatRouteResponse, AiStructuredAnswer } from '@/lib/ai/types';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { Button, IconButton } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 
 type MessageRole = 'user' | 'assistant';
 
@@ -227,18 +229,18 @@ export default function AiChatPanel() {
   const canSend = !!input.trim() && !isLoading && !!sessionId;
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-[#fbfbfa] text-gray-900">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-surface-card text-text-default">
       <PaneHeader
-        className="border-gray-200 bg-[#fbfbfa]/95 backdrop-blur"
+        className="border-border-soft bg-surface-card/95 backdrop-blur"
         rowClassName="px-6"
         leftSlot={
           <>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-gray-300 bg-white text-gray-700">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-border-default bg-surface-card text-text-muted">
               <BotIcon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <p className={sectionLabel}>AI Chat</p>
-              <p className="truncate text-sm font-medium text-gray-700">
+              <p className="truncate text-sm font-medium text-text-muted">
                 Deterministic shipped-order summaries plus general AI responses
               </p>
             </div>
@@ -246,37 +248,37 @@ export default function AiChatPanel() {
         }
         rightSlot={
           <>
-            <div className="hidden border border-gray-200 bg-white px-3 py-1.5 text-micro font-medium text-gray-600 md:block">
+            <div className="hidden border border-border-soft bg-surface-card px-3 py-1.5 text-micro font-medium text-text-muted md:block">
               PST week ranges
             </div>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={startNewChat}
-              className={`flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 ${sectionLabel} text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900`}
+              icon={<RefreshIcon className="h-3 w-3" />}
             >
-              <RefreshIcon className="h-3 w-3" />
               New Chat
-            </button>
+            </Button>
           </>
         }
         belowSlot={
-          <div className="grid gap-px border-t border-gray-200 bg-gray-200 px-6 py-px md:grid-cols-3">
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
+          <div className="grid gap-px border-t border-border-soft bg-surface-strong px-6 py-px md:grid-cols-3">
+            <div className="flex items-center gap-2 bg-surface-card px-3 py-2 text-caption text-text-muted">
               {connectionStatus === 'online' ? (
                 <Check className="h-4 w-4 text-emerald-600" />
               ) : connectionStatus === 'offline' ? (
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
               ) : (
-                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
               )}
               <span>{statusLabel(connectionStatus)}</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
-              <Database className="h-4 w-4 text-gray-500" />
+            <div className="flex items-center gap-2 bg-surface-card px-3 py-2 text-caption text-text-muted">
+              <Database className="h-4 w-4 text-text-soft" />
               <span>Local shipped summaries use app-side order data</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
-              <Clock className="h-4 w-4 text-gray-500" />
+            <div className="flex items-center gap-2 bg-surface-card px-3 py-2 text-caption text-text-muted">
+              <Clock className="h-4 w-4 text-text-soft" />
               <span>
                 {connectionStatus === 'offline'
                   ? 'Model backend can be offline while shipped metrics still work'
@@ -291,15 +293,15 @@ export default function AiChatPanel() {
         {messages.length === 0 && !isLoading ? (
           <div className="mx-auto flex h-full w-full max-w-4xl flex-col justify-center">
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-              <section className="space-y-4 border border-gray-200 bg-white p-5">
+              <section className="space-y-4 border border-border-soft bg-surface-card p-5">
                 <div className={`flex items-center gap-2 ${sectionLabel}`}>
-                  <PackageCheck className="h-4 w-4 text-gray-500" />
+                  <PackageCheck className="h-4 w-4 text-text-soft" />
                   Reliable Ops Questions
                 </div>
-                <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
+                <h1 className="text-2xl font-semibold tracking-tight text-text-default">
                   Ask shipped-count questions in plain English and get the exact timeframe back.
                 </h1>
-                <p className="max-w-2xl text-sm leading-7 text-gray-600">
+                <p className="max-w-2xl text-sm leading-7 text-text-muted">
                   The panel now handles shipped-order summaries locally against the same shipped-order data used by the dashboard.
                   For prompts like shipped counts by packer or tester, it returns the total, the operator breakdown, the source tables,
                   and a direct link back to the shipped view.
@@ -307,22 +309,22 @@ export default function AiChatPanel() {
                 <AiPromptChips prompts={STARTER_PROMPTS} onSelect={handlePromptSelect} />
               </section>
 
-              <section className="space-y-3 border border-gray-200 bg-white p-5">
+              <section className="space-y-3 border border-border-soft bg-surface-card p-5">
                 <div className={`flex items-center gap-2 ${sectionLabel}`}>
-                  <Database className="h-4 w-4 text-gray-500" />
+                  <Database className="h-4 w-4 text-text-soft" />
                   What The Panel Uses
                 </div>
-                <div className="space-y-3 text-label leading-6 text-gray-600">
-                  <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">Shipped summaries</p>
+                <div className="space-y-3 text-label leading-6 text-text-muted">
+                  <div className="border-b border-border-hairline pb-3">
+                    <p className="font-medium text-text-default">Shipped summaries</p>
                     <p>`shipping_tracking_numbers`, `packer_logs`, and `work_assignments`</p>
                   </div>
-                  <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">Timeframes</p>
+                  <div className="border-b border-border-hairline pb-3">
+                    <p className="font-medium text-text-default">Timeframes</p>
                     <p>PST-aware date ranges with exact start and end dates shown in every answer</p>
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">Fallback behavior</p>
+                    <p className="font-medium text-text-default">Fallback behavior</p>
                     <p>General questions still use the AI backend. Structured shipping metrics do not need the model backend to answer.</p>
                   </div>
                 </div>
@@ -336,12 +338,12 @@ export default function AiChatPanel() {
 
               if (msg.role === 'user') {
                 return (
-                  <div key={msg.id} className="ml-auto w-full max-w-2xl border border-gray-200 bg-white px-4 py-3">
+                  <div key={msg.id} className="ml-auto w-full max-w-2xl border border-border-soft bg-surface-card px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className={sectionLabel}>Question</span>
-                      <span className="text-micro text-gray-500">{timestampLabel}</span>
+                      <span className="text-micro text-text-soft">{timestampLabel}</span>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-gray-900">{msg.content}</p>
+                    <p className="mt-2 text-sm leading-6 text-text-default">{msg.content}</p>
                   </div>
                 );
               }
@@ -372,12 +374,12 @@ export default function AiChatPanel() {
             })}
 
             {isLoading ? (
-              <div className="w-full max-w-3xl border border-gray-200 bg-white px-4 py-3">
+              <div className="w-full max-w-3xl border border-border-soft bg-surface-card px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  <Loader2 className="h-4 w-4 animate-spin text-text-faint" />
                   <div>
                     <p className={sectionLabel}>Working</p>
-                    <p className="mt-1 text-label text-gray-600">
+                    <p className="mt-1 text-label text-text-muted">
                       {connectionStatus === 'offline'
                         ? 'Running local ops query or waiting for model backend'
                         : 'Preparing the answer'}
@@ -392,9 +394,9 @@ export default function AiChatPanel() {
         )}
       </div>
 
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+      <div className="flex-shrink-0 border-t border-border-soft bg-surface-card px-4 py-3">
         <div className="mx-auto w-full max-w-4xl">
-          <div className="flex items-end gap-2 border border-gray-300 bg-[#fbfbfa] px-3 py-2 focus-within:border-gray-400">
+          <div className="flex items-end gap-2 border border-border-default bg-surface-card px-3 py-2 focus-within:border-border-emphasis">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -409,21 +411,26 @@ export default function AiChatPanel() {
                     : 'Ask about shipped counts, staff breakdowns, or general ops questions…'
               }
               disabled={!sessionId || isLoading}
-              className="min-h-[24px] flex-1 resize-none bg-transparent text-sm leading-6 text-gray-800 placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
+              className="min-h-[24px] flex-1 resize-none bg-transparent text-sm leading-6 text-text-default placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
               style={{ maxHeight: '160px' }}
             />
-            <button
+            <IconButton
               type="button"
               onClick={() => void sendMessage()}
               disabled={!canSend}
-              aria-label="Send message"
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-gray-900 bg-gray-900 text-white transition-colors hover:bg-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500"
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
+              ariaLabel="Send message"
+              icon={
+                isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-text-soft" />
+                ) : (
+                  <Send className={cn('h-4 w-4', canSend ? 'text-white' : 'text-text-soft')} />
+                )
+              }
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-surface-inverse bg-surface-inverse hover:bg-surface-inverse-hover disabled:border-border-default disabled:bg-surface-strong disabled:text-text-soft"
+            />
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-micro text-gray-500">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-micro text-text-soft">
             <span>Shift+Enter for new line. Deterministic shipped summaries use PST date ranges and local app data.</span>
             <span>{connectionStatus === 'offline' ? 'Model backend offline' : 'Model backend online'}</span>
           </div>

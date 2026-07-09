@@ -12,10 +12,11 @@
 
 import { useCallback, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { Button } from '@/design-system/primitives';
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
-  'placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+  'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2 text-sm text-text-default ' +
+  'placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
 
 interface Workspace { organizationId: string; organizationName: string }
 
@@ -103,76 +104,76 @@ export default function AccountSignInPage() {
   }, [busy, email]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-surface-canvas px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-border-soft bg-surface-card p-6 shadow-sm">
         <header className="mb-4 space-y-1">
-          <h1 className="text-lg font-bold text-gray-900">Sign in</h1>
-          <p className="text-sm text-gray-500">Use your account email, or a passkey.</p>
+          <h1 className="text-lg font-bold text-text-default">Sign in</h1>
+          <p className="text-sm text-text-soft">Use your account email, or a passkey.</p>
         </header>
 
         {err && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
 
         {linkSent ? (
-          <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center">
-            <p className="text-sm font-semibold text-gray-900">Check your email</p>
-            <p className="text-xs text-gray-500">
+          <div className="space-y-2 rounded-xl border border-border-soft bg-surface-canvas px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-text-default">Check your email</p>
+            <p className="text-xs text-text-soft">
               If {email || 'that address'} has an account, a one-time sign-in link is on its way (valid 15 minutes).
             </p>
-            <button type="button" onClick={() => setLinkSent(false)} className="text-xs text-gray-500 hover:underline">
+            {/* ds-raw-button: minimal inline text link with hover:underline, not a DS Button control */}
+            <button type="button" onClick={() => setLinkSent(false)} className="text-xs text-text-soft hover:underline">
               ← Back to sign in
             </button>
           </div>
         ) : choices ? (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-gray-500">Choose a workspace</p>
-            <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+            <p className="text-xs font-medium text-text-soft">Choose a workspace</p>
+            <div className="divide-y divide-border-hairline overflow-hidden rounded-xl border border-border-soft">
               {choices.map((w) => (
+                // ds-raw-button: text-left master-detail picker row (name + "Enter →" suffix), not a standard action button
                 <button
                   key={w.organizationId}
                   type="button"
                   disabled={busy}
                   onClick={() => void signin(w.organizationId)}
-                  className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+                  className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold text-text-default hover:bg-surface-hover disabled:opacity-50"
                 >
                   {w.organizationName}
-                  <span className="text-xs text-gray-400">Enter →</span>
+                  <span className="text-xs text-text-faint">Enter →</span>
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => setChoices(null)} className="text-xs text-gray-500 hover:underline">
+            {/* ds-raw-button: minimal inline text link with hover:underline, not a DS Button control */}
+            <button type="button" onClick={() => setChoices(null)} className="text-xs text-text-soft hover:underline">
               ← Back
             </button>
           </div>
         ) : (
           <form onSubmit={(e) => { e.preventDefault(); void signin(); }} className="space-y-3">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-700">Email</span>
+              <span className="mb-1 block text-xs font-medium text-text-muted">Email</span>
               <input className={FIELD} type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com" autoComplete="username" required />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-700">Password</span>
+              <span className="mb-1 block text-xs font-medium text-text-muted">Password</span>
               <input className={FIELD} type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="Your password" autoComplete="current-password" required />
             </label>
-            <button type="submit" disabled={busy || !email || !password}
-              className="w-full rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50">
+            <Button type="submit" variant="brand" disabled={busy || !email || !password} className="w-full">
               {busy ? 'Signing in…' : 'Sign in'}
-            </button>
+            </Button>
 
-            <div className="flex items-center gap-3 py-1 text-xs text-gray-400">
-              <span className="h-px flex-1 bg-gray-200" /> or <span className="h-px flex-1 bg-gray-200" />
+            <div className="flex items-center gap-3 py-1 text-xs text-text-faint">
+              <span className="h-px flex-1 bg-surface-strong" /> or <span className="h-px flex-1 bg-surface-strong" />
             </div>
 
-            <button type="button" disabled={busy} onClick={() => void passkeySignin()}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50">
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => void passkeySignin()} className="w-full">
               Sign in with a passkey
-            </button>
+            </Button>
 
-            <button type="button" disabled={busy || !email} onClick={() => void magicLink()}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50">
+            <Button type="button" variant="secondary" disabled={busy || !email} onClick={() => void magicLink()} className="w-full">
               Email me a sign-in link
-            </button>
+            </Button>
           </form>
         )}
       </div>

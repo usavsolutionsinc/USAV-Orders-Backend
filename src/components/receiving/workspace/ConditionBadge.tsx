@@ -1,27 +1,27 @@
-import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
+'use client';
+
+import { ConditionGradeChip } from '@/components/ui/CopyChip';
+import { useConditionGradeStyle, type ConditionGradeStyleSize } from '@/hooks/useConditionGradeStyle';
 
 /**
- * Small condition-grade pill. Extracted into its own leaf module so
+ * Small condition-grade readout. Extracted into its own leaf module so
  * `ReceivingUnitRows` and `UnitSlotList` can both render it without importing
  * each other (which formed a runtime cycle). `ReceivingUnitRows` re-exports it
  * for backwards compatibility.
+ *
+ * `size="meta"` renders the shared {@link ConditionGradeChip}; `compact` keeps
+ * the lightweight text badge for tight unit-row slots.
  */
-export function ConditionBadge({ grade }: { grade: string | null | undefined }) {
-  const g = String(grade || '').trim().toUpperCase();
-  if (!g || g === 'PENDING') {
-    return <span className="text-micro font-bold uppercase tracking-widest text-gray-400">pending</span>;
+export function ConditionBadge({
+  grade,
+  size = 'compact',
+}: {
+  grade: string | null | undefined;
+  size?: ConditionGradeStyleSize;
+}) {
+  const { textClass, label } = useConditionGradeStyle(grade, size);
+  if (size === 'meta') {
+    return <ConditionGradeChip grade={grade} />;
   }
-  const tone =
-    g === 'BRAND_NEW'
-      ? 'text-yellow-600'
-      : g === 'PARTS'
-        ? 'text-amber-800'
-        : g.startsWith('USED')
-          ? 'text-gray-600'
-          : 'text-gray-500';
-  return (
-    <span className={`text-micro font-bold uppercase tracking-widest ${tone}`}>
-      {conditionGradeTableLabel(g)}
-    </span>
-  );
+  return <span className={textClass}>{label}</span>;
 }

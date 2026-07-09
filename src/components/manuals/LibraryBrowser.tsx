@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { Loader2, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { tableHeader } from '@/design-system/tokens/typography/presets';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useDebounce } from '@/hooks';
 import { UploadManualModal, RenameFolderModal } from './ManualCrudModals';
 import { useManualsData } from './library/hooks/useManualsData';
@@ -81,14 +83,14 @@ export function LibraryBrowser({ query, basePath }: LibraryBrowserProps) {
       <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
           </div>
         ) : debouncedQuery && searchResults ? (
           <SearchResults results={searchResults} onOpenFolder={(node) => nav.setCurrentPath(node.path)} {...rowProps} />
         ) : currentNode.totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <FolderIcon className="mb-3 h-10 w-10 text-gray-300" />
-            <p className={`${tableHeader} text-gray-500`}>No manuals here</p>
+            <FolderIcon className="mb-3 h-10 w-10 text-text-faint" />
+            <p className={`${tableHeader} text-text-soft`}>No manuals here</p>
           </div>
         ) : (
           <FolderView subfolders={subfolders} files={filesHere} onEnter={nav.enterFolder} {...rowProps} />
@@ -117,15 +119,18 @@ export function LibraryBrowser({ query, basePath }: LibraryBrowserProps) {
       )}
 
       {/* Upload FAB — pre-fills the new manual's folder to the current breadcrumb. */}
-      <button
-        type="button"
-        onClick={() => setUploadOpen(true)}
-        className="absolute bottom-4 right-4 z-10 inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-3.5 py-2 text-micro font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-blue-600/30 transition-colors hover:bg-blue-700"
-        title="Upload a manual"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Upload
-      </button>
+      <HoverTooltip label="Upload a manual" asChild>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => setUploadOpen(true)}
+          ariaLabel="Upload a manual"
+          icon={<Plus className="h-3.5 w-3.5" />}
+          className="absolute bottom-4 right-4 z-10"
+        >
+          Upload
+        </Button>
+      </HoverTooltip>
 
       <UploadManualModal open={uploadOpen} onClose={() => setUploadOpen(false)} defaultFolderPath={nav.currentFolderPath} />
       <RenameFolderModal

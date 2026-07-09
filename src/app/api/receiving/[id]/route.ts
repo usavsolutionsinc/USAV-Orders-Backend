@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { syncPoHeaderNotesToZoho } from '@/lib/receiving/zoho-po-notes-sync';
+import { resolveCartonZohoPoId } from '@/lib/receiving/resolve-carton-po-id';
 import pool from '@/lib/db';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -9,6 +11,7 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { getOrgPlatforms, getOrgTypes } from '@/lib/catalog/org-catalog';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
+import { isTriageLane } from '@/lib/receiving/triage-lane-policy';
 
 const SOURCE_PLATFORMS = new Set([
   'zoho',
@@ -26,6 +29,21 @@ const SOURCE_PLATFORMS = new Set([
 // Carton-level default receiving type (receiving.intake_type). Per-line
 // receiving_lines.receiving_type overrides; see migration 2026-06-13b.
 const INTAKE_TYPES = new Set(['PO', 'RETURN', 'TRADE_IN']);
+
+// Return-platform vocabulary (receiving.return_platform). Mirrors the
+// return_platform_enum DB type and the RETURN_PLATFORM_LABELS keys in
+// src/components/sidebar/receiving/receiving-sidebar-shared.ts. Kept as a local
+// Set so the API route stays independent of the UI layer, matching the
+// SOURCE_PLATFORMS / INTAKE_TYPES convention above.
+const RETURN_PLATFORMS = new Set([
+  'AMZ',
+  'EBAY_DRAGONH',
+  'EBAY_USAV',
+  'EBAY_MK',
+  'FBA',
+  'WALMART',
+  'ECWID',
+]);
 
 /**
  * GET /api/receiving/:id
@@ -57,9 +75,8 @@ export async function GET(
       orgId,
       `SELECT
          r.id,
-         r.receiving_tracking_number,
          r.shipment_id,
-         COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+         stn.tracking_number_raw AS tracking,
          COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)            AS carrier,
          r.source,
          r.source_platform,
@@ -80,8 +97,12 @@ export async function GET(
          r.zoho_warehouse_id,
          r.support_notes,
          r.listing_url,
-         to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')  AS received_at,
-         r.received_by,
+         -- 3-stage operator lifecycle: Scanned (tracking_scanned_*, door scan) →
+         -- Unboxed (r.unboxed_at, first Unbox-surface scan) → Received (the terminal
+         -- DONE time = MAX(receiving_lines.received_done_at)). "Received" is NOT the
+         -- unbox event: a carton can be unboxed (9:05) yet not finished/received.
+         to_char(recv_done.received_done_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at,
+         recv_done.received_by                                       AS received_by,
          to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS unboxed_at,
          r.unboxed_by,
          -- Tracking-scan provenance. Prefer the earliest receiving_scans row
@@ -94,6 +115,9 @@ export async function GET(
          ) AS tracking_scanned_at,
          COALESCE(rs_first.scanned_by, r.received_by) AS tracking_scanned_by,
          staff_scan.name AS tracking_scanned_by_name,
+         to_char(r.unbox_opened_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS unbox_opened_at,
+         r.unbox_opened_by,
+         staff_unbox_open.name AS unbox_opened_by_name,
          staff_unbox.name AS unboxed_by_name,
          staff_recv.name AS received_by_name,
          to_char(r.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS created_at,
@@ -112,9 +136,21 @@ export async function GET(
          ORDER BY rs.scanned_at ASC, rs.id ASC
          LIMIT 1
        ) rs_first ON TRUE
+       -- Terminal "Received" (DONE) time + receiver, aggregated over this carton's
+       -- lines. NULL until at least one line is fully received (DONE) — so the
+       -- Overview's "Received" row stays "—" while the carton is only unboxed.
+       LEFT JOIN LATERAL (
+         SELECT MAX(rl.received_done_at) AS received_done_at,
+                (ARRAY_AGG(rl.received_by ORDER BY rl.received_done_at DESC NULLS LAST)
+                   FILTER (WHERE rl.received_by IS NOT NULL))[1] AS received_by
+         FROM receiving_lines rl
+         WHERE rl.receiving_id = r.id AND rl.organization_id = $2
+           AND rl.received_done_at IS NOT NULL
+       ) recv_done ON TRUE
        LEFT JOIN staff staff_scan ON staff_scan.id = COALESCE(rs_first.scanned_by, r.received_by)
+       LEFT JOIN staff staff_unbox_open ON staff_unbox_open.id = r.unbox_opened_by
        LEFT JOIN staff staff_unbox ON staff_unbox.id = r.unboxed_by
-       LEFT JOIN staff staff_recv ON staff_recv.id = r.received_by
+       LEFT JOIN staff staff_recv ON staff_recv.id = COALESCE(recv_done.received_by, r.unboxed_by)
        WHERE r.id = $1 AND r.organization_id = $2
        LIMIT 1`,
       [id, orgId],
@@ -136,9 +172,9 @@ export async function GET(
          rl.item_name,
          rl.quantity_expected,
          rl.quantity_received,
-         rl.qa_status,
-         rl.disposition_code,
-         rl.condition_grade,
+         rlt.qa_status,
+         rlt.disposition_code,
+         rlt.condition_grade,
          rl.workflow_status::text                          AS workflow_status,
          rl.zoho_purchaseorder_id,
          rl.zoho_purchaseorder_number,
@@ -148,11 +184,14 @@ export async function GET(
          rl.source_platform_pill,
          rl.location_code,
          rl.listing_reference,
-         COALESCE(stn_line.tracking_number_raw, r_cart.receiving_tracking_number) AS tracking_number,
+         stn_line.tracking_number_raw AS tracking_number,
          rl.notes,
          to_char(rl.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
          to_char(rl.updated_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS updated_at
        FROM receiving_lines rl
+       LEFT JOIN receiving_line_testing rlt
+         ON rlt.receiving_line_id = rl.id
+        AND rlt.organization_id = rl.organization_id
        LEFT JOIN receiving r_cart ON r_cart.id = rl.receiving_id
        LEFT JOIN shipping_tracking_numbers stn_line ON stn_line.id = r_cart.shipment_id
        WHERE rl.receiving_id = $1 AND rl.organization_id = $2
@@ -166,13 +205,16 @@ export async function GET(
     if (lineIds.length > 0) {
       const serialsRes = await tenantQuery(
         orgId,
-        `SELECT id, serial_number, current_status::text AS current_status,
-                current_location, condition_grade::text AS condition_grade,
-                origin_receiving_line_id, received_at, updated_at
-         FROM serial_units
-         WHERE origin_receiving_line_id = ANY($1::int[])
-           AND organization_id = $2
-         ORDER BY created_at ASC, id ASC`,
+        // Phase 3: filter + group by origin line via serial_unit_provenance.
+        `SELECT su.id, su.serial_number, su.current_status::text AS current_status,
+                su.current_location, su.condition_grade::text AS condition_grade,
+                p.origin_id AS origin_receiving_line_id, su.received_at, su.updated_at
+         FROM serial_units su
+         JOIN serial_unit_provenance p
+           ON p.serial_unit_id = su.id AND p.origin_type = 'RECEIVING_LINE'
+          AND p.origin_id = ANY($1::int[]) AND p.organization_id = $2
+         WHERE su.organization_id = $2
+         ORDER BY su.created_at ASC, su.id ASC`,
         [lineIds, orgId],
       );
       for (const row of serialsRes.rows) {
@@ -374,6 +416,26 @@ export async function PATCH(
       values.push(next);
     }
 
+    // Carton-level OVERALL Zoho note (Zoho PO header `notes`). Editable in the
+    // workspace Zoho Notes tab; persisted here and pushed to Zoho when
+    // `push_to_zoho` is set (Save to Zoho).
+    const pushToZoho = body.push_to_zoho === true;
+    let zohoNoteEdited: string | null | undefined;
+    if (Object.prototype.hasOwnProperty.call(body, 'zoho_notes')) {
+      const raw = body.zoho_notes;
+      zohoNoteEdited = raw == null || raw === '' ? null : String(raw).trim() || null;
+      updates.push(`zoho_notes = $${idx++}`);
+      values.push(zohoNoteEdited);
+    }
+    let zohoPoIdForNotes: string | null = null;
+    if (zohoNoteEdited !== undefined && pushToZoho) {
+      // Resolve the PO id from the carton header OR any linked line — eBay-
+      // imported cartons keep the PO id on the LINE, so a header-only lookup
+      // skipped the push with `no_zoho_link`. Mirrors the per-line description
+      // sync (which already reads the line), so notes now sync just like it.
+      zohoPoIdForNotes = await resolveCartonZohoPoId(ctx.organizationId, id);
+    }
+
     // Carton-level listing URL (sourced from Zoho PO parse or operator input
     // on the receiving page). Same trim+nullify pattern as support_notes so
     // explicit clears land as NULL rather than empty strings.
@@ -403,6 +465,31 @@ export async function PATCH(
         }
       }
       updates.push(`source_platform = $${idx++}`);
+      values.push(next);
+    }
+
+    // Return flag (receiving.is_return). Coerced to a strict boolean so a
+    // stringified 'false' / 0 from a form never lands as truthy.
+    if (Object.prototype.hasOwnProperty.call(body, 'is_return')) {
+      const raw = body.is_return;
+      const next = raw === true || raw === 'true' || raw === 1 || raw === '1';
+      updates.push(`is_return = $${idx++}`);
+      values.push(next);
+    }
+
+    // Return-platform tag (receiving.return_platform). Validated against the
+    // return_platform vocabulary (return_platform_enum); '' / null clears it.
+    // Mirrors the source_platform handler block above.
+    if (Object.prototype.hasOwnProperty.call(body, 'return_platform')) {
+      const raw = body.return_platform;
+      const next = raw == null || raw === '' ? null : String(raw).trim().toUpperCase();
+      if (next != null && !RETURN_PLATFORMS.has(next)) {
+        return NextResponse.json(
+          { success: false, error: `Invalid return_platform. Allowed: ${Array.from(RETURN_PLATFORMS).join(', ')}` },
+          { status: 400 },
+        );
+      }
+      updates.push(`return_platform = $${idx++}`);
       values.push(next);
     }
 
@@ -482,11 +569,54 @@ export async function PATCH(
           registeredShipmentId = Number(shipment.id);
           updates.push(`shipment_id = $${idx++}`);
           values.push(registeredShipmentId);
-          // Keep legacy receiving_tracking_number in sync for older readers.
-          updates.push(`receiving_tracking_number = COALESCE(receiving_tracking_number, $${idx++})`);
-          values.push(trackingStr);
+          // Tracking lives solely in STN (shipment_id) — legacy
+          // receiving_tracking_number has been dropped.
         }
       }
+    }
+
+    // Triage staging — physical shelf/lane assignment (A1,
+    // docs/receiving-triage-redesign-plan.md §4). Manual assignment always wins
+    // over the auto-routed lane default (resolveTriageLane in
+    // triage-lane-policy.ts); this route only persists whatever the operator
+    // (or the auto-suggest UI) chose.
+    if (Object.prototype.hasOwnProperty.call(body, 'staging_location_id')) {
+      const raw = body.staging_location_id;
+      const next = raw == null || raw === '' ? null : Number(raw);
+      if (next != null) {
+        if (!Number.isFinite(next) || next <= 0) {
+          return NextResponse.json(
+            { success: false, error: 'Invalid staging_location_id' },
+            { status: 400 },
+          );
+        }
+        const loc = await tenantQuery(
+          ctx.organizationId,
+          `SELECT 1 FROM locations WHERE id = $1 AND organization_id = $2 AND is_active = true LIMIT 1`,
+          [next, ctx.organizationId],
+        );
+        if (loc.rows.length === 0) {
+          return NextResponse.json(
+            { success: false, error: 'staging_location_id does not match an active location for this org' },
+            { status: 400 },
+          );
+        }
+      }
+      updates.push(`staging_location_id = $${idx++}`);
+      values.push(next);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'priority_lane')) {
+      const raw = body.priority_lane;
+      const next = raw == null || raw === '' ? null : String(raw).trim().toUpperCase();
+      if (next != null && !isTriageLane(next)) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid priority_lane' },
+          { status: 400 },
+        );
+      }
+      updates.push(`priority_lane = $${idx++}`);
+      values.push(next);
     }
 
     if (updates.length === 0) {
@@ -503,8 +633,10 @@ export async function PATCH(
     const { before, result } = await withTenantTransaction(ctx.organizationId, async (client) => {
       // Snapshot the row before the update so the audit row carries a real diff.
       const beforeRow = await client.query(
-        `SELECT id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number,
-                shipment_id, support_notes, listing_url, source, receiving_tracking_number
+        `SELECT id, source_platform, intake_type, is_return, return_platform,
+                zoho_purchaseorder_id, zoho_purchaseorder_number,
+                shipment_id, support_notes, listing_url, source,
+                staging_location_id, priority_lane
          FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
         [id, ctx.organizationId],
       );
@@ -514,15 +646,19 @@ export async function PATCH(
         id: number;
         source_platform: string | null;
         intake_type: string | null;
+        is_return: boolean | null;
+        return_platform: string | null;
         zoho_purchaseorder_id: string | null;
         zoho_purchaseorder_number: string | null;
         shipment_id: number | null;
         support_notes: string | null;
         listing_url: string | null;
+        staging_location_id: number | null;
+        priority_lane: string | null;
       }>(
         `UPDATE receiving SET ${updates.join(', ')}
          WHERE id = $${values.length - 1} AND organization_id = $${orgParamIdx}
-         RETURNING id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
+         RETURNING id, source_platform, intake_type, is_return, return_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url, staging_location_id, priority_lane`,
         values,
       );
       return { before, result };
@@ -550,7 +686,36 @@ export async function PATCH(
       method: 'manual',
     });
 
-    return NextResponse.json({ success: true, receiving: result.rows[0] });
+    let zoho:
+      | Awaited<ReturnType<typeof syncPoHeaderNotesToZoho>>
+      | undefined;
+    if (zohoNoteEdited !== undefined && pushToZoho) {
+      zoho = await syncPoHeaderNotesToZoho({
+        zohoPoId: zohoPoIdForNotes,
+        notes: zohoNoteEdited ?? null,
+      });
+      after(async () => {
+        try { await invalidateCacheTags(['receiving-lines', 'receiving-logs']); } catch { /* best-effort */ }
+      });
+      if (!zoho.ok && !zoho.skipped) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: zoho.error || 'Zoho PO notes update failed',
+            receiving: result.rows[0],
+            zoho_notes: zohoNoteEdited,
+            zoho,
+          },
+          { status: 502 },
+        );
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      receiving: result.rows[0],
+      ...(zoho != null ? { zoho_notes: zohoNoteEdited, zoho } : {}),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update receiving';
     console.error('receiving/[id] PATCH failed:', error);

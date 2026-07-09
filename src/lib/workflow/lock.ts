@@ -28,12 +28,10 @@
  */
 
 import type { AdvanceLock } from './contract';
-
-const REST_URL = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, '');
-const REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+import { isRedisConfigured, redisCmd } from '@/lib/redis/client';
 
 function isConfigured(): boolean {
-  return Boolean(REST_URL && REST_TOKEN);
+  return isRedisConfigured();
 }
 
 /** Lock lifetime. Long enough for one human-paced advance, short enough that a
@@ -58,24 +56,6 @@ function mintToken(): string {
   return `${process.pid.toString(36)}-${Date.now().toString(36)}-${tokenSeq.toString(36)}-${Math.random()
     .toString(36)
     .slice(2, 10)}`;
-}
-
-/** Run one Redis command through the Upstash REST pipeline; returns its result. */
-async function redisCmd(command: (string | number)[]): Promise<unknown> {
-  const res = await fetch(`${REST_URL}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${REST_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify([command]),
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`upstash ${res.status}`);
-  const data = (await res.json()) as Array<{ result?: unknown; error?: string }>;
-  const first = Array.isArray(data) ? data[0] : (data as { result?: unknown; error?: string });
-  if (first?.error) throw new Error(first.error);
-  return first?.result;
 }
 
 export const redisAdvanceLock: AdvanceLock = {

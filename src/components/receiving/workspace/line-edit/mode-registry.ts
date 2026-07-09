@@ -7,12 +7,12 @@
  *   - `triage`  (/receiving?mode=triage)— fast classify pass → save for unbox
  *   - `testing` (/tech?view=testing)    — verdict pills → pass · print
  *
- * Per-mode CARD VISIBILITY for the shared unbox/triage body lives in
- * `workspace-capabilities.ts` (the `caps` matrix). This registry owns the
- * cross-mode chrome config the unified pane header needs — which toolbar
- * actions a mode shows and which rail/table navigation channel its prev/next
- * drives — so the header is one primitive configured by data, not a bespoke
- * toolbar per mode. Adding a mode = one row here.
+ * Card visibility is no longer a shared matrix — unbox and triage are separate
+ * panels (`LineEditPanel` / `TriagePanel`) that each declare their own sections.
+ * This registry owns only the cross-mode chrome config the unified pane header
+ * needs — which toolbar actions a mode shows and which rail/table navigation
+ * channel its prev/next drives — so the header is one primitive configured by
+ * data, not a bespoke toolbar per mode. Adding a mode = one row here.
  */
 
 export type WorkspaceMode = 'unbox' | 'triage' | 'testing';
@@ -23,13 +23,16 @@ export type HeaderActionKey =
   | 'share' // copy/native-share a deep link to this package
   | 'audit' // open the inventory-events audit modal
   | 'copy' // copy package + PO details to the clipboard
+  | 'photoNote' // send this PO's photos to a Zendesk ticket as an internal note
   | 'pair' // open the cross-platform SKU pairing modal (testing only)
   | 'details'; // right-slot Info → receiving-details overlay
 
 /**
- * Custom-event name a mode's prev/next chevrons dispatch. Receiving navigates
- * the table/rail; testing navigates the tech rail (different feed, different
- * event) — so the shared header reads this instead of hard-coding the channel.
+ * Custom-event name a mode's prev/next chevrons dispatch.
+ *   - `receiving-navigate-table` → Unbox/Triage sidebar rail (and History/
+ *     Incoming table when those modes are active)
+ *   - `testing-navigate-rail` → Testing sidebar rail
+ * Shared header reads this instead of hard-coding the channel.
  */
 export type NavChannel = 'receiving-navigate-table' | 'testing-navigate-rail';
 
@@ -47,13 +50,13 @@ export interface ModeDef {
 export const WORKSPACE_MODES: Record<WorkspaceMode, ModeDef> = {
   unbox: {
     label: 'Unbox',
-    headerActions: ['refresh', 'share', 'audit', 'copy'],
+    headerActions: ['refresh', 'share', 'audit', 'copy', 'photoNote'],
     showDetails: true,
     navChannel: 'receiving-navigate-table',
   },
   triage: {
     label: 'Receiving',
-    headerActions: ['refresh', 'share', 'audit', 'copy'],
+    headerActions: ['refresh', 'share', 'audit', 'copy', 'photoNote'],
     showDetails: true,
     navChannel: 'receiving-navigate-table',
   },

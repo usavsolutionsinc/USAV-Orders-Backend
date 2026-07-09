@@ -22,7 +22,7 @@ export function SourcingWorkspace() {
   const mode = resolveSourcingMode(searchParams.get('mode'));
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
+    <div className="h-full overflow-y-auto bg-surface-canvas">
       {mode === 'scout' ? (
         <ScoutPane />
       ) : mode === 'queue' ? (

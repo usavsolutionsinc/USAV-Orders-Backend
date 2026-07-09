@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, Pencil } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -97,15 +99,15 @@ export function FnskuCatalogInfoPanel({
       <div className="mb-1 flex items-center justify-between">
         <p className={sectionLabel}>Catalog Info</p>
         {allowEdit ? (
-          <button
-            type="button"
-            onClick={openCatalogEdit}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Edit catalog details"
-            title="Edit catalog details"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
+          <HoverTooltip label="Edit catalog details" asChild>
+            <IconButton
+              type="button"
+              onClick={openCatalogEdit}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+              ariaLabel="Edit catalog details"
+              icon={<Pencil className="h-3.5 w-3.5" />}
+            />
+          </HoverTooltip>
         ) : null}
       </div>
       <div>
@@ -113,67 +115,67 @@ export function FnskuCatalogInfoPanel({
           label="Product Title"
           actions={
             productTitle ? (
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(productTitle)}
-                className="text-gray-400 transition-colors hover:text-gray-700"
-                aria-label="Copy product title"
-                title="Copy product title"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
+              <HoverTooltip label="Copy product title" asChild>
+                <IconButton
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(productTitle)}
+                  className="text-text-faint hover:text-text-muted"
+                  ariaLabel="Copy product title"
+                  icon={<Copy className="h-3.5 w-3.5" />}
+                />
+              </HoverTooltip>
             ) : null
           }
         >
-          <p className="whitespace-pre-wrap break-words text-sm font-bold text-gray-900">
-            {productTitle || <span className="text-gray-400">No title</span>}
+          <p className="whitespace-pre-wrap break-words text-sm font-bold text-text-default">
+            {productTitle || <span className="text-text-faint">No title</span>}
           </p>
         </DetailsPanelRow>
         <DetailsPanelRow
           label="Condition"
           actions={
             condition ? (
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(condition)}
-                className="text-gray-400 transition-colors hover:text-gray-700"
-                aria-label="Copy condition"
-                title="Copy condition"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
+              <HoverTooltip label="Copy condition" asChild>
+                <IconButton
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(condition)}
+                  className="text-text-faint hover:text-text-muted"
+                  ariaLabel="Copy condition"
+                  icon={<Copy className="h-3.5 w-3.5" />}
+                />
+              </HoverTooltip>
             ) : null
           }
         >
-          <p className="text-sm font-bold text-gray-900">
-            {condition || <span className="text-gray-400">—</span>}
+          <p className="text-sm font-bold text-text-default">
+            {condition || <span className="text-text-faint">—</span>}
           </p>
         </DetailsPanelRow>
         <DetailsPanelRow label="FNSKU">
           {fnskuTrimmed ? (
             <FnskuChip value={fnskuTrimmed} />
           ) : (
-            <p className="font-mono text-sm font-bold text-gray-400">—</p>
+            <p className="font-mono text-sm font-bold text-text-faint">—</p>
           )}
         </DetailsPanelRow>
         <DetailsPanelRow
           label="ASIN"
           actions={
             asin ? (
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(asin)}
-                className="text-gray-400 transition-colors hover:text-gray-700"
-                aria-label="Copy ASIN"
-                title="Copy ASIN"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
+              <HoverTooltip label="Copy ASIN" asChild>
+                <IconButton
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(asin)}
+                  className="text-text-faint hover:text-text-muted"
+                  ariaLabel="Copy ASIN"
+                  icon={<Copy className="h-3.5 w-3.5" />}
+                />
+              </HoverTooltip>
             ) : null
           }
         >
-          <p className="font-mono text-sm font-bold text-gray-900">
-            {asin || <span className="text-gray-400">—</span>}
+          <p className="font-mono text-sm font-bold text-text-default">
+            {asin || <span className="text-text-faint">—</span>}
           </p>
         </DetailsPanelRow>
         <DetailsPanelRow
@@ -181,20 +183,20 @@ export function FnskuCatalogInfoPanel({
           className="last:border-b-0"
           actions={
             sku ? (
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(sku)}
-                className="text-gray-400 transition-colors hover:text-gray-700"
-                aria-label="Copy SKU"
-                title="Copy SKU"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
+              <HoverTooltip label="Copy SKU" asChild>
+                <IconButton
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(sku)}
+                  className="text-text-faint hover:text-text-muted"
+                  ariaLabel="Copy SKU"
+                  icon={<Copy className="h-3.5 w-3.5" />}
+                />
+              </HoverTooltip>
             ) : null
           }
         >
-          <p className="font-mono text-sm font-bold text-gray-900">
-            {sku || <span className="text-gray-400">—</span>}
+          <p className="font-mono text-sm font-bold text-text-default">
+            {sku || <span className="text-text-faint">—</span>}
           </p>
         </DetailsPanelRow>
       </div>

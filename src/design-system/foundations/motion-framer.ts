@@ -31,6 +31,16 @@ export const framerDuration = {
   tableRowMount: 0.22,
   /** Workbench right-pane / detail crossfade */
   workbenchPaneMount: 0.18,
+  /** Photo viewer details column — slides in from the right */
+  photoContextPanelMount: 0.22,
+  /** Global detail-stack overlay card (inset, rounded) — enter/exit */
+  detailStackOverlayMount: 0.22,
+  /**
+   * Heavy right-pane WORKSPACE overlay settle (receiving line workspace).
+   * Slower + opacity-led than `workbenchPaneMount` — a carton→carton swap is a
+   * big subtree, so it dissolves gently rather than snapping.
+   */
+  workbenchPaneSettle: 0.3,
   /** Sidebar section expand/collapse */
   sidebarExpand: 0.26,
   /** Dropdown menu open/close */
@@ -56,6 +66,28 @@ export const framerTransition = {
   /** Workbench right-pane / detail crossfade — pair with `framerPresence.workbenchPane` */
   workbenchPaneMount: {
     duration: framerDuration.workbenchPaneMount,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /** Photo viewer details column — pair with `framerPresence.photoContextPanel` */
+  photoContextPanelMount: {
+    duration: framerDuration.photoContextPanelMount,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /** Detail-stack overlay card — pair with `framerPresence.detailStackOverlay` */
+  detailStackOverlayMount: {
+    duration: framerDuration.detailStackOverlayMount,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /**
+   * Heavy right-pane WORKSPACE overlay crossfade (receiving line workspace) — a
+   * slower, opacity-led settle. Pair with `framerPresence.workbenchPaneSettle`;
+   * consume through `useMotionTransition` so reduced-motion collapses it.
+   */
+  workbenchPaneSettle: {
+    duration: framerDuration.workbenchPaneSettle,
     ease: motionBezier.easeOut,
   } satisfies Transition,
 
@@ -170,6 +202,19 @@ export const framerTransition = {
     ease: motionBezier.easeOut,
   } satisfies Transition,
 
+  /**
+   * Media-library thumbnail → fullscreen viewer hero morph (`layoutId`-driven).
+   * Spring with no overshoot — same rationale as `viewerPaging`: a bounce on a
+   * photo's own edges reads as tacky. Only ever pairs a grid tile with the
+   * viewer's *first* shown image (see PhotoViewerModal) — never used for
+   * in-viewer prev/next, which stays a plain crossfade.
+   */
+  photoHeroMorph: {
+    type: 'spring' as const,
+    visualDuration: 0.45,
+    bounce: 0,
+  } satisfies Transition,
+
   /** Copy feedback flash */
   chipCopyFeedback: {
     duration: framerDuration.chipCopyFeedback,
@@ -225,6 +270,23 @@ export const framerTransition = {
     type: 'spring' as const,
     damping: 30,
     stiffness: 500,
+  } satisfies Transition,
+
+  /**
+   * Swimlane board column reflow — lanes slide into new grid slots when toggling
+   * 1-up / 2-up / 3-up. No bounce (ops dashboard); pair with `layout` on bubbles.
+   */
+  boardLaneLayout: {
+    type: 'spring' as const,
+    visualDuration: 0.38,
+    bounce: 0,
+  } satisfies Transition,
+
+  /** Table chip columns (platform / order id / tracking) reflow when toggling visibility */
+  chipColumnLayout: {
+    type: 'spring' as const,
+    visualDuration: 0.28,
+    bounce: 0,
   } satisfies Transition,
 
   /**
@@ -328,6 +390,43 @@ export const framerPresence = {
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -6 },
   },
+  /**
+   * Photo viewer details column — slides in from the right while the image-lane
+   * toolbar stays scoped to the stage. Opacity + x only (GPU-composited); flex
+   * width is instant. Consume via `useMotionPresence` + `useMotionTransition`.
+   */
+  photoContextPanel: {
+    initial: { opacity: 0, x: 20 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: 12 },
+  },
+  /**
+   * Global detail-stack overlay — inset rounded card over the viewport.
+   * Scale + opacity only (GPU-composited); no edge slide. Exits ~75% of enter
+   * duration via `framerDuration.detailStackOverlayMount`. Pair with
+   * `framerTransition.detailStackOverlayMount` + `useMotionPresence`.
+   */
+  detailStackOverlay: {
+    initial: { opacity: 0, scale: 0.97 },
+    animate: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 0.98 },
+  },
+  /**
+   * Heavy right-pane WORKSPACE overlay crossfade (the receiving line workspace
+   * swapping carton→carton). PURE opacity — no y on enter or exit — so two
+   * full-bleed heavy panes can never slide in opposite directions (the old
+   * double-image jitter); they simply cross-dissolve. The "settle" personality
+   * lives one level in, as the panel's staggered card rise
+   * (`staggerRevealRiseItem`), so the pane fade and the card rise never compound
+   * on the same element. Opacity is GPU-composited, so a big subtree only fades
+   * (no per-frame layout). Pair with `framerTransition.workbenchPaneSettle` and
+   * consume via `useMotionPresence`. See `.claude/rules/display/motion-crossfade.md`.
+   */
+  workbenchPaneSettle: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+  },
 } as const;
 
 /** Tech / packer grid chips — shared `whileTap` target */
@@ -412,14 +511,17 @@ export const framerTransitionMobile = {
 
   /**
    * Fullscreen photo viewer paging / dismiss settle — crisp spring with no
-   * overshoot (bounce reads as tacky on a photo). Slightly stiffer than
-   * sheetSlide so a swipe-to-next snaps confidently.
+   * overshoot (bounce reads as tacky on a photo). Duration-based (visualDuration
+   * + bounce) rather than stiffness/damping so the snap lands in the SAME visual
+   * time whether the finger barely nudged or hard-flicked — physics springs vary
+   * their perceived duration with distance + release velocity, which is what made
+   * paging feel uneven and left a slow overdamped tail crawling into the frame.
+   * Inherited flick `velocity` (passed at the call site) is still respected.
    */
   viewerPaging: {
     type: 'spring' as const,
-    damping: 38,
-    stiffness: 420,
-    mass: 0.6,
+    visualDuration: 0.32,
+    bounce: 0,
   } satisfies Transition,
 
   /** Camera fullscreen enter — opacity + scale */

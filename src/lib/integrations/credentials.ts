@@ -37,9 +37,17 @@ export type IntegrationProvider =
   | 'usps'
   | 'zendesk'
   | 'google_sheets'
+  | 'google_drive'
   | 'ably'
   | 'ollama'
-  | 'stripe';
+  | 'stripe'
+  | 'nextiva'
+  | 'shipstation'
+  // AI search providers (per-org BYOK — docs/ai-search-modernization-plan.md).
+  // 'ollama' above doubles as the self-hosted/custom OpenAI-compatible slot.
+  | 'ai_gateway'
+  | 'openai'
+  | 'anthropic';
 
 export interface EbayCredentials {
   appId: string;
@@ -88,9 +96,99 @@ export interface FedexCredentials { clientId: string; clientSecret: string; env:
 export interface UspsCredentials { consumerKey: string; consumerSecret: string }
 export interface ZendeskCredentials { subdomain: string; email: string; apiToken: string }
 export interface GoogleSheetsCredentials { clientEmail: string; privateKey: string; defaultSpreadsheetId?: string }
+
+/**
+ * Google Drive photo-backup credentials. Connected per-tenant via "Sign in with
+ * Google" (OAuth, scope drive.file). The clientId/clientSecret are the SHARED
+ * app credentials (one Google Cloud OAuth client for the whole platform) copied
+ * into the row so the refresh path is self-contained at runtime — mirrors the
+ * Amazon LWA model. The refreshToken + rootFolderId are the per-tenant secrets.
+ *
+ *   - rootFolderId   — the Drive folder this app created in the user's Drive;
+ *     all backups land under it (and its yyyy/MM subfolders).
+ *   - accountEmail   — the connected Google account (display only).
+ *   - accessToken/expiresAt — last minted short-lived token (cache hint; the
+ *     authoritative cache is in-process, see photos/drive/client.ts).
+ */
+export interface GoogleDriveCredentials {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  accessToken?: string;
+  /** Access-token expiry, epoch ms. */
+  expiresAt?: number;
+  accountEmail?: string;
+  rootFolderId: string;
+  scope?: string;
+}
 export interface AblyCredentials { apiKey: string }
-export interface OllamaCredentials { baseUrl: string; tunnelUrl?: string; model: string }
+export interface OllamaCredentials {
+  baseUrl: string;
+  tunnelUrl?: string;
+  model: string;
+  /** Embedding model served by the same endpoint (e.g. nomic-embed-text). */
+  embedModel?: string;
+  /** Optional bearer for secured self-hosted endpoints. */
+  apiKey?: string;
+}
+
+/**
+ * Per-org AI search providers (BYOK). All speak the OpenAI wire format:
+ * ai_gateway → https://ai-gateway.vercel.sh/v1 (any model string),
+ * openai → https://api.openai.com/v1,
+ * anthropic → https://api.anthropic.com/v1 (OpenAI-compat layer; CHAT ONLY —
+ * Anthropic has no embeddings API, so embeds fall back to the next source).
+ */
+export interface AiGatewayCredentials { apiKey: string; chatModel?: string; embedModel?: string }
+export interface OpenAiCredentials { apiKey: string; chatModel?: string; embedModel?: string }
+export interface AnthropicCredentials { apiKey: string; chatModel?: string }
 export interface StripeCredentials { secretKey: string; publishableKey: string; webhookSecret: string }
+
+/**
+ * Nextiva (business phone) credentials. Auth model is confirmed in the Phase 0
+ * spike (docs/nextiva-voice-support-mode-plan.md §9) — vault API key vs OAuth
+ * refresh token — so both shapes are optional here until that lands.
+ *   - accountId / locationId — Nextiva account ref, used to resolve org on the
+ *     (tokenless) legacy webhook path.
+ *   - webhookToken  — our per-tenant, unguessable id in the webhook URL
+ *     (/api/integrations/nextiva/webhook/{webhookToken}); also mirrored to the
+ *     indexed organization_integrations.webhook_token column for O(1) token→org.
+ *   - webhookSigningSecret — this org's OWN HMAC secret; deliveries are verified
+ *     against it so a forged body cannot cross tenants. (Mirrors the Zoho model.)
+ */
+export interface NextivaCredentials {
+  apiKey?: string;
+  refreshToken?: string;
+  accessToken?: string;
+  expiresAt?: number;
+  accountId?: string;
+  locationId?: string;
+  /** Nextiva extension to originate click-to-call from, per agent (optional). */
+  defaultExtension?: string;
+  webhookToken?: string;
+  webhookSigningSecret?: string;
+}
+
+/**
+ * ShipStation credentials.
+ *   - apiKey        — the v2 (api.shipstation.com) API key: rate-shop, buy/void
+ *                     labels, tracking, webhooks. REQUIRED for the label engine.
+ *   - v1ApiKey / v1ApiSecret — the legacy v1 (ssapi.shipstation.com) Basic-auth
+ *                     pair. OPTIONAL, but the ONLY way to pull orders (SKUs +
+ *                     stored weight) since v2 has no order-list endpoint.
+ *   - webhookToken / webhookSecret — per-tenant identity for the tokenized
+ *                     webhook URL (mirrors the Zoho/Nextiva model): the token is
+ *                     the unguessable path segment (also mirrored to
+ *                     organization_integrations.webhook_token) and the secret is
+ *                     this org's shared secret checked before the RSA signature.
+ */
+export interface ShipStationCredentials {
+  apiKey: string;
+  v1ApiKey?: string;
+  v1ApiSecret?: string;
+  webhookToken?: string;
+  webhookSecret?: string;
+}
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
 
@@ -211,6 +309,39 @@ function envFallback(provider: IntegrationProvider): unknown | null {
       const cred: StripeCredentials = { secretKey, publishableKey, webhookSecret };
       return cred;
     }
+    case 'nextiva': {
+      // Vault-only by default; an env bootstrap is supported for USAV's single
+      // tenant so the connector can light up before the settings Connect flow.
+      const apiKey = process.env.NEXTIVA_API_KEY;
+      const webhookSigningSecret = process.env.NEXTIVA_WEBHOOK_SECRET;
+      if (!apiKey) return null;
+      const cred: NextivaCredentials = {
+        apiKey,
+        accountId: process.env.NEXTIVA_ACCOUNT_ID || undefined,
+        webhookToken: process.env.NEXTIVA_WEBHOOK_TOKEN || undefined,
+        webhookSigningSecret: webhookSigningSecret || undefined,
+      };
+      return cred;
+    }
+    case 'shipstation': {
+      // USAV single-tenant env bootstrap (mirrors nextiva) so the label engine
+      // can light up before the settings Connect flow. apiKey = v2 key; the v1
+      // pair + webhook secret are optional.
+      const apiKey = process.env.SHIPSTATION_API_KEY;
+      if (!apiKey) return null;
+      const cred: ShipStationCredentials = {
+        apiKey,
+        v1ApiKey: process.env.SHIPSTATION_V1_API_KEY || undefined,
+        v1ApiSecret: process.env.SHIPSTATION_V1_API_SECRET || undefined,
+        webhookToken: process.env.SHIPSTATION_WEBHOOK_TOKEN || undefined,
+        webhookSecret: process.env.SHIPSTATION_WEBHOOK_SECRET || undefined,
+      };
+      return cred;
+    }
+    case 'google_drive':
+      // OAuth-only, connected per-tenant via Sign in with Google. No env bridge —
+      // there is no single-tenant Drive backup to mirror from env.
+      return null;
     case 'ecwid': case 'square':
       return null; // Add when needed.
   }

@@ -84,12 +84,12 @@ export function DataSourcePopover({ info, anchorRef, open, onOpenChange }: DataS
       ref={panelRef}
       role="dialog"
       aria-label={`Data source: ${info.headline}`}
-      className="fixed z-modal rounded-2xl border border-[#E8E4DD] bg-white p-3.5 text-left shadow-[0_8px_32px_rgba(45,42,38,0.12)]"
+      className="fixed z-modal rounded-2xl border border-border-soft bg-surface-card p-3.5 text-left shadow-[0_8px_32px_rgba(45,42,38,0.12)]"
       style={{ top: pos.top, left: pos.left, width: WIDTH, maxHeight: 'min(420px, 70vh)', overflowY: 'auto' }}
     >
-      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#A89F91]">Data source</p>
-      <p className="mt-1 text-[13px] font-bold leading-snug text-[#2D2A26]">{info.headline}</p>
-      <ul className="mt-2.5 space-y-1.5 text-[11px] font-medium leading-relaxed text-[#6B6356]">
+      <p className="text-caption font-black uppercase tracking-[0.12em] text-text-muted">Data source</p>
+      <p className="mt-1 text-[13px] font-bold leading-snug text-text-default">{info.headline}</p>
+      <ul className="mt-2.5 space-y-1.5 text-caption font-medium leading-relaxed text-text-muted">
         {info.bullets.map((b, i) => (
           <li key={i} className="flex gap-2">
             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#C4BAA8]" />
@@ -97,10 +97,10 @@ export function DataSourcePopover({ info, anchorRef, open, onOpenChange }: DataS
           </li>
         ))}
       </ul>
-      <p className="mt-3 border-t border-[#F0EDE8] pt-2.5 text-[10px] font-semibold uppercase tracking-wide text-[#A89F91]">
+      <p className="mt-3 border-t border-border-soft pt-2.5 text-micro font-semibold uppercase tracking-wide text-text-muted">
         API route
       </p>
-      <code className="mt-1 block break-all rounded-lg bg-[#FAFAF8] px-2 py-1.5 font-mono text-[10px] leading-relaxed text-[#2D2A26]">
+      <code className="mt-1 block break-all rounded-lg bg-surface-card px-2 py-1.5 font-mono text-micro leading-relaxed text-text-default">
         {info.endpoint}
       </code>
     </div>,

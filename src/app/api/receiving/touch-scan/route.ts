@@ -3,6 +3,7 @@ import { getCarrier } from '@/lib/tracking-format';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { recordReceivingScan } from '@/lib/receiving/record-scan';
+import { recordUnboxScanOpened } from '@/lib/receiving/unbox-scan-opened';
 
 /**
  * POST /api/receiving/touch-scan
@@ -43,6 +44,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           ? row.carrier
           : getCarrier(trackingNumber);
     const source = row.source === 'zoho_po' ? 'zoho_po' : 'unmatched';
+    const intakeSurface =
+      String(body?.intakeSurface ?? '').trim().toLowerCase() === 'unbox' ? 'unbox' : 'triage';
 
     const scanId = await recordReceivingScan(
       receivingId,
@@ -50,7 +53,18 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       carrier,
       ctx.staffId,
       source,
+      { intakeSurface },
     );
+
+    if (intakeSurface === 'unbox') {
+      await recordUnboxScanOpened(
+        ctx.organizationId,
+        receivingId,
+        ctx.staffId,
+        scanId,
+        trackingNumber,
+      );
+    }
 
     return NextResponse.json({ success: true, scan_id: scanId, receiving_id: receivingId });
   } catch (error) {

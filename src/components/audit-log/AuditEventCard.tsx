@@ -64,10 +64,10 @@ export const KIND_TONE: Record<string, string> = {
   TEST_PASS: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   TEST_FAIL: 'bg-rose-50 text-rose-700 ring-rose-200',
   PUTAWAY: 'bg-violet-50 text-violet-700 ring-violet-200',
-  MOVED: 'bg-slate-100 text-slate-700 ring-slate-200',
+  MOVED: 'bg-surface-sunken text-text-muted ring-border-soft',
   // Lifecycle spine: outbound
   ALLOCATED: 'bg-sky-50 text-sky-700 ring-sky-200',
-  RELEASED: 'bg-slate-100 text-slate-700 ring-slate-200',
+  RELEASED: 'bg-surface-sunken text-text-muted ring-border-soft',
   PICKED: 'bg-amber-50 text-amber-700 ring-amber-200',
   PACKED: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   LABELED: 'bg-violet-50 text-violet-700 ring-violet-200',
@@ -84,14 +84,14 @@ function pickString(v: unknown): string | null {
 }
 
 export function AuditEventCard({ event }: { event: AuditTimelineEvent }) {
-  const tone = KIND_TONE[event.kind] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
+  const tone = KIND_TONE[event.kind] ?? 'bg-surface-sunken text-text-muted ring-border-soft';
   // serial/sku may be top-level (Tech) or tucked into detail (Packing spine rows).
   const serial = event.serial_number ?? pickString(event.detail?.serial_number);
   const sku = event.sku ?? pickString(event.detail?.sku);
   const photoUrl = event.source === 'photo' ? pickString(event.detail?.url) : null;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3">
+    <div className="rounded-xl border border-border-soft bg-surface-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -100,16 +100,16 @@ export function AuditEventCard({ event }: { event: AuditTimelineEvent }) {
             >
               {kindLabel(event.kind)}
             </span>
-            {event.station && <span className="text-micro text-gray-500">{event.station}</span>}
+            {event.station && <span className="text-micro text-text-soft">{event.station}</span>}
           </div>
-          <div className="mt-1 flex items-center gap-1 text-caption text-gray-500">
+          <div className="mt-1 flex items-center gap-1 text-caption text-text-soft">
             <UserIcon className="h-3 w-3" />
             {event.actor_name ?? (event.actor_staff_id ? `#${event.actor_staff_id}` : 'System')}
           </div>
           {(serial || sku) && (
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-micro text-gray-500">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-micro text-text-soft">
               {serial && (
-                <span className="inline-flex items-center gap-1 font-mono font-semibold text-gray-700">
+                <span className="inline-flex items-center gap-1 font-mono font-semibold text-text-muted">
                   <FileText className="h-3 w-3" />
                   {serial}
                 </span>
@@ -118,11 +118,11 @@ export function AuditEventCard({ event }: { event: AuditTimelineEvent }) {
             </div>
           )}
         </div>
-        <div className="shrink-0 text-micro text-gray-400">{fmtTime(event.occurred_at)}</div>
+        <div className="shrink-0 text-micro text-text-faint">{fmtTime(event.occurred_at)}</div>
       </div>
 
       {event.notes && (
-        <p className="mt-2 whitespace-pre-wrap break-words text-label text-gray-700">
+        <p className="mt-2 whitespace-pre-wrap break-words text-label text-text-muted">
           {event.notes}
         </p>
       )}
@@ -142,7 +142,7 @@ export function AuditEventCard({ event }: { event: AuditTimelineEvent }) {
       )}
 
       {(event.before || event.after) && (
-        <pre className="mt-2 overflow-x-auto rounded-md bg-gray-50 p-2 text-micro text-gray-700">
+        <pre className="mt-2 overflow-x-auto rounded-md bg-surface-canvas p-2 text-micro text-text-muted">
           {JSON.stringify({ before: event.before, after: event.after }, null, 2)}
         </pre>
       )}
@@ -159,7 +159,7 @@ export function AuditCenterMessage({
 }) {
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <p className={`text-center text-label ${tone === 'error' ? 'text-rose-600' : 'text-gray-400'}`}>
+      <p className={`text-center text-label ${tone === 'error' ? 'text-rose-600' : 'text-text-faint'}`}>
         {label}
       </p>
     </div>

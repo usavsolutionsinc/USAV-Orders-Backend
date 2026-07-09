@@ -28,4 +28,4 @@ export const POST = withAuth(async (request, ctx) => {
     console.error('[POST /api/rma/[id]/mark-received] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'orders.view' });
+}, { permission: 'rma.manage' });

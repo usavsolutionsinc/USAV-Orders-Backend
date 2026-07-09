@@ -95,7 +95,7 @@ export function PackerSidebarPanel() {
       {/* Mode rail — Standard / Fragile / Multi-Item. Hidden when the master-nav
           L2 ModeRail is the single switcher (see MASTER_NAV_RAIL_PAGES). */}
       {!masterNavEnabled && (
-        <div className={`shrink-0 border-b border-gray-100 ${SIDEBAR_GUTTER} py-1.5`}>
+        <div className={`shrink-0 border-b border-border-hairline ${SIDEBAR_GUTTER} py-1.5`}>
           <HorizontalButtonSlider
             items={PACK_MODE_ITEMS}
             value={packMode}

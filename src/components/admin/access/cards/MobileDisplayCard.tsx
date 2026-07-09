@@ -8,6 +8,8 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import {
   MOBILE_NAV_TAB_IDS,
   resolveMobileDisplayConfig,
@@ -82,25 +84,21 @@ export function MobileDisplayCard({
   const primaryRoleLabel = rolesForResolve[0]?.label ?? '—';
 
   return (
-    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-white shadow-sm`}>
-      <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+    <section className={`overflow-hidden rounded-2xl border ${borderClass} bg-surface-card shadow-sm`}>
+      <header className="flex items-center justify-between border-b border-border-hairline px-5 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Mobile display</h2>
-          <p className="mt-0.5 text-caption text-gray-500">
+          <h2 className="text-sm font-semibold text-text-default">Mobile display</h2>
+          <p className="mt-0.5 text-caption text-text-soft">
             Controls what this staff sees on their phone. Defaults inherit from <b>{primaryRoleLabel}</b>.
             Edit role defaults in <a href="/settings/roles" className="text-blue-600 hover:underline">Roles</a>.
           </p>
         </div>
         {hasOverride && (
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={busy}
-            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            title="Clear per-staff override; fall back to role default"
-          >
-            Reset to role
-          </button>
+          <HoverTooltip label="Clear per-staff override; fall back to role default" asChild>
+            <Button type="button" variant="secondary" size="sm" onClick={onReset} disabled={busy}>
+              Reset to role
+            </Button>
+          </HoverTooltip>
         )}
       </header>
 
@@ -108,11 +106,12 @@ export function MobileDisplayCard({
         {/* Bottom nav enabled */}
         <label className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-semibold text-gray-900">Bottom navigation bar</div>
-            <p className="mt-0.5 text-caption text-gray-500">
+            <div className="text-sm font-semibold text-text-default">Bottom navigation bar</div>
+            <p className="mt-0.5 text-caption text-text-soft">
               When off, the phone is locked to a single page — no tabs to wander into other sections.
             </p>
           </div>
+          {/* ds-raw-button: role="switch" toggle track + knob, not a Button/IconButton */}
           <button
             type="button"
             role="switch"
@@ -120,11 +119,11 @@ export function MobileDisplayCard({
             onClick={() => setDraftEnabled((v) => !v)}
             disabled={busy}
             className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-              draftEnabled ? 'bg-blue-600' : 'bg-gray-200'
+              draftEnabled ? 'bg-blue-600' : 'bg-surface-strong'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-surface-card shadow ring-0 transition duration-200 ${
                 draftEnabled ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -133,14 +132,15 @@ export function MobileDisplayCard({
 
         {/* Tabs */}
         <div>
-          <div className="text-sm font-semibold text-gray-900">Tabs</div>
-          <p className="mb-2 mt-0.5 text-caption text-gray-500">
+          <div className="text-sm font-semibold text-text-default">Tabs</div>
+          <p className="mb-2 mt-0.5 text-caption text-text-soft">
             Tap to toggle. Scan stays centre and raised when included.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {MOBILE_NAV_TAB_IDS.map((id) => {
               const on = draftTabs.includes(id);
               return (
+                // ds-raw-button: segmented multi-select tab toggle (conditional active fill), not a single DS variant
                 <button
                   key={id}
                   type="button"
@@ -149,7 +149,7 @@ export function MobileDisplayCard({
                   className={`rounded-full px-2.5 py-1 text-caption font-semibold ring-1 ring-inset transition ${
                     on
                       ? 'bg-blue-100 text-blue-800 ring-blue-300'
-                      : 'bg-gray-50 text-gray-500 ring-gray-200 hover:bg-gray-100'
+                      : 'bg-surface-canvas text-text-soft ring-border-soft hover:bg-surface-sunken'
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {TAB_LABELS[id]}
@@ -160,18 +160,13 @@ export function MobileDisplayCard({
         </div>
 
         {/* Save row */}
-        <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div className="text-micro text-gray-500">
+        <div className="flex items-center justify-between gap-3 border-t border-border-hairline pt-3">
+          <div className="text-micro text-text-soft">
             {hasOverride ? 'Per-staff override active.' : 'Inheriting role default.'}
           </div>
-          <button
-            type="button"
-            onClick={save}
-            disabled={busy || !dirty}
-            className="rounded-md bg-gray-900 px-3 py-1.5 text-caption font-semibold uppercase tracking-wider text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button type="button" variant="brand" size="sm" onClick={save} disabled={busy || !dirty}>
             {busy ? 'Saving…' : dirty ? 'Save override' : 'Saved'}
-          </button>
+          </Button>
         </div>
       </div>
     </section>

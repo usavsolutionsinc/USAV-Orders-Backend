@@ -69,7 +69,7 @@ export function FbaTrackingGroupDisplay({
       : undefined;
 
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
+    <div className="border-b border-border-hairline last:border-b-0">
       {/* Tracking header — same visual as editor (TrackingChip) */}
       <div
         className={`flex items-center gap-2 border-b border-blue-50 bg-blue-50/30 px-3 py-1.5 ${
@@ -90,7 +90,7 @@ export function FbaTrackingGroupDisplay({
         </span>
       </div>
 
-      <div className="divide-y divide-gray-50">
+      <div className="divide-y divide-border-hairline">
         {items.map((item) => {
           const qty = resolveQty(item);
           const isSelected = selectedIds ? selectedIds.has(item.item_id) : true;

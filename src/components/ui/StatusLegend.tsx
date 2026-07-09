@@ -47,7 +47,7 @@ export function StatusLegend<K extends string>({
 }) {
   const interactive = Boolean(onSelectState);
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-gray-50/70 px-3 py-2 ring-1 ring-inset ring-gray-100">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-surface-canvas/70 px-3 py-2 ring-1 ring-inset ring-border-hairline">
       {items.map(({ state, short, fold }) => {
         const m = meta[state];
         const value = counts[state] + (fold ? counts[fold] : 0);
@@ -58,8 +58,8 @@ export function StatusLegend<K extends string>({
         const inner = (
           <>
             <span className={`h-2 w-2 shrink-0 rounded-full ${m.dot} ${dimmed ? 'opacity-40' : ''}`} />
-            <span className={`text-[10px] font-bold uppercase tracking-wide ${active ? 'text-gray-900' : 'text-gray-500'} ${dimmed ? 'opacity-60' : ''}`}>{short}</span>
-            <span className={`text-xs font-black tabular-nums ${active ? 'text-gray-900' : 'text-gray-900'} ${dimmed ? 'opacity-60' : ''}`}>{value}</span>
+            <span className={`text-micro font-bold uppercase tracking-wide ${active ? 'text-text-default' : 'text-text-soft'} ${dimmed ? 'opacity-60' : ''}`}>{short}</span>
+            <span className={`text-xs font-black tabular-nums ${active ? 'text-text-default' : 'text-text-default'} ${dimmed ? 'opacity-60' : ''}`}>{value}</span>
           </>
         );
         return (
@@ -73,8 +73,8 @@ export function StatusLegend<K extends string>({
                 type="button"
                 aria-pressed={active}
                 onClick={() => onSelectState?.(state)}
-                className={`-mx-0.5 inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors ${
-                  active ? 'bg-white ring-1 ring-gray-300 shadow-sm' : 'hover:bg-gray-100'
+                className={`ds-raw-button -mx-0.5 inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors ${
+                  active ? 'bg-surface-card ring-1 ring-border-default shadow-sm' : 'hover:bg-surface-sunken'
                 }`}
               >
                 {inner}

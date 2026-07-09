@@ -75,6 +75,25 @@ export interface JourneyCursor {
   id: number;
 }
 
+/**
+ * Per-serial provenance facts for the journey's serial-grouped "By unit" view —
+ * the band header card (SKU · grade · status · originating PO). Resolved once
+ * per entity lookup ({@link EntityAnchors}); the timeline rows themselves stay
+ * lean. PO comes from `serial_units.origin_receiving_line_id →
+ * receiving_lines.zoho_purchaseorder_number`.
+ */
+export interface SerialProvenance {
+  serialUnitId: number;
+  serial: string;
+  sku: string | null;
+  /** `condition_grade_enum` code — render via `conditionLabel` / `ConditionGradeChip`. */
+  grade: string | null;
+  /** `serial_units.current_status` — render via `serialStatusLabel`/`serialStatusDot`. */
+  status: string | null;
+  /** Originating purchase-order number (the carton this unit was received on). */
+  poNumber: string | null;
+}
+
 export interface EntityAnchors {
   kind: JourneyDimension;
   orderId: number | null;
@@ -83,6 +102,8 @@ export interface EntityAnchors {
   serialUnitIds: number[];
   serials: string[];
   trackingNumbers: string[];
+  /** Per-serial provenance (SKU/grade/status/PO) for the By-unit band headers. */
+  serialProvenance?: SerialProvenance[];
 }
 
 export interface BrowseRow {
@@ -193,6 +214,55 @@ export function resolveSources(filters: JourneyFilters): JourneySource[] {
     active = active.filter((s) => s === 'sal' || s === 'inventory' || s === 'audit');
   }
   return active;
+}
+
+/**
+ * Audit-spine access gate for BROWSE mode (Operations History Consolidation
+ * plan Decision §3.2, Option B). The `audit` spine carries field-level
+ * before/after edits, so browsing it is admin-only. Given the parsed `?sources=`
+ * request (`undefined` = "all spines") and whether the caller holds
+ * `admin.view_logs`:
+ *   - admin → pass the request through untouched (`undefined` still means all).
+ *   - non-admin who EXPLICITLY asked for the audit spine → `forbidden` (the
+ *     route turns this into a 403; they requested a spine they can't read).
+ *   - non-admin otherwise → the audit spine is silently dropped, so a default
+ *     browse degrades to SAL / inventory / carrier / warranty rather than 403ing.
+ *
+ * Pure (no DB, no request object) so the security-sensitive decision is
+ * unit-tested rather than reachable only through a live route. Applies to
+ * BROWSE only; entity/Trace mode is unchanged in this phase.
+ */
+export function resolveBrowseSources(
+  requested: JourneySource[] | undefined,
+  canViewAudit: boolean,
+): { forbidden: true } | { forbidden: false; sources: JourneySource[] | undefined } {
+  if (canViewAudit) return { forbidden: false, sources: requested };
+  if (requested?.includes('audit')) return { forbidden: true };
+  const base = requested ?? [...JOURNEY_SOURCES];
+  return { forbidden: false, sources: base.filter((s) => s !== 'audit') };
+}
+
+/**
+ * Redact the field-level audit diff for callers without `admin.view_logs`
+ * (Operations History plan §3.2 Option B). Audit rows carry a `before_data`
+ * snapshot; nulling it means the client-side `diffChanges` (which needs BOTH
+ * before and after) produces no change list, so no field VALUE — before or
+ * after — is exposed. The audit ROW itself (title/actor/time) is kept, so a
+ * non-admin still sees that an edit happened, just not what changed.
+ *
+ * Pure (returns new objects, never mutates input) so it's unit-tested and the
+ * security decision lives in one place the route calls for BOTH modes. In
+ * browse the audit spine is already dropped for non-admins upstream
+ * (`resolveBrowseSources`), so this is a redundant-but-cheap backstop there and
+ * the real gate for entity/Trace mode.
+ */
+export function redactAuditDiffs(events: JourneyEvent[], canViewAudit: boolean): JourneyEvent[] {
+  if (canViewAudit) return events;
+  return events.map((e) =>
+    e.source === 'audit'
+      ? { ...e, raw: { ...(e.raw as OrderAuditRow), before_data: null } }
+      : e,
+  );
 }
 
 /** Parse an ISO date, or null if absent/invalid (so a bad param can't throw a
@@ -315,7 +385,8 @@ export function buildBrowseQuery(
              o3.id, o3.order_id, NULL::text, NULL::text, NULL::text AS station, NULL::text,
              jsonb_build_object(
                'id', al.id, 'created_at', al.created_at, 'action', al.action,
-               'after_data', al.after_data, 'metadata', al.metadata, 'actor_name', s.name
+               'before_data', al.before_data, 'after_data', al.after_data,
+               'metadata', al.metadata, 'actor_name', s.name
              )
         FROM audit_logs al
         LEFT JOIN staff s ON s.id = al.actor_staff_id

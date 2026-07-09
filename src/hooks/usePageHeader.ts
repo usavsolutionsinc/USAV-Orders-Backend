@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { useHeader, type HeaderSelectionControl } from '@/contexts/HeaderContext';
+import { useHeader, type HeaderSelectionControl, type HeaderSearchControl } from '@/contexts/HeaderContext';
 
 /**
  * Mount contextual content into the GlobalHeader's left/center zone for the
@@ -53,4 +53,23 @@ export function usePageSelection(
     return () => setSelection(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setSelection, ...deps]);
+}
+
+/**
+ * Register contextual search with the global header. While mounted (and while
+ * `control` is non-null), the header's search pill becomes a live
+ * {@link SearchField} scoped to the active page/mode. Pass `null` when the
+ * surface has no search.
+ */
+export function usePageHeaderSearch(
+  control: HeaderSearchControl | null,
+  deps: unknown[] = [],
+): void {
+  const { setSearch } = useHeader();
+
+  useEffect(() => {
+    setSearch(control);
+    return () => setSearch(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setSearch, ...deps]);
 }

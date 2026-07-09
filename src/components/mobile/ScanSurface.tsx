@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ScanLine } from 'lucide-react';
+import { Button } from '@/design-system/primitives';
 import type { UseBarcodeScanner } from '@/hooks/useBarcodeScanner';
 
 interface ScanSurfaceProps {
@@ -83,9 +84,9 @@ export function ScanSurface({
   const isPulse = scanner.lastScannedValue != null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
+    <div className="overflow-hidden rounded-2xl border border-border-soft bg-stage-raised">
       {/* Camera frame */}
-      <div className="relative w-full bg-black" style={{ aspectRatio }}>
+      <div className="relative w-full bg-stage" style={{ aspectRatio }}>
         <video
           ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
           autoPlay
@@ -123,13 +124,14 @@ export function ScanSurface({
 
         {/* Torch toggle */}
         {scanner.isScanning && (
+          // ds-raw-button: emoji-glyph torch toggle (aria-pressed + dynamic on/off fill) on the camera overlay — not an icon-SVG action; tone color would fight the dynamic fill
           <button
             type="button"
             onClick={scanner.toggleTorch}
             aria-label="Toggle flashlight"
             aria-pressed={scanner.torchOn}
             className={`absolute top-3 left-3 grid h-10 w-10 place-items-center rounded-full text-lg backdrop-blur transition-colors ${
-              scanner.torchOn ? 'bg-yellow-400/90 text-black' : 'bg-white/15 text-white/85'
+              scanner.torchOn ? 'bg-yellow-400/90 text-black' : 'bg-glass/15 text-white/85'
             }`}
           >
             ⚡
@@ -143,7 +145,7 @@ export function ScanSurface({
               ? 'bg-red-500/85 text-white'
               : scanner.isScanning
                 ? 'bg-emerald-500/85 text-white'
-                : 'bg-white/15 text-white/85'
+                : 'bg-glass/15 text-white/85'
           }`}
         >
           {isScanError ? 'Camera error' : scanner.isScanning ? 'Scanning' : 'Paused'}
@@ -151,23 +153,23 @@ export function ScanSurface({
 
         {/* Error overlay */}
         {isScanError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-scrim/80 p-6 text-center">
             <p className="max-w-[280px] text-sm text-red-200">
               {scanner.error || 'Camera unavailable. Check browser permissions and reload.'}
             </p>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => void scanner.startScanning()}
-              className="rounded-2xl bg-white/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+              className="bg-glass/10 text-white hover:bg-glass/20 hover:text-white"
             >
               Try again
-            </button>
+            </Button>
           </div>
         )}
       </div>
 
       {/* Manual entry dock — collapsed by default */}
-      <div className="bg-slate-900 px-3 py-2.5">
+      <div className="bg-stage-raised px-3 py-2.5">
         {manualOpen ? (
           <form onSubmit={handleManualSubmit} className="flex items-center gap-2">
             <input
@@ -177,36 +179,39 @@ export function ScanSurface({
               placeholder={manualPlaceholder}
               autoComplete="off"
               inputMode="text"
-              className="h-11 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/40 outline-none focus:border-white/40"
+              className="h-11 flex-1 rounded-xl border border-glass/10 bg-glass/5 px-3 text-sm text-white placeholder:text-white/40 outline-none focus:border-glass/40"
             />
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={!manualValue.trim()}
-              className="h-11 rounded-xl bg-blue-600 px-4 text-xs font-semibold uppercase tracking-wider text-white active:bg-blue-700 disabled:opacity-50"
+              className="h-11"
             >
               Send
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setManualValue('');
                 setManualOpen(false);
               }}
-              className="h-11 rounded-xl bg-white/5 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 active:bg-white/10"
-              aria-label="Cancel manual entry"
+              className="h-11 bg-glass/5 text-white/80 hover:bg-glass/10 hover:text-white"
+              ariaLabel="Cancel manual entry"
             >
               Cancel
-            </button>
+            </Button>
           </form>
         ) : (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => setManualOpen(true)}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl text-xs font-semibold uppercase tracking-wider text-white/75 active:text-white"
+            icon={<ScanLine aria-hidden="true" />}
+            className="h-10 w-full text-white/75 hover:text-white"
           >
-            <ScanLine className="h-4 w-4" aria-hidden="true" />
             Type code manually
-          </button>
+          </Button>
         )}
       </div>
     </div>

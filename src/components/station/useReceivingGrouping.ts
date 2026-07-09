@@ -64,13 +64,13 @@ export function useReceivingGrouping({
         seenByTracking.set(trackingKey, out.length);
         out.push(row);
       } else if (
-        receivingRowActivityMs(row) > receivingRowActivityMs(out[existingIdx])
+        receivingRowActivityMs(row, historyAxis) > receivingRowActivityMs(out[existingIdx], historyAxis)
       ) {
         out[existingIdx] = row;
       }
     }
     return out;
-  }, [localRows]);
+  }, [localRows, historyAxis]);
 
   // Collapse the flat lines into one row per purchase order, GLOBALLY — a PO's
   // lines merge into a single group even when scanned across several days (the
@@ -83,15 +83,22 @@ export function useReceivingGrouping({
         row.zoho_purchaseorder_id ||
         ''
       ).trim();
-      return po ? `po:${po}` : `line:${row.id}`;
+      if (po) return `po:${po}`;
+      // eBay (and other marketplace) buyer purchases have no Zoho PO — group by
+      // their external order id so a multi-line purchase collapses into ONE
+      // Incoming row (operators think in orders/boxes), same as a Zoho PO.
+      const src = (row.inbound_source_type || '').trim().toLowerCase();
+      const orderId = (row.source_order_id || '').trim();
+      if (src && orderId) return `src:${src}:${orderId}`;
+      return `line:${row.id}`;
     });
     return grouped.map(({ key, rows }) => {
       let anchorTs: string | null = null;
       if (mode.groupAxis === 'po_date') {
         anchorTs = rows.find((r) => r.po_date)?.po_date ?? rows[0]?.created_at ?? null;
       } else {
-        // History's Sort axis decides which timestamp the group is banded +
-        // ordered by; Receive always uses scan activity.
+        // History/Receive band + order groups by the active lifecycle axis.
+        // Incoming uses po_date above.
         let bestMs = -1;
         for (const r of rows) {
           const ms = receivingRowActivityMs(r, historyAxis);

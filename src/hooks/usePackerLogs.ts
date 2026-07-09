@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { invalidatePackerCounts } from '@/lib/queries/station-cache-patch';
 import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
@@ -140,6 +141,9 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
       } else {
         queryClient.invalidateQueries({ queryKey: ['packer-logs', packerId] });
       }
+      // Keep the lightweight counts in step without a row download (no-op until a
+      // counts query is mounted). station-table-unification §7.4.
+      invalidatePackerCounts(queryClient);
     },
     !!stationChannel,
   );
@@ -159,6 +163,7 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
           return [record, ...prev];
         },
       );
+      invalidatePackerCounts(queryClient);
     };
     window.addEventListener('packer-log-added', handleNewLog);
     return () => window.removeEventListener('packer-log-added', handleNewLog);

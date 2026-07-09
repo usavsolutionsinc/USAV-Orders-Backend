@@ -11,10 +11,20 @@ import {
 } from '@/lib/realtime/channels';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useNasConfig } from '@/hooks/useNasConfig';
-import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
+import {
+  MobilePackageGroup,
+  MobileReceivingUnitCard,
+  type ReceivingCardCallbacks,
+} from '@/components/mobile/receiving/MobileReceivingCards';
+import {
+  groupReceivingEntries,
+  type ReceivingFeedEntry,
+} from '@/components/mobile/receiving/receiving-feed-entries';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
+import { MobileReceivingFeedGallery } from '@/components/mobile/receiving/MobileReceivingFeedGallery';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
 import { useFeedWindow, useMobileFeedQuery } from '@/components/mobile/feed/useMobileFeed';
+import { receivingLinePhotoHrefs } from '@/lib/photos/mobile-gallery-url';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface ApiResponse {
@@ -22,9 +32,20 @@ interface ApiResponse {
   receiving_lines: ReceivingLineRow[];
 }
 
-// Same query key + fetch as the desktop ReceivingRecentRail (the "Unboxing"
-// rail) so the mobile feed shares its cache and shows the exact same lines.
-const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive', 'unboxed_newest'] as const;
+// Mirror the desktop UNBOX-mode rail exactly — the "Unboxed" sub-view of
+// /receiving?mode=receive is ReceivingRecentRail (view=activity, sort=
+// unboxed_newest, all-staff). Same view+sort here ⇒ the mobile feed renders the
+// identical list. Distinct `rail` key (vs ReceivingRecentRail's 6-segment
+// staff-keyed key) because this query returns a plain array while the rail
+// caches the full ApiResponse object — same key would collide on shape. Still
+// under the 'receiving-lines-table' prefix so broad invalidations refresh it.
+// Mirror the desktop Unbox-mode rail (view=unbox_opened) or Triage Prioritize
+// (view=scanned, sort=priority). Distinct query keys so the two mobile surfaces
+// never share a stale cache entry.
+const queryKeyForSurface = (surface: 'triage' | 'unbox') =>
+  surface === 'triage'
+    ? (['receiving-lines-table', 'rail', 'scanned', 'mobile-triage'] as const)
+    : (['receiving-lines-table', 'rail', 'unbox-opened', 'mobile-unbox'] as const);
 
 /**
  * Mobile receiving surface — single scrollable list of receiving lines, newest
@@ -32,14 +53,17 @@ const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive', 'unbo
  * row to open MobileCartonSheet; the expanded card's camera CTA jumps to the
  * capture route.
  *
- * Display logic (windowing, bottom-anchored scroll, fresh-row pulse, realtime
- * refetch) now lives in the shared {@link useMobileFeedQuery}/{@link useFeedWindow}
- * + {@link MobileFeed} primitives so every mobile feed behaves identically.
- *
- * `limit` controls how many recent rows render — default 8 (one phone screen);
- * the dedicated /receiving page passes a larger value.
+ * `surface` selects which desktop rail this feed mirrors:
+ *   • triage — door-scanned cartons awaiting unbox (package photos)
+ *   • unbox  — cartons opened on the bench (item photos)
  */
-export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
+export function MobileReceivingList({
+  limit = 8,
+  surface = 'unbox',
+}: {
+  limit?: number;
+  surface?: 'triage' | 'unbox';
+} = {}) {
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
@@ -49,20 +73,27 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   // Seed runtime NAS base (/api/nas) before capture routes or the carton sheet open.
   useNasConfig();
 
+  const queryKey = queryKeyForSurface(surface);
+
   const { data, isLoading, refetch } = useMobileFeedQuery<ReceivingLineRow>({
-    queryKey: QUERY_KEY,
+    queryKey,
+    // Capture navigates to a fullscreen (immersive) route and back, so the
+    // realtime photo push fires while this list is unmounted (no rewind). Always
+    // refetch on return so the camera ×N badge reconciles past the staleTime
+    // window — the optimistic bump in notifyReceivingPhotoChanged covers the gap.
+    refetchOnMount: 'always',
     queryFn: async () => {
-      // Mirror ReceivingRecentRail: the UNBOXING pipeline (view=activity), with
-      // serials, so both surfaces render the same rows.
       const params = new URLSearchParams({
         limit: '500',
         offset: '0',
-        view: 'activity',
         include: 'serials',
-        // MUST match ReceivingRecentRail — same react-query key; without this
-        // the default server sort is scanned_newest and refetches scramble order.
-        sort: 'unboxed_newest',
       });
+      if (surface === 'triage') {
+        params.set('view', 'scanned');
+        params.set('sort', 'priority');
+      } else {
+        params.set('view', 'unbox_opened');
+      }
       const res = await fetch(`/api/receiving-lines?${params.toString()}`);
       if (!res.ok) throw new Error('fetch failed');
       const json = (await res.json()) as ApiResponse;
@@ -101,7 +132,13 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
 
   const { rows, scrollRef, freshIds } = useFeedWindow(data, { limit, anchor: 'bottom' });
 
+  // Collapse carton-mates into package entries for rendering — windowing, scroll,
+  // and fresh-pulse stay line-level (above) so the existing feed mechanics are
+  // untouched; grouping is purely presentational.
+  const entries = useMemo<ReceivingFeedEntry[]>(() => groupReceivingEntries(rows), [rows]);
+
   const [sheetRow, setSheetRow] = useState<ReceivingLineRow | null>(null);
+  const [feedGalleryReceivingId, setFeedGalleryReceivingId] = useState<number | null>(null);
   // Re-derive the open sheet's row from the live feed so its CTA photo count
   // updates after an upload — the stored `sheetRow` snapshot would stay stale.
   const liveSheetRow = useMemo(
@@ -110,43 +147,76 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   );
   const openSheet = useCallback((row: ReceivingLineRow) => setSheetRow(row), []);
   const closeSheet = useCallback(() => setSheetRow(null), []);
-  const buildPhotosHref = useCallback((row: ReceivingLineRow) => {
-    if (!row.receiving_id) return '#';
+  const openFeedGallery = useCallback((row: ReceivingLineRow) => {
+    if (!row.receiving_id) return;
+    setFeedGalleryReceivingId(row.receiving_id);
+  }, []);
+  const closeFeedGallery = useCallback(() => setFeedGalleryReceivingId(null), []);
+  const buildPhotoHrefs = useCallback((row: ReceivingLineRow) => {
     const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').toString().trim();
-    const cameraTitle =
-      row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
-    const params = new URLSearchParams({ title: cameraTitle });
-    if (poValue) params.set('poRef', poValue);
-    return `/m/r/${row.receiving_id}/photos?${params.toString()}`;
+    return receivingLinePhotoHrefs({
+      receivingId: row.receiving_id,
+      lineId: row.id,
+      itemName: row.item_name,
+      sku: row.sku,
+      zohoItemId: row.zoho_item_id,
+      poRef: poValue || undefined,
+      back: '/m/receiving',
+    });
   }, []);
 
+  // Bottom-anchored feed: rows are oldest→newest, so the last one is the
+  // bottom-most (newest) line — the only row that renders the big photo display.
+  const expandedLineId = rows.length ? rows[rows.length - 1].id : null;
+
+  const cardCallbacks = useMemo<ReceivingCardCallbacks>(
+    () => ({
+      buildHrefs: buildPhotoHrefs,
+      onOpenGallery: openFeedGallery,
+      onOpenSheet: openSheet,
+      isFresh: (row) => freshIds.has(row.id),
+      isExpanded: (row) => row.id === expandedLineId,
+    }),
+    [buildPhotoHrefs, openFeedGallery, openSheet, freshIds, expandedLineId],
+  );
+
   return (
-    <div className="flex h-full w-full flex-col bg-white">
-      <MobileFeed<ReceivingLineRow>
-        rows={rows}
+    <div className="flex h-full w-full max-w-full flex-col overflow-x-hidden bg-surface-card">
+      <MobileFeed<ReceivingFeedEntry>
+        rows={entries}
         isLoading={isLoading}
         scrollRef={scrollRef}
-        freshIds={freshIds}
+        getId={(entry) => entry.key}
         empty={
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-white px-6 text-center">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">No packages yet</p>
-            <p className="max-w-[260px] text-caption font-semibold text-gray-500">
+          <div className="flex h-full flex-col items-center justify-center gap-2 bg-surface-card px-6 text-center">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-text-muted">No packages yet</p>
+            <p className="max-w-[260px] text-caption font-semibold text-text-soft">
               Scan a tracking number on the desktop to drop one in here.
             </p>
           </div>
         }
-        renderRow={(row, { variant, fresh }) => (
-          <MobileReceivingRow
-            row={row}
-            variant={variant}
-            fresh={fresh}
-            onTap={() => openSheet(row)}
-            photosHref={buildPhotosHref(row)}
-          />
-        )}
+        renderRow={(entry) =>
+          entry.kind === 'package' ? (
+            <MobilePackageGroup entry={entry} cb={cardCallbacks} />
+          ) : (
+            <MobileReceivingUnitCard row={entry.unit} cb={cardCallbacks} />
+          )
+        }
       />
 
-      <MobileCartonSheet row={liveSheetRow} staffId={staffId} open={sheetRow != null} onClose={closeSheet} />
+      <MobileCartonSheet
+        row={liveSheetRow}
+        staffId={staffId}
+        open={sheetRow != null}
+        onClose={closeSheet}
+      />
+
+      <MobileReceivingFeedGallery
+        receivingId={feedGalleryReceivingId}
+        staffId={staffId}
+        open={feedGalleryReceivingId != null}
+        onClose={closeFeedGallery}
+      />
     </div>
   );
 }

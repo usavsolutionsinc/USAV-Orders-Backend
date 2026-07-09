@@ -2,6 +2,8 @@
 
 import React, { useRef } from 'react';
 import { PaneHeader, PaneHeaderTitle } from '@/components/ui/pane-header';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
 import { Printer, Package, Link2, Sparkles, Camera } from '@/components/Icons';
 import Link from 'next/link';
@@ -43,7 +45,7 @@ export function UnitDetailHeader({
       // Inner (inset-shadow) bottom hairline — the canonical receiving header
       // hairline — instead of the default border, so the 40px band reads as a
       // distinct header over the gray-50 body.
-      className={`bg-white border-b-0 ${receivingHeaderHairlineClass}`}
+      className={`bg-surface-card border-b-0 ${receivingHeaderHairlineClass}`}
       leftSlot={
         <>
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
@@ -82,7 +84,7 @@ export function UnitDetailHeader({
             rel="noreferrer"
             title="Photos in library"
             aria-label="Photos in library"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-soft transition-colors hover:bg-surface-sunken hover:text-text-muted"
           >
             <Camera className="h-4 w-4" />
           </Link>
@@ -121,19 +123,18 @@ function ActionIconButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-        active
-          ? 'bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200'
-          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-      }`}
-    >
-      {icon}
-    </button>
+    <HoverTooltip label={label} asChild>
+      <IconButton
+        icon={icon}
+        ariaLabel={label}
+        onClick={onClick}
+        aria-pressed={active}
+        className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+          active
+            ? 'bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200'
+            : 'hover:bg-surface-sunken hover:text-text-muted'
+        }`}
+      />
+    </HoverTooltip>
   );
 }

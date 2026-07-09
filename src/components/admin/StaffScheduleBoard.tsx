@@ -22,6 +22,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getStaffColorHex } from '@/utils/staff-colors';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface ShiftRow {
   id: number;
@@ -114,24 +115,24 @@ export function StaffScheduleBoard({
   }, [data]);
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-md shadow-gray-200/40">
+    <div className="overflow-hidden rounded-3xl border border-border-soft bg-surface-card shadow-md shadow-gray-200/40">
       {/* Header bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-hairline px-5 py-3.5">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-base font-bold tracking-tight text-gray-900">Work calendar</h2>
-          <span className="rounded-full bg-gray-900 px-2.5 py-0.5 text-micro font-semibold uppercase tracking-[0.14em] text-white">
+          <h2 className="text-base font-bold tracking-tight text-text-default">Work calendar</h2>
+          <span className="rounded-full bg-surface-inverse px-2.5 py-0.5 text-micro font-semibold uppercase tracking-[0.14em] text-white">
             9 AM – 5 PM
           </span>
-          <span className="text-caption font-medium text-gray-500">{timezoneLabel}</span>
+          <span className="text-caption font-medium text-text-soft">{timezoneLabel}</span>
         </div>
-        <div className="flex items-center gap-1.5 rounded-full bg-gray-100 p-1">
+        <div className="flex items-center gap-1.5 rounded-full bg-surface-sunken p-1">
           <WeekToggle label="This week" active={weekView === 'current'} onClick={() => setWeekView('current')} />
           <WeekToggle label="Next week" active={weekView === 'next'} onClick={() => setWeekView('next')} />
         </div>
       </div>
 
       {/* Day-columns grid */}
-      <div className="grid grid-cols-5 divide-x divide-gray-100">
+      <div className="grid grid-cols-5 divide-x divide-border-hairline">
         {days.map((day) => {
           const isToday = day.date === todayDateKey;
           const dayShifts = byDate[day.date] ?? [];
@@ -144,14 +145,14 @@ export function StaffScheduleBoard({
                 }`}
               >
                 <div>
-                  <p className={`text-[10.5px] font-bold uppercase tracking-[0.14em] ${isToday ? 'text-amber-700' : 'text-gray-500'}`}>
+                  <p className={`text-[10.5px] font-bold uppercase tracking-[0.14em] ${isToday ? 'text-amber-700' : 'text-text-soft'}`}>
                     {day.label}
                   </p>
-                  <p className={`mt-0.5 text-base font-bold tracking-tight ${isToday ? 'text-amber-900' : 'text-gray-900'}`}>
+                  <p className={`mt-0.5 text-base font-bold tracking-tight ${isToday ? 'text-amber-900' : 'text-text-default'}`}>
                     {formatDayNumber(day.date)}
                   </p>
                 </div>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-bold tabular-nums text-gray-700">
+                <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-bold tabular-nums text-text-muted">
                   {dayShifts.length}
                 </span>
               </div>
@@ -159,12 +160,12 @@ export function StaffScheduleBoard({
               {/* Avatar pills */}
               <div className="flex flex-col gap-1 px-2 py-1.5">
                 {isLoading && dayShifts.length === 0 && (
-                  <p className="px-1 py-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-gray-300">
+                  <p className="px-1 py-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-text-faint">
                     Loading…
                   </p>
                 )}
                 {!isLoading && dayShifts.length === 0 && (
-                  <p className="px-1 py-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-gray-300">
+                  <p className="px-1 py-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-text-faint">
                     No one in
                   </p>
                 )}
@@ -187,11 +188,12 @@ export function StaffScheduleBoard({
 
 function WeekToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
+    // ds-raw-button
     <button
       type="button"
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-caption font-semibold uppercase tracking-[0.14em] transition ${
-        active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+        active ? 'bg-surface-card text-text-default shadow-sm' : 'text-text-soft hover:text-text-muted'
       }`}
     >
       {label}
@@ -212,28 +214,32 @@ function ShiftAvatarPill({
   // module cache — keeps the pill correct even mid-update.
   const color = getStaffColorHex({ id: shift.staff_id, color_hex: shift.color_hex });
   const isCovering = shift.covers_shift_id != null;
+  const tooltipLabel = `${shift.staff_name} · ${formatHours(shift.starts_at, shift.ends_at, timezone)}${
+    isCovering ? ' · covering shift' : ''
+  }`;
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(shift.staff_id)}
-      title={`${shift.staff_name} · ${formatHours(shift.starts_at, shift.ends_at, timezone)}${
-        isCovering ? ' · covering shift' : ''
-      }`}
-      className="group flex items-center gap-1.5 rounded-full bg-white px-1.5 py-1 text-left ring-1 ring-gray-200 transition hover:bg-gray-50 hover:ring-gray-300"
-    >
-      <span
-        aria-hidden
-        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-eyebrow font-bold text-white ring-2 ring-white"
-        style={{ backgroundColor: color }}
+    <HoverTooltip label={tooltipLabel} asChild>
+      {/* ds-raw-button */}
+      <button
+        type="button"
+        onClick={() => onSelect?.(shift.staff_id)}
+        aria-label={tooltipLabel}
+        className="group flex items-center gap-1.5 rounded-full bg-surface-card px-1.5 py-1 text-left ring-1 ring-border-soft transition hover:bg-surface-hover hover:ring-border-default"
       >
-        {initials(shift.staff_name)}
-      </span>
-      <span className="truncate text-caption font-semibold text-gray-900">{shift.staff_name.split(/\s+/)[0]}</span>
-      {isCovering && (
-        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-amber-800">
-          Cover
+        <span
+          aria-hidden
+          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-eyebrow font-bold text-white ring-2 ring-white"
+          style={{ backgroundColor: color }}
+        >
+          {initials(shift.staff_name)}
         </span>
-      )}
-    </button>
+        <span className="truncate text-caption font-semibold text-text-default">{shift.staff_name.split(/\s+/)[0]}</span>
+        {isCovering && (
+          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-amber-800">
+            Cover
+          </span>
+        )}
+      </button>
+    </HoverTooltip>
   );
 }

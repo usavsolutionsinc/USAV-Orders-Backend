@@ -1,4 +1,3 @@
-import { after } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
@@ -9,7 +8,6 @@ import {
   TEST_VERDICTS,
   type TestVerdict,
 } from '@/lib/tech/recordTestVerdict';
-import { syncSerialToZohoPo } from '@/lib/receiving/zoho-serial-sync';
 
 /**
  * POST /api/serial-units/[id]/test
@@ -94,27 +92,6 @@ export const POST = withAuth(async (request, ctx) => {
     });
     if (!result) {
       return NextResponse.json({ ok: false, error: 'unit not found' }, { status: 404 });
-    }
-
-    // Post the tester's name to the Zoho PO notes so the line item's history
-    // shows who tested it. Fire-and-forget: Zoho sync is best-effort and must
-    // never block or break the verdict. Only runs when the unit has a receiving
-    // line (orphan units have no PO to annotate).
-    const receivingLineId = result.unit.origin_receiving_line_id;
-    if (receivingLineId != null) {
-      const capturedStaffId = actorStaffId;
-      const capturedSerial = result.unit.serial_number;
-      const verdictNote = `Verdict: ${verdict}`;
-      after(async () => {
-        void syncSerialToZohoPo({
-          receivingLineId,
-          serial: capturedSerial,
-          staffId: capturedStaffId,
-          notes: verdictNote,
-        }).catch((err) => {
-          console.warn('[serial-units/test] syncSerialToZohoPo threw', err);
-        });
-      });
     }
 
     // Formal audit-log row. recordAudit pulls actor/role/ip/request-id from

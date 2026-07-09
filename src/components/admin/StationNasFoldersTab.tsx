@@ -25,11 +25,11 @@ export function StationNasFoldersTab({ mode }: StationNasFoldersTabProps) {
   const picking = c.picking; // const local so it narrows inside the modal guard
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto bg-gray-50 p-6">
+    <div className="h-full min-h-0 overflow-y-auto bg-surface-canvas p-6">
       <div className="mx-auto max-w-3xl space-y-5">
         <div>
           <h1 className="sr-only">NAS Photos</h1>
-          <p className="mt-1 text-caption text-gray-500">
+          <p className="mt-1 text-caption text-text-soft">
             Control the NAS endpoint, workflow storage folders, and station picker defaults.
           </p>
         </div>

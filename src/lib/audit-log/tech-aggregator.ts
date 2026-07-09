@@ -378,13 +378,14 @@ export async function getTechSessionDetail(
   // whose tech_serial_numbers row predates the receiving_line_id backfill, or
   // line-less orphan serials reached via shipment.
   if (serialUnitIds.size > 0) {
+    // Phase 3: origin line via the reconstruction view (bounded id-set).
     const suSql = orgId
-      ? `SELECT id, origin_receiving_line_id
-           FROM serial_units
-          WHERE id = ANY($1::int[]) AND organization_id = $2`
-      : `SELECT id, origin_receiving_line_id
-           FROM serial_units
-          WHERE id = ANY($1::int[])`;
+      ? `SELECT su.id, vo.origin_receiving_line_id
+           FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+          WHERE su.id = ANY($1::int[]) AND su.organization_id = $2`
+      : `SELECT su.id, vo.origin_receiving_line_id
+           FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+          WHERE su.id = ANY($1::int[])`;
     const suRes = orgId
       ? await tenantQuery(orgId, suSql, [Array.from(serialUnitIds), orgId])
       : await pool.query(suSql, [Array.from(serialUnitIds)]);
@@ -469,18 +470,12 @@ export async function getTechSessionDetail(
   // TEST_START) tagged with receiving_line_id + serial_unit_id, and receiving
   // writes RECEIVED there too. Anchoring on those keys surfaces the full
   // cross-station timeline that the shipment-only query used to miss.
-  // NOTE(tenancy): readInventorySpine takes an opts object that does not yet
-  // accept an orgId. Its anchors here (lineIds/serialUnitIds) are themselves
-  // already org-scoped above (the line/serial ids were derived from org-gated
-  // queries when orgId is present), so the input set is tenant-bounded. Thread
-  // orgId into readInventorySpine once its opts gains the param (sibling module
-  // migration) for defense-in-depth.
   const invRows = await readInventorySpine({
     lineIds: Array.from(lineIds),
     serialUnitIds: Array.from(serialUnitIds),
     staffId: filters.staffId,
     order: 'asc',
-  });
+  }, orgId);
 
   // Serials that already have a first-class TEST_* lifecycle event. For these
   // we suppress the synthetic SERIAL_TESTED row so the verdict isn't shown

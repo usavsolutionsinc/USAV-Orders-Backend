@@ -16,10 +16,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { dispatchReceivingWorkspaceClose } from '@/utils/events';
-import {
-  dispatchSelectLine,
-  type ReceivingLineRow,
-} from '@/components/station/ReceivingLinesTable';
+import { dispatchSelectLine, mergeReceivingPackageMetaIntoRow } from '@/components/station/receiving-lines-table-helpers';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 export interface WorkspaceState {
   row: ReceivingLineRow;
@@ -110,15 +108,27 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
       }, 500);
     };
 
+    const handlePackageMeta = (e: Event) => {
+      const detail = (e as CustomEvent<Parameters<typeof mergeReceivingPackageMetaIntoRow>[1]>).detail;
+      if (!detail || detail.receiving_id == null) return;
+      setWorkspace((prev) => {
+        if (!prev || prev.row.receiving_id !== detail.receiving_id) return prev;
+        const merged = mergeReceivingPackageMetaIntoRow(prev.row, detail);
+        return merged ? { ...prev, row: merged } : prev;
+      });
+    };
+
     window.addEventListener('receiving-workspace-open', handleOpen);
     window.addEventListener('receiving-workspace-close', handleClose);
     window.addEventListener('receiving-line-updated', handleUpdate);
+    window.addEventListener('receiving-package-updated', handlePackageMeta);
     window.addEventListener('receiving-scan-in-flight', handleInFlight);
     window.addEventListener('receiving-scan-resolved', handleResolved);
     return () => {
       window.removeEventListener('receiving-workspace-open', handleOpen);
       window.removeEventListener('receiving-workspace-close', handleClose);
       window.removeEventListener('receiving-line-updated', handleUpdate);
+      window.removeEventListener('receiving-package-updated', handlePackageMeta);
       window.removeEventListener('receiving-scan-in-flight', handleInFlight);
       window.removeEventListener('receiving-scan-resolved', handleResolved);
       if (clearTimer) clearTimeout(clearTimer);
@@ -135,7 +145,8 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
     return () => window.removeEventListener('receiving-workspace-nav-state', handler);
   }, []);
 
-  // Deep-link: cmd+k emits /receiving?mode=receive&openReceivingId=<receiving.id>.
+  // Deep-link: cmd+k emits /unbox?openReceivingId=<receiving.id> (param read
+  // path-agnostically, so the legacy /receiving?…&openReceivingId= still works).
   // Resolve that carton's first line (receiving.id → /api/receiving-lines
   // ?receiving_id=) and select it once via dispatchSelectLine, so the right pane
   // opens AND the sidebar/rail highlight stay in sync. Best-effort: a missing or
@@ -183,6 +194,21 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
   // Guards the "never blank" effect while a delete-recovery is choosing the next
   // line, so the two don't race and momentarily reopen the just-deleted line.
   const recoveringRef = useRef(false);
+  // Any mode switch must drop the focused workspace from state — even though
+  // ReceivingRightPane hides the overlay via isTableOnlyMode / presence keys,
+  // stale state lets a late receiving-workspace-open or a zero-duration race
+  // repaint the prior mode's panel (Triage ↔ Unbox ↔ History bleed).
+  const prevModeForWorkspaceRef = useRef<string | null>(null);
+  useEffect(() => {
+    const liveMode = searchParams.get('mode') ?? 'receive';
+    const prev = prevModeForWorkspaceRef.current;
+    prevModeForWorkspaceRef.current = liveMode;
+    if (prev === null || prev === liveMode) return;
+    setWorkspace(null);
+    setNav(null);
+    setScanInFlight(null);
+  }, [searchParams]);
+
   useEffect(() => {
     const liveMode = searchParams.get('mode') ?? 'receive';
     if (liveMode !== 'receive') return;
@@ -196,10 +222,9 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
     void (async () => {
       try {
         const res = await fetch(
-          // sort MUST match ReceivingRecentRail's axis (unboxed_newest) so this
-          // effect and the rail's auto-select resolve to the SAME "most recent"
-          // line.
-          `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials&sort=unboxed_newest`,
+          // Unbox surface only — activity includes triage-unboxed lines and
+          // excludes lineless unfound cartons opened here.
+          `/api/receiving-lines?limit=1&offset=0&view=unbox_opened&include=serials`,
           { cache: 'no-store' },
         );
         const data = await res.json().catch(() => null);
@@ -241,7 +266,7 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
       void (async () => {
         try {
           const res = await fetch(
-            `/api/receiving-lines?limit=5&offset=0&view=activity&include=serials&sort=unboxed_newest`,
+            `/api/receiving-lines?limit=5&offset=0&view=unbox_opened&include=serials`,
             { cache: 'no-store' },
           );
           const data = await res.json().catch(() => null);

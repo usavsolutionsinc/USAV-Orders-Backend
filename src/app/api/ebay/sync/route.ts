@@ -34,9 +34,9 @@ export const POST = withAuth(async (req: Request) => {
  * GET /api/ebay/sync
  * Get sync status for all accounts
  */
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, ctx) => {
   try {
-    const status = await getSyncStatus();
+    const status = await getSyncStatus(ctx.organizationId);
     
     return NextResponse.json({
       success: true,

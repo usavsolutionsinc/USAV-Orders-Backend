@@ -9,6 +9,13 @@
  *
  * No operator cooldown / rate-limit (those are UI concerns); just the batch
  * cap to stay inside the function budget.
+ *
+ * Tenancy (Phase D category B — global carrier-poll sweep): like sync-due,
+ * carrier reads are global and each shipment carries its own org via its
+ * receiving parent, so this polls the cross-org visible set on the owner pool.
+ * Phase E follow-up: selectIncomingShipmentIds(cap, orgId) ALREADY exposes a
+ * per-org GUC-scoped path — wire it behind a listSweepOrgIds() loop with a
+ * budget-sharded per-org cap once the FORCE cutover lands.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

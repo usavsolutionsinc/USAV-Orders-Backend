@@ -586,17 +586,43 @@ export function assertPurchaseOrderLineItemsEditable(
   }
 }
 
-function mergeSerialNoteIntoLineDescription(existing: string, serialNote: string): string {
+export function mergeSerialNoteIntoLineDescription(existing: string, serialNote: string): string {
   const e = existing.trim();
   const s = serialNote.trim();
   if (!s) return e;
   if (!e) return s;
-  const body = s.replace(/^(SN|SNs)\s*:\s*/i, '').trim();
-  const tokens = body.split(/\s*,\s*/).filter(Boolean);
+  // The serial core of the new note: strip an optional "SN:/SNs:" prefix AND any
+  // " · <condition>" suffix, then split a multi-serial list. We dedup on the
+  // serial(s) so the same unit is never listed twice — even when the new note
+  // adds a condition the old one lacked.
+  const serialCore = s.split('·')[0].replace(/^(SN|SNs)\s*:\s*/i, '').trim();
+  const tokens = serialCore.split(/\s*,\s*/).map((t) => t.trim()).filter(Boolean);
   const eUpper = e.toUpperCase();
-  const already = tokens.length > 0 && tokens.every((t) => eUpper.includes(t.toUpperCase()));
-  if (already) return e;
-  return `${e} | ${s}`;
+  // Exact note already present → no-op.
+  if (eUpper.includes(s.toUpperCase())) return e;
+  if (tokens.length === 0) return `${e} | ${s}`;
+  // If a prior " | "-joined segment already notes this serial (bare, e.g. from a
+  // per-scan sync, or with an older condition), UPGRADE that segment to the
+  // fuller note in place instead of appending a duplicate SN.
+  const segments = e.split('|').map((seg) => seg.trim());
+  let replaced = false;
+  const merged = segments.map((seg) => {
+    if (replaced) return seg;
+    const segUpper = seg.toUpperCase();
+    const ownsSerial = tokens.every((t) => segUpper.includes(t.toUpperCase()));
+    const looksLikeSerialSeg =
+      /^(SN|SNs)\s*:/i.test(seg) || seg.toUpperCase() === serialCore.toUpperCase();
+    if (ownsSerial && looksLikeSerialSeg) {
+      replaced = true;
+      return s;
+    }
+    return seg;
+  });
+  if (replaced) return merged.join(' | ');
+  // Serial only appears inside the base description text (or not at all) — leave
+  // the base intact and append when it's genuinely new.
+  const inBase = tokens.every((t) => eUpper.includes(t.toUpperCase()));
+  return inBase ? e : `${e} | ${s}`;
 }
 
 /**
@@ -626,6 +652,41 @@ export function buildPurchaseOrderLineItemsForDescriptionPut(
     const add = lineItemIdToSerialNote[lineId];
     const baseDesc = String(li.description ?? '').trim();
     const desc = add ? mergeSerialNoteIntoLineDescription(baseDesc, add) : baseDesc;
+    if (desc) payload.description = desc;
+
+    return payload;
+  });
+}
+
+/**
+ * Full `line_items` array for PUT /purchaseorders/{id} with explicit per-line
+ * `description` replacements. Keys are Zoho `line_item_id`s; other lines keep
+ * their current description unchanged.
+ */
+export function buildPurchaseOrderLineItemsForItemDescriptionPut(
+  po: ZohoPurchaseOrder,
+  lineItemIdToDescription: Record<string, string | null | undefined>,
+): Record<string, unknown>[] {
+  const items = po.line_items || [];
+  if (items.length === 0) return [];
+
+  return items.map((li) => {
+    const lineId = String(li.line_item_id || '').trim();
+    const payload: Record<string, unknown> = {
+      line_item_id: lineId,
+      item_id: String(li.item_id || ''),
+      quantity: Number(li.quantity ?? 0),
+      rate: li.rate != null ? Number(li.rate) : 0,
+    };
+    if (li.item_order != null && Number.isFinite(Number(li.item_order))) {
+      payload.item_order = Number(li.item_order);
+    }
+
+    const override = lineItemIdToDescription[lineId];
+    const desc =
+      override !== undefined
+        ? String(override ?? '').trim()
+        : String(li.description ?? '').trim();
     if (desc) payload.description = desc;
 
     return payload;

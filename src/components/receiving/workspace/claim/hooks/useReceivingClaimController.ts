@@ -2,16 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import {
   CLAIM_TYPE_OPTIONS,
+  randomId,
   type ClaimType,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
   claimWizardStepStates,
+  linkWizardStepStates,
   CREATE_STEP_ORDER,
+  LINK_STEP_ORDER,
   type ArchiveState,
   type ClaimModalMode,
   type CreateClaimStep,
+  type LinkClaimStep,
   type FiledTicket,
   type LinkCandidate,
 } from '../claim-types';
@@ -24,6 +28,13 @@ import { useClaimTicketReply } from './useClaimTicketReply';
 export interface ClaimModalProps {
   open: boolean;
   row: ReceivingLineRow;
+  /**
+   * Overrides the entity the claim is filed against. Default (`undefined`) keeps
+   * today's behavior: `lineId = row.id`. Pass `null` to file a CARTON-level claim
+   * (`entityType='RECEIVING'`, sets `receiving.zendesk_ticket`) — used for unfound
+   * triage cartons whose rail row is a synthetic stub with no real receiving_line.
+   */
+  lineIdOverride?: number | null;
   /** Seeds the "What happened?" note when the modal opens (RETURN match CTA). */
   prefillReason?: string;
   onClose: () => void;
@@ -43,13 +54,17 @@ export interface ClaimModalProps {
 export function useReceivingClaimController({
   open,
   row,
+  lineIdOverride,
   prefillReason,
   onClose,
   onTicketCreated,
   onTicketUnlinked,
 }: ClaimModalProps) {
+  const LAST_CC_EMAIL_STORAGE_KEY = 'receiving-claim:last-cc-email';
   const receivingId = row.receiving_id;
-  const lineId = row.id;
+  // `undefined` override = default to the row's own line; an explicit value
+  // (incl. `null` for a carton-level claim) wins.
+  const lineId = lineIdOverride !== undefined ? lineIdOverride : row.id;
   // A real PO# (number or id) — when present, 'unfound' is neither defaulted nor
   // offered, even if the carton came in as an unmatched scan.
   const hasPo = !!(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id);
@@ -70,15 +85,24 @@ export function useReceivingClaimController({
   const [claimType, setClaimType] = useState<ClaimType>(initialClaimType);
   const [mode, setMode] = useState<ClaimModalMode>('create');
   const [createStep, setCreateStep] = useState<CreateClaimStep>('photos');
+  const [linkStep, setLinkStep] = useState<LinkClaimStep>('find');
   const [filedTicket, setFiledTicket] = useState<FiledTicket | null>(null);
   const [reason, setReason] = useState('');
+
+  // ── Recipients (opening comment) ─────────────────────────────────────────
+  // Default is a public reply + CC. `notePublic` files the opening comment as a
+  // public reply and enables CC'ing collaborator emails (a vendor, a teammate).
+  // CCs are only meaningful on a public comment, so the UI hides them when
+  // internal-note is selected and the server ignores them there too.
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+  const [notePublic, setNotePublic] = useState(true);
 
   // ── Create-flow submit state ─────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
   const [draftBody, setDraftBody] = useState<string | null>(null);
   const [archiveSubmitting, setArchiveSubmitting] = useState(false);
 
-  // ── Dry-run test state (no Zendesk ticket / NAS / DB side-effects) ────────
+  // ── Dry-run test state (no Zendesk ticket / local backup / DB side-effects) ─
   // True once the operator filed via the dry-run path: the confirm/seller steps
   // render against the '#TEST' sentinel and suppress any real side-effect.
   const [isDryRun, setIsDryRun] = useState(false);
@@ -92,8 +116,8 @@ export function useReceivingClaimController({
   const [testSellerPreview, setTestSellerPreview] = useState<{ message: string; model: string } | null>(
     null,
   );
-  // NAS backup result — set by both the auto-archive on ticket creation and the
-  // manual "Archive to NAS" action, so the seller step can DISPLAY whether the
+  // Local backup result — set by both the auto-backup on ticket creation and the
+  // manual "Back up locally" action, so the confirm step can DISPLAY whether the
   // backup landed (and offer a retry when it failed/was partial).
   const [archiveState, setArchiveState] = useState<ArchiveState | null>(null);
   // Stable per-submission idempotency key — generated on open and reused across
@@ -123,10 +147,14 @@ export function useReceivingClaimController({
     receivingId,
     lineId,
   });
+  // The seller step is the last step of EITHER wizard — gate the seller hook's
+  // auto-draft on whichever mode is active so a link-mode selection no longer
+  // drafts prematurely (it only drafts once we actually reach the seller step).
+  const sellerActive = mode === 'create' ? createStep === 'seller' : linkStep === 'seller';
   const seller = useClaimSellerMessage({
     open,
     mode,
-    createStep,
+    sellerActive,
     filedTicket,
     receivingId,
     lineId,
@@ -145,9 +173,20 @@ export function useReceivingClaimController({
     setReason(prefillReason ?? '');
     setDraftBody(null);
     setClaimType(initialClaimType);
-    idempotencyKey.current = crypto.randomUUID();
+    setNotePublic(true);
+    try {
+      const stored = window.localStorage.getItem(LAST_CC_EMAIL_STORAGE_KEY);
+      const email = stored ? stored.trim() : '';
+      setCcEmails(email ? [email] : []);
+    } catch {
+      setCcEmails([]);
+    }
+    // `crypto.randomUUID` only exists in a secure context (HTTPS / localhost);
+    // over a plain-HTTP LAN IP it's undefined. `randomId` falls back safely.
+    idempotencyKey.current = randomId();
     setMode('create');
     setCreateStep('photos');
+    setLinkStep('find');
     setFiledTicket(null);
     setLinkCommitted(false);
     setTestResult(null);
@@ -155,6 +194,17 @@ export function useReceivingClaimController({
     setArchiveState(null);
     setIsDryRun(false);
   }, [open, receivingId, lineId, initialClaimType, prefillReason]);
+
+  // Persist the last-used CC email for the next claim.
+  useEffect(() => {
+    if (!open) return;
+    const last = ccEmails.at(-1)?.trim() ?? '';
+    try {
+      if (last) window.localStorage.setItem(LAST_CC_EMAIL_STORAGE_KEY, last);
+    } catch {
+      // Best-effort only.
+    }
+  }, [ccEmails, open]);
 
   // ── Derived view-model ───────────────────────────────────────────────────
   // Hide 'unfound' once a real PO# is present — an order with a PO can't be
@@ -171,6 +221,7 @@ export function useReceivingClaimController({
     () => claimWizardStepStates(createStep, filedTicket, mode),
     [createStep, filedTicket, mode],
   );
+  const linkStepStates = useMemo(() => linkWizardStepStates(linkStep), [linkStep]);
   const sellerStepReady = !!filedTicket || mode === 'link';
   // The compose draft must be complete before Review/Submit are reachable.
   const composeComplete = !!template.subject.trim() && !!template.description.trim();
@@ -205,42 +256,52 @@ export function useReceivingClaimController({
     }
   };
 
+  // ── Link-flow navigation (link mode) ─────────────────────────────────────
+  // linked/seller are only reachable once the ticket is committed.
+  const isLinkStepDisabled = (key: string): boolean => {
+    const target = key as LinkClaimStep;
+    if (target === 'linked' || target === 'seller') return !linkCommitted;
+    return false;
+  };
+
+  const handleLinkStepClick = (key: string) => {
+    if (isLinkStepDisabled(key)) return;
+    setLinkStep(key as LinkClaimStep);
+  };
+
+  /** Link "Back" — one step left in the link order (no-op on the first). */
+  const goLinkBack = () => {
+    const idx = LINK_STEP_ORDER.indexOf(linkStep);
+    if (idx > 0) setLinkStep(LINK_STEP_ORDER[idx - 1]);
+  };
+
   // ── Wizard navigation ────────────────────────────────────────────────────
   const handleModeChange = (next: ClaimModalMode) => {
     setMode(next);
     if (next === 'link') {
-      setCreateStep('seller');
+      setLinkStep(linkCommitted ? 'linked' : 'find');
       seller.resetBootstrap();
     } else {
       setCreateStep(filedTicket ? 'confirm' : 'photos');
-      setLinkCommitted(false);
     }
   };
 
   const handleClaimStepClick = (key: string) => {
-    if (mode === 'link') {
-      // Link mode has no linear create stepper; clicking the picker returns to
-      // create from a deselected link.
-      if (key === 'photos' && !filedTicket) setMode('create');
-      return;
-    }
     goToStep(key as CreateClaimStep);
   };
 
   /**
-   * Confirmation → seller. In a real flow the seller hook auto-bootstraps on
-   * `createStep`; for a dry run ('#TEST') the hook deliberately skips its fetch,
-   * so we draft a throwaway preview here instead.
+   * Confirmation → seller, for whichever wizard is active. In a real create flow
+   * the seller hook auto-bootstraps; for a dry run ('#TEST') the hook skips its
+   * fetch, so we draft a throwaway preview here instead.
    */
   const continueToSeller = () => {
+    if (mode === 'link') {
+      setLinkStep('seller');
+      return;
+    }
     setCreateStep('seller');
     if (filedTicket?.number === '#TEST') void draftTestSellerMessage();
-  };
-
-  const advanceToSellerStep = (ticket: FiledTicket) => {
-    setFiledTicket(ticket);
-    setCreateStep('seller');
-    seller.resetBootstrap();
   };
 
   const selectLinkTicket = (t: LinkCandidate | null) => {
@@ -267,6 +328,8 @@ export function useReceivingClaimController({
     setFiledTicket(null);
     setLinkCommitted(false);
     seller.resetDraftState();
+    // Deselecting / unlinking always returns to the picker step.
+    setLinkStep('find');
   };
 
   const handleBannerUnlink = () => {
@@ -298,6 +361,8 @@ export function useReceivingClaimController({
           subject: template.readSubject().trim(),
           description: template.readDescription().trim(),
           attachPhotoIds: [...photos.selectedPhotoIds],
+          notePublic,
+          ccEmails,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -323,7 +388,7 @@ export function useReceivingClaimController({
       } else {
         toast.success('Claim filed — continue to seller message when the ticket # is assigned');
       }
-      // Capture the auto-archive result so the seller step DISPLAYS the NAS
+      // Capture the auto-backup result so the confirm step DISPLAYS the local
       // backup status — and a retry when it failed/was partial.
       const archiveWarning = data.archiveWarning ? String(data.archiveWarning) : null;
       setArchiveState({
@@ -351,7 +416,7 @@ export function useReceivingClaimController({
       }
 
       // Land on the confirmation step — the operator reviews the ticket result
-      // AND the NAS backup result there before continuing to the seller message.
+      // AND the local backup result there before continuing to the seller message.
       setFiledTicket({
         number: ticketNumber || 'pending',
         url: ticketUrl,
@@ -365,10 +430,10 @@ export function useReceivingClaimController({
     }
   };
 
-  // Archive the carton's photos to a NAS folder via the office agent. The
-  // folder is the filed/linked ticket # when we have one, else the PO#, else a
-  // receiving fallback — so the operator can publish to NAS before OR after a
-  // ticket exists. No free-text target.
+  // Save the carton's photos to a local-storage folder. The folder is the
+  // filed/linked ticket # when we have one, else the PO#, else a receiving
+  // fallback — so the operator can back up before OR after a ticket exists.
+  // No free-text target.
   const archiveToNas = async () => {
     if (archiveSubmitting || submitting || !receivingId) return;
     const folder =
@@ -392,7 +457,7 @@ export function useReceivingClaimController({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        toast.error(data?.error || 'Could not archive claim photos');
+        toast.error(data?.error || 'Could not back up claim photos');
         return;
       }
       // Display the backup result on the seller step (folder + counts), and a
@@ -430,6 +495,8 @@ export function useReceivingClaimController({
           subject: template.readSubject().trim(),
           description: template.readDescription().trim(),
           attachPhotoIds: [...photos.selectedPhotoIds],
+          notePublic,
+          ccEmails,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -501,8 +568,8 @@ export function useReceivingClaimController({
 
   // Dry-run "File ticket": exercise the REAL Review → Confirm → Seller arc with
   // zero side-effects. The endpoint short-circuits on `dryRun` (returns the
-  // assembled subject/body + a '#TEST' ticket; no Zendesk/NAS/DB writes), so we
-  // land on the confirm step with a synthetic ticket + NAS result to inspect.
+  // assembled subject/body + a '#TEST' ticket; no Zendesk/local/DB writes), so we
+  // land on the confirm step with a synthetic ticket + local backup result to inspect.
   const submitDryRun = async () => {
     if (testCreating || submitting || !receivingId) return;
     const subject = template.readSubject().trim();
@@ -522,6 +589,8 @@ export function useReceivingClaimController({
           subject,
           description,
           attachPhotoIds: [...photos.selectedPhotoIds],
+          notePublic,
+          ccEmails,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -532,8 +601,8 @@ export function useReceivingClaimController({
       const attachCount = Number(data.attachCount ?? photos.selectedPhotoIds.size);
       setIsDryRun(true);
       setFiledTicket({ number: '#TEST', url: null, id: null });
-      // Synthesise the NAS result the real archive would have produced, so the
-      // confirmation's backup card renders exactly as it would in production.
+      // Synthesise the local backup result the real backup would have produced,
+      // so the confirmation's backup card renders exactly as it would in production.
       setArchiveState({
         ok: true,
         copied: photos.photos.length,
@@ -610,11 +679,9 @@ export function useReceivingClaimController({
       onTicketCreated(String(data.ticketNumber));
       setLinkCommitted(true);
       setFiledTicket({ number: String(data.ticketNumber), url, id: selected.id });
-      if (createStep !== 'seller') {
-        advanceToSellerStep({ number: String(data.ticketNumber), url, id: selected.id });
-      } else {
-        seller.resetBootstrap();
-      }
+      // Land on the "Linked" confirmation step (local backup + continue to seller).
+      seller.resetBootstrap();
+      setLinkStep('linked');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');
     } finally {
@@ -661,17 +728,27 @@ export function useReceivingClaimController({
     claimType,
     setClaimType,
     reason,
+    // recipients (opening comment)
+    ccEmails,
+    setCcEmails,
+    notePublic,
+    setNotePublic,
     archiveSubmitting,
     claimTypeItems,
     claimStepStates,
+    linkStep,
+    linkStepStates,
     sellerStepReady,
     composeComplete,
     handleModeChange,
     handleClaimStepClick,
+    handleLinkStepClick,
     isCreateStepDisabled,
+    isLinkStepDisabled,
     goToStep,
     goBack,
     goNext,
+    goLinkBack,
     continueToSeller,
     selectLinkTicket,
     handleBannerUnlink,

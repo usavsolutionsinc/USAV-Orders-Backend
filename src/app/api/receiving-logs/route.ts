@@ -6,6 +6,7 @@ import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
 import { isValidPriorityTier } from '@/lib/receiving/priority-override';
+import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -46,7 +47,10 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         const weekStart = searchParams.get('weekStart') || '';
         const weekEnd = searchParams.get('weekEnd') || '';
         const needsTestParam = searchParams.get('needs_test');
-        const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd, needsTestParam, scanMeta: true });
+        // orgId MUST be part of the cache key — the SQL is org-scoped via
+        // tenantQuery(orgId, …), but without org in the key org B could be
+        // served org A's cached logs.
+        const cacheLookup = createCacheLookupKey({ org: orgId, limit, offset, weekStart, weekEnd, needsTestParam, scanMeta: true });
 
         const today = getCurrentPSTDateKey();
         const cacheTTL = weekEnd && weekEnd < today ? 86400 : 60;
@@ -69,9 +73,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         // when receiving.shipment_id exists on the schema. See
         // 2026-04-15_receiving_attach_shipment_id.sql.
         const hasShipmentId = hasColumn('shipment_id');
+        // Tracking is sourced solely from the canonical STN row (legacy
+        // receiving.receiving_tracking_number was dropped). Degrades to NULL if
+        // the shipment_id column is somehow absent — never references the column.
         const trackingExpr = hasShipmentId
-            ? 'COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking'
-            : 'r.receiving_tracking_number AS tracking';
+            ? 'stn.tracking_number_raw AS tracking'
+            : 'NULL::text AS tracking';
         const statusExpr = hasShipmentId
             ? "COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS status"
             : 'r.carrier AS status';
@@ -146,8 +153,8 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             ? 'LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id'
             : '';
         const hasTrackingClause = hasShipmentId
-            ? "(r.shipment_id IS NOT NULL OR (r.receiving_tracking_number IS NOT NULL AND r.receiving_tracking_number <> ''))"
-            : "r.receiving_tracking_number IS NOT NULL AND r.receiving_tracking_number <> ''";
+            ? 'r.shipment_id IS NOT NULL'
+            : 'FALSE';
 
         const logs = await tenantQuery(orgId, `
             SELECT ${selectFields.join(', ')}
@@ -319,8 +326,16 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         let idx = 1;
 
         if (tracking) {
-            updates.push(`receiving_tracking_number = $${idx++}`);
-            values.push(tracking);
+            // Legacy receiving_tracking_number was dropped — register the manual
+            // tracking into the canonical STN row and link it via shipment_id.
+            const stn = await registerShipmentPermissive(
+                { trackingNumber: tracking, sourceSystem: 'receiving_logs_manual' },
+                orgId,
+            ).catch(() => null);
+            if (stn) {
+                updates.push(`shipment_id = $${idx++}`);
+                values.push(stn.id);
+            }
         }
         if (status) {
             updates.push(`carrier = $${idx++}`);

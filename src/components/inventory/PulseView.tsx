@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { EventRow } from './EventRow';
 import type { PulseEventRow, PulseEventsResponse } from './types';
 
@@ -54,7 +55,7 @@ export function PulseView() {
 
     if (events === null && fetching) {
         return (
-            <div className="flex items-center justify-center py-16 text-gray-400">
+            <div className="flex items-center justify-center py-16 text-text-faint">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="ml-2 text-sm">Loading recent activity…</span>
             </div>
@@ -73,24 +74,24 @@ export function PulseView() {
         <section>
             <header className="flex items-center justify-between px-4 py-2 sm:px-6">
                 <div>
-                    <h2 className="text-sm font-semibold text-gray-900">Recent activity</h2>
-                    <p className="text-xs text-gray-500">
+                    <h2 className="text-sm font-semibold text-text-default">Recent activity</h2>
+                    <p className="text-xs text-text-soft">
                         Last {events?.length ?? 0} inventory events · auto-refresh 30s
                     </p>
                 </div>
-                <button
-                    type="button"
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<RefreshCw />}
+                    loading={fetching}
                     onClick={fetchEvents}
-                    disabled={fetching}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60"
                 >
-                    <RefreshCw className={`h-3.5 w-3.5 ${fetching ? 'animate-spin' : ''}`} />
                     Refresh
-                </button>
+                </Button>
             </header>
 
             {events && events.length === 0 ? (
-                <div className="px-4 py-12 text-center text-sm text-gray-400 sm:px-6">
+                <div className="px-4 py-12 text-center text-sm text-text-faint sm:px-6">
                     No inventory events yet.
                 </div>
             ) : (

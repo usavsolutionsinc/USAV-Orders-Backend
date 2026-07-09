@@ -40,6 +40,12 @@ import {
   dashboardOrderRowShellClass,
 } from '@/lib/dashboard-order-row-layout';
 import { IncomingAttachTrackingButton } from '@/components/station/IncomingAttachTrackingButton';
+import { FulfillmentPickupPill } from '@/components/receiving/ReceivingIdentityChips';
+import { isLocalPickupFulfillment } from '@/lib/receiving/fulfillment-mode';
+import {
+  getReceivingPoGroupTitle,
+  getReceivingPoIdentityParts,
+} from '@/lib/receiving/po-group-title';
 import type { ReceivingLineRow } from './receiving-line-row';
 
 export function ReceivingPoSummary({
@@ -67,20 +73,9 @@ export function ReceivingPoSummary({
   const conditionLabel =
     grades.size === 1 ? conditionGradeTableLabel([...grades][0]) : 'MIXED';
 
-  const poValue = (
-    first?.zoho_purchaseorder_number ||
-    first?.zoho_purchaseorder_id ||
-    ''
-  ).trim();
-
-  // Title = the group's shared identity: platform + PO. Falls back gracefully
-  // when either is missing (e.g. an un-platformed Zoho carton → just "PO 3715").
-  const platformRaw = (first?.source_platform || '').trim().toLowerCase();
-  const platformLabel = platformRaw ? resolvePlatformMeta(platformRaw).label : '';
-  const title =
-    [platformLabel, poValue ? `PO ${poValue}` : '']
-      .filter(Boolean)
-      .join(' · ') || (first?.item_name ?? 'Grouped lines');
+  const resolvePlatformLabel = (raw: string) => resolvePlatformMeta(raw).label;
+  const { poValue } = getReceivingPoIdentityParts(first, resolvePlatformLabel);
+  const title = getReceivingPoGroupTitle(first, resolvePlatformLabel);
 
   // Only surface tracking when every line shares one carton; otherwise leave the
   // column empty so the summary never implies a single tracking# for a split PO.
@@ -88,6 +83,7 @@ export function ReceivingPoSummary({
     rows.map((r) => (r.tracking_number || '').trim()).filter(Boolean),
   );
   const trackingValue = trackings.size === 1 ? [...trackings][0] : '';
+  const isPickup = first ? isLocalPickupFulfillment(first) : false;
 
   // The differing columns carry a yellow "×N" count instead of a value. SKU is
   // one-per-line, so its count is the line count.
@@ -132,7 +128,9 @@ export function ReceivingPoSummary({
       width: CHIP_COL.tracking,
       // Incoming AWAITING_TRACKING with no carton-wide tracking → the empty
       // tracking slot hosts the "Add tracking" trigger, pre-targeted to this PO.
-      node: trackingValue
+      node: isPickup
+        ? <FulfillmentPickupPill />
+        : trackingValue
         ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
         : isIncoming && uniformDeliveryState === 'AWAITING_TRACKING' && (first?.zoho_purchaseorder_id || '').trim()
           ? (
@@ -168,7 +166,7 @@ export function ReceivingPoSummary({
               {quantityText}
             </span>
           }
-          condition={<span className="text-gray-400">{conditionLabel}</span>}
+          condition={<span className="text-text-faint">{conditionLabel}</span>}
           rest={
             <div className="flex items-center gap-2">
               {shouldShowWorkflowStatusIcon({ isHistory, isIncoming }) ? (
@@ -187,7 +185,8 @@ export function ReceivingPoSummary({
         <div className={dashboardOrderRowChipsClass(true)}>
           <OrderIdChip value={poValue} display={getLast4(poValue)} dense />
           <SkuCountChip count={skuCount} dense />
-          {trackingValue ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense /> : null}
+          {trackingValue && !isPickup ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense /> : null}
+          {isPickup ? <FulfillmentPickupPill dense /> : null}
           {allSerials.length === 1 ? (
             <SerialChip value={allSerials[0]} width="w-fit max-w-full" dense />
           ) : allSerials.length > 1 ? (

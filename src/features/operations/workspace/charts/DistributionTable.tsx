@@ -42,11 +42,11 @@ export function DistributionTable({
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-caption text-gray-400">
+        <div className="rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-faint">
           {emptyMessage}
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border-hairline">
           {rows.map((row) => (
             <li key={row.key} className="relative flex items-center justify-between py-2">
               {showBar && (
@@ -69,19 +69,19 @@ export function DistributionTable({
                   />
                 )}
                 <span className="min-w-0">
-                  <span className="block truncate text-caption font-semibold text-gray-900">{row.label}</span>
+                  <span className="block truncate text-caption font-semibold text-text-default">{row.label}</span>
                   {row.sublabel && (
-                    <span className="block truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+                    <span className="block truncate text-eyebrow font-semibold uppercase tracking-widest text-text-faint">
                       {row.sublabel}
                     </span>
                   )}
                 </span>
               </span>
               <span className="relative flex items-center gap-4">
-                <span className="w-12 text-right text-caption font-bold tabular-nums text-gray-900">
+                <span className="w-12 text-right text-caption font-bold tabular-nums text-text-default">
                   {row.count.toLocaleString()}
                 </span>
-                <span className="w-10 text-right text-caption font-semibold tabular-nums text-gray-500">
+                <span className="w-10 text-right text-caption font-semibold tabular-nums text-text-soft">
                   {row.percent.toFixed(1)}%
                 </span>
               </span>

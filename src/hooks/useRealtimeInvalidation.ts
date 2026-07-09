@@ -14,6 +14,8 @@ import { useAblyChannel } from './useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
 import { qk } from '@/queries/keys';
 import { OUTBOUND_QUERY_PREFIXES } from '@/lib/outbound/outbound-cache-keys';
+import { receivingFeedsRecentlyInvalidatedLocally } from '@/lib/queries/receiving-queries';
+import { invalidateUnshippedCounts } from '@/lib/queries/dashboard-cache-patch';
 
 function invalidateOutboundQueues(queryClient: ReturnType<typeof useQueryClient>) {
   for (const queryKey of OUTBOUND_QUERY_PREFIXES) {
@@ -63,6 +65,9 @@ export function useRealtimeInvalidation({
     () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      // The new counts key (Phase 2) lives under a SEPARATE prefix, so the row
+      // invalidate above doesn't cover it — refresh it explicitly.
+      invalidateUnshippedCounts(queryClient);
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
@@ -80,6 +85,9 @@ export function useRealtimeInvalidation({
     () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      // The new counts key (Phase 2) lives under a SEPARATE prefix, so the row
+      // invalidate above doesn't cover it — refresh it explicitly.
+      invalidateUnshippedCounts(queryClient);
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
@@ -95,6 +103,9 @@ export function useRealtimeInvalidation({
     () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      // The new counts key (Phase 2) lives under a SEPARATE prefix, so the row
+      // invalidate above doesn't cover it — refresh it explicitly.
+      invalidateUnshippedCounts(queryClient);
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
@@ -110,7 +121,11 @@ export function useRealtimeInvalidation({
     ordersChannel,
     'order.tested',
     () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      // Phase 3: the Unshipped rows are patched IN PLACE by UnshippedTable's own
+      // order.tested handler (has_tech_scan → the row moves pending → tested lane),
+      // so do NOT broad-invalidate the row list here — a tech scan on an idle
+      // dashboard causes 0 full /api/orders refetch. Just refresh the cheap counts.
+      invalidateUnshippedCounts(queryClient);
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
@@ -132,9 +147,17 @@ export function useRealtimeInvalidation({
     stationChannel,
     'receiving-log.changed',
     () => {
-      queryClient.invalidateQueries({ queryKey: ['receiving'] });
+      // The Ably echo of a LOCAL scan/receive arrives just after this client
+      // already ran invalidateReceivingFeeds optimistically. Skip re-invalidating
+      // the two overlapping desktop-rail roots in that window so one scan doesn't
+      // refetch the rails twice (the flicker). Events from OTHER clients carry no
+      // recent local stamp and still refresh fully. The remaining keys below have
+      // no desktop-rail observers (mobile / serials / pending), so invalidating
+      // them here either way is a harmless no-op.
+      const localCovered = receivingFeedsRecentlyInvalidatedLocally();
+      if (!localCovered) queryClient.invalidateQueries({ queryKey: ['receiving'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
-      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      if (!localCovered) queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
       // 'receiving-logs' is intentionally omitted: ReceivingLogs handles it
       // surgically via its own useAblyChannel (insert→insertIntoCache,
       // delete→removeFromCache). Invalidating here races with the refetch
@@ -158,6 +181,7 @@ export function useRealtimeInvalidation({
     () => {
       queryClient.invalidateQueries({ queryKey: ['receiving-photos'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-po-list'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-po-detail'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-item-photos'] });

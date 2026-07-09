@@ -1,16 +1,33 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { Check, Loader2, X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { OrderPreviewPanel } from './OrderPreviewPanel';
+import { WorkspaceCard } from '@/design-system/components';
 import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
 
 interface ActiveOrderBodyProps {
   activeOrder: ActiveStationOrder;
   onRemoveSerial?: (serial: string, index: number) => Promise<void> | void;
+  revealItem?: Variants;
+}
+
+function RevealSection({
+  revealItem,
+  children,
+}: {
+  revealItem?: Variants;
+  children: ReactNode;
+}) {
+  if (revealItem) {
+    return <motion.div variants={revealItem}>{children}</motion.div>;
+  }
+  return <>{children}</>;
 }
 
 /**
@@ -42,7 +59,7 @@ function activeOrderToOrderShape(activeOrder: ActiveStationOrder): Order {
  * so the surface looks identical to the sidebar-click preview, and appends
  * a serial list below that slides each scan in as it arrives.
  */
-export function ActiveOrderBody({ activeOrder, onRemoveSerial }: ActiveOrderBodyProps) {
+export function ActiveOrderBody({ activeOrder, onRemoveSerial, revealItem }: ActiveOrderBodyProps) {
   const previewOrder = useMemo(() => activeOrderToOrderShape(activeOrder), [activeOrder]);
   const quantity = Math.max(1, Number(activeOrder.quantity) || 1);
 
@@ -88,24 +105,26 @@ export function ActiveOrderBody({ activeOrder, onRemoveSerial }: ActiveOrderBody
 
   return (
     <div className="space-y-4">
-      <OrderPreviewPanel order={previewOrder} />
+      <OrderPreviewPanel order={previewOrder} revealItem={revealItem} />
 
       <AnimatePresence initial={false}>
         {activeOrder.serialNumbers.length > 0 ? (
-          <motion.section
-            key="active-serials"
-            initial={framerPresence.collapseHeight.initial}
-            animate={framerPresence.collapseHeight.animate}
-            exit={framerPresence.collapseHeight.exit}
-            transition={framerTransition.stationCollapse}
-            className="overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50/60"
-          >
-            <div className="space-y-2 p-3">
-              <p className="text-eyebrow font-black uppercase tracking-wider text-emerald-700">
-                Scanned Serials ({activeOrder.serialNumbers.length}
-                {quantity > 1 ? ` / ${quantity}` : ''})
-              </p>
-              <div className="max-h-48 space-y-1 overflow-y-auto">
+          <RevealSection revealItem={revealItem}>
+            <motion.section
+              key="active-serials"
+              initial={framerPresence.collapseHeight.initial}
+              animate={framerPresence.collapseHeight.animate}
+              exit={framerPresence.collapseHeight.exit}
+              transition={framerTransition.stationCollapse}
+              className="overflow-hidden"
+            >
+              <WorkspaceCard label="Scanned serials" tone="emerald" bodyClassName="p-3">
+                <div className="space-y-2">
+                  <p className="text-eyebrow font-black uppercase tracking-wider text-emerald-700">
+                    {activeOrder.serialNumbers.length}
+                    {quantity > 1 ? ` / ${quantity}` : ''} captured
+                  </p>
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
                 <AnimatePresence initial={false}>
                   {activeOrder.serialNumbers.map((sn, index) => {
                     const isNew = sn === lastAddedSerial;
@@ -118,7 +137,7 @@ export function ActiveOrderBody({ activeOrder, onRemoveSerial }: ActiveOrderBody
                         exit={{ opacity: 0, x: -24, height: 0 }}
                         transition={framerTransition.stationSerialRow}
                         className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors duration-500 ${
-                          isNew ? 'border-emerald-400 bg-emerald-200 shadow-sm' : 'border-emerald-100 bg-white'
+                          isNew ? 'border-emerald-400 bg-emerald-200 shadow-sm' : 'border-emerald-100 bg-surface-card'
                         }`}
                       >
                         <Check className="h-3 w-3 flex-shrink-0 text-emerald-600" />
@@ -138,16 +157,15 @@ export function ActiveOrderBody({ activeOrder, onRemoveSerial }: ActiveOrderBody
                             ) : null}
                           </AnimatePresence>
                           {onRemoveSerial ? (
-                            <button
-                              type="button"
-                              onClick={() => void handleRemoveSerial(sn, index)}
-                              disabled={Boolean(removingKey)}
-                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-emerald-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                              aria-label={`Remove serial ${sn}`}
-                              title={`Remove serial ${sn}`}
-                            >
-                              {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-                            </button>
+                            <HoverTooltip label={`Remove serial ${sn}`} asChild>
+                              <IconButton
+                                icon={isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                                onClick={() => void handleRemoveSerial(sn, index)}
+                                disabled={Boolean(removingKey)}
+                                ariaLabel={`Remove serial ${sn}`}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-emerald-500 hover:bg-red-50 hover:text-red-600"
+                              />
+                            </HoverTooltip>
                           ) : null}
                         </div>
                       </motion.div>
@@ -155,11 +173,13 @@ export function ActiveOrderBody({ activeOrder, onRemoveSerial }: ActiveOrderBody
                   })}
                 </AnimatePresence>
               </div>
-              {serialError ? (
-                <p className="text-micro font-bold text-red-600">{serialError}</p>
-              ) : null}
-            </div>
-          </motion.section>
+                  {serialError ? (
+                    <p className="text-micro font-bold text-red-600">{serialError}</p>
+                  ) : null}
+                </div>
+              </WorkspaceCard>
+            </motion.section>
+          </RevealSection>
         ) : null}
       </AnimatePresence>
     </div>

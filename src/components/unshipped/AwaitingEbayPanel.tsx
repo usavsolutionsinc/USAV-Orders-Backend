@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { RefreshCw, ShieldCheck } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 
 interface EbayAccount {
@@ -163,66 +165,72 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
         return (
           <div
             key={account.id}
-            className="flex items-center justify-between border-b border-gray-100 py-2.5"
+            className="flex items-center justify-between border-b border-border-hairline py-2.5"
           >
             <span className={`${fieldLabel} truncate pr-2`}>
               {account.account_name} (expired)
             </span>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<RefreshCw />}
+              loading={isRefreshing}
               onClick={() => refreshTokenMutation.mutate(account.account_name)}
-              disabled={isRefreshing}
-              className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-amber-700 disabled:opacity-60"
+              className="shrink-0 bg-fill-warning hover:bg-fill-warning/90"
             >
-              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
-            </button>
+            </Button>
           </div>
         );
       })}
 
-      <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
+      <div className="flex items-center justify-between border-b border-border-hairline py-2.5">
         <span className={`${fieldLabel} truncate pr-2`}>Sync eBay orders</span>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<RefreshCw />}
+          loading={ebayBackfillMutation.isPending}
+          disabled={ebayDisabled}
           onClick={() => ebayBackfillMutation.mutate()}
-          disabled={ebayBackfillMutation.isPending || ebayDisabled}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 bg-fill-warning hover:bg-fill-warning/90"
         >
-          <RefreshCw className={`w-3 h-3 ${ebayBackfillMutation.isPending ? 'animate-spin' : ''}`} />
           Run
-        </button>
+        </Button>
       </div>
 
-      <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
+      <div className="flex items-center justify-between border-b border-border-hairline py-2.5">
         <span className={`${fieldLabel} truncate pr-2`}>Sync Ecwid orders</span>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<RefreshCw />}
+          loading={ecwidBackfillMutation.isPending}
           onClick={() => ecwidBackfillMutation.mutate()}
-          disabled={ecwidBackfillMutation.isPending}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 bg-accent-bg hover:bg-accent-bg/90"
         >
-          <RefreshCw className={`w-3 h-3 ${ecwidBackfillMutation.isPending ? 'animate-spin' : ''}`} />
           Run
-        </button>
+        </Button>
       </div>
 
-      <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
+      <div className="flex items-center justify-between border-b border-border-hairline py-2.5">
         <span className={`${fieldLabel} truncate pr-2`}>Check Integrity</span>
-        <button
-          type="button"
-          onClick={() => integrityCheckMutation.mutate(false)}
-          disabled={integrityCheckMutation.isPending}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-gray-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Deduplicate orders by unique (order_id, tracking). Keeps most complete row per group."
-        >
-          <ShieldCheck className={`w-3 h-3 ${integrityCheckMutation.isPending ? 'animate-pulse' : ''}`} />
-          Run
-        </button>
+        <HoverTooltip label="Deduplicate orders by unique (order_id, tracking). Keeps most complete row per group." asChild>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<ShieldCheck className={integrityCheckMutation.isPending ? 'animate-pulse' : ''} />}
+            onClick={() => integrityCheckMutation.mutate(false)}
+            disabled={integrityCheckMutation.isPending}
+            className="shrink-0 bg-surface-inverse-soft hover:bg-surface-inverse-raised"
+          >
+            Run
+          </Button>
+        </HoverTooltip>
       </div>
 
       {logs.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
+        <div className="mt-3 pt-3 border-t border-border-soft">
           <p className={`${sectionLabel} mb-1.5`}>
             Recent
           </p>
@@ -231,7 +239,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
               <p
                 key={log.id}
                 className={`text-micro font-medium leading-tight ${
-                  log.type === 'success' ? 'text-emerald-700' : 'text-red-600'
+                  log.type === 'success' ? 'text-text-success' : 'text-text-danger'
                 }`}
               >
                 {log.text}

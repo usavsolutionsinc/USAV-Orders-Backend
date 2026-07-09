@@ -22,6 +22,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Check, Loader2, Package, Printer, ShoppingCart, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { ReceivingPoLabelPreview } from '@/components/receiving/workspace/ReceivingPoLabelPreview';
 import { printReceivingLabel } from '@/lib/print/printReceivingLabel';
 import { buildLocalPickupPoNumber } from '@/lib/local-pickup/po-number';
@@ -119,7 +120,7 @@ function FinalizeReview({ onClose }: { onClose: () => void }) {
       {/* Name + notes (locked once finalized) */}
       <div className="space-y-2">
         <div>
-          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
             Pickup name
           </label>
           <input
@@ -127,14 +128,14 @@ function FinalizeReview({ onClose }: { onClose: () => void }) {
             onChange={(e) => setName(e.target.value)}
             disabled={!!done || isSubmitting}
             placeholder="e.g. Ken"
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-caption font-bold text-gray-900 outline-none focus:border-emerald-500 disabled:bg-gray-50"
+            className="h-9 w-full rounded-lg border border-border-soft bg-surface-card px-3 text-caption font-bold text-text-default outline-none focus:border-emerald-500 disabled:bg-surface-canvas"
           />
           <p className="mt-1 font-mono text-micro font-black uppercase tracking-wide text-emerald-600">
             {poNumber}
           </p>
         </div>
         <div>
-          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
             Notes
           </label>
           <textarea
@@ -143,7 +144,7 @@ function FinalizeReview({ onClose }: { onClose: () => void }) {
             disabled={!!done || isSubmitting}
             rows={2}
             placeholder="Printed in the middle of the label…"
-            className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-caption text-gray-900 outline-none focus:border-emerald-500 disabled:bg-gray-50"
+            className="w-full resize-none rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-caption text-text-default outline-none focus:border-emerald-500 disabled:bg-surface-canvas"
           />
         </div>
       </div>
@@ -174,47 +175,44 @@ function FinalizeReview({ onClose }: { onClose: () => void }) {
       {/* Footer actions */}
       {done ? (
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
             onClick={handlePrint}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700"
+            icon={<Printer className="h-4 w-4" />}
+            className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
           >
-            <Printer className="h-4 w-4" /> Print label
-          </button>
-          <button
-            type="button"
+            Print label
+          </Button>
+          <Button
+            variant="secondary"
+            size="md"
             onClick={onClose}
-            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50"
           >
             Done
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
             onClick={() => closeReview()}
             disabled={isSubmitting}
-            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => void handleFinalize()}
             disabled={isSubmitting || !name.trim() || items.length === 0}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            loading={isSubmitting}
+            icon={<ShoppingCart className="h-4 w-4" />}
+            className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Pushing to Zoho…
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="h-4 w-4" /> Finalize &amp; push to Zoho
-              </>
-            )}
-          </button>
+            {isSubmitting ? 'Pushing to Zoho…' : 'Finalize & push to Zoho'}
+          </Button>
         </div>
       )}
     </ReviewShell>
@@ -320,7 +318,7 @@ function ReprintReview({ orderId, onClose }: { orderId?: number; onClose: () => 
   return (
     <ReviewShell title="Local pickup PO" onClose={onClose}>
       {loading ? (
-        <div className="flex items-center justify-center py-10 text-gray-400">
+        <div className="flex items-center justify-center py-10 text-text-faint">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : error ? (
@@ -330,14 +328,14 @@ function ReprintReview({ orderId, onClose }: { orderId?: number; onClose: () => 
       ) : order ? (
         <>
           <div>
-            <p className="text-base font-black tracking-tight text-gray-900">
+            <p className="text-base font-black tracking-tight text-text-default">
               {order.customer_name || 'Local pickup'}
             </p>
             <p className="mt-0.5 font-mono text-micro font-black uppercase tracking-wide text-emerald-600">
               {poNumber}
             </p>
             {order.notes ? (
-              <p className="mt-1 text-caption text-gray-600">{order.notes}</p>
+              <p className="mt-1 text-caption text-text-muted">{order.notes}</p>
             ) : null}
           </div>
 
@@ -352,21 +350,23 @@ function ReprintReview({ orderId, onClose }: { orderId?: number; onClose: () => 
           />
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={handlePrint}
               disabled={!order.receiving_id}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              icon={<Printer className="h-4 w-4" />}
+              className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
             >
-              <Printer className="h-4 w-4" /> Reprint label
-            </button>
-            <button
-              type="button"
+              Reprint label
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
               onClick={onClose}
-              className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50"
             >
               Close
-            </button>
+            </Button>
           </div>
         </>
       ) : null}
@@ -393,7 +393,7 @@ function ReviewShell({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-panelPopover bg-gray-900/50 backdrop-blur-sm"
+        className="fixed inset-0 z-panelPopover bg-scrim/50 backdrop-blur-sm"
         onClick={onClose}
       />
       <motion.div
@@ -408,25 +408,23 @@ function ReviewShell({
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="pointer-events-auto flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl ring-1 ring-gray-200"
+          className="pointer-events-auto flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-emerald-200 bg-surface-card shadow-2xl ring-1 ring-border-soft"
         >
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+          <div className="flex items-center justify-between border-b border-border-hairline px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                 <ShoppingCart className="h-4 w-4" />
               </span>
-              <span className="text-label font-black uppercase tracking-tight text-gray-900">
+              <span className="text-label font-black uppercase tracking-tight text-text-default">
                 {title}
               </span>
             </div>
-            <button
-              type="button"
+            <IconButton
               onClick={onClose}
-              aria-label="Close"
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              ariaLabel="Close"
+              className="rounded-lg p-1.5 transition-colors hover:bg-surface-sunken"
+              icon={<X className="h-4 w-4" />}
+            />
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">{children}</div>
         </div>
@@ -440,22 +438,22 @@ function ItemList({ items }: { items: ReviewItem[] }) {
   const subtotal = items.reduce((sum, i) => sum + i.total, 0);
   const unitCount = items.reduce((sum, i) => sum + i.quantity, 0);
   return (
-    <div className="rounded-xl border border-gray-200">
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500">
+    <div className="rounded-xl border border-border-soft">
+      <div className="flex items-center justify-between border-b border-border-hairline px-3 py-2">
+        <span className="text-eyebrow font-black uppercase tracking-wider text-text-soft">
           {unitCount} item{unitCount === 1 ? '' : 's'}
         </span>
         <span className="text-caption font-black text-emerald-600">{formatMoney(subtotal)}</span>
       </div>
-      <div className="max-h-52 divide-y divide-gray-100 overflow-y-auto">
+      <div className="max-h-52 divide-y divide-border-hairline overflow-y-auto">
         {items.map((i) => (
           <div key={i.key} className="flex items-center gap-2 px-3 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-50">
-              <Package className="h-4 w-4 text-gray-300" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-canvas">
+              <Package className="h-4 w-4 text-text-faint" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-caption font-bold text-gray-900">{i.title}</p>
-              <p className="text-mini font-bold uppercase tracking-wide text-gray-400">
+              <p className="truncate text-caption font-bold text-text-default">{i.title}</p>
+              <p className="text-mini font-bold uppercase tracking-wide text-text-faint">
                 {i.sku || 'No SKU'} · x{i.quantity}
                 {i.conditionGrade ? ` · ${conditionLabel(i.conditionGrade)}` : ''}
                 {i.partsStatus === 'MISSING_PARTS' ? ' · Missing' : ''}
@@ -486,7 +484,7 @@ function LabelPreviewBlock({
 }) {
   return (
     <div>
-      <p className="mb-1.5 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+      <p className="mb-1.5 text-eyebrow font-black uppercase tracking-wider text-text-soft">
         Label preview
       </p>
       <ReceivingPoLabelPreview

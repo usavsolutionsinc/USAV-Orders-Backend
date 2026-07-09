@@ -17,6 +17,7 @@ import {
   GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
 import { SerialChip, SkuSerialChip } from '@/components/ui/CopyChip';
+import { Button } from '@/design-system/primitives';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { ScanInput } from '@/components/mobile/redesign/ScanInput';
 import {
@@ -304,13 +305,13 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
             {/* Raw label identifiers — the scanned QR/unit id + GTIN. */}
             <div className="flex flex-wrap items-center gap-2">
               {parsed && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-950 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-950 px-3 py-1 text-caption font-black uppercase tracking-wider text-white">
                   <Box className="h-3.5 w-3.5" />
                   {parsed.display}
                 </span>
               )}
               {gtin && (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold tracking-wide text-slate-500">
+                <span className="rounded-full bg-surface-sunken px-3 py-1 text-caption font-bold tracking-wide text-text-soft">
                   GTIN {gtin}
                 </span>
               )}
@@ -365,20 +366,20 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
               {tracked && tracked.events.length > 0 ? (
                 <div className="max-h-64 space-y-2 overflow-y-auto">
                   {tracked.events.map((e) => (
-                    <div key={e.id} className="flex items-start gap-3 rounded-2xl border border-blue-50 bg-white px-3 py-2.5">
+                    <div key={e.id} className="flex items-start gap-3 rounded-2xl border border-blue-50 bg-surface-card px-3 py-2.5">
                       <History className="mt-0.5 h-4 w-4 shrink-0 text-blue-300" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-black tracking-tight text-blue-950">{humanizeEvent(e.event_type)}</p>
-                        <p className="truncate text-[11px] font-semibold text-blue-400">
+                        <p className="truncate text-caption font-semibold text-blue-400">
                           {[e.station, e.next_status, e.notes].filter(Boolean).join(' · ') || '—'}
                         </p>
                       </div>
-                      <span className="shrink-0 text-[11px] font-bold text-blue-300">{formatWhen(e.occurred_at)}</span>
+                      <span className="shrink-0 text-caption font-bold text-blue-300">{formatWhen(e.occurred_at)}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 px-4 py-6 text-center">
+                <div className="flex flex-col items-center gap-2 rounded-2xl bg-surface-canvas px-4 py-6 text-center">
                   <p className="text-xs font-black uppercase tracking-widest text-blue-300">
                     {tracked ? 'No history yet' : 'No history for untracked units'}
                   </p>
@@ -393,13 +394,13 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
               )}
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={onClose}
-              className={`mt-1 w-full rounded-[20px] py-3 text-sm font-black uppercase tracking-wider ${TOKENS.colors.text.muted}`}
+              className={`mt-1 w-full ${TOKENS.colors.text.muted}`}
             >
               Done
-            </button>
+            </Button>
           </div>
         )}
       </BottomSheet>
@@ -449,7 +450,7 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
 function ChipRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-12 shrink-0 text-[10px] font-black uppercase tracking-[0.14em] text-blue-300">
+      <span className="w-12 shrink-0 text-micro font-black uppercase tracking-[0.14em] text-blue-300">
         {label}
       </span>
       {children}
@@ -459,8 +460,8 @@ function ChipRow({ label, children }: { label: string; children: React.ReactNode
 
 function StatField({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
-      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-300">{label}</p>
+    <div className="rounded-2xl bg-surface-canvas px-3 py-2.5">
+      <p className="text-micro font-black uppercase tracking-[0.15em] text-blue-300">{label}</p>
       <div className="mt-1 flex items-center gap-1">
         {icon}
         <p className="truncate text-sm font-black tracking-tight text-blue-950">{value}</p>

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { QrCode, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 
 /**
  * Header control cluster for any page reached by scanning a Data Matrix on the
@@ -14,22 +15,23 @@ export function ScanAgainBar({ className = '' }: { className?: string }) {
   const router = useRouter();
   return (
     <div className={`flex items-center gap-1.5 ${className}`}>
-      <button
+      <Button
         type="button"
+        variant="brand"
+        size="sm"
+        icon={<QrCode />}
         onClick={() => router.push('/m/scan')}
-        className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white active:bg-slate-800"
+        className="rounded-full px-3 text-micro font-black uppercase tracking-wider"
       >
-        <QrCode className="h-3.5 w-3.5" />
         Scan again
-      </button>
-      <button
+      </Button>
+      <IconButton
         type="button"
+        icon={<X className="h-4 w-4" />}
+        ariaLabel="Exit to home"
         onClick={() => router.push('/m/home')}
-        aria-label="Exit to home"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 active:bg-slate-200"
-      >
-        <X className="h-4 w-4" />
-      </button>
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-sunken text-text-soft active:bg-surface-strong"
+      />
     </div>
   );
 }

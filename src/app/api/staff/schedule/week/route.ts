@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { isMondayDateKey } from '@/lib/staff-availability';
@@ -30,7 +31,7 @@ function isValidIsoDate(value: string | null | undefined): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const weekStartDate = searchParams.get('weekStart');
@@ -87,12 +88,12 @@ export const GET = withAuth(async (request: NextRequest) => {
             ELSE true
           END AS is_allowed
       ) sar ON true
-      ${includeInactive ? '' : 'WHERE s.active = true'}
+      WHERE s.organization_id = $2${includeInactive ? '' : ' AND s.active = true'}
       ORDER BY s.role ASC, s.name ASC, d.day_of_week ASC
     `;
 
     const result = await queryWithRetry(
-      () => pool.query(sql, [weekStartDate]),
+      () => tenantQuery(ctx.organizationId, sql, [weekStartDate, ctx.organizationId]),
       { retries: 3, delayMs: 1000 }
     );
 

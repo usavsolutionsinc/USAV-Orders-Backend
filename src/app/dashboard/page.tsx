@@ -32,7 +32,7 @@ import { DashboardOrderDetails } from '@/components/dashboard/DashboardOrderDeta
 function DashboardPageContent() {
   const { detailsEnabled, orderView, searchQuery } = useDashboardSearchController();
 
-  const { selectionEnabled, selectMode, selectedRows, selectionActions } =
+  const { selectionEnabled, selectMode, toggleSelectMode, selectedRows, selectionActions } =
     useDashboardBulkSelection(orderView);
 
   const { selectedShipped, selectedContext, requestCloseSelectedOrder } =
@@ -50,6 +50,7 @@ function DashboardPageContent() {
       <DashboardOrdersView
         orderView={orderView}
         selectMode={selectMode}
+        onToggleSelectMode={toggleSelectMode}
         selectionEnabled={selectionEnabled}
         selectedRows={selectedRows}
         selectionActions={selectionActions}

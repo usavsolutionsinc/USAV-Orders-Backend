@@ -1,10 +1,10 @@
 /** Shared with `ShippedIntakeForm` and FBA create shipment — keep in sync. */
 
 export const SIDEBAR_INTAKE_LABEL_CLASS =
-  'block text-micro font-black uppercase tracking-widest text-gray-700';
+  'block text-micro font-black uppercase tracking-widest text-text-muted';
 
 const SIDEBAR_INTAKE_INPUT_BASE_CLASS =
-  'w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:border-transparent transition-all';
+  'w-full px-4 py-3 bg-surface-canvas border border-border-soft rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:border-transparent transition-all';
 
 const SIDEBAR_INTAKE_INPUT_RING_CLASS = {
   green: 'focus:ring-green-500',
@@ -23,7 +23,7 @@ export const SIDEBAR_INTAKE_INPUT_MONO_CLASS = `${SIDEBAR_INTAKE_INPUT_CLASS} fo
 export const SIDEBAR_INTAKE_SELECT_CLASS = SIDEBAR_INTAKE_INPUT_CLASS;
 
 export const SIDEBAR_INTAKE_CLOSE_BUTTON_CLASS =
-  'p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all';
+  'p-2 bg-surface-sunken hover:bg-surface-strong rounded-xl transition-all';
 
 const SIDEBAR_INTAKE_SUBMIT_BUTTON_TONE_CLASS = {
   green: 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-green-500/20',
@@ -31,7 +31,7 @@ const SIDEBAR_INTAKE_SUBMIT_BUTTON_TONE_CLASS = {
 } as const;
 
 const SIDEBAR_INTAKE_SUBMIT_BUTTON_BASE_CLASS =
-  'w-full px-4 py-3 disabled:bg-gray-300 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg';
+  'w-full px-4 py-3 disabled:bg-surface-strong text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg';
 
 export function getSidebarIntakeSubmitButtonClass(tone: keyof typeof SIDEBAR_INTAKE_SUBMIT_BUTTON_TONE_CLASS = 'green'): string {
   return `${SIDEBAR_INTAKE_SUBMIT_BUTTON_BASE_CLASS} ${SIDEBAR_INTAKE_SUBMIT_BUTTON_TONE_CLASS[tone]}`;
@@ -48,7 +48,7 @@ export const SIDEBAR_INTAKE_SUBTITLE_ACCENT: Record<
   blue: 'text-mini font-bold text-blue-600 uppercase tracking-widest',
   purple: 'text-mini font-bold text-purple-600 uppercase tracking-widest',
   yellow: 'text-mini font-bold text-amber-600 uppercase tracking-widest',
-  black: 'text-mini font-bold text-slate-700 uppercase tracking-widest',
+  black: 'text-mini font-bold text-text-muted uppercase tracking-widest',
   red: 'text-mini font-bold text-red-600 uppercase tracking-widest',
   lightblue: 'text-mini font-bold text-sky-600 uppercase tracking-widest',
   pink: 'text-mini font-bold text-pink-600 uppercase tracking-widest',

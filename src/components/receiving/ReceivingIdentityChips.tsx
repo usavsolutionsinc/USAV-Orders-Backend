@@ -1,5 +1,11 @@
 'use client';
 
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import {
+  displayTrackingNumber,
+  fulfillmentModeLabel,
+  isLocalPickupFulfillment,
+} from '@/lib/receiving/fulfillment-mode';
 import {
   OrderIdChip,
   SkuScanRefChip,
@@ -8,6 +14,59 @@ import {
   getLast4,
 } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+
+/** Matches {@link InlinePillPicker} collapsed shell — read-only status pills in the carton bar. */
+const RAIL_PILL_BASE =
+  'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide';
+const RAIL_PICKUP_TONE = 'border-emerald-600 bg-emerald-600 text-white';
+
+export type FulfillmentPickupPillVariant = 'chip' | 'rail';
+
+/**
+ * Non-copy pickup indicator for the tracking slot.
+ * - `chip` (default) — ring badge for table columns, popovers, dense rows.
+ * - `rail` — solid h-8 pill aligned with InlinePillPicker in CartonContextCard.
+ */
+export function FulfillmentPickupPill({
+  dense,
+  variant = 'chip',
+  tooltip,
+}: {
+  dense?: boolean;
+  variant?: FulfillmentPickupPillVariant;
+  /** Rail variant only — explains fulfillment mode on hover/focus. */
+  tooltip?: string;
+}) {
+  if (variant === 'rail') {
+    const pill = (
+      <span
+        className={`${RAIL_PILL_BASE} ${RAIL_PICKUP_TONE}`}
+        aria-label={tooltip ?? 'Pickup — fulfilled in person, no tracking number'}
+      >
+        Pickup
+      </span>
+    );
+    if (tooltip) {
+      return (
+        <HoverTooltip label={tooltip} asChild>
+          {pill}
+        </HoverTooltip>
+      );
+    }
+    return pill;
+  }
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center rounded font-black uppercase tracking-widest text-emerald-700 ring-1 ring-inset ring-emerald-200 bg-emerald-50 ${
+        dense ? 'px-1 py-px text-[8.5px]' : 'px-1.5 py-0.5 text-eyebrow'
+      }`}
+    >
+      Pickup
+    </span>
+  );
+}
 
 /**
  * The slim, color-coded, last-4 chip cluster shared by the desktop receiving
@@ -25,6 +84,8 @@ export interface ReceivingIdentityChipsProps {
   tracking?: string | null;
   /** Comma-joined serial list; SerialChip picks the most recent + last-4. */
   serialsCsv?: string | null;
+  /** When set, derives pickup vs shipped tracking display from the row. */
+  row?: ReceivingLineRow | null;
   includePo?: boolean;
   includeSku?: boolean;
   includeTracking?: boolean;
@@ -43,7 +104,7 @@ export interface ReceivingIdentityChipsProps {
   /**
    * Replaces the tracking chip when there's no tracking value — used by the
    * Incoming view to host the "Add tracking" popover trigger in the otherwise
-   * empty tracking slot. Ignored when a tracking value is present.
+   * empty tracking slot. Ignored when a tracking value is present or row is pickup.
    */
   trackingAction?: React.ReactNode;
 }
@@ -53,6 +114,7 @@ export function ReceivingIdentityChips({
   sku,
   tracking,
   serialsCsv,
+  row = null,
   includePo = true,
   includeSku = true,
   includeTracking = true,
@@ -64,11 +126,19 @@ export function ReceivingIdentityChips({
 }: ReceivingIdentityChipsProps) {
   const poValue = (po || '').trim();
   const skuValue = (sku || '').trim();
-  const trackingValue = (tracking || '').trim();
+  const isPickup = row ? isLocalPickupFulfillment(row) : false;
+  const pickupLabel = row ? fulfillmentModeLabel(row) : null;
+  const trackingValue = row
+    ? (displayTrackingNumber(row) ?? '')
+    : (tracking || '').trim();
   // The empty tracking slot can host an action (Incoming "Add tracking") instead
   // of the placeholder chip — only when there's genuinely no tracking value.
   const trackingNode =
-    !trackingValue && trackingAction ? trackingAction : null;
+    isPickup && pickupLabel
+      ? <FulfillmentPickupPill dense={dense} />
+      : !trackingValue && trackingAction
+        ? trackingAction
+        : null;
   const serialsValue = (serialsCsv || '').trim();
   // Dense columns are ~12px narrower so the full PO·SKU·tracking·serial set
   // stays on one line in a phone row.
@@ -88,7 +158,9 @@ export function ReceivingIdentityChips({
       columns.push({
         key: 'tracking',
         width: trackCol,
-        node: trackingNode ?? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />,
+        node:
+          trackingNode ??
+          (isPickup ? null : <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />),
       });
     }
     if (includeSerial) {
@@ -101,7 +173,9 @@ export function ReceivingIdentityChips({
     <div className={className}>
       {includePo && <OrderIdChip value={poValue} display={getLast4(poValue)} dense={dense} />}
       {includeSku && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} dense={dense} />}
-      {includeTracking && (trackingNode ?? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />)}
+      {includeTracking &&
+        (trackingNode ??
+          (!isPickup ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} /> : null))}
       {includeSerial && <SerialChip value={serialsValue} dense={dense} />}
     </div>
   );

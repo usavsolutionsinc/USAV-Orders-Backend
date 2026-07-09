@@ -2,6 +2,7 @@ import type { DateRange } from 'react-day-picker';
 import { ChevronDown } from '@/components/Icons';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import { FilterDropdownSelect } from '@/design-system/components/FilterDropdownSelect';
+import { Button } from '@/design-system/primitives';
 import type { CarrierCode, ShipmentStatusCategory } from '@/components/shipping/ShipmentStatusBadge';
 import { SHIPPED_SEARCH_FIELDS, type ShippedSearchField } from '@/lib/shipped-search';
 import { CARRIERS, STATUS_CATEGORIES, TYPE_ITEMS, type ShippedTypeFilter } from './shipped-filter-constants';
@@ -9,8 +10,8 @@ import { useShippedFilterRefinements } from './useShippedFilterRefinements';
 import { NeedsAttentionButton } from './ShippedFilterControls';
 
 const selectClass =
-  'h-9 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2.5 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
-const labelClass = 'mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500';
+  'h-9 w-full cursor-pointer appearance-none rounded-md border border-border-soft bg-surface-card pl-2.5 pr-7 text-caption font-semibold text-text-default hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+const labelClass = 'mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft';
 
 export function ShippedFilterDropdown({
   onClose,
@@ -40,7 +41,7 @@ export function ShippedFilterDropdown({
                 <option key={field.id} value={field.id}>{field.label}</option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
           </div>
         </label>
       ) : null}
@@ -53,7 +54,7 @@ export function ShippedFilterDropdown({
               <option key={t.id} value={String(t.id)}>{t.label}</option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
         </div>
       </label>
 
@@ -69,7 +70,7 @@ export function ShippedFilterDropdown({
             <option value="">All carriers</option>
             {CARRIERS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
         </div>
       </label>
 
@@ -80,7 +81,7 @@ export function ShippedFilterDropdown({
             <option value="">All statuses</option>
             {STATUS_CATEGORIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
         </div>
       </label>
 
@@ -100,9 +101,9 @@ export function ShippedFilterDropdown({
         options={staffOptions}
       />
 
-      <button onClick={onClose} className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-bold text-white transition-colors hover:bg-black">
+      <Button variant="brand" size="md" onClick={onClose} className="w-full">
         Done
-      </button>
+      </Button>
     </div>
   );
 }

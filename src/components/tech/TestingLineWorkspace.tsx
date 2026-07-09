@@ -144,9 +144,9 @@ export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineCh
 
   if (restoring && !row) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gray-50">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" aria-hidden />
-        <p className="text-caption font-bold uppercase tracking-widest text-gray-400">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-surface-canvas">
+        <Loader2 className="h-6 w-6 animate-spin text-text-faint" aria-hidden />
+        <p className="text-caption font-bold uppercase tracking-widest text-text-faint">
           Loading testing workspace…
         </p>
       </div>
@@ -155,9 +155,9 @@ export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineCh
 
   if (!row) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gray-50 px-6 text-center">
-        <p className="text-sm font-bold text-gray-700">No line selected</p>
-        <p className="max-w-sm text-caption text-gray-500">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface-canvas px-6 text-center">
+        <p className="text-sm font-bold text-text-muted">No line selected</p>
+        <p className="max-w-sm text-caption text-text-soft">
           Scan a unit or PO from the sidebar, or pick a line from the testing rail to begin.
         </p>
       </div>

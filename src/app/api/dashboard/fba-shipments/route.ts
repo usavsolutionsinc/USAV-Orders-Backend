@@ -43,7 +43,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       const legacy = await pool.query(
         `SELECT
            r.id,
-           COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS shipment_ref,
+           stn.tracking_number_raw AS shipment_ref,
            COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier,
            r.qa_status,
            r.disposition_code,
@@ -58,10 +58,10 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
          LEFT JOIN staff s ON s.id = r.assigned_tech_id
          WHERE (r.shipment_id IS NOT NULL
-                OR (r.receiving_tracking_number IS NOT NULL AND r.receiving_tracking_number <> ''))
+                OR (stn.tracking_number_raw IS NOT NULL AND stn.tracking_number_raw <> ''))
            AND UPPER(COALESCE(r.target_channel::text, '')) = 'FBA'
            AND ($1 = ''
-                OR r.receiving_tracking_number ILIKE '%' || $1 || '%'
+                OR stn.tracking_number_raw ILIKE '%' || $1 || '%'
                 OR stn.tracking_number_raw     ILIKE '%' || $1 || '%'
                 OR COALESCE(s.name,'') ILIKE '%' || $1 || '%')
          ORDER BY r.id DESC

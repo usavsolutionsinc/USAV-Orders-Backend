@@ -47,13 +47,14 @@ export function PrintTableCheckbox({
       aria-disabled={disabled}
       aria-label={label ?? (checked ? 'Deselect item' : 'Select item')}
       className={[
+        'ds-raw-button',
         'relative flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] transition-all duration-150 outline-none',
         u.checkboxFocusRing,
         disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
         className ?? '',
         checked || indeterminate
           ? u.checkboxChecked
-          : ['border-zinc-300 bg-white', u.checkboxIdleHover].join(' '),
+          : ['border-border-default bg-surface-card', u.checkboxIdleHover].join(' '),
       ].join(' ')}
     >
       <AnimatePresence initial={false} mode="wait">

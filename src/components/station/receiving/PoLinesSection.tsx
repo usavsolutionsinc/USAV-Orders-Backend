@@ -13,6 +13,8 @@ import {
   workflowStatusTableLabel,
   WORKFLOW_BADGE,
 } from '@/components/station/receiving-constants';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 interface ReceivingLine {
   id: number;
@@ -50,7 +52,7 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
     (line.quantity_expected ?? 0) > 0
       ? line.quantity_received >= (line.quantity_expected ?? 0)
       : false;
-  const badgeCls = WORKFLOW_BADGE[line.workflow_status] ?? 'bg-gray-100 text-gray-500';
+  const badgeCls = WORKFLOW_BADGE[line.workflow_status] ?? 'bg-surface-sunken text-text-soft';
   const conditionLabel = conditionGradeTableLabel(line.condition_grade);
   const condGrade = (line.condition_grade || '').toUpperCase();
   const conditionColor =
@@ -58,21 +60,28 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
       ? 'text-yellow-600'
       : condGrade === 'PARTS'
         ? 'text-amber-800'
-        : 'text-gray-500';
+        : 'text-text-soft';
   const skuValue = (line.sku || '').trim();
   const serialsCsv = Array.isArray(line.serials)
     ? line.serials.map((s) => (s.serial_number || '').trim()).filter(Boolean).join(', ')
     : '';
 
+  // Row 1 — full-width product title. No truncation; wraps as needed.
+  const titleNode = (
+    <p className="text-label font-bold text-text-default leading-snug">
+      {line.item_name || line.sku || `Line #${line.id}`}
+    </p>
+  );
+
   return (
-    <div className="border-b border-gray-100 last:border-b-0 px-3 py-2.5">
-      {/* Row 1 — full-width product title. No truncation; wraps as needed. */}
-      <p
-        className="text-label font-bold text-gray-900 leading-snug"
-        title={line.item_name ?? undefined}
-      >
-        {line.item_name || line.sku || `Line #${line.id}`}
-      </p>
+    <div className="border-b border-border-hairline last:border-b-0 px-3 py-2.5">
+      {line.item_name ? (
+        <HoverTooltip label={line.item_name} asChild>
+          {titleNode}
+        </HoverTooltip>
+      ) : (
+        titleNode
+      )}
 
       {/* Row 2 — bottom strip:
             LEFT  → qty + workflow / condition / needs-test badges
@@ -81,12 +90,12 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span
             className={`flex shrink-0 items-center gap-0.5 text-caption font-black tabular-nums ${
-              qtyOk ? 'text-emerald-600' : 'text-gray-700'
+              qtyOk ? 'text-emerald-600' : 'text-text-muted'
             }`}
           >
             {line.quantity_received}
-            <span className="text-gray-300">/</span>
-            <span className="text-gray-400">{line.quantity_expected ?? '?'}</span>
+            <span className="text-text-faint">/</span>
+            <span className="text-text-faint">{line.quantity_expected ?? '?'}</span>
             {qtyOk ? <Check className="h-3 w-3 text-emerald-500" aria-hidden /> : null}
           </span>
           <span
@@ -96,7 +105,7 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
           </span>
           {condGrade && condGrade !== 'PENDING' ? (
             <span
-              className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ring-gray-200 ${conditionColor}`}
+              className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ring-border-soft ${conditionColor}`}
             >
               {conditionLabel}
             </span>
@@ -107,7 +116,7 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
             </span>
           ) : null}
           {line.assigned_tech_name ? (
-            <span className="truncate text-eyebrow font-bold text-gray-400">
+            <span className="truncate text-eyebrow font-bold text-text-faint">
               → {line.assigned_tech_name}
             </span>
           ) : null}
@@ -169,27 +178,27 @@ export function PoLinesSection({ receivingId, trackingNumber }: PoLinesSectionPr
   return (
     <div className="space-y-2">
       {isFetching && lines.length === 0 ? (
-        <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+        <Loader2 className="h-3 w-3 animate-spin text-text-faint" />
       ) : null}
 
       {lines.length === 0 ? (
         <div className="text-center py-4 space-y-2">
-          <p className="text-micro font-bold text-gray-400">No items linked yet.</p>
-          <button
-            type="button"
+          <p className="text-micro font-bold text-text-faint">No items linked yet.</p>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Package />}
+            loading={markingReceived}
             onClick={handleSearchAndLink}
-            disabled={markingReceived}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-micro font-black uppercase tracking-widest disabled:opacity-50 transition-all"
           >
-            {markingReceived ? <Loader2 className="h-3 w-3 animate-spin" /> : <Package className="h-3 w-3" />}
             Search Zoho PO
-          </button>
+          </Button>
           {markResult === 'err' && (
             <p className="text-eyebrow text-red-500 font-bold">Search failed — try again</p>
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-card">
           {lines.map((line) => (
             <PoLineRow key={line.id} line={line} />
           ))}

@@ -58,9 +58,9 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
           <button
             type="button"
             onClick={() => onNavigate(page.id)}
-            title={`Go to ${page.label}`}
+            aria-label={`Go to ${page.label}`}
             className={cn(
-              'flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left transition-colors',
+              'ds-raw-button flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left transition-colors',
               isPageActive ? 'text-white' : 'rounded-xl hover:bg-surface-canvas',
             )}
           >
@@ -73,15 +73,15 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
               type="button"
               onClick={() => onToggleRow(open ? null : rowKey)}
               aria-expanded={open}
-              title={`${modeCount} modes`}
+              aria-label={`${modeCount} modes`}
               className={cn(
-                'flex shrink-0 items-center gap-1.5 px-2.5 py-2 transition-colors',
+                'ds-raw-button flex shrink-0 items-center gap-1.5 px-2.5 py-2 transition-colors',
                 isPageActive ? 'text-white/90 hover:text-white' : 'rounded-xl hover:bg-surface-canvas',
               )}
             >
               <span
                 className={cn(
-                  'text-[11px] font-bold tabular-nums',
+                  'text-caption font-bold tabular-nums',
                   isPageActive ? 'text-white/80' : 'text-text-muted/60',
                 )}
               >
@@ -116,7 +116,7 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
                   return (
                     <Fragment key={mode.id}>
                       {showGroupHeader && (
-                        <p className="px-2.5 pb-0.5 pt-2 text-[10px] font-bold uppercase tracking-widest text-text-muted/70">
+                        <p className="px-2.5 pb-0.5 pt-2 text-micro font-bold uppercase tracking-widest text-text-muted/70">
                           {mode.group}
                         </p>
                       )}
@@ -124,7 +124,7 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
                         type="button"
                         onClick={() => onNavigate(page.id, mode.id)}
                         className={cn(
-                          'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors',
+                          'ds-raw-button flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors',
                           isModeActive
                             ? 'bg-blue-600 text-white'
                             : 'text-text-default hover:bg-blue-600 hover:text-white',
@@ -158,7 +158,7 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
     >
       {recentPages.length > 0 && (
         <>
-          <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-widest text-text-muted/70">Recent</p>
+          <p className="px-2.5 pb-1 pt-1.5 text-micro font-bold uppercase tracking-widest text-text-muted/70">Recent</p>
           {recentPages.map((page) => renderRow(page, 'recent'))}
           <div className="my-1 h-px bg-border-soft" />
         </>
@@ -168,7 +168,7 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
         if (groupPages.length === 0) return null;
         return (
           <div key={group.kind}>
-            <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-widest text-text-muted/70">{group.label}</p>
+            <p className="px-2.5 pb-1 pt-1.5 text-micro font-bold uppercase tracking-widest text-text-muted/70">{group.label}</p>
             {groupPages.map((page) => renderRow(page, group.kind))}
           </div>
         );

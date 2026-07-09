@@ -33,7 +33,7 @@ export function StaffButtonGrid({
 
   return (
     <div className={className}>
-      <p className="mb-2 text-eyebrow font-black uppercase tracking-[0.22em] text-gray-500">{label}</p>
+      <p className="mb-2 text-eyebrow font-black uppercase tracking-[0.22em] text-text-soft">{label}</p>
       {options.length > 0 ? (
         <div
           className="grid w-full gap-2"
@@ -61,7 +61,7 @@ export function StaffButtonGrid({
           })}
         </div>
       ) : (
-        <p className={`${fieldLabel} text-gray-500`}>{emptyMessage}</p>
+        <p className={`${fieldLabel} text-text-soft`}>{emptyMessage}</p>
       )}
     </div>
   );

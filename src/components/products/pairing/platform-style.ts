@@ -16,14 +16,14 @@ const STYLE: Record<string, PlatformStyle> = {
   ebay:    { label: 'eBay',    chip: 'border-yellow-200 bg-yellow-50 text-yellow-800', ring: 'border-l-yellow-400', underline: 'border-yellow-500' },
   walmart: { label: 'Walmart', chip: 'border-amber-200  bg-amber-50  text-amber-800',  ring: 'border-l-amber-400',  underline: 'border-amber-500' },
   mercari: { label: 'Mercari', chip: 'border-purple-200 bg-purple-50 text-purple-700', ring: 'border-l-purple-400', underline: 'border-purple-500' },
-  shopify: { label: 'Shopify', chip: 'border-slate-300  bg-slate-50  text-slate-800',  ring: 'border-l-slate-400',  underline: 'border-slate-500' },
+  shopify: { label: 'Shopify', chip: 'border-border-default  bg-surface-canvas  text-text-default',  ring: 'border-l-border-emphasis',  underline: 'border-border-emphasis' },
 };
 
 const DEFAULT: PlatformStyle = {
   label: 'Other',
-  chip: 'border-slate-200 bg-slate-50 text-slate-700',
-  ring: 'border-l-slate-400',
-  underline: 'border-slate-500',
+  chip: 'border-border-soft bg-surface-canvas text-text-muted',
+  ring: 'border-l-border-emphasis',
+  underline: 'border-border-emphasis',
 };
 
 export function platformStyle(platform: string): PlatformStyle {

@@ -20,8 +20,10 @@
  */
 
 import { useState } from 'react';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { toast } from 'sonner';
 import { BottomSheet, ConfirmSheet } from '@/components/ui/BottomSheet';
+import { Button } from '@/design-system/primitives';
 
 export interface ReceivingLineLite {
   id: number;
@@ -58,10 +60,7 @@ async function markAllLines(
           disposition_code: dispositionCode,
           condition_grade: qaStatus === 'PASSED' ? 'USED_A' : 'PARTS',
           notes,
-          client_event_id:
-            typeof crypto !== 'undefined' && 'randomUUID' in crypto
-              ? crypto.randomUUID()
-              : `${Date.now()}-${line.id}`,
+          client_event_id: safeRandomUUID(),
         }),
       });
       if (res.ok) ok += 1;
@@ -112,29 +111,27 @@ export function ReceivingQaActionSheet({ open, onClose, receivingId, lines, onMu
     <>
       <BottomSheet open={open} onClose={onClose} title={`RCV-${receivingId} · ${lineCount} line${lineCount === 1 ? '' : 's'}`}>
         <div className="flex flex-col gap-2">
+          {/* ds-raw-button: vibrant emerald gradient success CTA — no success variant in Button */}
           <button
             type="button"
             onClick={() => setConfirmPass(true)}
             disabled={busy || lineCount === 0}
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-emerald-600/30 transition-transform active:scale-[0.98] disabled:opacity-40"
+            className="ds-raw-button flex h-14 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-emerald-600/30 transition-transform active:scale-[0.98] disabled:opacity-40"
           >
             Mark tested — PASS
           </button>
+          {/* ds-raw-button: vibrant rose gradient CTA, designed twin of the emerald PASS CTA above */}
           <button
             type="button"
             onClick={() => setConfirmFail({ reason: '' })}
             disabled={busy || lineCount === 0}
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-rose-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-rose-600/30 transition-transform active:scale-[0.98] disabled:opacity-40"
+            className="ds-raw-button flex h-14 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-rose-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-rose-600/30 transition-transform active:scale-[0.98] disabled:opacity-40"
           >
             Mark FAILED — return
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-2 flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-600 hover:bg-gray-100"
-          >
+          <Button variant="ghost" onClick={onClose} className="mt-2 h-12 w-full text-text-muted">
             Cancel
-          </button>
+          </Button>
         </div>
       </BottomSheet>
 

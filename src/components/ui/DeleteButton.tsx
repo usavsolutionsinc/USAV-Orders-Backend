@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useDeleteOrderRow } from '@/hooks';
+import { Button } from '@/design-system/primitives';
 
 interface DeleteButtonProps {
   orderId?: number;
@@ -88,13 +89,14 @@ export default function DeleteButton({
   };
 
   return (
-    <button
+    <Button
+      variant="danger"
+      icon={icon}
       onClick={handleDelete}
       disabled={isDisabled}
       className={className}
     >
-      {icon}
       {isDeleting ? 'Deleting...' : isDeleteArmed ? armedLabel : label}
-    </button>
+    </Button>
   );
 }

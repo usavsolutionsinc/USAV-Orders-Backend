@@ -26,7 +26,7 @@ export function PanelSection({ title, headerRight, children, className = '', bod
         <div className="flex items-center justify-between gap-2">
           {title != null ? (
             typeof title === 'string' ? (
-              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">{title}</h3>
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-default">{title}</h3>
             ) : (
               <div className="min-w-0">{title}</div>
             )

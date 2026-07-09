@@ -6,6 +6,8 @@ import { SerialCard } from '../SerialCard';
 import { SerialMatchResult, type SerialMatchedOrder } from '../SerialMatchResult';
 import { ReceivingUnitRows, type UnitSerial } from '../ReceivingUnitRows';
 import type { ActiveRowSerial } from '../PoLinesAccordion';
+import { NoSerialControl, type SerialAbsentState } from './NoSerialControl';
+import { useSetting } from '@/hooks/useSettings';
 
 type SerialLookupView = Pick<
   ComponentProps<typeof SerialMatchResult>,
@@ -21,8 +23,8 @@ type SerialLookupView = Pick<
  * RETURN-type lines additionally surface a serial-match band.
  *
  * Purely presentational: every mutation is delegated to the parent's existing
- * handlers. `window.confirm` guards on delete are kept here to preserve the
- * original UX exactly.
+ * handlers. The `window.confirm` guards on delete are gated by the
+ * `receiving.confirmSerialRemoval` org setting (Settings Registry; default on).
  */
 export function ActiveLineConditionSerial({
   serials,
@@ -42,6 +44,11 @@ export function ActiveLineConditionSerial({
   onActiveConditionChange,
   onConditionChange,
   onEditingSerialChange,
+  serialAbsent,
+  serialAbsentReason,
+  onSerialAbsentChange,
+  requireSerialConfirmation,
+  serialStepActive = false,
 }: {
   serials: ActiveRowSerial[];
   lineId: number;
@@ -52,9 +59,17 @@ export function ActiveLineConditionSerial({
   serialSubmitting: boolean;
   editingSerial: ActiveRowSerial | null;
   serialLookup: SerialLookupView;
+  /** No-serial waiver state (single-qty only) + handler, from the controller. */
+  serialAbsent: boolean;
+  serialAbsentReason: string | null;
+  onSerialAbsentChange: (next: SerialAbsentState) => void;
+  /** Org enforces the serial checkpoint — surfaces the "required" hint. */
+  requireSerialConfirmation: boolean;
   /** RETURN match CTA — pair the order + open the prefilled claim. */
   onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null) => void;
-  onSubmitSerial: (raw?: string, conditionGrade?: string | null) => void;
+  /** Stepper active step = serial — focus the scan input. */
+  serialStepActive?: boolean;
+  onSubmitSerial: (raw?: string, conditionGrade?: string | null) => void | Promise<void>;
   onDeleteSerialUnit: (serialUnitId: number, lineId?: number) => void;
   onReplaceSerialUnit: (
     original: { id: number; serial_number: string; condition_grade?: string | null },
@@ -65,9 +80,19 @@ export function ActiveLineConditionSerial({
   onConditionChange: (next: string) => void;
   onEditingSerialChange: (next: ActiveRowSerial | null) => void;
 }) {
+  // Settings Registry: org policy for the destructive serial-remove confirm
+  // (default on — falls back to the prior always-confirm UX while loading).
+  const { value: confirmSerialRemoval } = useSetting<boolean>(
+    'receiving',
+    'receiving.confirmSerialRemoval',
+  );
+  const shouldConfirmRemoval = confirmSerialRemoval ?? true;
   const isMultiQty = (quantityExpected ?? 0) > 1;
+  // Surface the serial-match band whenever a lookup is active (a return detected
+  // on ANY line) or on a pre-typed RETURN line. SerialMatchResult self-hides on
+  // idle, so this is only an allocation guard — a non-return scan shows nothing.
   const matchResult =
-    receivingType === 'RETURN' ? (
+    serialLookup.state !== 'idle' || receivingType === 'RETURN' ? (
       <SerialMatchResult
         state={serialLookup.state}
         unit={serialLookup.unit}
@@ -78,7 +103,7 @@ export function ActiveLineConditionSerial({
     ) : undefined;
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       {isMultiQty ? (
         // Multi-qty same-product line: split into one selectable row per
         // physical unit, each with its own condition grade and serial. The
@@ -95,34 +120,68 @@ export function ActiveLineConditionSerial({
             serialEditTarget={editingSerial?.id != null ? (editingSerial as UnitSerial) : null}
             onAddSerial={(sn, grade) => onSubmitSerial(sn, grade)}
             onDeleteSerial={(id) => {
-              if (!window.confirm('Remove this serial?')) return;
+              if (shouldConfirmRemoval && !window.confirm('Remove this serial?')) return;
               onDeleteSerialUnit(id);
             }}
             onReplaceSerial={(original, next) => onReplaceSerialUnit(original, next)}
             onSetUnitGrade={(id, grade) => onSetUnitGrade(id, grade)}
             onConditionChange={onConditionChange}
             onActiveConditionChange={onActiveConditionChange}
+            // Icon-only no-serial toggle in the top-right of the unit list.
+            noSerialControl={
+              <NoSerialControl
+                variant="check"
+                absent={serialAbsent}
+                reason={serialAbsentReason}
+                required={requireSerialConfirmation}
+                disabled={!receivingId}
+                onChange={onSerialAbsentChange}
+              />
+            }
           />
           {/* RETURN-only: serial-match result under the unit rows. */}
           {matchResult ?? null}
         </>
       ) : (
         // Single-qty line (incl. a PARTS product carrying several part-serials
-        // under one unit): integrated condition picker + serial card.
+        // under one unit): integrated condition picker + serial card. The
+        // no-serial waiver sits directly under the input when no serial exists.
+        <>
         <SerialCard
-          key={`serial-card-${lineId}`}
           saved={serials}
           expected={quantityExpected ?? null}
           isSubmitting={serialSubmitting}
           disabled={!receivingId}
           embedded
+          autoFocusInput={serialStepActive}
           showSavedChips={false}
           editingSerial={editingSerial}
           onEditingSerialChange={onEditingSerialChange}
           resultSlot={matchResult}
           condition={cond}
           onConditionChange={onConditionChange}
+          // The PO-line meta row already shows the condition chip, so the
+          // collapsed picker here is edit-pencil-only (no redundant grade pill).
+          collapsedConditionLabel={false}
           onAdd={(sn) => onSubmitSerial(sn, cond)}
+          noSerialActive={serialAbsent}
+          onMarkNoSerial={() =>
+            onSerialAbsentChange(
+              serialAbsent
+                ? { absent: false, reason: null }
+                : { absent: true, reason: serialAbsentReason ?? 'NOT_SERIALIZED' },
+            )
+          }
+          noSerialSlot={
+            <NoSerialControl
+              absent
+              fullWidth
+              reason={serialAbsentReason}
+              required={requireSerialConfirmation}
+              disabled={!receivingId}
+              onChange={onSerialAbsentChange}
+            />
+          }
           onReplaceSerial={(original, nextSerial) => {
             if (original.id == null) return;
             onReplaceSerialUnit(
@@ -136,10 +195,11 @@ export function ActiveLineConditionSerial({
           }}
           onDeleteSerial={(s) => {
             if (s.id == null) return;
-            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+            if (shouldConfirmRemoval && !window.confirm(`Remove serial ${s.serial_number}?`)) return;
             onDeleteSerialUnit(s.id);
           }}
         />
+        </>
       )}
     </div>
   );

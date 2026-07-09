@@ -16,10 +16,21 @@ import {
   createSession, SESSION_COOKIE_NAME, cookieMaxAgeForSession,
 } from '@/lib/auth/session';
 import {
-  decodeIdTokenClaimsUnsafe, exchangeCode, fetchUserInfo, resolveEndpoints,
-  type OidcProviderRow, type UserInfo,
+  exchangeCode, fetchUserInfo, resolveEndpoints, validateIdTokenClaims,
+  type IdTokenClaims, type OidcProviderRow, type UserInfo,
 } from '@/lib/auth/sso-oidc';
 import { getIntegrationCredentials } from '@/lib/integrations/credentials';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import {
+  getAccountByEmail, getAccountIdByIdentity, createAccount, linkAccountIdentity,
+} from '@/lib/identity/accounts';
+import { logAuthEvent } from '@/lib/identity/memberships';
+import { canonicalRole, ALL_ROLES, type StaffRole } from '@/lib/auth/permissions';
+import { invalidateStaffRolesCache } from '@/lib/auth/role-store';
+
+/** Internal sentinel: thrown to roll back the tx when an un-provisionable
+ *  subject signs in under auto_provision=false. */
+class SsoProvisioningError extends Error {}
 
 interface StateRow {
   state: string;
@@ -27,6 +38,7 @@ interface StateRow {
   organization_id: string;
   code_verifier: string;
   next_path: string | null;
+  created_at: Date;
 }
 
 interface ProviderDbRow {
@@ -67,8 +79,9 @@ export const GET = withAuth(async (req) => {
   const stateRow = stateRes.rows[0];
   if (!stateRow) return failRedirect(req, 'STATE_NOT_FOUND');
   // 10 min hard expiry, defense in depth against an attacker who pops a
-  // valid state then waits before completing.
-  if (Date.now() - new Date((stateRow as unknown as { created_at?: Date }).created_at ?? Date.now()).getTime() > 10 * 60 * 1000) {
+  // valid state then waits before completing. `created_at` comes back via the
+  // DELETE … RETURNING * above (column exists in 2026-05-23_sso_providers.sql).
+  if (Date.now() - new Date(stateRow.created_at).getTime() > 10 * 60 * 1000) {
     return failRedirect(req, 'STATE_EXPIRED');
   }
 
@@ -129,53 +142,146 @@ export const GET = withAuth(async (req) => {
     return failRedirect(req, 'TOKEN_EXCHANGE_FAILED');
   }
 
+  // Validate the id_token's standard claims (iss/aud/exp) when present. In the
+  // auth-code flow it arrives over the direct, server-to-server TLS token
+  // exchange, so claim validation + TLS stands in for JWS signature
+  // verification (OIDC Core §3.1.3.7); JWKS signature checking is the v2
+  // hardening. The validated claims are the authoritative identity source.
+  let claims: IdTokenClaims | null = null;
+  if (tokens.id_token) {
+    try {
+      claims = validateIdTokenClaims(tokens.id_token, {
+        issuer: provider.issuer,
+        clientId: provider.clientId,
+      });
+    } catch {
+      return failRedirect(req, 'ID_TOKEN_INVALID');
+    }
+  }
+
+  // Enrich with userinfo (name/email) — best effort; the id_token claims win.
   let userinfo: UserInfo | null = null;
   if (endpoints.userinfo_endpoint) {
     try {
       userinfo = await fetchUserInfo({ endpoint: endpoints.userinfo_endpoint, accessToken: tokens.access_token });
     } catch {
-      // Fall through to id_token decode.
+      // Fall through to id_token claims.
     }
   }
-  if (!userinfo && tokens.id_token) {
-    userinfo = decodeIdTokenClaimsUnsafe(tokens.id_token);
-  }
-  if (!userinfo?.sub) return failRedirect(req, 'NO_USER_IDENTITY');
 
-  // Find-or-create the staff row keyed by (organization_id, sso_provider,
-  // sso_subject). sso_provider stores the issuer string for cross-IdP
-  // disambiguation when an org adds multiple providers.
-  const existing = await pool.query<{ id: number }>(
-    `SELECT id FROM staff
-      WHERE organization_id = $1 AND sso_provider = $2 AND sso_subject = $3
-      LIMIT 1`,
-    [provider.organizationId, provider.issuer, userinfo.sub],
-  );
+  const subject = claims?.sub ?? userinfo?.sub ?? null;
+  if (!subject) return failRedirect(req, 'NO_USER_IDENTITY');
+  const email = (claims?.email ?? userinfo?.email ?? null)?.toLowerCase() ?? null;
+  // OIDC Core §5.7: an unverified email must not be used as a unique identifier.
+  // We therefore only MATCH onto a pre-existing account by email when the IdP
+  // asserts it verified — otherwise the email is still stored on a freshly
+  // created (subject-keyed) account but can't be used to take over someone
+  // else's identity. Absent `email_verified` is treated as NOT verified.
+  const emailVerified = claims?.email_verified === true || userinfo?.email_verified === true;
+  const displayName =
+    userinfo?.name || claims?.name || userinfo?.preferred_username ||
+    claims?.preferred_username || email || `SSO ${subject.slice(0, 8)}`;
 
-  let staffId: number;
-  if (existing.rows[0]) {
-    staffId = existing.rows[0].id;
-    await pool.query(`UPDATE staff SET last_login_at = now() WHERE id = $1`, [staffId]);
-  } else if (provider.autoProvision) {
-    const name = userinfo.name || userinfo.preferred_username || userinfo.email || `SSO ${userinfo.sub.slice(0, 8)}`;
-    const inserted = await pool.query<{ id: number }>(
-      `INSERT INTO staff (name, role, active, organization_id, status, sso_provider, sso_subject, last_login_at, default_home_path)
-       VALUES ($1, $2, true, $3, 'active', $4, $5, now(), '/dashboard')
-       RETURNING id`,
-      [name, provider.defaultRole, provider.organizationId, provider.issuer, userinfo.sub],
-    );
-    staffId = inserted.rows[0]!.id;
-  } else {
-    // Pre-invited-only mode: refuse unknown subjects.
-    return failRedirect(req, 'STAFF_NOT_PROVISIONED');
+  // Map the provider's default role onto a canonical role; fall back to viewer.
+  const canonical = canonicalRole((provider.defaultRole || 'viewer').toLowerCase() as StaffRole);
+  const role = canonical === 'unknown' || !ALL_ROLES.includes(canonical) ? 'viewer' : canonical;
+
+  // Resolve the identity layer + per-org staff profile atomically. Mirrors the
+  // invitation-accept flow: global account → membership → staff, all in one tx.
+  let resolved: { staffId: number; accountId: string };
+  try {
+    resolved = await withTenantTransaction(provider.organizationId, async (client) => {
+      // 1. Resolve the global account — by federated identity first (a stable
+      //    `sub` survives email changes), then by VERIFIED email, else create.
+      let accountId = await getAccountIdByIdentity(provider.issuer, subject, client);
+      if (!accountId && email && emailVerified) {
+        accountId = (await getAccountByEmail(email, client))?.id ?? null;
+      }
+      if (!accountId) {
+        accountId = await createAccount({ displayName, email, password: null }, client);
+      }
+      // 2. Record the federated login (idempotent) so the next sign-in resolves
+      //    straight to this account.
+      await linkAccountIdentity(
+        { accountId, provider: provider.issuer, subject, emailAtLink: email }, client,
+      );
+
+      // 3. Upsert the membership.
+      const mem = await client.query<{ id: string }>(
+        `INSERT INTO memberships (account_id, org_id, status, joined_at)
+         VALUES ($1, $2, 'active', now())
+         ON CONFLICT (account_id, org_id)
+         DO UPDATE SET status = 'active', joined_at = COALESCE(memberships.joined_at, now())
+         RETURNING id`,
+        [accountId, provider.organizationId],
+      );
+      const membershipId = mem.rows[0]!.id;
+
+      // 4. Find-or-create the per-org staff profile keyed by (org, issuer, sub).
+      //    sso_provider stores the issuer string for cross-IdP disambiguation.
+      const existing = await client.query<{ id: number }>(
+        `SELECT id FROM staff
+          WHERE organization_id = $1 AND sso_provider = $2 AND sso_subject = $3
+          LIMIT 1`,
+        [provider.organizationId, provider.issuer, subject],
+      );
+      if (existing.rows[0]) {
+        const sid = existing.rows[0].id;
+        // Backfill the identity link for staff provisioned before this wiring.
+        await client.query(
+          `UPDATE staff
+              SET last_login_at = now(),
+                  account_id    = COALESCE(account_id, $2),
+                  membership_id = COALESCE(membership_id, $3)
+            WHERE id = $1`,
+          [sid, accountId, membershipId],
+        );
+        return { staffId: sid, accountId };
+      }
+      if (!provider.autoProvision) {
+        // Pre-invited-only mode: refuse unknown subjects. Throw to roll back the
+        // account/membership we just created for an un-provisionable login.
+        throw new SsoProvisioningError();
+      }
+      const inserted = await client.query<{ id: number }>(
+        `INSERT INTO staff
+           (name, role, active, organization_id, status, sso_provider, sso_subject,
+            last_login_at, default_home_path, account_id, membership_id)
+         VALUES ($1, $2, true, $3, 'active', $4, $5, now(), '/dashboard', $6, $7)
+         RETURNING id`,
+        [displayName, role, provider.organizationId, provider.issuer, subject, accountId, membershipId],
+      );
+      const sid = inserted.rows[0]!.id;
+      await client.query(
+        `INSERT INTO staff_roles (staff_id, role_id, granted_at)
+         SELECT $1, r.id, now() FROM roles r WHERE r.key = $2
+         ON CONFLICT (staff_id, role_id) DO NOTHING`,
+        [sid, role],
+      );
+      return { staffId: sid, accountId };
+    });
+  } catch (err) {
+    if (err instanceof SsoProvisioningError) return failRedirect(req, 'STAFF_NOT_PROVISIONED');
+    console.error('[sso-callback] identity provisioning failed:', err);
+    return failRedirect(req, 'PROVISIONING_FAILED');
   }
+
+  const { staffId, accountId } = resolved;
+  invalidateStaffRolesCache(staffId);
+
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
+  const userAgent = req.headers.get('user-agent');
+
+  // Identity-layer audit: record the federated login in auth_events. Best-effort
+  // (logAuthEvent never throws) so it can't block the session mint.
+  await logAuthEvent({ accountId, orgId: provider.organizationId, event: 'login', ip, userAgent });
 
   const session = await createSession({
     staffId,
     deviceKind: 'personal',
     deviceLabel: 'sso',
-    ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
-    userAgent: req.headers.get('user-agent'),
+    ip,
+    userAgent,
   });
 
   const target = new URL(stateRow.next_path || '/dashboard', origin(req));

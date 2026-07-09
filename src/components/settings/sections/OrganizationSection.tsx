@@ -6,7 +6,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 function orgInitials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('') || 'W';
@@ -64,15 +66,15 @@ function ActiveWorkspaceCard() {
   };
 
   return (
-    <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-semibold text-gray-900">Active workspace</h3>
+    <div className="space-y-3 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-text-default">Active workspace</h3>
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-900 text-sm font-bold text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-inverse text-sm font-bold text-white">
           {orgInitials(user.organizationName)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold text-gray-900">{user.organizationName}</div>
-          <div className="truncate text-xs text-gray-500">
+          <div className="truncate text-sm font-bold text-text-default">{user.organizationName}</div>
+          <div className="truncate text-xs text-text-soft">
             {user.organizationSlug ?? '—'}
             {user.organizationPlan ? ` · ${user.organizationPlan} plan` : ''}
           </div>
@@ -87,28 +89,28 @@ function ActiveWorkspaceCard() {
       )}
 
       {others.length > 0 && (
-        <div className="space-y-1 border-t border-gray-100 pt-3">
-          <p className="text-xs font-medium text-gray-500">Switch workspace</p>
-          <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+        <div className="space-y-1 border-t border-border-hairline pt-3">
+          <p className="text-xs font-medium text-text-soft">Switch workspace</p>
+          <div className="divide-y divide-border-hairline overflow-hidden rounded-xl border border-border-soft">
             {others.map((m) => (
               <button
                 key={m.organizationId}
                 type="button"
                 disabled={!!switching}
                 onClick={() => void switchTo(m.organizationId, m.organizationName)}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-gray-50 disabled:opacity-50"
+                className="ds-raw-button flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-surface-hover disabled:opacity-50"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-200 text-xs font-bold text-gray-700">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-strong text-xs font-bold text-text-muted">
                   {orgInitials(m.organizationName)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-gray-900">{m.organizationName}</div>
-                  <div className="truncate text-xs text-gray-500">
+                  <div className="truncate text-sm font-semibold text-text-default">{m.organizationName}</div>
+                  <div className="truncate text-xs text-text-soft">
                     {m.organizationSlug ?? '—'}
                     {m.role ? ` · ${m.role.replace(/_/g, ' ')}` : ''}
                   </div>
                 </div>
-                <span className="shrink-0 text-xs text-gray-400">
+                <span className="shrink-0 text-xs text-text-faint">
                   {switching === m.organizationId ? 'Switching…' : 'Switch →'}
                 </span>
               </button>
@@ -117,7 +119,7 @@ function ActiveWorkspaceCard() {
         </div>
       )}
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-text-soft">
         You&rsquo;re signed in to this workspace. Every page, scan, and record you see is scoped to it.
       </p>
     </div>
@@ -140,11 +142,17 @@ interface OrgProfileResponse {
     logoUrl?: string;
     primaryColor?: string;
   };
+  letterhead: {
+    addressLine1: string;
+    addressLine2: string;
+    phone: string;
+    email: string;
+  };
 }
 
 const FIELD_CLS =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
-  'placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+  'w-full rounded-xl border border-border-default bg-surface-card px-3 py-2 text-sm text-text-default ' +
+  'placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
 
 const TIMEZONES = [
   'America/Los_Angeles',
@@ -264,10 +272,10 @@ function InvitationsSection() {
   if (!canManage) return null;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
       <header>
-        <h3 className="text-sm font-semibold text-gray-900">Invite teammates</h3>
-        <p className="mt-1 text-xs text-gray-500">
+        <h3 className="text-sm font-semibold text-text-default">Invite teammates</h3>
+        <p className="mt-1 text-xs text-text-soft">
           Send an email invite to join this workspace. They&rsquo;ll set up their account and land in the app.
         </p>
       </header>
@@ -284,14 +292,14 @@ function InvitationsSection() {
         <select value={role} onChange={(e) => setRole(e.target.value)} className={FIELD_CLS + ' sm:w-44'}>
           {INVITE_ROLES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
         </select>
-        <button
-          type="button"
+        <Button
+          variant="brand"
+          size="md"
           disabled={submitting || !email}
           onClick={() => void invite()}
-          className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
         >
           {submitting ? 'Inviting…' : 'Invite'}
-        </button>
+        </Button>
       </div>
 
       {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
@@ -300,44 +308,46 @@ function InvitationsSection() {
         <div className="space-y-1 rounded-lg bg-emerald-50 px-3 py-2">
           <p className="text-xs font-medium text-emerald-800">Invitation created — share this link:</p>
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs text-gray-700 ring-1 ring-emerald-200">{lastUrl}</code>
-            <button
-              type="button"
+            <code className="min-w-0 flex-1 truncate rounded bg-surface-card px-2 py-1 text-xs text-text-muted ring-1 ring-emerald-200">{lastUrl}</code>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => void copy(lastUrl)}
-              className="shrink-0 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+              className="shrink-0 bg-emerald-600 text-white shadow-none hover:bg-emerald-700 active:bg-emerald-700"
             >
               {copied ? 'Copied' : 'Copy'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       <div className="space-y-1">
-        <p className="text-xs font-medium text-gray-500">Pending invitations</p>
+        <p className="text-xs font-medium text-text-soft">Pending invitations</p>
         {loading ? (
-          <p className="text-sm text-gray-400">Loading…</p>
+          <p className="text-sm text-text-faint">Loading…</p>
         ) : list.length === 0 ? (
-          <p className="text-sm text-gray-400">No pending invitations.</p>
+          <p className="text-sm text-text-faint">No pending invitations.</p>
         ) : (
-          <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+          <div className="divide-y divide-border-hairline overflow-hidden rounded-xl border border-border-soft">
             {list.map((inv) => (
               <div key={inv.id} className="flex items-center gap-3 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-gray-900">{inv.email}</div>
-                  <div className="truncate text-xs text-gray-500">
+                  <div className="truncate text-sm font-semibold text-text-default">{inv.email}</div>
+                  <div className="truncate text-xs text-text-soft">
                     {(inv.roleKey ?? 'viewer').replace(/_/g, ' ')}
                     {' · expires '}
                     {new Date(inv.expiresAt).toLocaleDateString()}
                   </div>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   disabled={revoking === inv.id}
                   onClick={() => void revoke(inv.id)}
-                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="shrink-0 text-rose-600 hover:text-rose-700"
                 >
                   {revoking === inv.id ? 'Revoking…' : 'Revoke'}
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -395,7 +405,7 @@ export function OrganizationSection() {
     }
   }, [draft, load]);
 
-  if (loading) return <div className="text-sm text-gray-500">Loading…</div>;
+  if (loading) return <div className="text-sm text-text-soft">Loading…</div>;
   if (!draft) {
     return err
       ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>
@@ -405,8 +415,8 @@ export function OrganizationSection() {
   return (
     <section className="space-y-6">
       <header>
-        <h2 className="text-lg font-bold text-gray-900">Organization</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-lg font-bold text-text-default">Organization</h2>
+        <p className="mt-1 text-sm text-text-soft">
           Workspace-wide defaults for time, money, sign-in policy, and warranty terms.
         </p>
       </header>
@@ -416,13 +426,15 @@ export function OrganizationSection() {
 
       <ActiveWorkspaceCard />
 
+      <WorkspaceSwitcher />
+
       <InvitationsSection />
 
-      <div className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-900">Regional</h3>
+      <div className="space-y-5 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-text-default">Regional</h3>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-gray-700">Timezone</span>
+            <span className="mb-1 block text-xs font-medium text-text-muted">Timezone</span>
             <select
               value={draft.timezone}
               onChange={(e) => setDraft({ ...draft, timezone: e.target.value })}
@@ -435,7 +447,7 @@ export function OrganizationSection() {
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-gray-700">Currency</span>
+            <span className="mb-1 block text-xs font-medium text-text-muted">Currency</span>
             <input
               type="text"
               maxLength={3}
@@ -445,7 +457,7 @@ export function OrganizationSection() {
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-gray-700">Locale</span>
+            <span className="mb-1 block text-xs font-medium text-text-muted">Locale</span>
             <input
               type="text"
               value={draft.locale}
@@ -457,8 +469,8 @@ export function OrganizationSection() {
         </div>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-900">Sign-in policy</h3>
+      <div className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-text-default">Sign-in policy</h3>
         <label className="flex items-start gap-3">
           <input
             type="checkbox"
@@ -467,8 +479,8 @@ export function OrganizationSection() {
             className="mt-1"
           />
           <span>
-            <span className="block text-sm font-medium text-gray-900">Email-first sign-in</span>
-            <span className="block text-xs text-gray-500">Require email then PIN instead of tap-your-name on stations.</span>
+            <span className="block text-sm font-medium text-text-default">Email-first sign-in</span>
+            <span className="block text-xs text-text-soft">Require email then PIN instead of tap-your-name on stations.</span>
           </span>
         </label>
         <label className="flex items-start gap-3">
@@ -479,12 +491,12 @@ export function OrganizationSection() {
             className="mt-1"
           />
           <span>
-            <span className="block text-sm font-medium text-gray-900">Passkey required for new staff</span>
-            <span className="block text-xs text-gray-500">New invites must enroll a passkey — no PIN-only accounts.</span>
+            <span className="block text-sm font-medium text-text-default">Passkey required for new staff</span>
+            <span className="block text-xs text-text-soft">New invites must enroll a passkey — no PIN-only accounts.</span>
           </span>
         </label>
         <label className="block max-w-xs">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Max concurrent sessions per staff</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Max concurrent sessions per staff</span>
           <input
             type="number"
             min={0}
@@ -492,14 +504,14 @@ export function OrganizationSection() {
             onChange={(e) => setDraft({ ...draft, maxConcurrentSessions: Number(e.target.value) || 0 })}
             className={FIELD_CLS}
           />
-          <span className="mt-1 block text-xs text-gray-500">0 = unlimited</span>
+          <span className="mt-1 block text-xs text-text-soft">0 = unlimited</span>
         </label>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-900">Warranty</h3>
+      <div className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-text-default">Warranty</h3>
         <label className="block max-w-xs">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Warranty term (days)</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Warranty term (days)</span>
           <input
             type="number"
             min={1}
@@ -511,10 +523,10 @@ export function OrganizationSection() {
         </label>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-900">Packing</h3>
+      <div className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-text-default">Packing</h3>
         <label className="block max-w-sm">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Kit-checklist enforcement</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Kit-checklist enforcement</span>
           <select
             value={draft.packing?.enforcement ?? 'advisory'}
             onChange={(e) =>
@@ -530,7 +542,7 @@ export function OrganizationSection() {
             <option value="advisory">Advisory — show the checklist, never block</option>
             <option value="block_until_matched">Box until matched — flag the pack until every required item is confirmed</option>
           </select>
-          <span className="mt-1 block text-xs text-gray-500">
+          <span className="mt-1 block text-xs text-text-soft">
             Applies only to SKUs that have required kit parts defined (Products → Kit Parts). A SKU with no
             required parts is never blocked, so turning this on can&rsquo;t stall packing for products you haven&rsquo;t
             set up yet.
@@ -538,20 +550,20 @@ export function OrganizationSection() {
         </label>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-900">Branding</h3>
+      <div className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-text-default">Branding</h3>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Display name</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Display name</span>
           <input
             type="text"
             value={draft.brand.name ?? ''}
             onChange={(e) => setDraft({ ...draft, brand: { ...draft.brand, name: e.target.value } })}
             className={FIELD_CLS}
-            placeholder="USAV"
+            placeholder="Defaults to your workspace name"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Logo URL</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Logo URL</span>
           <input
             type="url"
             value={draft.brand.logoUrl ?? ''}
@@ -561,7 +573,7 @@ export function OrganizationSection() {
           />
         </label>
         <label className="block max-w-xs">
-          <span className="mb-1 block text-xs font-medium text-gray-700">Primary color</span>
+          <span className="mb-1 block text-xs font-medium text-text-muted">Primary color</span>
           <input
             type="text"
             value={draft.brand.primaryColor ?? ''}
@@ -572,15 +584,67 @@ export function OrganizationSection() {
         </label>
       </div>
 
+      <div className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-5 shadow-sm">
+        <div>
+          <h3 className="text-sm font-semibold text-text-default">Letterhead</h3>
+          <p className="mt-1 text-xs text-text-soft">
+            Printed on repair paper and walk-in receipts for this workspace. The platform itself is always
+            branded Cycle Forge — this is your company&rsquo;s own letterhead, not the platform name.
+          </p>
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-text-muted">Address line 1</span>
+          <input
+            type="text"
+            value={draft.letterhead.addressLine1}
+            onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, addressLine1: e.target.value } })}
+            className={FIELD_CLS}
+            placeholder="123 Main St. Suite A"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-text-muted">Address line 2</span>
+          <input
+            type="text"
+            value={draft.letterhead.addressLine2}
+            onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, addressLine2: e.target.value } })}
+            className={FIELD_CLS}
+            placeholder="City, State ZIP, Country"
+          />
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-text-muted">Phone</span>
+            <input
+              type="text"
+              value={draft.letterhead.phone}
+              onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, phone: e.target.value } })}
+              className={FIELD_CLS}
+              placeholder="(555) 555-5555"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-text-muted">Email</span>
+            <input
+              type="email"
+              value={draft.letterhead.email}
+              onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, email: e.target.value } })}
+              className={FIELD_CLS}
+              placeholder="info@example.com"
+            />
+          </label>
+        </div>
+      </div>
+
       <div className="flex justify-end">
-        <button
-          type="button"
+        <Button
+          variant="brand"
+          size="md"
           disabled={saving}
           onClick={() => void save()}
-          className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save changes'}
-        </button>
+        </Button>
       </div>
     </section>
   );

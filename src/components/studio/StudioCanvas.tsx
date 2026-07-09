@@ -37,6 +37,7 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { buildStaticFlowGraph } from '@/lib/studio/static-flow-graph';
 import type { Diagnostic } from './studio-types';
 import {
@@ -197,7 +198,7 @@ export function StudioCanvas({
         edges: [
           ...kept,
           {
-            id: `e-${crypto.randomUUID()}`,
+            id: `e-${safeRandomUUID()}`,
             source: connection.source,
             sourcePort,
             target: connection.target,
@@ -247,10 +248,10 @@ export function StudioCanvas({
     >
       <Background gap={18} size={1.2} color="#cbd5e1" />
       <Controls showInteractive={false} />
-      <MiniMap pannable zoomable className="!bg-slate-100" />
+      <MiniMap pannable zoomable className="!bg-surface-sunken" />
       {lens === 'static' && zoom === 1 && staticFlow && (
-        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-slate-200 bg-white/90 px-3 py-1.5 text-[10px] font-semibold text-slate-600 shadow-sm">
-          <span className="uppercase tracking-wide text-slate-400">Data flow</span>
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-border-soft bg-surface-card/90 px-3 py-1.5 text-micro font-semibold text-text-muted shadow-sm">
+          <span className="uppercase tracking-wide text-text-faint">Data flow</span>
           {(
             [
               [STATIC_ROLE.source.color, 'Sources', staticFlow.counts.sources],
@@ -260,13 +261,13 @@ export function StudioCanvas({
           ).map(([color, label, count]) => (
             <span key={label} className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-              {label} <span className="tabular-nums text-slate-400">{count}</span>
+              {label} <span className="tabular-nums text-text-faint">{count}</span>
             </span>
           ))}
         </div>
       )}
       {editable && (
-        <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-slate-900/80 px-3 py-1 text-[10px] font-medium text-white">
+        <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-surface-inverse/80 px-3 py-1 text-micro font-medium text-white">
           drag nodes to move · drag a port to wire it · click an edge to remove it
         </div>
       )}

@@ -40,7 +40,7 @@ const STATION_META = {
   receiving: { label: 'Receiving', tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', Icon: ClipboardList },
   packing: { label: 'Packing', tone: 'bg-sky-50 text-sky-700 ring-sky-200', Icon: Package },
   tech: { label: 'Tech', tone: 'bg-violet-50 text-violet-700 ring-violet-200', Icon: FileText },
-  other: { label: 'Other', tone: 'bg-slate-100 text-slate-700 ring-slate-200', Icon: FileText },
+  other: { label: 'Other', tone: 'bg-surface-sunken text-text-muted ring-border-soft', Icon: FileText },
 } as const;
 
 export function AuditLogStaffClient() {
@@ -91,16 +91,16 @@ export function AuditLogStaffClient() {
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <div className="border-b border-border-soft bg-surface-card px-6 py-4">
         <p className="text-micro font-bold uppercase tracking-widest text-emerald-700">
           Staff audit
         </p>
-        <h2 className="mt-0.5 text-base font-bold text-gray-900">
+        <h2 className="mt-0.5 text-base font-bold text-text-default">
           {detail.staff.name ?? `#${detail.staff.id}`}
         </h2>
         {detail.staff.role && (
-          <p className="mt-1 text-label text-gray-500">{detail.staff.role}</p>
+          <p className="mt-1 text-label text-text-soft">{detail.staff.role}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-1.5">
           {(['receiving', 'packing', 'tech'] as const).map((s) => {
@@ -136,7 +136,7 @@ export function AuditLogStaffClient() {
 function EventRow({ event }: { event: StaffEvent }) {
   const meta = STATION_META[event.station];
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3">
+    <div className="rounded-xl border border-border-soft bg-surface-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -146,11 +146,11 @@ function EventRow({ event }: { event: StaffEvent }) {
               <meta.Icon className="h-3 w-3" />
               {meta.label}
             </span>
-            <span className="text-caption font-semibold text-gray-800">
+            <span className="text-caption font-semibold text-text-default">
               {kindLabel(event.kind)}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-gray-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-text-soft">
             {event.tracking && (
               <span className="font-mono text-micro">{event.tracking}</span>
             )}
@@ -162,10 +162,10 @@ function EventRow({ event }: { event: StaffEvent }) {
             )}
           </div>
         </div>
-        <div className="shrink-0 text-micro text-gray-400">{fmtTime(event.occurred_at)}</div>
+        <div className="shrink-0 text-micro text-text-faint">{fmtTime(event.occurred_at)}</div>
       </div>
       {event.notes && (
-        <p className="mt-2 whitespace-pre-wrap break-words text-label text-gray-700">
+        <p className="mt-2 whitespace-pre-wrap break-words text-label text-text-muted">
           {event.notes}
         </p>
       )}
@@ -184,7 +184,7 @@ function CenterMessage({
     <div className="flex h-full items-center justify-center p-6">
       <p
         className={`text-center text-label ${
-          tone === 'error' ? 'text-rose-600' : 'text-gray-400'
+          tone === 'error' ? 'text-rose-600' : 'text-text-faint'
         }`}
       >
         {label}

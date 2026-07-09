@@ -7,6 +7,11 @@ import {
   findLocationByBarcode,
   findLocationByName,
 } from '@/lib/repositories/inventory/locations';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import type { DecisionRule } from '@/lib/workflow/decision-eval';
+import { observePlacementParity } from '@/lib/workflow/placement-parity';
+import { resolveSitePlacementBin } from '@/lib/workflow/placement-policy';
+import { isPlacementStranglePartsSort } from '@/lib/feature-flags';
 
 /**
  * Auto-sort to the Parts bin.
@@ -22,6 +27,30 @@ import {
  */
 
 const DEFAULT_PARTS_BIN_BARCODE = 'TECH-PARTS';
+
+/** The configured Parts-bin symbol (barcode/name) the hardcoded path targets. */
+function partsBinSymbol(): string {
+  return (process.env.PARTS_BIN_BARCODE || DEFAULT_PARTS_BIN_BARCODE).trim();
+}
+
+/**
+ * The declarative placement policy that EXPRESSES today's hardcoded parts-sort
+ * routing as a decision table (Track 1, Stage 1.x). Right now it only feeds the
+ * OBSERVE-ONLY parity shim — proving `resolveDecision → resolvePlacementBin`
+ * picks the same bin the env-constant path does. When the cutover flag lands,
+ * the same policy becomes the source of truth (and later, a per-org decision
+ * node in the workflow definition overrides this system default).
+ */
+function partsSortPlacementPolicy(): DecisionRule[] {
+  return [
+    {
+      id: 'parts-disposition',
+      when: { disposition: 'parts' },
+      thenPort: 'parts',
+      then: { placement: partsBinSymbol(), category: 'parts' },
+    },
+  ];
+}
 
 // Statuses where the unit is already committed to an order or has left the
 // building — never yank these into the parts bin from under a fulfillment flow.
@@ -102,18 +131,17 @@ export async function sortSerialUnitToParts(
 ): Promise<SortSerialToPartsResult> {
   if (!autosortEnabled()) return { sorted: false, reason: 'disabled' };
 
-  const bin = await resolvePartsBin();
-  if (!bin) return { sorted: false, reason: 'no_parts_bin' };
-
   const db = input.client ?? pool;
 
+  // Load the unit FIRST — its org scopes the placement policy + bin lookup.
   const unitRes = await db.query<{
     id: number;
     sku: string | null;
     current_status: string;
     current_location: string | null;
+    organization_id: string | null;
   }>(
-    `SELECT id, sku, current_status::text AS current_status, current_location
+    `SELECT id, sku, current_status::text AS current_status, current_location, organization_id
        FROM serial_units WHERE id = $1 LIMIT 1`,
     [input.serialUnitId],
   );
@@ -123,9 +151,46 @@ export async function sortSerialUnitToParts(
   if (isCommittedForPartsSort(unit.current_status)) {
     return { sorted: false, reason: 'committed' };
   }
+
+  const orgId = (unit.organization_id as OrgId | null) ?? USAV_ORG_ID;
+
+  // Resolve the destination bin. CUTOVER (PLACEMENT_STRANGLE_PARTS_SORT): source
+  // it from the declarative policy — the org's Studio decision nodes first, then
+  // the system-default parts policy — and only fall back to the env-constant bin
+  // when the policy resolves nothing. With no decision node authored, the
+  // system-default policy targets the same PARTS_BIN_BARCODE, so flipping the
+  // flag ON is byte-identical to the legacy path. Flag OFF → env-constant only.
+  let resolvedBin: PartsBin | null = null;
+  if (isPlacementStranglePartsSort()) {
+    const policy = await resolveSitePlacementBin({
+      orgId,
+      facts: { disposition: 'parts' },
+      systemPolicy: partsSortPlacementPolicy(),
+    });
+    // Policy-resolved bins carry no barcode (resolved by id/name) — null is fine,
+    // the result's barcode is informational only.
+    if (policy) resolvedBin = { id: policy.bin.binId, name: policy.bin.binName, barcode: null };
+  }
+  resolvedBin ??= await resolvePartsBin();
+  if (!resolvedBin) return { sorted: false, reason: 'no_parts_bin' };
+  // const so the narrowing survives into runMove's closure below.
+  const bin = resolvedBin;
+
   if (unit.current_location === bin.name && unit.current_status === 'STOCKED') {
     return { sorted: false, reason: 'already_there' };
   }
+
+  // OBSERVE-ONLY (PLACEMENT_PARITY_OBSERVE): prove the declarative decision-table
+  // mechanism resolves the SAME bin this path is about to use. Most valuable when
+  // the cutover flag is OFF (it compares policy vs the env-constant bin). Always
+  // fire-and-forget + self-guarded — never disturbs the real move.
+  void observePlacementParity({
+    site: 'parts-sort',
+    orgId,
+    facts: { disposition: 'parts' },
+    rules: partsSortPlacementPolicy(),
+    expected: { binId: bin.id, binName: bin.name },
+  });
 
   // Resolve the prior bin id for the event's prev_bin_id (best-effort).
   let prevBinId: number | null = null;

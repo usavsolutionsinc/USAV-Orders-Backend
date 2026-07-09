@@ -1,10 +1,17 @@
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 
-/** Bust `/api/orders` Upstash snapshots and any other entries tagged `orders`. */
-export async function invalidateAllOrdersApiCaches(extraTags: string[] = []) {
+/** Bust `/api/orders` Upstash snapshots and any other entries tagged `orders`.
+ *  Optionally org-scope the bust (v2 org-scoped tags — e.g. the order-detail
+ *  read model) when the caller knows the tenant. */
+export async function invalidateAllOrdersApiCaches(extraTags: string[] = [], organizationId?: string) {
   const tags = Array.from(new Set(['orders', ...extraTags].filter(Boolean)));
-  await invalidateCacheTags(tags);
+  await invalidateCacheTags(tags); // legacy global `/api/orders` snapshot cache
+  if (organizationId) {
+    // v2 org-scoped read models tagged `orders`/`order-detail`.
+    await invalidateCacheTags(organizationId, [CACHE_TAGS.orders, CACHE_TAGS.orderDetail, ...tags]);
+  }
 }
 
 type InvalidateOrderViewsOptions = {
@@ -32,6 +39,6 @@ export async function invalidateOrderViews({
   );
   if (normalizedIds.length === 0) return;
 
-  await invalidateAllOrdersApiCaches(extraTags);
+  await invalidateAllOrdersApiCaches(extraTags, organizationId);
   await publishOrderChanged({ organizationId, orderIds: normalizedIds, source });
 }

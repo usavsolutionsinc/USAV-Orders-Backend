@@ -17,6 +17,7 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import pool from '@/lib/db';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 interface AuditRow {
   id: number;
@@ -81,41 +82,41 @@ export default async function AuditPage({ searchParams }: PageProps) {
   const nextCursor = hasMore ? rows[rows.length - 1]?.id : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 antialiased">
+    <div className="min-h-screen bg-surface-canvas antialiased">
       <PageHeader title="Audit log" maxWidth="6xl" />
       <div className="mx-auto max-w-6xl space-y-4 px-6 py-6">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-text-soft">
           Every privileged write, every permission denial. Last {PAGE_SIZE} rows{source || action ? ' matching filter' : ''}.
         </p>
 
-        <form className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 text-label shadow-sm">
+        <form className="flex flex-wrap items-center gap-2 rounded-2xl border border-border-soft bg-surface-card p-3 text-label shadow-sm">
           <label className="flex items-center gap-2">
-            <span className="font-medium text-gray-500">Source</span>
+            <span className="font-medium text-text-soft">Source</span>
             <input
               name="source"
               defaultValue={source ?? ''}
               placeholder="e.g. receiving"
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-label focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
+              className="rounded-lg border border-border-soft bg-surface-card px-2.5 py-1 text-label focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-border-soft"
             />
           </label>
           <label className="flex items-center gap-2">
-            <span className="font-medium text-gray-500">Action</span>
+            <span className="font-medium text-text-soft">Action</span>
             <input
               name="action"
               defaultValue={action ?? ''}
               placeholder="e.g. mark_received"
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-label focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
+              className="rounded-lg border border-border-soft bg-surface-card px-2.5 py-1 text-label focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-border-soft"
             />
           </label>
-          <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1 font-medium text-white hover:bg-slate-800">Apply</button>
+          <Button variant="brand" size="sm" type="submit">Apply</Button>
           {(source || action) && (
-            <a href="/settings/audit" className="font-medium text-gray-500 hover:text-gray-900">Clear</a>
+            <a href="/settings/audit" className="font-medium text-text-soft hover:text-text-default">Clear</a>
           )}
         </form>
 
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-100 text-[12.5px]">
-            <thead className="bg-gray-50 text-left text-caption font-medium uppercase tracking-[0.08em] text-gray-500">
+        <div className="overflow-hidden rounded-2xl border border-border-soft bg-surface-card shadow-sm">
+          <table className="min-w-full divide-y divide-border-hairline text-[12.5px]">
+            <thead className="bg-surface-canvas text-left text-caption font-medium uppercase tracking-[0.08em] text-text-soft">
               <tr>
                 <th className="px-3 py-2">When</th>
                 <th className="px-3 py-2">Actor</th>
@@ -124,25 +125,25 @@ export default async function AuditPage({ searchParams }: PageProps) {
                 <th className="px-3 py-2">IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border-hairline">
               {rows.length === 0 ? (
-                <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">No audit entries match.</td></tr>
+                <tr><td colSpan={5} className="px-3 py-6 text-center text-text-faint">No audit entries match.</td></tr>
               ) : rows.map((row) => (
-                <tr key={row.id} className="text-gray-900">
-                  <td className="px-3 py-2 align-top font-mono text-[11.5px] text-gray-600">{fmtTs(row.created_at)}</td>
+                <tr key={row.id} className="text-text-default">
+                  <td className="px-3 py-2 align-top font-mono text-[11.5px] text-text-muted">{fmtTs(row.created_at)}</td>
                   <td className="px-3 py-2 align-top">
                     <div className="font-medium">{row.actor_name ?? `#${row.actor_staff_id ?? '—'}`}</div>
-                    {row.actor_role && <div className="text-[10.5px] text-gray-500">{row.actor_role}</div>}
+                    {row.actor_role && <div className="text-[10.5px] text-text-soft">{row.actor_role}</div>}
                   </td>
                   <td className="px-3 py-2 align-top">
                     <div className="font-medium">{row.action}</div>
-                    <div className="text-[10.5px] text-gray-500">{row.source}</div>
+                    <div className="text-[10.5px] text-text-soft">{row.source}</div>
                   </td>
                   <td className="px-3 py-2 align-top">
                     <div className="font-medium">{row.entity_type}</div>
-                    <div className="font-mono text-[10.5px] text-gray-500">{row.entity_id}</div>
+                    <div className="font-mono text-[10.5px] text-text-soft">{row.entity_id}</div>
                   </td>
-                  <td className="px-3 py-2 align-top font-mono text-[10.5px] text-gray-500">{row.ip_address ?? '—'}</td>
+                  <td className="px-3 py-2 align-top font-mono text-[10.5px] text-text-soft">{row.ip_address ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -152,7 +153,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
         {nextCursor && (
           <div className="text-right">
             <a
-              className="inline-flex items-center rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-label font-medium text-gray-700 shadow-sm hover:text-gray-900"
+              className="inline-flex items-center rounded-2xl border border-border-soft bg-surface-card px-3 py-1.5 text-label font-medium text-text-muted shadow-sm hover:text-text-default"
               href={`?${new URLSearchParams({
                 ...(source ? { source } : {}),
                 ...(action ? { action } : {}),

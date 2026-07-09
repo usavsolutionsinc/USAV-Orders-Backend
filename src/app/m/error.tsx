@@ -13,6 +13,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/design-system/primitives';
 
 export default function MobileError({
   error,
@@ -30,31 +31,23 @@ export default function MobileError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface-canvas px-6 text-center">
       <div className="flex flex-col items-center gap-2">
         <p className="text-micro font-black uppercase tracking-[0.22em] text-rose-500">
           Something broke
         </p>
-        <h1 className="text-lg font-black text-slate-900">This screen hit an error</h1>
-        <p className="max-w-xs text-caption font-bold text-slate-500">
+        <h1 className="text-lg font-black text-text-default">This screen hit an error</h1>
+        <p className="max-w-xs text-caption font-bold text-text-soft">
           {error?.message || 'Unexpected error.'}
         </p>
       </div>
       <div className="grid w-full max-w-xs grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => reset()}
-          className="flex h-12 items-center justify-center rounded-2xl border border-slate-300 bg-white text-sm font-black uppercase tracking-wider text-slate-700 active:bg-slate-50"
-        >
+        <Button variant="secondary" onClick={() => reset()} className="h-12 w-full">
           Try again
-        </button>
-        <button
-          type="button"
-          onClick={() => router.push('/m/receiving')}
-          className="flex h-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/30 active:scale-[0.98]"
-        >
+        </Button>
+        <Button variant="primary" onClick={() => router.push('/m/receiving')} className="h-12 w-full">
           Back to Unbox
-        </button>
+        </Button>
       </div>
     </div>
   );

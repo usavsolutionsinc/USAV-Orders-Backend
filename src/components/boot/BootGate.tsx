@@ -2,7 +2,6 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { BootSplash } from '@/components/boot/BootSplash';
 
@@ -63,9 +62,16 @@ export function BootGate({
 }: BootGateProps) {
   const queryClient = useQueryClient();
   // `revealed` = children are mounted (behind the splash). `splashUp` = the
-  // splash overlay is still shown. Both start in the "splash only" state.
+  // splash is at full opacity (false → fade it out). `splashMounted` = the splash
+  // is still in the tree at all; it is removed only AFTER the fade-out completes.
+  // Splitting "fading" from "mounted" is what kills the flicker: with
+  // AnimatePresence's exit, the wrapper reset to opacity 1 for one frame right
+  // before unmounting (a visible flash). Here the element stays mounted through
+  // the whole fade and is unmounted by onAnimationComplete, so opacity only ever
+  // moves 1 → 0, never back.
   const [revealed, setRevealed] = useState(false);
   const [splashUp, setSplashUp] = useState(true);
+  const [splashMounted, setSplashMounted] = useState(true);
   // Portal target. Starts null so SSR and the first client render agree (no
   // hydration mismatch); the layout effect points it at <body> before paint so
   // the splash escapes <main>'s stacking context and covers the global header,
@@ -90,7 +96,18 @@ export function BootGate({
     const reveal = () => {
       if (cancelled) return;
       setRevealed(true); // mount children behind the (still-visible) splash
-      setSplashUp(false); // begin the fade-out
+      setSplashUp(false); // begin the CSS opacity fade-out
+      // Unmount only AFTER the fade has fully finished — primarily via the
+      // element's own `transitionend` (precise), with this timer as a generous
+      // fallback in case the transition never starts/ends (e.g. the heavy child
+      // mount delays first paint, or reduced-motion zeroes the duration). Either
+      // way the opacity-0 class stays applied until the node is removed, so
+      // opacity never reverts to 1 — no end-of-fade flash.
+      timers.push(
+        setTimeout(() => {
+          if (!cancelled) setSplashMounted(false);
+        }, fadeMs + 1500),
+      );
     };
 
     if (!hold) {
@@ -129,23 +146,45 @@ export function BootGate({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Remove the pre-paint bridge splash (injected by BOOT_SPLASH_SCRIPT in
+  // app/layout.tsx) once our own React splash is mounted on top. This runs after
+  // the commit that set portalEl — i.e. after the portal splash is in the DOM —
+  // so removing the identical bridge underneath is seamless, no gap.
+  useEffect(() => {
+    if (!portalEl) return;
+    document.getElementById('__boot_splash_pre')?.remove();
+  }, [portalEl]);
+
   return (
     <>
       {revealed && children}
       {portalEl &&
+        splashMounted &&
         createPortal(
-          <AnimatePresence>
-            {splashUp && (
-              <motion.div
-                key="boot-gate-splash"
-                className="fixed inset-0 z-splash"
-                exit={{ opacity: 0 }}
-                transition={{ duration: fadeMs / 1000, ease: 'easeOut' }}
-              >
-                {splash}
-              </motion.div>
-            )}
-          </AnimatePresence>,
+          // Plain CSS opacity fade — deliberately NOT framer-motion. framer clears
+          // its inline opacity the instant its animation completes (handing the
+          // value back), which reverts computed opacity to the CSS default 1 for
+          // one frame before React removes the node — a visible end-of-fade flash.
+          // A CSS class keeps opacity pinned at 0 right up until the node is
+          // unmounted, so there is no revert frame. Held at opacity-100, then a
+          // single transition to opacity-0 on reveal; pointer-events-none while
+          // fading so it doesn't swallow clicks over the now-live page. No entrance
+          // transition (it mounts already at opacity-100), so the hard-nav handoff
+          // from the sign-in-side splash stays seamless.
+          <div
+            className={`fixed inset-0 z-splash transition-opacity ease-out ${
+              splashUp ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            style={{ transitionDuration: `${fadeMs}ms` }}
+            onTransitionEnd={(e) => {
+              // Fires exactly when the fade-out completes (opacity at 0). Guard on
+              // the opacity property + the faded state so neither a held splash nor
+              // an unrelated transition unmounts it early.
+              if (e.propertyName === 'opacity' && !splashUp) setSplashMounted(false);
+            }}
+          >
+            {splash}
+          </div>,
           portalEl,
         )}
     </>

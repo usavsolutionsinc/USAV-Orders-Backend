@@ -89,16 +89,16 @@ export function AuditLogTechClient() {
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-canvas">
+      <div className="border-b border-border-soft bg-surface-card px-6 py-4">
         <p className="text-micro font-bold uppercase tracking-widest text-emerald-700">
           Tech audit
         </p>
-        <h2 className="mt-0.5 break-all font-mono text-base font-bold text-gray-900">
+        <h2 className="mt-0.5 break-all font-mono text-base font-bold text-text-default">
           {detail.tracking}
         </h2>
         {detail.sku_summary && (
-          <p className="mt-1 text-label text-gray-500">SKU: {detail.sku_summary}</p>
+          <p className="mt-1 text-label text-text-soft">SKU: {detail.sku_summary}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-1.5">
           {detail.serials.slice(0, 8).map((sn) => (
@@ -111,7 +111,7 @@ export function AuditLogTechClient() {
             </span>
           ))}
           {detail.serials.length > 8 && (
-            <span className="text-micro text-gray-500">
+            <span className="text-micro text-text-soft">
               +{detail.serials.length - 8} more
             </span>
           )}
@@ -126,8 +126,8 @@ export function AuditLogTechClient() {
             <>
               {/* Unified trail — same shared EventTimeline as the Shipped /
                   Incoming detail panels (label → tech verdict → pack → ship). */}
-              <div className="rounded-xl border border-gray-100 bg-white p-4">
-                <h3 className="mb-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <div className="rounded-xl border border-border-hairline bg-surface-card p-4">
+                <h3 className="mb-2 text-eyebrow font-black uppercase tracking-wider text-text-soft">
                   Activity timeline
                 </h3>
                 <EventTimeline items={techEventsToTimeline(detail.events)} />

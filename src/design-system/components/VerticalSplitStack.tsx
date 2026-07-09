@@ -293,15 +293,15 @@ function SplitDivider({
     <div
       {...props}
       className={cn(
-        'group/grip relative z-10 flex h-3 shrink-0 cursor-row-resize items-center justify-center border-y border-gray-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300',
-        isDragging ? 'bg-blue-100' : 'bg-gray-100 hover:bg-blue-50',
+        'group/grip relative z-10 flex h-3 shrink-0 cursor-row-resize items-center justify-center border-y border-border-soft transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300',
+        isDragging ? 'bg-blue-100' : 'bg-surface-sunken hover:bg-blue-50',
         className,
       )}
     >
       <span
         className={cn(
           'h-[3px] w-10 rounded-full transition-colors',
-          isDragging ? 'bg-blue-500' : 'bg-gray-300 group-hover/grip:bg-blue-400',
+          isDragging ? 'bg-blue-500' : 'bg-surface-strong group-hover/grip:bg-blue-400',
         )}
       />
     </div>
@@ -444,7 +444,7 @@ function SectionHeader({
   collapsed?: boolean;
 }) {
   return (
-    <span className="flex min-w-0 items-center gap-1.5 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+    <span className="flex min-w-0 items-center gap-1.5 text-eyebrow font-black uppercase tracking-wider text-text-soft">
       {chevron ? (
         <ChevronDown
           className={cn('h-3.5 w-3.5 shrink-0 transition-transform', collapsed ? '-rotate-90' : '')}
@@ -453,7 +453,7 @@ function SectionHeader({
       {title}
       {badge != null && badge !== false ? (
         typeof badge === 'number' || typeof badge === 'string' ? (
-          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-mini font-black tabular-nums text-gray-600">
+          <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-mini font-black tabular-nums text-text-muted">
             {badge}
           </span>
         ) : (

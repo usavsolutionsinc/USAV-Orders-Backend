@@ -9,7 +9,7 @@ test.describe('Photos GCS platform', () => {
 
   test('photo library page loads for authenticated staff', async ({ page }) => {
     await page.goto('/ops/photos');
-    await expect(page.getByRole('heading', { name: /photo library/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /media library/i })).toBeVisible({
       timeout: 15_000,
     });
   });

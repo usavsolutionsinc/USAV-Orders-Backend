@@ -21,7 +21,7 @@ const META: Record<AgentStatus, AgentStatusMeta> = {
   online: { dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700', label: 'Online' },
   offline: { dot: 'bg-rose-500', chip: 'bg-rose-50 text-rose-700', label: 'Offline' },
   unconfigured: { dot: 'bg-amber-400', chip: 'bg-amber-50 text-amber-700', label: 'Not set up' },
-  unknown: { dot: 'bg-gray-300', chip: 'bg-gray-100 text-gray-500', label: 'Unknown' },
+  unknown: { dot: 'bg-surface-strong', chip: 'bg-surface-sunken text-text-soft', label: 'Unknown' },
 };
 
 /** Dot/chip/label meta for an agent status; falls back to `unknown`. */

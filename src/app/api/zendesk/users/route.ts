@@ -3,10 +3,12 @@ import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   getUsers,
-  isZendeskConfigured,
+  isZendeskConfiguredForOrg,
   ZendeskApiError,
   ZendeskNotConfiguredError,
+  type ZendeskUser,
 } from '@/lib/zendesk';
+import { getCachedUsers, upsertCachedUsers } from '@/lib/zendesk-users-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,10 +39,10 @@ function mapZendeskError(err: unknown, context: string): NextResponse {
 }
 
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     const context = 'GET /api/zendesk/users';
     try {
-      if (!isZendeskConfigured()) return notConfigured(context);
+      if (!(await isZendeskConfiguredForOrg(ctx.organizationId))) return notConfigured(context);
 
       const ids = (req.nextUrl.searchParams.get('ids') ?? '')
         .split(',')
@@ -49,7 +51,26 @@ export const GET = withAuth(
 
       if (!ids.length) return NextResponse.json({ success: true, users: [] });
 
-      const users = await getUsers(ids);
+      // Cache-first: serve known users from the DB, fetch only the misses from
+      // Zendesk, then upsert so the next caller (and the comments route) is warm.
+      const cached = await getCachedUsers(ctx.organizationId, ids);
+      const missing = ids.filter((id) => !cached.has(id));
+      let fetched: ZendeskUser[] = [];
+      if (missing.length) {
+        fetched = await getUsers(missing, ctx.organizationId);
+        if (fetched.length) await upsertCachedUsers(ctx.organizationId, fetched);
+      }
+
+      const users: ZendeskUser[] = [
+        ...Array.from(cached.values()).map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role ?? 'end-user',
+          photo: u.photo,
+        })),
+        ...fetched,
+      ];
       return NextResponse.json({ success: true, users });
     } catch (err) {
       return mapZendeskError(err, context);

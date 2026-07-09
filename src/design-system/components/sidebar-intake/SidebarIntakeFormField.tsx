@@ -23,7 +23,7 @@ export function SidebarIntakeFormField({
       <label className={SIDEBAR_INTAKE_LABEL_CLASS}>
         {label}{' '}
         {required ? <span className="text-red-500">*</span> : null}
-        {optionalHint != null ? <span className="text-gray-400"> {optionalHint}</span> : null}
+        {optionalHint != null ? <span className="text-text-faint"> {optionalHint}</span> : null}
       </label>
       {children}
       {hintBelow}

@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X, Pencil } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SerialChip } from '@/components/ui/CopyChip';
-import { TextField } from '@/design-system/primitives';
+import { TextField, IconButton } from '@/design-system/primitives';
 import { ConditionPills } from './ConditionPills';
 import { ConditionBadge } from './ReceivingUnitRows';
 
@@ -11,6 +12,7 @@ interface SavedSerial {
   id?: number;
   serial_number: string;
   condition_grade?: string | null;
+  _optimistic?: 'adding' | 'removing';
 }
 
 interface Props {
@@ -39,6 +41,27 @@ interface Props {
   /** Optional condition picker integrated into the scan row. */
   condition?: string | null | undefined;
   onConditionChange?: (grade: string) => void;
+  /**
+   * When false, the collapsed condition picker shows only its edit pencil (no
+   * selected-grade pill) — for surfaces where the grade is already displayed
+   * elsewhere (the PO-line meta row chip), so the pill isn't a redundant second
+   * label. Defaults to true (labeled pill) for the standalone unmatched flows.
+   */
+  collapsedConditionLabel?: boolean;
+  /**
+   * When the serial input is empty, show a green check in place of the disabled
+   * "+" so the operator can mark the item as having no serial number. Omitted →
+   * the trailing control is the normal add-"+" button only.
+   */
+  onMarkNoSerial?: () => void;
+  /** Render the no-serial check as active (solid green) while the waiver is set. */
+  noSerialActive?: boolean;
+  /**
+   * Rendered IN the serial-input position (replacing the field) while the
+   * no-serial waiver is active — a contextual form swap on the same row, not a
+   * second row underneath.
+   */
+  noSerialSlot?: ReactNode;
   /** PO-line notes — co-located here so operators see them while scanning. */
   notes?: string;
   /** Notes change handler (controlled). */
@@ -55,6 +78,8 @@ interface Props {
    * scan field.
    */
   resultSlot?: ReactNode;
+  /** When false, serial input does not steal focus on mount (step-aware unbox). */
+  autoFocusInput?: boolean;
   /** Nested inside {@link PoLinesAccordion} — skip duplicate card chrome. */
   embedded?: boolean;
   /** Controlled edit target from the PO item header chip. */
@@ -81,11 +106,16 @@ export function SerialCard({
   onReplaceSerial,
   condition,
   onConditionChange,
+  collapsedConditionLabel = true,
+  onMarkNoSerial,
+  noSerialActive = false,
+  noSerialSlot,
   notes,
   onNotesChange,
   onNotesBlur,
   notesId,
   showSavedChips = true,
+  autoFocusInput = true,
   embedded = false,
   editingSerial = null,
   onEditingSerialChange,
@@ -154,6 +184,16 @@ export function SerialCard({
     return () => window.clearTimeout(t);
   }, [isSubmitting]);
 
+  useEffect(() => {
+    if (!autoFocusInput || disabled || isSubmitting || editing || editingSerial) return;
+    const t = window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled) return;
+      el.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [autoFocusInput, disabled, isSubmitting, editing, editingSerial]);
+
   const beginEdit = (s: SavedSerial) => {
     setEditing(s);
     onEditingSerialChange?.(s);
@@ -164,7 +204,7 @@ export function SerialCard({
     setTimeout(() => {
       const el = inputRef.current;
       if (!el) return;
-      el.focus();
+      el.focus({ preventScroll: true });
       el.select();
     }, 0);
   };
@@ -204,12 +244,19 @@ export function SerialCard({
         /* Parent handles toasts on its own; keep the loop going. */
       }
     }
+    // Barcode wedge: keep the scan field focused after each Enter so multi-part
+    // PARTS lines can accept serial after serial without re-clicking.
+    window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled || editing || noSerialActive) return;
+      el.focus({ preventScroll: true });
+    }, 0);
   };
 
   const Shell = embedded ? 'div' : 'section';
   const shellClass = embedded
     ? 'w-full group'
-    : 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60 group';
+    : 'rounded-2xl bg-surface-card p-4 shadow-sm ring-1 ring-border-soft/60 group';
 
   return (
     <Shell className={shellClass}>
@@ -223,10 +270,11 @@ export function SerialCard({
               value={condition}
               onChange={handleConditionPick}
               collapsible
+              collapsedLabel={collapsedConditionLabel}
               expanded={condExpanded}
               onExpandedChange={setCondExpanded}
             />
-            <div className="h-8 w-px shrink-0 bg-gray-100" />
+            <div className="h-8 w-px shrink-0 bg-surface-sunken" />
           </div>
         ) : condition ? (
           <div className="shrink-0">
@@ -235,6 +283,9 @@ export function SerialCard({
         ) : null}
 
         <div className="flex-1 min-w-0">
+          {noSerialActive && noSerialSlot ? (
+            noSerialSlot
+          ) : (
           <TextField
             ref={inputRef}
             label="Serial"
@@ -245,12 +296,12 @@ export function SerialCard({
             disabled={disabled || isSubmitting}
             autoComplete="off"
             spellCheck={false}
-            // eslint-disable-next-line jsx-a11y/no-autofocus -- scan-focused workflow
-            autoFocus
+            // Programmatic focus uses preventScroll — avoid native autoFocus scroll jumps.
+            autoFocus={false}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                submit();
+                void submit();
               } else if (e.key === 'Escape' && editing) {
                 e.preventDefault();
                 cancelEdit();
@@ -258,35 +309,58 @@ export function SerialCard({
             }}
             trailing={
               scan || editing ? (
-                <button
-                  type="button"
+                <IconButton
                   onClick={() => (editing ? cancelEdit() : setScan(''))}
-                  aria-label={editing ? 'Cancel edit' : 'Clear input'}
-                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                  ariaLabel={editing ? 'Cancel edit' : 'Clear input'}
+                  className="rounded-md p-1 hover:bg-surface-sunken"
+                  icon={<X className="h-3.5 w-3.5" />}
+                />
               ) : undefined
             }
           />
+          )}
         </div>
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!scan.trim() || isSubmitting || disabled}
-          className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          {showSavingLabel && isSubmitting ? (
-            'Saving…'
-          ) : editing ? (
-            'Save'
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
-              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-            </svg>
-          )}
-        </button>
+        {/* Trailing action. While the waiver is ACTIVE the full-width no-serial bar
+            (rendered in the field slot above) owns the row and carries its own
+            clear (✕) — so no trailing control here, no redundant confirm. When the
+            field is empty, a QUIET no-serial offer affordance (secondary, not a
+            second green CTA). Otherwise the "+" add / Save submit. */}
+        {noSerialActive ? null : !scan.trim() && !editing && onMarkNoSerial ? (
+          <HoverTooltip label="Mark this item as having no serial number" asChild>
+            {/* ds-raw-button: green-check no-serial offer toggle, not a DS Button */}
+            <button
+              type="button"
+              onClick={onMarkNoSerial}
+              aria-label="Mark this item as having no serial number"
+              className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-600 shadow-sm transition-colors hover:bg-emerald-100"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </HoverTooltip>
+        ) : (
+          /* ds-raw-button: solid-emerald scan-submit CTA with add-glyph / Saving… text-swap */
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!scan.trim() || isSubmitting || disabled}
+            className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-surface-strong ${
+              editing || (showSavingLabel && isSubmitting) ? 'px-4' : 'w-14'
+            }`}
+          >
+            {showSavingLabel && isSubmitting ? (
+              'Saving…'
+            ) : editing ? (
+              'Save'
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Inline slot directly under the scan field — the RETURN flow renders
@@ -320,10 +394,10 @@ export function SerialCard({
           Same card chrome, same width; a hairline divider signals it's a
           distinct field, not part of the scan flow. */}
       {showNotes ? (
-        <div className="mt-3 border-t border-gray-100 pt-3">
+        <div className="mt-3 border-t border-border-hairline pt-3">
           <label
             htmlFor={notesId}
-            className="block text-micro font-bold uppercase tracking-[0.14em] text-gray-500"
+            className="block text-micro font-bold uppercase tracking-[0.14em] text-text-soft"
           >
             Notes
           </label>
@@ -334,7 +408,7 @@ export function SerialCard({
             onBlur={onNotesBlur}
             rows={2}
             placeholder="PO-line notes (saved on off click)"
-            className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-label font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="mt-1 w-full resize-none rounded-xl border border-border-soft bg-surface-card px-3 py-2 text-label font-medium leading-snug text-text-default placeholder:text-text-faint focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
       ) : null}
@@ -355,6 +429,7 @@ export function SerialChipWithMenu({
   onEdit,
   onDelete,
   onSetCondition,
+  dense,
 }: {
   serial: SavedSerial;
   isEditing: boolean;
@@ -362,14 +437,23 @@ export function SerialChipWithMenu({
   onDelete?: (s: SavedSerial) => void;
   /** When provided, the hover menu includes a condition picker for this serial. */
   onSetCondition?: (s: SavedSerial, grade: string) => void;
+  /** Compact meta-row rendering — forwarded to the inner {@link SerialChip}. */
+  dense?: boolean;
 }) {
   const sn = serial.serial_number;
-  const hasActions = !!(onEdit || onDelete || onSetCondition);
+  const pending = serial._optimistic;
+  const hasActions = !pending && !!(onEdit || onDelete || onSetCondition);
   const [menuHover, setMenuHover] = useState(false);
 
   return (
     <div
-      className="group relative inline-flex"
+      className={`group relative inline-flex rounded-md transition-opacity ${
+        pending === 'removing'
+          ? 'bg-surface-sunken opacity-50 ring-1 ring-inset ring-border-soft'
+          : pending === 'adding'
+            ? 'opacity-70'
+            : ''
+      }`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
       onMouseEnter={() => {
@@ -382,16 +466,13 @@ export function SerialChipWithMenu({
           isEditing ? 'ring-2 ring-emerald-400 ring-offset-1' : ''
         }`}
       >
-        <SerialChip value={sn} width="w-fit max-w-full" />
+        <SerialChip value={sn} width="w-fit max-w-full" pending={pending} dense={dense} />
       </div>
       {hasActions ? (
         <div
-          // Intentional exception (memory: z-index-scale-sot): a purely in-flow
-          // CSS hover tooltip stacking within this card's local context — not
-          // part of the global portal/overlay system, so it stays a raw z-[100].
-          // Hover-only — focus-within kept menus stuck after chip click.
+          // Hover-only menu within the card's local stacking context.
           // eslint-disable-next-line no-restricted-syntax
-          className={`absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 transition-opacity duration-100 ${
+          className={`absolute left-1/2 top-full z-panel -translate-x-1/2 pt-1 transition-opacity duration-100 ${
             menuHover
               ? 'visible pointer-events-auto opacity-100'
               : 'invisible pointer-events-none opacity-0'
@@ -400,11 +481,11 @@ export function SerialChipWithMenu({
           <div
             role="menu"
             aria-label="Serial actions"
-            className={`overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg ${onSetCondition ? 'min-w-[200px]' : 'min-w-[112px]'}`}
+            className={`overflow-hidden rounded-lg border border-border-soft bg-surface-card shadow-lg ${onSetCondition ? 'min-w-[200px]' : 'min-w-[112px]'}`}
           >
             {onSetCondition ? (
-              <div className="border-b border-gray-100 px-2 py-1.5">
-                <p className="mb-1 text-micro font-bold uppercase tracking-widest text-gray-400">
+              <div className="border-b border-border-hairline px-2 py-1.5">
+                <p className="mb-1 text-micro font-bold uppercase tracking-widest text-text-faint">
                   Condition
                 </p>
                 <ConditionPills
@@ -414,22 +495,24 @@ export function SerialChipWithMenu({
               </div>
             ) : null}
             {onEdit ? (
+              // ds-raw-button: role=menuitem text-left dropdown action row, not a standalone DS Button
               <button
                 type="button"
                 role="menuitem"
                 onClick={() => onEdit(serial)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-text-muted hover:bg-surface-hover"
               >
-                <Pencil className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-text-soft" />
                 Edit
               </button>
             ) : null}
             {onDelete ? (
+              // ds-raw-button: role=menuitem text-left dropdown action row, not a standalone DS Button
               <button
                 type="button"
                 role="menuitem"
                 onClick={() => onDelete(serial)}
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50"
+                className="flex w-full items-center gap-2 border-t border-border-hairline px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50"
               >
                 <X className="h-3.5 w-3.5 shrink-0" />
                 Delete

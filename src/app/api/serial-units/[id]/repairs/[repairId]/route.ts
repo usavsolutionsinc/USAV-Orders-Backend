@@ -36,7 +36,7 @@ export const PATCH = withAuth(async (request, ctx) => {
       costCents: parsed.costCents,
       staffId: ctx.staffId,
       clientEventId: parsed.clientEventId ?? null,
-    });
+    }, ctx.organizationId);
     if (!repair) {
       return NextResponse.json({ ok: false, error: 'repair not found' }, { status: 404 });
     }
@@ -51,7 +51,7 @@ export const PATCH = withAuth(async (request, ctx) => {
       extra: { serial_unit_id: repair.serial_unit_id, status: repair.status },
     });
 
-    await recomputeUnitQualitySafe(repair.serial_unit_id);
+    await recomputeUnitQualitySafe(repair.serial_unit_id, ctx.organizationId);
     return NextResponse.json({ ok: true, repair });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to update repair';

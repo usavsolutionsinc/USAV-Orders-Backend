@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, type ReactNode, type RefObject } from 'react';
 import { sectionLabel, SkeletonList } from '@/design-system';
+import { Button } from '@/design-system/primitives';
 import { Loader2 } from '@/components/Icons';
 import { useTableSelectMode } from '@/hooks/useTableSelectMode';
-import WeekHeader from '@/components/ui/WeekHeader';
+import DateRangeHeader from '@/components/ui/DateRangeHeader';
 import { getDaysLateNullable } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
@@ -23,7 +24,10 @@ import { OrdersQueueTableRow } from '@/components/dashboard/orders-queue/OrdersQ
 import { QueueTableBanner } from '@/components/dashboard/orders-queue/QueueTableBanner';
 import { QueueDateSection } from '@/components/dashboard/orders-queue/QueueDateSection';
 import { useOrdersQueueRows } from '@/components/dashboard/orders-queue/useOrdersQueueRows';
+import { VirtualQueueSections } from '@/components/dashboard/orders-queue/VirtualQueueSections';
 import { useOrdersQueueSelection } from '@/components/dashboard/orders-queue/useOrdersQueueSelection';
+import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
+import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
 
 // Re-exported so existing importers keep their `@/components/dashboard/OrdersQueueTable` path.
 export type { OrdersQueueMode, OrdersQueueSort } from '@/components/dashboard/orders-queue/helpers';
@@ -41,6 +45,11 @@ export interface OrdersQueueTableProps {
   showWeekControls?: boolean;
   onClearSearch: () => void;
   emptyMessage: string;
+  /** Typed first-run empty (zero rows, no active search). When provided it
+   *  replaces the faint `emptyMessage` text — used to teach a brand-new org and
+   *  offer a "connect a channel" CTA instead of a blank-looking board. Omitted
+   *  by per-lane embedders so empty lanes keep the quiet faint text. */
+  firstRunEmpty?: ReactNode;
   searchEmptyTitle?: string;
   searchResultLabel?: string;
   clearSearchLabel?: string;
@@ -65,8 +74,6 @@ export interface OrdersQueueTableProps {
   /** Suppress the built-in WeekHeader/banner so an embedder (e.g. the shelf-board
    *  bubble cards) can supply its own header. Body + scroll behavior unchanged. */
   hideHeader?: boolean;
-  /** Day-header style — `band` (default) or the slim `chip` used by the board. */
-  dateHeaderVariant?: 'band' | 'chip';
   /** Clip horizontal overflow instead of scrolling it (no bottom scrollbar).
    *  Used by the shelf-board bubbles, which are vertical-only. */
   noHorizontalScroll?: boolean;
@@ -81,6 +88,27 @@ export interface OrdersQueueTableProps {
   /** Explicit px cap for the `autoHeight` body — wins over `maxBodyHeightClass`.
    *  Drives the drag-to-resize handle on the shelf-board bubbles. */
   maxBodyHeightPx?: number;
+  /** When true (only meaningful with `autoHeight`), the body grows to its full
+   *  content with NO internal vertical scroll or max-height — an ancestor scroll
+   *  region owns the scroll. Used by stacked (1-up) SwimlaneBoard lanes so the
+   *  whole board scrolls as one region instead of trapping the wheel per lane. */
+  growToContent?: boolean;
+  /** When true, skip the internal {@link TableColumnConfigProvider} — a parent
+   *  (e.g. {@link UnshippedShelfBoard}) owns the provider + Columns control. */
+  inheritColumnConfig?: boolean;
+  /** Window the day-banded body via {@link VirtualQueueSections} so the DOM stays
+   *  ∝ viewport regardless of row count (mirrors the Shipped board). Off by
+   *  default → other callers keep the all-rows-mounted body unchanged. Requires
+   *  the body to be a real scroll container (the `autoHeight` capped case); in
+   *  `growToContent` (1-up lanes) the ancestor owns the scroll, so windowing
+   *  degrades to rendering all rows — same as today, no regression. */
+  virtualized?: boolean;
+  /** When embedded in a stacked (1-up) {@link SwimlaneBoard} lane, the board's
+   *  shared scroll region. The virtualizer windows against THIS element instead
+   *  of the (absent) internal body scroll, so a stacked lane stays windowed
+   *  rather than mounting every row (Phase V0 fix). Omitted → the internal body
+   *  `scrollRef` owns the scroll (dense table + grid lanes), unchanged. */
+  scrollParentRef?: RefObject<HTMLElement | null>;
 }
 
 export function OrdersQueueTable({
@@ -96,6 +124,7 @@ export function OrdersQueueTable({
   showWeekControls = false,
   onClearSearch,
   emptyMessage,
+  firstRunEmpty,
   searchEmptyTitle = 'Order not found',
   searchResultLabel = 'records',
   clearSearchLabel = 'Show All Orders',
@@ -110,11 +139,16 @@ export function OrdersQueueTable({
   selectionScope = 'orders-queue',
   queueMode = 'fulfillment',
   hideHeader = false,
-  dateHeaderVariant = 'band',
   noHorizontalScroll = false,
   autoHeight = false,
   maxBodyHeightClass,
   maxBodyHeightPx,
+  growToContent = false,
+  inheritColumnConfig = false,
+  virtualized = false,
+  // `scrollParentRef` is still accepted (SwimlaneBoard lane-body contract) but no
+  // longer consumed: stacked lanes render all rows instead of windowing against the
+  // shared ancestor scroll (see the render branch below), so nothing to wire here.
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
@@ -123,17 +157,25 @@ export function OrdersQueueTable({
   // `autoHeight`: the body sizes to content, capped by a max-height (px wins over
   // class), so short tables leave no trailing whitespace and tall ones scroll.
   const rootClass = autoHeight
-    ? 'flex min-w-0 w-full bg-white relative'
-    : 'flex h-full min-w-0 flex-1 bg-white relative';
+    ? 'flex min-w-0 w-full bg-surface-card relative'
+    : 'flex h-full min-w-0 flex-1 bg-surface-card relative';
   const columnClass = autoHeight
     ? 'flex flex-col w-full min-w-0'
     : 'flex-1 flex flex-col overflow-hidden';
   const xScroll = noHorizontalScroll ? 'overflow-x-hidden' : 'overflow-x-auto';
+  // `growToContent` (stacked lanes): no internal vertical scroll / cap — the body
+  // grows to content and an ancestor scroll region owns the wheel. Otherwise the
+  // body scrolls internally, capped by the px (drag) or class (preset) height.
   const bodyScrollClass = autoHeight
-    ? `${xScroll} overflow-y-auto no-scrollbar w-full ${maxBodyHeightPx == null ? maxBodyHeightClass ?? '' : ''}`
+    ? growToContent
+      // `overflow-x-clip` (NOT hidden): clips horizontally without becoming a
+      // scroll container, so it doesn't trap the sticky DateGroupHeader — the
+      // header promotes to the board's scroll region and docks at the top.
+      ? 'overflow-x-clip w-full'
+      : `${xScroll} overflow-y-auto no-scrollbar w-full ${maxBodyHeightPx == null ? maxBodyHeightClass ?? '' : ''}`
     : `flex-1 ${xScroll} overflow-y-auto no-scrollbar w-full`;
   const bodyScrollStyle =
-    autoHeight && maxBodyHeightPx != null ? { maxHeight: maxBodyHeightPx } : undefined;
+    autoHeight && !growToContent && maxBodyHeightPx != null ? { maxHeight: maxBodyHeightPx } : undefined;
   const emptyPadClass = autoHeight ? 'py-10' : 'py-40';
 
   const { visibleRecords, orderGroupsByDate, displayedRecords, totalCount } = useOrdersQueueRows({
@@ -191,10 +233,12 @@ export function OrdersQueueTable({
           getStaffName(r.packed_by as number | null | undefined) ||
           getStaffName(r.packer_id as number | null | undefined);
       const outOfStockValue = String(r.out_of_stock || '').trim();
+      const notesValue = String(r.notes || '').trim();
       const rowStatus = resolveRowStatus(r, queueMode);
       return (
         <OrdersQueueTableRow
           key={record.id}
+          disableEnterAnimation={virtualized}
           record={r}
           isSelected={selectMode ? selectedIds.has(Number(record.id)) : selectedRecord?.id === record.id}
           selectMode={selectMode}
@@ -209,17 +253,23 @@ export function OrdersQueueTable({
           trackingAction={queueMode === 'labels' ? <AddTrackingPopover record={record} /> : undefined}
           hasOutOfStock={outOfStockValue !== ''}
           outOfStockValue={outOfStockValue}
+          notesValue={notesValue}
           daysLate={getDaysLateNullable(r.deadline_at as string | null | undefined)}
           onRowClick={handleRowAction}
         />
       );
     },
-    [getStaffName, useWaForDisplay, selectMode, selectedIds, selectedRecord, isMobile, handleRowAction, queueMode],
+    [getStaffName, useWaForDisplay, selectMode, selectedIds, selectedRecord, isMobile, handleRowAction, queueMode, virtualized],
   );
 
+  const wrapColumnConfig = (node: ReactNode) =>
+    inheritColumnConfig ? node : (
+      <TableColumnConfigProvider tableId="orders">{node}</TableColumnConfigProvider>
+    );
+
   if (loading) {
-    return (
-      <div className={autoHeight ? 'flex flex-col bg-gray-50' : 'flex-1 flex flex-col bg-gray-50 overflow-hidden'}>
+    return wrapColumnConfig(
+      <div className={autoHeight ? 'flex flex-col bg-surface-canvas' : 'flex-1 flex flex-col bg-surface-canvas overflow-hidden'}>
         {hideHeader ? null : bannerTitle ? (
           <QueueTableBanner
             title={bannerTitle}
@@ -227,8 +277,8 @@ export function OrdersQueueTable({
             compact={bannerCompact}
           />
         ) : (
-          <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
-            <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+          <div className="h-10 bg-surface-card border-b border-border-hairline flex items-center px-4">
+            <div className="h-4 w-32 bg-surface-sunken rounded animate-pulse" />
           </div>
         )}
         <div
@@ -237,11 +287,11 @@ export function OrdersQueueTable({
         >
           <SkeletonList count={autoHeight ? 6 : 12} />
         </div>
-      </div>
+      </div>,
     );
   }
 
-  return (
+  return wrapColumnConfig(
     <div className={rootClass}>
       <div className={columnClass}>
         {hideHeader ? null : bannerTitle ? (
@@ -252,21 +302,22 @@ export function OrdersQueueTable({
             isRefreshing={isRefreshing}
           />
         ) : (
-          <WeekHeader
+          <DateRangeHeader
             count={totalCount}
+            columns={<ColumnConfigButton iconOnly />}
             weekRange={weekRange}
             weekOffset={weekOffset}
             onPrevWeek={onPrevWeek}
             onNextWeek={onNextWeek}
             rightSlot={
               !showWeekControls
-                ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
+                ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" /> : null}</div>
                 : undefined
             }
           />
         )}
 
-        <div ref={scrollRef} className={bodyScrollClass} style={bodyScrollStyle}>
+        <div ref={scrollRef} data-testid="column-table-body" className={bodyScrollClass} style={bodyScrollStyle}>
           {orderGroupsByDate.length === 0 ? (
             <div className={`flex flex-col items-center justify-center ${emptyPadClass} text-center`}>
               {searchValue ? (
@@ -277,21 +328,40 @@ export function OrdersQueueTable({
                   clearLabel={clearSearchLabel}
                   onClear={onClearSearch}
                 />
+              ) : firstRunEmpty ? (
+                <div className="mx-auto animate-in fade-in zoom-in duration-300">{firstRunEmpty}</div>
               ) : (
-                <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                  <p className="text-gray-500 font-semibold italic opacity-20">{emptyMessage}</p>
+                <div className="max-w-xs mx-auto">
+                  <div className="mx-auto max-w-xs rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-muted">{emptyMessage}</div>
                   {showWeekControls && weekOffset > 0 && onResetWeek ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="brand"
                       onClick={onResetWeek}
-                      className={`mt-4 px-6 py-2 bg-gray-900 text-white ${sectionLabel} rounded-xl hover:bg-gray-800 transition-all active:scale-95`}
+                      className={`mt-4 bg-none bg-surface-inverse px-6 ${sectionLabel} text-white hover:bg-surface-inverse-hover`}
                     >
                       Go to Current Week
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               )}
             </div>
+          ) : virtualized && !growToContent ? (
+            // Self-scrolling body (dense table + grid lanes): window against the
+            // internal `scrollRef`. Stacked (growToContent) lanes deliberately fall
+            // through to the all-rows path below — the ancestor-scroll virtualizer
+            // mis-measures on first mount (rows only appear after a column toggle),
+            // and the queue is already bounded (rowLimit 200, split across lanes),
+            // so rendering all rows keeps the wheel on the board's shared scroll
+            // region with no first-paint race. This is the "windowing degrades to
+            // all-rows in 1-up lanes" behavior the `virtualized` prop doc promises.
+            <VirtualQueueSections
+              orderGroupsByDate={orderGroupsByDate}
+              scrollParentRef={scrollRef}
+              useAncestorScroll={false}
+              isMobile={isMobile}
+              renderRow={renderRow}
+            />
           ) : (
             <div className="flex flex-col w-full">
               {orderGroupsByDate.map(([date, groups]) => (
@@ -301,13 +371,12 @@ export function OrdersQueueTable({
                   groups={groups}
                   isMobile={isMobile}
                   renderRow={renderRow}
-                  dateHeaderVariant={dateHeaderVariant}
                 />
               ))}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </div>,
   );
 }

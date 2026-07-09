@@ -7,10 +7,19 @@ import {
 } from '@/lib/cache/upstash-cache';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { queryWithRetry } from '@/lib/db-retry';
+import { isPackerLogEnrichmentRead } from '@/lib/feature-flags';
+import { computePackerLogEnrichment } from '@/lib/neon/packer-log-enrichment';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type PackerLogsTrackingFilter = 'all' | 'orders' | 'sku' | 'fba';
 
 export interface FetchPackerLogRowsOptions {
+  /**
+   * Tenant scope (REQUIRED). Every row is filtered by `sal.organization_id`
+   * and the org id is part of the cache key — without it this loader returned
+   * every tenant's PACK rows to any caller (tenant-isolation bug, 2026-07-01).
+   */
+  organizationId: OrgId;
   packerId?: number | null;
   testedBy?: number | null;
   /**
@@ -31,8 +40,8 @@ export interface FetchPackerLogRowsResult {
   cacheHit: boolean;
 }
 
-// v6: adds ship_confirmed_at / shipped_out_by / shipped_out_by_name (dock scan-out).
-const CACHE_NAMESPACE = 'api:packing-logs-v6';
+// v7: enriched read path falls back to live order_match when projection row is missing.
+const CACHE_NAMESPACE = 'api:packing-logs-v7';
 const CACHE_TAGS = ['packing-logs'];
 
 /**
@@ -55,10 +64,15 @@ export async function fetchPackerLogRows(
   const weekEnd = opts.weekEnd ?? '';
   const trackingTypeFilter: PackerLogsTrackingFilter = opts.trackingTypeFilter ?? 'all';
 
+  const orgId = opts.organizationId;
+
   const staffFilterId =
     opts.staffId != null && Number.isFinite(opts.staffId) && opts.staffId > 0 ? opts.staffId : null;
 
   const cacheLookup = createCacheLookupKey({
+    // Org id FIRST so the cache is per-tenant — never share a PACK-log page
+    // across organizations.
+    organizationId: orgId,
     packerId: opts.packerId ?? '',
     testedBy: opts.testedBy ?? '',
     staffId: staffFilterId ?? '',
@@ -79,6 +93,11 @@ export async function fetchPackerLogRows(
 
   const params: any[] = [];
   const conditions: string[] = [`sal.station = 'PACK'`];
+
+  // Tenant scope — bounds the whole page CTE (and therefore both the legacy and
+  // enriched queries, which share these conditions) to the caller's org.
+  params.push(orgId);
+  conditions.push(`sal.organization_id = $${params.length}`);
 
   if (opts.packerId != null && !Number.isNaN(opts.packerId)) {
     params.push(opts.packerId);
@@ -141,7 +160,7 @@ export async function fetchPackerLogRows(
         LEFT JOIN LATERAL (
             SELECT ord.id
             FROM orders ord
-            LEFT JOIN order_shipment_links osl ON osl.order_row_id = ord.id
+            LEFT JOIN shipment_links osl ON osl.owner_id = ord.id AND osl.owner_type = 'ORDER'
             LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
             WHERE (
                 sal.shipment_id IS NOT NULL
@@ -167,7 +186,7 @@ export async function fetchPackerLogRows(
                 ord.id DESC
             LIMIT 1
         ) order_match ON TRUE
-        LEFT JOIN orders o ON o.id = order_match.id
+        LEFT JOIN orders o ON o.id = order_match.id AND o.organization_id = sal.organization_id
         LEFT JOIN LATERAL (
             SELECT wa.assigned_tech_id
             FROM work_assignments wa
@@ -201,7 +220,7 @@ export async function fetchPackerLogRows(
         LIMIT $${limitIdx} OFFSET $${offsetIdx}
     )`;
 
-  const query = `
+  const legacyQuery = `
     ${pageCte}
     SELECT
         sal.id,
@@ -328,7 +347,7 @@ export async function fetchPackerLogRows(
     LEFT JOIN LATERAL (
         SELECT ord.id
         FROM orders ord
-        LEFT JOIN order_shipment_links osl ON osl.order_row_id = ord.id
+        LEFT JOIN shipment_links osl ON osl.owner_id = ord.id AND osl.owner_type = 'ORDER'
         LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
         WHERE (
             sal.shipment_id IS NOT NULL
@@ -354,7 +373,7 @@ export async function fetchPackerLogRows(
             ord.id DESC
         LIMIT 1
     ) order_match ON TRUE
-    LEFT JOIN orders o ON o.id = order_match.id
+    LEFT JOIN orders o ON o.id = order_match.id AND o.organization_id = sal.organization_id
     LEFT JOIN orders_exceptions oe ON oe.id = sal.orders_exception_id
     LEFT JOIN LATERAL (
         SELECT COALESCE(
@@ -363,8 +382,10 @@ export async function fetchPackerLogRows(
         ) AS ecwid_product_title
         FROM sku_platform_ids sp_e
         LEFT JOIN sku_catalog sc_e ON sc_e.id = sp_e.sku_catalog_id
+          AND sc_e.organization_id = sal.organization_id
         WHERE sp_e.platform = 'ecwid'
           AND sp_e.is_active = true
+          AND sp_e.organization_id = sal.organization_id
           AND EXISTS (
             SELECT 1
             FROM UNNEST(ARRAY[
@@ -398,7 +419,8 @@ export async function fetchPackerLogRows(
     LEFT JOIN LATERAL (
         SELECT sc.product_title AS catalog_product_title
         FROM sku_catalog sc
-        WHERE EXISTS (
+        WHERE sc.organization_id = sal.organization_id
+          AND EXISTS (
             SELECT 1
             FROM UNNEST(ARRAY[
                 NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
@@ -433,7 +455,8 @@ export async function fetchPackerLogRows(
     LEFT JOIN LATERAL (
         SELECT ss.product_title AS stock_product_title
         FROM sku_stock ss
-        WHERE EXISTS (
+        WHERE ss.organization_id = sal.organization_id
+          AND EXISTS (
             SELECT 1
             FROM UNNEST(ARRAY[
                 NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
@@ -492,10 +515,10 @@ export async function fetchPackerLogRows(
             stn_link.tracking_number_raw,
             COALESCE(osl_link.is_primary, false) AS is_primary,
             CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-          FROM order_shipment_links osl_link
+          FROM shipment_links osl_link
           LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-          WHERE o.id IS NOT NULL
-            AND osl_link.order_row_id = o.id
+          WHERE osl_link.owner_type = 'ORDER' AND o.id IS NOT NULL
+            AND osl_link.owner_id = o.id
 
           UNION
 
@@ -552,6 +575,184 @@ export async function fetchPackerLogRows(
     ORDER BY sal.created_at DESC NULLS LAST
   `;
 
+  // Read-model path (PACKER_LOG_ENRICHMENT_READ): the 6 non-indexable per-row
+  // laterals (sku_lookup / order_match / ecwid / sku_catalog / sku_stock /
+  // order_trackings) are replaced by a single 1:1 join to the precomputed
+  // `packer_log_enrichment` projection. orders is re-joined cheaply on
+  // enr.order_row_id so every live o.* column (status_history, notes, condition,
+  // quantity) and the volatile stn carrier status / staff / deadline / scan-out
+  // laterals stay exactly as fresh as before. Column shape is identical to the
+  // legacy query (same aliases), so the route + client are unaffected. When the
+  // projection row is missing (e.g. packs after the backfill cutoff), fall back
+  // to the legacy order_match lateral so titles still resolve.
+  const enrichedQuery = `
+    ${pageCte}
+    SELECT
+        sal.id,
+        sal.packer_log_id AS packer_log_id,
+        to_char(sal.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
+        sal.scan_ref,
+        COALESCE(stn.tracking_number_raw, oe.shipping_tracking_number, sal.scan_ref, sal.fnsku) AS shipping_tracking_number,
+        oe.id AS orders_exception_id,
+        oe.exception_reason,
+        oe.status AS exception_status,
+        CASE WHEN oe.id IS NOT NULL AND o.id IS NULL THEN 'exception' ELSE 'order' END AS row_source,
+        sal.staff_id AS packed_by,
+        packed_staff.name AS packed_by_name,
+        COALESCE(pl.tracking_type,
+                 CASE sal.activity_type
+                   WHEN 'FBA_READY' THEN 'FNSKU'
+                   WHEN 'PACK_COMPLETED' THEN 'ORDERS'
+                   ELSE 'SCAN'
+                 END) AS tracking_type,
+        NULL::json AS packer_photos_url,
+        o.id AS order_row_id,
+        o.shipment_id,
+        o.order_id,
+        COALESCE(o.account_source, CASE WHEN sal.fnsku IS NOT NULL THEN 'fba' ELSE null END) AS account_source,
+        COALESCE(enr.tracking_numbers, '[]'::jsonb) AS tracking_numbers,
+        COALESCE(enr.tracking_number_rows, '[]'::jsonb) AS tracking_number_rows,
+        COALESCE(
+            ff.product_title,
+            o.product_title,
+            enr.external_product_title,
+            NULLIF(BTRIM(o.item_number), ''),
+            NULLIF(BTRIM(o.sku), '')
+        ) AS product_title,
+        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
+        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,
+        o.item_number,
+        NULLIF(TRIM(COALESCE(o.condition, '')), '') AS condition,
+        COALESCE(o.quantity, sal.metadata->>'quantity') AS quantity,
+        COALESCE(
+            o.sku,
+            ff.sku,
+            sal.metadata->>'sku',
+            CASE WHEN POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                 THEN TRIM(split_part(sal.scan_ref, ':', 1))
+                 ELSE NULL
+            END
+        ) AS sku,
+        COALESCE(o.notes, '') AS notes,
+        COALESCE(o.status_history, '[]'::jsonb) AS status_history,
+        COALESCE(
+            NULLIF(TRIM(COALESCE(test_data.serial_number, '')), ''),
+            NULLIF(TRIM(COALESCE(enr.sku_table_serial, '')), '')
+        ) AS serial_number,
+        enr.sku_table_id AS sku_table_id,
+        wa_t.assigned_tech_id AS tester_id,
+        test_data.tested_by,
+        test_data.test_date_time,
+        tested_staff.name AS tested_by_name,
+        tester_staff.name AS tester_name,
+        sal.fnsku,
+        (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint AS fnsku_log_id,
+        stn.carrier                            AS carrier,
+        stn.latest_status_code                 AS latest_status_code,
+        stn.latest_status_label                AS latest_status_label,
+        stn.latest_status_description          AS latest_status_description,
+        stn.latest_status_category             AS latest_status_category,
+        stn.latest_event_at::text              AS latest_event_at,
+        stn.has_exception                      AS has_exception,
+        stn.exception_at::text                 AS exception_at,
+        stn.is_terminal                        AS is_terminal,
+        to_char(ship_out.ship_confirmed_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_confirmed_at,
+        ship_out.shipped_out_by                AS shipped_out_by,
+        shipped_out_staff.name                 AS shipped_out_by_name
+    FROM station_activity_logs sal
+    JOIN page ON page.id = sal.id
+    LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
+    LEFT JOIN packer_log_enrichment enr ON enr.sal_id = sal.id
+    LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
+    LEFT JOIN LATERAL (
+        SELECT ord.id
+        FROM orders ord
+        LEFT JOIN shipment_links osl ON osl.owner_id = ord.id AND osl.owner_type = 'ORDER'
+        LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
+        WHERE ord.organization_id = sal.organization_id
+          AND (
+            sal.shipment_id IS NOT NULL
+            AND (
+              osl.shipment_id = sal.shipment_id
+              OR ord.shipment_id = sal.shipment_id
+            )
+        ) OR (
+            COALESCE(stn.tracking_number_raw, sal.scan_ref, '') <> ''
+            AND ord_stn.tracking_number_raw IS NOT NULL
+            AND ord_stn.tracking_number_raw != ''
+            AND RIGHT(regexp_replace(UPPER(ord_stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
+                RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, sal.scan_ref, '')), '[^A-Z0-9]', '', 'g'), 18)
+        )
+        ORDER BY
+            CASE
+              WHEN sal.shipment_id IS NOT NULL AND osl.shipment_id = sal.shipment_id THEN 0
+              WHEN sal.shipment_id IS NOT NULL AND ord.shipment_id = sal.shipment_id THEN 1
+              ELSE 2
+            END,
+            CASE WHEN COALESCE(osl.is_primary, false) THEN 0 ELSE 1 END,
+            ord.created_at DESC NULLS LAST,
+            ord.id DESC
+        LIMIT 1
+    ) order_match_fallback ON enr.sal_id IS NULL
+    LEFT JOIN LATERAL (
+        SELECT
+            MAX(so.created_at) AS ship_confirmed_at,
+            (ARRAY_AGG(so.staff_id ORDER BY so.created_at DESC))[1] AS shipped_out_by
+        FROM station_activity_logs so
+        WHERE so.activity_type = 'SHIP_CONFIRM'
+          AND sal.shipment_id IS NOT NULL
+          AND so.shipment_id = sal.shipment_id
+    ) ship_out ON TRUE
+    LEFT JOIN staff shipped_out_staff ON shipped_out_staff.id = ship_out.shipped_out_by
+    LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
+    LEFT JOIN staff packed_staff ON packed_staff.id = sal.staff_id
+    LEFT JOIN orders o ON o.id = COALESCE(enr.order_row_id, order_match_fallback.id)
+      AND o.organization_id = sal.organization_id
+    LEFT JOIN orders_exceptions oe ON oe.id = sal.orders_exception_id
+    LEFT JOIN LATERAL (
+        SELECT wa.deadline_at
+        FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id = o.id
+          AND wa.work_type = 'TEST'
+        ORDER BY
+          CASE wa.status
+            WHEN 'IN_PROGRESS' THEN 1
+            WHEN 'ASSIGNED' THEN 2
+            WHEN 'OPEN' THEN 3
+            WHEN 'DONE' THEN 4
+            ELSE 5
+          END,
+          wa.updated_at DESC,
+          wa.id DESC
+        LIMIT 1
+    ) wa_deadline ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT wa.assigned_tech_id
+        FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id = o.id
+          AND wa.work_type = 'TEST'
+          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
+        ORDER BY wa.created_at DESC, wa.id DESC
+        LIMIT 1
+    ) wa_t ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT
+            COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
+            MIN(tsn.tested_by)::int AS tested_by,
+            MIN(tsn.created_at)::text AS test_date_time
+        FROM tech_serial_numbers tsn
+        WHERE o.shipment_id IS NOT NULL
+          AND tsn.shipment_id = o.shipment_id
+    ) test_data ON TRUE
+    LEFT JOIN staff tested_staff ON tested_staff.id = test_data.tested_by
+    LEFT JOIN staff tester_staff ON tester_staff.id = wa_t.assigned_tech_id
+    ORDER BY sal.created_at DESC NULLS LAST
+  `;
+
+  const query = isPackerLogEnrichmentRead() ? enrichedQuery : legacyQuery;
+
   const result = await queryWithRetry(
     () => pool.query(query, params),
     { retries: 3, delayMs: 1000 },
@@ -581,8 +782,9 @@ export async function fetchPackerLogRows(
           WHERE l.entity_type = 'PACKER_LOG'
             AND l.link_role = 'primary'
             AND l.entity_id = ANY($1)
+            AND l.organization_id = $2
           GROUP BY l.entity_id`,
-        [packerLogIds],
+        [packerLogIds, orgId],
       );
       for (const row of photosResult.rows) {
         photosMap[row.entity_id] = row.photos;
@@ -600,6 +802,30 @@ export async function fetchPackerLogRows(
   // Defer the cache write so it never blocks TTFB. Safe in both Route Handlers
   // and Server Components on Next 16.
   after(() => setCachedJson(CACHE_NAMESPACE, cacheLookup, rows, cacheTTL, CACHE_TAGS));
+
+  // Heal missing projection rows in the background so subsequent reads stay on
+  // the fast path (order_match_fallback above is the correctness safety net).
+  if (isPackerLogEnrichmentRead() && rows.length > 0) {
+    const salIds = rows.map((r: { id?: unknown }) => Number(r.id)).filter((id) => Number.isFinite(id));
+    after(() => {
+      pool.query<{ id: number }>(
+        `SELECT sal.id
+           FROM station_activity_logs sal
+           LEFT JOIN packer_log_enrichment enr ON enr.sal_id = sal.id
+          WHERE sal.id = ANY($1::int[])
+            AND enr.sal_id IS NULL`,
+        [salIds],
+      )
+        .then((missing) => {
+          const ids = missing.rows.map((r) => r.id);
+          if (ids.length === 0) return;
+          return computePackerLogEnrichment(pool, ids);
+        })
+        .catch((error) => {
+          console.warn('[packer-logs-week] deferred enrichment backfill failed', error);
+        });
+    });
+  }
 
   return { rows, cacheTTL, cacheHit: false };
 }

@@ -44,7 +44,7 @@ export function ConditionText({
   const conditionColor = getConditionColor(condition);
 
   return (
-    <h4 className={`text-base font-black text-gray-900 leading-tight ${className}`.trim()}>
+    <h4 className={`text-base font-black text-text-default leading-tight ${className}`.trim()}>
       {quantity >= 2 && <span className="text-yellow-500">x{quantity} </span>}
       <span className={conditionColor}>{conditionLabel}</span>
       {productTitle && ` ${productTitle}`}

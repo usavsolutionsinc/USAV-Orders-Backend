@@ -98,7 +98,7 @@ export function RenameFolderModal({ open, onClose, oldPath, fileCount }: RenameF
           className={inputClass}
           autoFocus
         />
-        <p className="mt-1 text-micro text-zinc-400">
+        <p className="mt-1 text-micro text-text-faint">
           Use “/” to nest. Change just the last segment to rename in place, or change a parent to move the folder.
         </p>
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { formatDateTimePST } from '@/utils/date';
 
@@ -162,37 +163,38 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
     <RightPaneOverlay
       open={open}
       onClose={onClose}
-      align="right"
-      anchor="pane"
-      width={460}
+      align="center"
+      resizable
+      storageKey="receiving-audit-modal-size"
+      minWidth={420}
+      minHeight={420}
+      className="-mt-8 h-[min(86vh,44rem)] w-[min(94vw,40rem)]"
       aria-labelledby="receiving-audit-title"
     >
-      <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+      <div className="flex items-center justify-between border-b border-border-soft px-4 py-3">
         <div className="min-w-0">
           <p
             id="receiving-audit-title"
-            className="text-micro font-black uppercase tracking-[0.16em] text-slate-500"
+            className="text-micro font-black uppercase tracking-[0.16em] text-text-soft"
           >
             Audit log
           </p>
-          <p className="truncate text-xs font-semibold text-slate-900">{cartonLabel}</p>
+          <p className="truncate text-xs font-semibold text-text-default">{cartonLabel}</p>
         </div>
-        <button
-          type="button"
+        <IconButton
           onClick={onClose}
-          aria-label="Close audit log"
-          className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          ariaLabel="Close audit log"
+          icon={<X className="h-4 w-4" />}
+          className="rounded p-1 text-text-faint hover:bg-surface-sunken hover:text-text-muted"
+        />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {loading ? (
-          <p className="py-6 text-center text-caption text-slate-500">Loading activity…</p>
+          <p className="py-6 text-center text-caption text-text-soft">Loading activity…</p>
         ) : error ? (
           <p className="py-6 text-center text-caption font-medium text-rose-600">{error}</p>
         ) : events.length === 0 ? (
-          <p className="py-6 text-center text-caption text-slate-500">No activity recorded yet.</p>
+          <p className="py-6 text-center text-caption text-text-soft">No activity recorded yet.</p>
         ) : (
           <ul className="space-y-2">
             {groups.map((g) =>
@@ -212,32 +214,32 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
 function EventRow({ ev }: { ev: ReceivingAuditEvent }) {
   return (
     <li className="flex items-start gap-2 text-caption">
-      <span className="mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden />
+      <span className="mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-border-emphasis" aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="font-bold text-slate-900">
+        <p className="font-bold text-text-default">
           {ev.event_type.replace(/_/g, ' ')}
           {ev.bin_name ? (
-            <span className="ml-1 font-semibold text-slate-600">→ {ev.bin_name}</span>
+            <span className="ml-1 font-semibold text-text-muted">→ {ev.bin_name}</span>
           ) : null}
           {ev.prev_bin_name && ev.bin_name && ev.prev_bin_name !== ev.bin_name ? (
-            <span className="ml-1 font-normal text-slate-500">
+            <span className="ml-1 font-normal text-text-soft">
               ({ev.prev_bin_name} → {ev.bin_name})
             </span>
           ) : null}
           {ev.serial_number ? (
-            <span className="ml-1 font-mono text-slate-500">· {ev.serial_number}</span>
+            <span className="ml-1 font-mono text-text-soft">· {ev.serial_number}</span>
           ) : null}
         </p>
-        <p className="text-slate-500">
+        <p className="text-text-soft">
           {ev.actor_name || 'Unknown'} · {formatTimelineAgo(ev.occurred_at)} ago
           {ev.station ? ` · ${ev.station}` : ''}
           {ev.receiving_line_id != null ? ` · line ${ev.receiving_line_id}` : ''}
         </p>
-        <p className="text-micro tabular-nums text-slate-400">
+        <p className="text-micro tabular-nums text-text-faint">
           {formatDateTimePST(ev.occurred_at)}
         </p>
         {ev.notes ? (
-          <p className="mt-0.5 italic text-slate-600">{ev.notes}</p>
+          <p className="mt-0.5 italic text-text-muted">{ev.notes}</p>
         ) : null}
       </div>
     </li>
@@ -255,33 +257,33 @@ function SerialBatchRow({
   const label = `Received ${events.length} ${allSerialed ? 'serials' : 'units'}`;
   return (
     <li className="flex items-start gap-2 text-caption">
-      <span className="mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden />
+      <span className="mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-border-emphasis" aria-hidden />
       <div className="min-w-0 flex-1">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1 text-left font-bold text-slate-900 hover:text-slate-700"
+          className="ds-raw-button flex items-center gap-1 text-left font-bold text-text-default hover:text-text-muted"
           aria-expanded={expanded}
         >
           <span>{label}</span>
-          <span className="text-micro font-normal text-slate-400">
+          <span className="text-micro font-normal text-text-faint">
             {expanded ? '▾ hide' : '▸ show'}
           </span>
         </button>
-        <p className="text-slate-500">
+        <p className="text-text-soft">
           {latest.actor_name || 'Unknown'} · {formatTimelineAgo(latest.occurred_at)} ago
           {latest.station ? ` · ${latest.station}` : ''}
           {latest.receiving_line_id != null ? ` · line ${latest.receiving_line_id}` : ''}
         </p>
-        <p className="text-micro tabular-nums text-slate-400">
+        <p className="text-micro tabular-nums text-text-faint">
           {formatDateTimePST(latest.occurred_at)}
         </p>
         {expanded ? (
-          <ul className="mt-1 space-y-0.5 border-l border-slate-200 pl-2">
+          <ul className="mt-1 space-y-0.5 border-l border-border-soft pl-2">
             {events.map((ev) => (
-              <li key={ev.id} className="font-mono text-micro text-slate-600">
+              <li key={ev.id} className="font-mono text-micro text-text-muted">
                 {ev.serial_number ?? 'unit (no serial)'}
-                <span className="ml-1 tabular-nums text-slate-400">
+                <span className="ml-1 tabular-nums text-text-faint">
                   {formatTimelineAgo(ev.occurred_at)} ago
                 </span>
               </li>

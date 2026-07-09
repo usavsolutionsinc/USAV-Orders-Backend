@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
-import { AlertTriangle, Check, Loader2, Mail, RefreshCw, X } from '@/components/Icons';
+import { AlertTriangle, Check, Mail, RefreshCw, X } from '@/components/Icons';
 import { PoMailboxPreviewPanel } from '@/components/po-gmail/PoMailboxPreviewPanel';
+import { Button } from '@/design-system/primitives';
 
 interface PoMailboxStatus {
   connected: boolean;
@@ -77,7 +78,7 @@ export function PoMailboxTab() {
 
   if (loading && !status) {
     return (
-      <div className="h-full overflow-auto bg-gray-50">
+      <div className="h-full overflow-auto bg-surface-canvas">
         <div className="mx-auto max-w-3xl space-y-4 p-6">
           <SkeletonCard />
         </div>
@@ -86,24 +87,24 @@ export function PoMailboxTab() {
   }
 
   return (
-    <div className="h-full overflow-auto bg-gray-50">
+    <div className="h-full overflow-auto bg-surface-canvas">
       <div className="mx-auto max-w-3xl space-y-6 p-6">
       <header className="flex items-start gap-3">
         <div className="rounded-md bg-blue-50 p-2 text-blue-600">
           <Mail className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">PO Mailbox</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold tracking-tight text-text-default">PO Mailbox</h1>
+          <p className="mt-0.5 text-sm text-text-soft">
             Dedicated Gmail account scanned for purchase-order emails. Connect once; refresh tokens
             are stored server-side and rotated automatically.
           </p>
         </div>
       </header>
 
-      <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-5 py-3">
-          <h2 className="text-sm font-medium text-gray-900">Connection</h2>
+      <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+        <div className="border-b border-border-hairline px-5 py-3">
+          <h2 className="text-sm font-medium text-text-default">Connection</h2>
         </div>
 
         <div className="space-y-4 px-5 py-4">
@@ -115,7 +116,7 @@ export function PoMailboxTab() {
                 detail={status.accountEmail ?? '(account email unavailable)'}
               />
               {status.connectedAt && (
-                <p className="text-label text-gray-500">
+                <p className="text-label text-text-soft">
                   Connected {new Date(status.connectedAt).toLocaleString()}
                 </p>
               )}
@@ -130,56 +131,47 @@ export function PoMailboxTab() {
               )}
 
               <div className="flex flex-wrap gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleConnect}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <RefreshCw className="h-4 w-4" />
+                <Button variant="secondary" icon={<RefreshCw />} onClick={handleConnect}>
                   Reconnect
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDisconnect}
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<X />}
+                  loading={disconnecting}
                   disabled={disconnecting}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleDisconnect}
+                  className="border border-red-200 text-red-600 hover:bg-red-50"
                 >
-                  {disconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                   Disconnect
-                </button>
+                </Button>
               </div>
             </>
           ) : (
             <>
               <StatusRow ok={false} label="Not connected" detail="No mailbox has been authorized yet." />
-              <button
-                type="button"
-                onClick={handleConnect}
-                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                <Mail className="h-4 w-4" />
+              <Button variant="primary" icon={<Mail />} onClick={handleConnect}>
                 Connect PO mailbox
-              </button>
-              <p className="text-label text-gray-500">
+              </Button>
+              <p className="text-label text-text-soft">
                 You&apos;ll be redirected to Google to sign in as the dedicated PO email account and approve
-                the <code className="rounded bg-gray-100 px-1 py-0.5">gmail.modify</code> scope.
+                the <code className="rounded bg-surface-sunken px-1 py-0.5">gmail.modify</code> scope.
               </p>
             </>
           )}
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-5 py-3">
-          <h2 className="text-sm font-medium text-gray-900">Scope &amp; storage</h2>
+      <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+        <div className="border-b border-border-hairline px-5 py-3">
+          <h2 className="text-sm font-medium text-text-default">Scope &amp; storage</h2>
         </div>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-2 px-5 py-4 text-sm sm:grid-cols-[140px_1fr]">
-          <dt className="text-gray-500">Scope granted</dt>
-          <dd className="text-gray-900 break-all">{status?.scope ?? '—'}</dd>
-          <dt className="text-gray-500">Refresh token</dt>
-          <dd className="text-gray-900">Stored in <code className="rounded bg-gray-100 px-1 py-0.5">google_oauth_tokens</code> (provider=&apos;po_gmail&apos;)</dd>
-          <dt className="text-gray-500">Client credentials</dt>
-          <dd className="text-gray-900">Read from <code className="rounded bg-gray-100 px-1 py-0.5">PO_GMAIL_CLIENT_ID</code> / <code className="rounded bg-gray-100 px-1 py-0.5">PO_GMAIL_CLIENT_SECRET</code> env vars</dd>
+          <dt className="text-text-soft">Scope granted</dt>
+          <dd className="text-text-default break-all">{status?.scope ?? '—'}</dd>
+          <dt className="text-text-soft">Refresh token</dt>
+          <dd className="text-text-default">Stored in <code className="rounded bg-surface-sunken px-1 py-0.5">google_oauth_tokens</code> (provider=&apos;po_gmail&apos;)</dd>
+          <dt className="text-text-soft">Client credentials</dt>
+          <dd className="text-text-default">Read from <code className="rounded bg-surface-sunken px-1 py-0.5">PO_GMAIL_CLIENT_ID</code> / <code className="rounded bg-surface-sunken px-1 py-0.5">PO_GMAIL_CLIENT_SECRET</code> env vars</dd>
         </dl>
       </section>
 
@@ -194,14 +186,14 @@ function StatusRow({ ok, label, detail }: { ok: boolean; label: string; detail: 
     <div className="flex items-start gap-2">
       <span
         className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full ${
-          ok ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+          ok ? 'bg-emerald-100 text-emerald-700' : 'bg-surface-sunken text-text-soft'
         }`}
       >
         {ok ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
       </span>
       <div className="min-w-0">
-        <div className="text-sm font-medium text-gray-900">{label}</div>
-        <div className="truncate text-label text-gray-500">{detail}</div>
+        <div className="text-sm font-medium text-text-default">{label}</div>
+        <div className="truncate text-label text-text-soft">{detail}</div>
       </div>
     </div>
   );

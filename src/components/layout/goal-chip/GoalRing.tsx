@@ -18,13 +18,14 @@ export function GoalRing({ percent, color, size = 26 }: { percent: number; color
           fill="none"
           strokeLinecap="round"
           strokeDasharray={c}
+          initial={{ strokeDashoffset: c }}
           animate={{ strokeDashoffset: c * (1 - clamped / 100) }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         <span
-          className="font-extrabold tabular-nums tracking-tight text-gray-900"
+          className="font-extrabold tabular-nums tracking-tight text-text-default"
           style={{ fontSize: Math.max(7, size * 0.3) }}
         >
           {clamped}

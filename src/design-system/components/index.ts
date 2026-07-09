@@ -29,4 +29,5 @@ export * from './MobileSelectionBar';
 export * from './FilterRefinementBar';
 export * from './VerticalSplitStack';
 export * from './StaffFilter';
+export * from './SearchableSelectField';
 export * from './DataTable';

@@ -21,6 +21,8 @@ import {
   PaneHeaderLabel,
 } from '@/components/ui/pane-header';
 import { receivingIdentityBandClass } from '@/components/layout/header-shell';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { formatCentsToDollars } from '@/lib/square/client';
 import { SquareProductSearchPopover } from './SquareProductSearchPopover';
 import {
@@ -63,9 +65,9 @@ export function SalesEditPanel() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-gray-50">
+    <div className="flex h-full w-full flex-col bg-surface-canvas">
       <PaneHeader
-        className={`z-20 border-b-0 bg-white backdrop-blur-none ${receivingIdentityBandClass}`}
+        className={`z-20 border-b-0 bg-surface-card backdrop-blur-none ${receivingIdentityBandClass}`}
         rowClassName="w-full px-3"
         leftSlot={
           <>
@@ -79,7 +81,7 @@ export function SalesEditPanel() {
                 <>
                   Sale
                   {selected && cart.length > 1 ? (
-                    <span className="ml-1 text-gray-500">
+                    <span className="ml-1 text-text-soft">
                       · Item {index + 1} of {cart.length}
                     </span>
                   ) : null}
@@ -94,28 +96,27 @@ export function SalesEditPanel() {
           <>
             {cart.length > 1 ? (
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  disabled={!canPrev}
-                  aria-label="Previous item"
-                  title="Previous item"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={!canNext}
-                  aria-label="Next item"
-                  title="Next item"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </button>
+                <HoverTooltip label="Previous item" asChild>
+                  <IconButton
+                    onClick={goPrev}
+                    disabled={!canPrev}
+                    ariaLabel="Previous item"
+                    icon={<ChevronUp className="h-4 w-4" />}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-soft hover:bg-surface-sunken hover:text-text-default disabled:opacity-40"
+                  />
+                </HoverTooltip>
+                <HoverTooltip label="Next item" asChild>
+                  <IconButton
+                    onClick={goNext}
+                    disabled={!canNext}
+                    ariaLabel="Next item"
+                    icon={<ChevronDown className="h-4 w-4" />}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-soft hover:bg-surface-sunken hover:text-text-default disabled:opacity-40"
+                  />
+                </HoverTooltip>
               </div>
             ) : null}
+            {/* ds-raw-button: solid emerald CTA — no green Button variant (primary=blue, brand=navy); className bg override is unreliable vs the variant's own bg */}
             <button
               type="button"
               onClick={() => setAddOpen(true)}
@@ -157,13 +158,14 @@ function SalesEmptyState({ onAdd }: { onAdd: () => void }) {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
           <ShoppingCart className="h-8 w-8 text-emerald-300" />
         </div>
-        <p className="text-label font-black uppercase tracking-tight text-gray-700">
+        <p className="text-label font-black uppercase tracking-tight text-text-muted">
           No items yet
         </p>
-        <p className="mt-1 text-micro text-gray-400">
+        <p className="mt-1 text-micro text-text-faint">
           Add products to start a walk-in sale. Each item lands in the sidebar
           and opens here for editing.
         </p>
+        {/* ds-raw-button: solid emerald CTA — no green Button variant (primary=blue, brand=navy); className bg override is unreliable vs the variant's own bg */}
         <button
           type="button"
           onClick={onAdd}
@@ -185,33 +187,32 @@ function SalesLineEditor({ line }: { line: SalesCartLine }) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5"
+      className="space-y-4 rounded-2xl border border-border-soft bg-surface-card p-4 sm:p-5"
     >
       {/* Image + remove */}
       <div
-        className="relative flex w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50"
+        className="relative flex w-full items-center justify-center overflow-hidden rounded-xl bg-surface-canvas"
         style={{ height: 280 }}
       >
         {line.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={line.image_url} alt="" className="h-full w-full object-contain" />
         ) : (
-          <Package className="h-14 w-14 text-gray-200" />
+          <Package className="h-14 w-14 text-text-faint" />
         )}
-        <button
-          type="button"
-          onClick={() => removeLine(line.key)}
-          aria-label="Remove item"
-          title="Remove item"
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-400 shadow-sm transition-colors hover:bg-rose-50 hover:text-rose-600"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <HoverTooltip label="Remove item" asChild>
+          <IconButton
+            onClick={() => removeLine(line.key)}
+            ariaLabel="Remove item"
+            icon={<X className="h-4 w-4" />}
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface-card/90 text-text-faint shadow-sm hover:bg-rose-50 hover:text-rose-600"
+          />
+        </HoverTooltip>
       </div>
 
       {/* Title + SKU */}
       <div>
-        <h2 className="text-base font-black leading-snug text-gray-900">
+        <h2 className="text-base font-black leading-snug text-text-default">
           {line.product_title}
         </h2>
         <p className="mt-1 font-mono text-micro font-black uppercase text-emerald-600">
@@ -220,9 +221,9 @@ function SalesLineEditor({ line }: { line: SalesCartLine }) {
       </div>
 
       {/* Price + Qty */}
-      <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
+      <div className="grid grid-cols-2 gap-3 border-t border-border-hairline pt-4">
         <div>
-          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
             {line.isManual ? 'Unit Price' : 'Unit Price (Square)'}
           </label>
           {line.isManual ? (
@@ -247,17 +248,17 @@ function SalesLineEditor({ line }: { line: SalesCartLine }) {
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                 }}
                 placeholder="0.00"
-                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-6 pr-3 text-caption font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none"
+                className="h-9 w-full rounded-lg border border-border-soft bg-surface-card pl-6 pr-3 text-caption font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none"
               />
             </div>
           ) : (
-            <div className="flex h-9 items-center rounded-lg border border-gray-100 bg-gray-50 px-3 text-caption font-bold text-emerald-700">
+            <div className="flex h-9 items-center rounded-lg border border-border-hairline bg-surface-canvas px-3 text-caption font-bold text-emerald-700">
               {formatCentsToDollars(line.unitAmount)}
             </div>
           )}
         </div>
         <div>
-          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
             Qty
           </label>
           <input
@@ -272,14 +273,14 @@ function SalesLineEditor({ line }: { line: SalesCartLine }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-caption font-black text-gray-900 focus:border-emerald-500 focus:outline-none"
+            className="h-9 w-full rounded-lg border border-border-soft bg-surface-card px-3 text-center text-caption font-black text-text-default focus:border-emerald-500 focus:outline-none"
           />
         </div>
       </div>
 
       {/* Line total */}
-      <div className="flex items-center justify-between border-t border-gray-100 pt-4">
-        <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500">
+      <div className="flex items-center justify-between border-t border-border-hairline pt-4">
+        <span className="text-eyebrow font-black uppercase tracking-wider text-text-soft">
           Line Total
         </span>
         <span className="text-base font-black text-emerald-600">

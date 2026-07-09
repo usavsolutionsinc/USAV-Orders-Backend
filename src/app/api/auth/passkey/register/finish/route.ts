@@ -17,6 +17,8 @@ import {
   PASSKEY_CHALLENGE_COOKIE,
   verifyRegistration,
 } from '@/lib/auth/webauthn';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { loadEnrollment } from '@/lib/auth/enrollment';
 import { audit } from '@/lib/auth/audit';
 import type { RegistrationResponseJSON } from '@simplewebauthn/types';
 
@@ -35,9 +37,27 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const response = (body as { response?: unknown }).response as RegistrationResponseJSON | undefined;
     const deviceLabel = ((body as { deviceLabel?: unknown }).deviceLabel ?? null) as string | null;
+    const enrollmentToken = (body as { enrollmentToken?: unknown }).enrollmentToken;
 
     if (!response) {
       return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
+    }
+
+    // Re-derive the registering staff AUTHORITATIVELY — never from the cookie.
+    // Mirrors /register/begin: an enrollment token (validated server-side) or
+    // the live session. A forged challenge cookie therefore can't bind a
+    // credential to anyone but the caller's own resolved identity.
+    let staffId: number;
+    if (typeof enrollmentToken === 'string' && enrollmentToken) {
+      const enr = await loadEnrollment(enrollmentToken);
+      if (!enr) {
+        return NextResponse.json({ error: 'INVALID_ENROLLMENT' }, { status: 404 });
+      }
+      staffId = enr.staffId;
+    } else {
+      const me = await getCurrentUser();
+      if (!me) return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+      staffId = me.staffId;
     }
 
     const cookie = req.cookies.get(PASSKEY_CHALLENGE_COOKIE)?.value;
@@ -45,14 +65,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'CHALLENGE_MISSING' }, { status: 400 });
     }
     let challenge: string;
-    let staffId: number;
     try {
       const decoded = JSON.parse(Buffer.from(cookie, 'base64url').toString('utf8')) as {
         challenge: string;
-        staffId: number;
       };
       challenge = decoded.challenge;
-      staffId = decoded.staffId;
+      if (!challenge) throw new Error('no challenge');
     } catch {
       return NextResponse.json({ error: 'CHALLENGE_INVALID' }, { status: 400 });
     }

@@ -19,6 +19,7 @@
  *       platform_ids: [{ platform, platform_sku, platform_item_id, account_name }],
  *       order_id,          // most recent Ecwid order number
  *       order_date,        // ISO ts of that order
+ *       is_repair_service, // true when SKU ends in `-RS`
  *     }]
  *   }
  *
@@ -78,6 +79,7 @@ interface RepairCandidate {
   order_date: string;
   /** Ecwid product page URL, when derivable. Saved as the carton's listing_url when linking. */
   product_url: string | null;
+  is_repair_service: boolean;
 }
 
 const DEFAULT_STOREFRONT = 'https://usavshop.com';
@@ -172,6 +174,13 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     1,
     Math.min(100, Number(url.searchParams.get('limit')) || DEFAULT_LIMIT),
   );
+  // When set, RELAX the -RS-only filter to also include normal orders, so a
+  // carton can be linked to any recent Ecwid order — not just repair-service
+  // (-RS) SKUs. Used by the triage Smart-Matching "Link repair service" list.
+  // Default (false) keeps the existing unbox popover scoped to -RS only.
+  const includeNormal = ['1', 'true', 'yes'].includes(
+    (url.searchParams.get('include_normal') ?? '').toLowerCase(),
+  );
 
   let storeId: string;
   let token: string;
@@ -237,7 +246,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const items = Array.isArray(order.items) ? order.items : [];
     for (const item of items) {
       const sku = String(item.sku || '').trim();
-      if (!sku || !isRepairServiceSku(sku)) continue;
+      if (!sku) continue;
+      // -RS-only by default; relaxed to all SKUs when include_normal is set.
+      if (!includeNormal && !isRepairServiceSku(sku)) continue;
       const upper = sku.toUpperCase();
       if (bySku.has(upper)) continue;
       bySku.set(upper, {
@@ -320,6 +331,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         order_id: bucket.order_id,
         order_date: bucket.order_date,
         product_url: bucket.product_url,
+        is_repair_service: isRepairServiceSku(bucket.sku),
       });
     } else {
       // SKU exists in Ecwid orders but has no sku_platform_ids row — surface
@@ -338,6 +350,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         order_id: bucket.order_id,
         order_date: bucket.order_date,
         product_url: bucket.product_url,
+        is_repair_service: isRepairServiceSku(bucket.sku),
       });
     }
   }

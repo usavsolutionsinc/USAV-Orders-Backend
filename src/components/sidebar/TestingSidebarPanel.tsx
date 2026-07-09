@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
-import { Barcode, ClipboardList, Hash, MapPin, Package } from '@/components/Icons';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { Barcode, Hash, MapPin, Package, Pencil } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
 import { TestingRecentRail } from '@/components/sidebar/receiving/TestingRecentRail';
+import { TechRailSearchBar } from '@/components/sidebar/tech/TechRailSearchBar';
+import { useIsMobile } from '@/hooks';
 import {
   resolveTestingScan,
   type ResolvedTestingScan,
@@ -22,6 +23,10 @@ import {
   readSelectLineDetail,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { SerialPreviewStrip, BoxMembershipHint, serialLast4 } from '@/components/receiving/SerialPreviewStrip';
+import { DetailStackRailRegistrar } from '@/components/right-rail/DetailStackRailRegistrar';
+import { BoxWorkbenchPanel } from '@/components/receiving/BoxWorkbenchPanel';
+import { ManifestWorkbenchPanel } from '@/components/receiving/ManifestWorkbenchPanel';
 
 interface Props {
   /**
@@ -29,77 +34,80 @@ interface Props {
    * sidebar tracks selection itself by listening for `receiving-select-line`.
    */
   selectedLineId?: number | null;
-  /** Staff id used to theme the scan bar's input border (matches the shipping bar). */
+  /** Staff id used to theme the scan bar's input border. */
   staffId?: string;
 }
 
-/**
- * Sidebar shell for the Testing sub-page.
- *
- * Strips the welcome/goal/UpNext chrome that {@link StationTesting} owns;
- * the tech is in test-mode, not pull-from-queue mode. Surface is just:
- *
- *   1. Header band — back chevron + "Testing" label + view switcher (icon pills)
- *   2. {@link ReceivingScanBar} — scans receiving carton QRs (PO# / RCV-id) and
- *      printed unit IDs (GS1 Digital Link or raw {SHORTSKU}-{YYWW}-{SEQ6}).
- *   3. {@link ReceivingRecentRail} — same live feed the History table shows.
- *
- * Resolved scans dispatch `receiving-select-line` (the canonical event the
- * receiving workspace listens for), so {@link TechTestingWorkspace} can pick
- * it up via the same listener LineEditPanel uses.
- */
-/** Human label for the toast describing how a scan was matched. */
 function viaFoundLabel(via: string | undefined): string | null {
   if (via === 'serial') return 'serial number';
   if (via === 'po') return 'PO number';
   if (via === 'tracking') return 'tracking number';
   if (via === 'sku') return 'product SKU';
-  return null; // explicit handle / unit-id scans don't need a callout
+  if (via === 'handle') return 'carton handle';
+  return null;
 }
 
-/** Icon + label + chip tint for the real-time "acknowledged as" indicator. */
 function viaAckMeta(via: ResolvedVia): { label: string; Icon: typeof MapPin; chip: string } {
   switch (via) {
     case 'tracking':
       return { label: 'Tracking', Icon: MapPin, chip: 'bg-blue-50 text-blue-700 ring-blue-200' };
     case 'po':
-      return { label: 'PO#', Icon: ClipboardList, chip: 'bg-indigo-50 text-indigo-700 ring-indigo-200' };
+      return { label: 'PO#', Icon: Hash, chip: 'bg-surface-canvas text-text-muted ring-border-soft' };
     case 'sku':
-      return { label: 'SKU', Icon: Hash, chip: 'bg-purple-50 text-purple-700 ring-purple-200' };
+      return { label: 'SKU', Icon: Pencil, chip: 'bg-yellow-50 text-yellow-700 ring-yellow-200' };
     case 'serial':
     case 'unit_id':
       return { label: via === 'unit_id' ? 'Unit ID' : 'Serial', Icon: Barcode, chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200' };
     case 'handle':
     case 'receiving_id':
     default:
-      return { label: 'Carton', Icon: Package, chip: 'bg-slate-50 text-slate-700 ring-slate-200' };
+      return { label: 'Carton', Icon: Package, chip: 'bg-surface-canvas text-text-muted ring-border-soft' };
   }
 }
 
+/** Compact line summary shown in the enriched post-scan ack strip. */
+function lineAckSummary(row: ReceivingLineRow): {
+  title: string;
+  received?: number | null;
+  expected?: number | null;
+} {
+  return {
+    title: row.item_name || row.sku || `Line #${row.id}`,
+    received: row.quantity_received,
+    expected: row.quantity_expected,
+  };
+}
+
+/**
+ * Tech sidebar for Testing mode — receiving scan band plus the To Test /
+ * Tested activity rail. Shares the same shell anatomy as
+ * {@link ShippingSidebarPanel} (scan band, scrollable rail, bottom filter)
+ * but uses testing-specific rails and scan resolution instead of Up Next orders.
+ */
 export function TestingSidebarPanel({
   selectedLineId: selectedLineIdProp,
   staffId,
 }: Props) {
+  const isMobile = useIsMobile();
+  const [railFilter, setRailFilter] = useState('');
   const [scanValue, setScanValue] = useState('');
   const [isResolving, setIsResolving] = useState(false);
-  /** Armed search route — forces the next scan's type. null = auto-detect. */
   const [armedMode, setArmedMode] = useState<ForcedTestingType | null>(null);
-  /** Real-time "acknowledged as" indicator: what the last scan was recognised as. */
-  const [lastAck, setLastAck] = useState<{ via: ResolvedVia; value: string } | null>(null);
-  /** Multi-line carton picker state. Set when a scan returns >1 line. */
+  const [lastAck, setLastAck] = useState<{
+    via: ResolvedVia;
+    value: string;
+    line?: ReturnType<typeof lineAckSummary> | null;
+  } | null>(null);
   const [picker, setPicker] = useState<ResolvedTestingScan & { kind: 'multi' } | null>(null);
-  // Self-track the selection when the parent doesn't pass one down — keeps
-  // the rail highlight in lockstep with whichever line is open in the
-  // workspace without prop drilling through RouteShell. Also caches the
-  // full row so the rail can pin it (visible) even when it's older than
-  // the top `limit` rows (e.g. a localStorage restore of an old line).
+  const [boxPanel, setBoxPanel] = useState<{ id: number; lines: ReceivingLineRow[] } | null>(null);
+  const [manifestPanel, setManifestPanel] = useState<{ ref: string } | null>(null);
   const [internalSelectedRow, setInternalSelectedRow] =
     useState<ReceivingLineRow | null>(null);
   const internalSelectedId = internalSelectedRow?.id ?? null;
   const selectedLineId = selectedLineIdProp ?? internalSelectedId;
 
   useEffect(() => {
-    if (selectedLineIdProp !== undefined) return; // Parent owns selection
+    if (selectedLineIdProp !== undefined) return;
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<ReceivingSelectLineDetail>).detail;
       const { row } = readSelectLineDetail(detail);
@@ -109,69 +117,79 @@ export function TestingSidebarPanel({
     return () => window.removeEventListener('receiving-select-line', handler);
   }, [selectedLineIdProp]);
 
-  // Single concurrent scan guard — second submit while one is in flight is
-  // ignored, mirroring the receiving sidebar's lookup-in-flight counter.
   const inFlightRef = useRef(false);
 
-  const runScan = useCallback(
-    async (rawValue: string, forcedType: ForcedTestingType | null) => {
-      const value = rawValue.trim();
-      if (!value || inFlightRef.current) return;
-      inFlightRef.current = true;
-      setIsResolving(true);
-      try {
-        const result = await resolveTestingScan(value, { forcedType });
-        switch (result.kind) {
-          case 'line': {
-            dispatchSelectLine(result.row);
-            setScanValue('');
-            setArmedMode(null);
-            if (result.via) setLastAck({ via: result.via, value });
-            const label = viaFoundLabel(result.via);
-            if (label) {
-              toast.success(`Found via ${label}`, {
-                description: 'Opened the matching receiving line.',
-              });
-            }
-            break;
+  const runScan = useCallback(async (rawValue: string, forcedType: ForcedTestingType | null) => {
+    const value = rawValue.trim();
+    if (!value || inFlightRef.current) return;
+    inFlightRef.current = true;
+    setIsResolving(true);
+    try {
+      const result = await resolveTestingScan(value, { forcedType });
+      switch (result.kind) {
+        case 'line': {
+          dispatchSelectLine(result.row);
+          setScanValue('');
+          setArmedMode(null);
+          if (result.via) setLastAck({ via: result.via, value, line: lineAckSummary(result.row) });
+          const label = viaFoundLabel(result.via);
+          if (label) {
+            toast.success(`Found via ${label}`, { description: 'Opened the matching receiving line.' });
           }
-          case 'multi': {
-            // Multi-item PO — let the tech pick which line to test.
-            setPicker(result);
-            setArmedMode(null);
-            if (result.via) setLastAck({ via: result.via, value });
-            const label = viaFoundLabel(result.via);
-            if (label) {
-              toast.success(`Found via ${label}`, { description: 'Pick the line to test.' });
-            }
-            break;
-          }
-          case 'not_found': {
-            const what = forcedType === 'po' ? 'PO' : forcedType === 'tracking' ? 'tracking' : forcedType === 'serial' ? 'serial' : 'receiving line';
-            toast.error('Not found', {
-              description: `No ${what} match for "${result.query}".`,
-            });
-            break;
-          }
-          case 'error': {
-            toast.error('Lookup failed', { description: result.message });
-            break;
-          }
+          break;
         }
-      } finally {
-        inFlightRef.current = false;
-        setIsResolving(false);
+        case 'multi': {
+          setPicker(result);
+          setArmedMode(null);
+          if (result.via) setLastAck({ via: result.via, value });
+          const label = viaFoundLabel(result.via);
+          if (label) toast.success(`Found via ${label}`, { description: 'Pick the line to test.' });
+          break;
+        }
+        case 'box': {
+          // A license-plate (H-####) scan opens the box workbench drawer so the
+          // operator can re-sort its units — desktop parity with /m/h/[id].
+          setBoxPanel({ id: result.handlingUnitId, lines: result.rows });
+          setPicker(null);
+          setScanValue('');
+          setArmedMode(null);
+          setLastAck({ via: result.via, value });
+          toast.success('Opened box', { description: `H-${result.handlingUnitId}` });
+          break;
+        }
+        case 'manifest': {
+          // A KIT- master-label scan opens the manifest workbench drawer.
+          setManifestPanel({ ref: result.manifestRef });
+          setPicker(null);
+          setScanValue('');
+          setArmedMode(null);
+          toast.success('Opened kit', { description: result.manifestRef });
+          break;
+        }
+        case 'not_found': {
+          const what =
+            forcedType === 'po' ? 'PO'
+              : forcedType === 'tracking' ? 'tracking'
+                : forcedType === 'serial' ? 'serial'
+                  : 'receiving line';
+          toast.error('Not found', { description: `No ${what} match for "${result.query}".` });
+          break;
+        }
+        case 'error': {
+          toast.error('Lookup failed', { description: result.message });
+          break;
+        }
       }
-    },
-    [],
-  );
+    } finally {
+      inFlightRef.current = false;
+      setIsResolving(false);
+    }
+  }, []);
 
   const handleSubmit = useCallback(() => {
     void runScan(scanValue, armedMode);
   }, [runScan, scanValue, armedMode]);
 
-  // Arm/disarm a search route. Clicking a route while the field already holds a
-  // value searches immediately (mirrors the shipping station's mode buttons).
   const toggleMode = useCallback(
     (mode: ForcedTestingType) => {
       const turningOff = armedMode === mode;
@@ -189,58 +207,60 @@ export function TestingSidebarPanel({
     [armedMode, scanValue, runScan],
   );
 
-  // External focus trigger — match the receiving sidebar's convention so
-  // Quick Access chips that navigate to Testing can hot-focus the bar.
   useEffect(() => {
     const handler = () => {
       requestAnimationFrame(() => {
-        const input = document.querySelector<HTMLInputElement>('[data-testing-scan] input');
-        input?.focus();
+        document.querySelector<HTMLInputElement>('[data-testing-scan] input')?.focus();
       });
     };
     window.addEventListener('testing-focus-scan', handler);
     return () => window.removeEventListener('testing-focus-scan', handler);
   }, []);
 
+  const scanBarBlock = (
+    <TestingScanBar
+      value={scanValue}
+      onChange={setScanValue}
+      onSubmit={handleSubmit}
+      isResolving={isResolving}
+      staffId={staffId}
+      armedMode={armedMode}
+      onToggleMode={toggleMode}
+    />
+  );
+
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      {/* Scan bar — same chrome + mode toggles as the shipping StationScanBar.
-          Tap Tracking / PO# / Serial to force the next scan's search type, or
-          leave unarmed to auto-detect. Top padding matches the shipping scan
-          band (`py-1.5`) so the bar holds its vertical position across modes. */}
-      <div className={`${SIDEBAR_GUTTER} pt-1.5 pb-2`}>
-        <TestingScanBar
-          value={scanValue}
-          onChange={setScanValue}
-          onSubmit={handleSubmit}
-          isResolving={isResolving}
-          staffId={staffId}
-          armedMode={armedMode}
-          onToggleMode={toggleMode}
-        />
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-surface-card">
+      {!isMobile ? (
+        <div className={`${SIDEBAR_GUTTER} pt-1.5 pb-2`}>
+          {scanBarBlock}
+          {lastAck ? (() => {
+            const meta = viaAckMeta(lastAck.via);
+            return (
+              <div className="mt-2 flex items-center gap-1.5">
+                <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${meta.chip}`}>
+                  <meta.Icon className="h-3 w-3 shrink-0" />
+                  {meta.label}
+                </span>
+                <span className="min-w-0 shrink-0 truncate font-mono text-micro font-bold text-text-muted" title={lastAck.value}>
+                  {lastAck.value}
+                </span>
+                {lastAck.line ? (
+                  <span className="min-w-0 truncate text-micro font-semibold text-text-soft">
+                    · {lastAck.line.title}
+                    {typeof lastAck.line.received === 'number'
+                      ? ` · ${lastAck.line.received}/${lastAck.line.expected ?? '?'}`
+                      : ''}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })() : null}
+        </div>
+      ) : null}
 
-        {/* Real-time acknowledgment — what the last scan was recognised as. */}
-        {lastAck ? (() => {
-          const meta = viaAckMeta(lastAck.via);
-          return (
-            <div className="mt-2 flex items-center gap-1.5">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${meta.chip}`}
-              >
-                <meta.Icon className="h-3 w-3 shrink-0" />
-                {meta.label}
-              </span>
-              <span className="min-w-0 truncate font-mono text-micro font-bold text-gray-600" title={lastAck.value}>
-                {lastAck.value}
-              </span>
-            </div>
-          );
-        })() : null}
-      </div>
-
-      {/* Multi-line picker — tiny inline list when a PO has >1 receiving_line */}
       {picker ? (
-        <div className={`border-b border-amber-200 bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
+        <div data-testing-picker className={`border-b border-amber-200 bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
           <p className="mb-1 text-eyebrow font-black uppercase tracking-widest text-amber-700">
             {picker.via === 'serial'
               ? `Pick a unit — ${picker.rows.length} serial matches`
@@ -255,41 +275,86 @@ export function TestingSidebarPanel({
                   type="button"
                   onClick={() => {
                     dispatchSelectLine(row);
+                    // Carry the chosen line into the ack strip so the post-pick
+                    // context (serial via + line + qty) reads the same as a
+                    // direct single-line resolve.
+                    setLastAck((prev) => ({
+                      via: picker.via ?? prev?.via ?? 'receiving_id',
+                      value: prev?.value ?? '',
+                      line: lineAckSummary(row),
+                    }));
                     setPicker(null);
                     setScanValue('');
                   }}
-                  className="w-full rounded-md bg-white px-2 py-1.5 text-left text-caption font-bold text-gray-800 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+                  className="ds-raw-button w-full rounded-md bg-surface-card px-2 py-1.5 text-left text-caption font-bold text-text-default ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
                 >
                   <span className="block truncate">{row.item_name || row.sku || `Line #${row.id}`}</span>
-                  <span className="block text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
-                    {row.quantity_received}/{row.quantity_expected ?? '?'} ·{' '}
-                    {row.workflow_status || 'EXPECTED'}
+                  <span className="block text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
+                    {row.quantity_received}/{row.quantity_expected ?? '?'} · {row.workflow_status || 'EXPECTED'}
+                    {row.tracking_number ? ` · TRK …${serialLast4(String(row.tracking_number))}` : ''}
                   </span>
+                  {row.serials && row.serials.length > 0 ? (
+                    <span className="mt-1 flex flex-wrap items-center gap-1">
+                      <SerialPreviewStrip serials={row.serials} />
+                      <BoxMembershipHint serials={row.serials} />
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}
           </ul>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setPicker(null)}
-            className="mt-1.5 text-eyebrow font-black uppercase tracking-widest text-amber-600 hover:text-amber-800"
+            className="mt-1.5 h-auto px-0 text-eyebrow font-black uppercase tracking-widest text-amber-600 hover:bg-transparent hover:text-amber-800"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       ) : null}
 
-      {/* Scrollable recent rail — min-h-0 lets the flex child shrink below its
-          content so overflow-y-auto actually engages; overscroll-contain keeps
-          the wheel/trackpad gesture inside the rail instead of chaining to the
-          page once it bottoms out. */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <TestingRecentRail
           selectedLineId={selectedLineId}
           selectedRow={internalSelectedRow}
           testerId={staffId ? Number(staffId) : null}
+          filterText={railFilter}
         />
       </div>
+
+      <TechRailSearchBar
+        value={railFilter}
+        onChange={setRailFilter}
+        placeholder="Filter lines…"
+      />
+
+      {isMobile ? (
+        <div className={`flex-shrink-0 border-t border-border-hairline bg-surface-card ${SIDEBAR_GUTTER} pb-[max(1.125rem,env(safe-area-inset-bottom))] pt-3`}>
+          {scanBarBlock}
+        </div>
+      ) : null}
+
+      {/* Box workbench — an H-#### scan opens this into the global right-rail
+          drawer (RightRailHost). Returns null here; it only registers the panel. */}
+      {boxPanel ? (
+        <DetailStackRailRegistrar id={`box:${boxPanel.id}`} onClose={() => setBoxPanel(null)}>
+          <BoxWorkbenchPanel
+            handlingUnitId={boxPanel.id}
+            onClose={() => setBoxPanel(null)}
+            lines={boxPanel.lines}
+          />
+        </DetailStackRailRegistrar>
+      ) : null}
+
+      {manifestPanel ? (
+        <DetailStackRailRegistrar
+          id={`manifest:${manifestPanel.ref}`}
+          onClose={() => setManifestPanel(null)}
+        >
+          <ManifestWorkbenchPanel manifestRef={manifestPanel.ref} onClose={() => setManifestPanel(null)} />
+        </DetailStackRailRegistrar>
+      ) : null}
     </div>
   );
 }

@@ -27,10 +27,10 @@ export function EmailTab({ data }: { data: DetailsResponse }) {
             </span>
           </div>
           {e.email_subject ? (
-            <div className="mt-1 text-label font-bold text-gray-900">{e.email_subject}</div>
+            <div className="mt-1 text-label font-bold text-text-default">{e.email_subject}</div>
           ) : null}
           {e.snippet ? (
-            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-caption leading-relaxed text-gray-600">{e.snippet}</p>
+            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-caption leading-relaxed text-text-muted">{e.snippet}</p>
           ) : null}
         </div>
       ))}
@@ -38,20 +38,20 @@ export function EmailTab({ data }: { data: DetailsResponse }) {
       {worklist.length > 0 ? (
         <div className="space-y-2 pt-1">
           {delivered.length > 0 ? (
-            <div className="text-eyebrow font-black uppercase tracking-wide text-gray-400">PO mailbox</div>
+            <div className="text-eyebrow font-black uppercase tracking-wide text-text-faint">PO mailbox</div>
           ) : null}
           {worklist.map((e) => (
-            <div key={`w-${e.gmail_msg_id}`} className="border-l-2 border-gray-200 pl-3">
+            <div key={`w-${e.gmail_msg_id}`} className="border-l-2 border-border-soft pl-3">
               <div className="flex items-center gap-2">
                 {e.status ? (
-                  <span className="text-eyebrow font-bold uppercase tracking-wide text-gray-500">{e.status}</span>
+                  <span className="text-eyebrow font-bold uppercase tracking-wide text-text-soft">{e.status}</span>
                 ) : null}
-                <span className="ml-auto whitespace-nowrap text-eyebrow font-semibold text-gray-400">
+                <span className="ml-auto whitespace-nowrap text-eyebrow font-semibold text-text-faint">
                   {fmtDateTime(e.email_received)}
                 </span>
               </div>
               {e.email_subject ? (
-                <div className="mt-0.5 text-label font-bold text-gray-900">{e.email_subject}</div>
+                <div className="mt-0.5 text-label font-bold text-text-default">{e.email_subject}</div>
               ) : null}
             </div>
           ))}

@@ -1,20 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from '@/lib/toast';
 import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { classifyReceiveResponse } from '../../ReceiveResponsePanel';
+import { useScanFeedback } from '@/lib/scan-feedback/useScanFeedback';
+import { shouldUseLocalReceiveOnly } from '@/lib/receiving/intake-items-routing';
 
-type ReceiveIntent = 'zoho_receive' | 'scan_only';
+// 'local_receive' = unfound carton: mark RECEIVED locally, never touch Zoho.
+// Distinct from 'scan_only', which stays SCANNED.
+type ReceiveIntent = 'zoho_receive' | 'scan_only' | 'local_receive';
 
 /**
- * Last response from POST /api/receiving/mark-received-po. Surfaced in the UI
- * (ReceiveResponsePanel) so operators can see exactly why a Zoho receive
- * succeeded, was skipped (missing zoho ids), or failed (rate_limit,
- * circuit_open, api, other). No more silent failures.
+ * Last response from POST /api/receiving/mark-received-po. Surfaced inline
+ * below the label (ReceiveResponsePanel for non-success) so operators can see
+ * exactly why a Zoho receive succeeded, was skipped (missing zoho ids), or
+ * failed (rate_limit, circuit_open, api, other). No more silent failures —
+ * and no more bottom-right toasts.
  */
 export type ReceiveResponseRecord = {
   at: number;
@@ -29,39 +34,61 @@ export type ReceiveResponseRecord = {
 };
 
 /**
- * Sticky progress card shown in the bottom-right toast while the Receive →
- * Zoho roundtrip is in flight. Renders an indeterminate bar (CSS keyframes
- * live in globals.css under `.recv-indet-bar`) and an elapsed-seconds counter
- * so the operator knows the request is still alive even when Zoho is slow.
+ * The per-action breakdown the inline ReceiveSuccessChecklist renders as
+ * staggered green checks. Optimistic — the Zoho writes run server-side in
+ * after(); the realtime `zohoReceive` verdict reconciles a background failure.
  */
-function ReceiveProgressToast({ startedAt, intent }: { startedAt: number; intent: ReceiveIntent }) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    const t = window.setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    }, 250);
-    return () => window.clearInterval(t);
-  }, [startedAt]);
-  const label = intent === 'scan_only' ? 'Marking as scanned…' : 'Receiving in Zoho…';
-  return (
-    <div className="flex min-w-[260px] flex-col gap-2">
-      <div className="flex items-center justify-between text-label font-semibold text-gray-900">
-        <span>{label}</span>
-        <span className="tabular-nums text-gray-500">{elapsed}s</span>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200/70">
-        <div className="recv-indet-bar h-full w-1/3 rounded-full bg-blue-500" />
-      </div>
-    </div>
-  );
-}
+export type ReceiveSummary = {
+  /** Zoho purchase receive was attempted against a linked PO. */
+  markedReceived: boolean;
+  /** Lines whose description got the `SN: …` + condition write. */
+  descriptionsUpdated: number;
+  /** A notes string was pushed to the Zoho PO. */
+  notesUpdated: boolean;
+  /** Nothing reached Zoho — local-only (unfound / no PO link / scan-only). */
+  localOnly: boolean;
+  /** Drives headline wording. */
+  intent: ReceiveIntent;
+  /** Unfound carton — "Received locally", label printed, Zoho untouched. */
+  isUnfound: boolean;
+  /** Zoho was already fully received — local now matches the dashboard. */
+  alreadyReceived: boolean;
+  /** Per-line Zoho item description for the details dropdown. */
+  itemDescription?: string | null;
+  /** PO / operator notes text for the details dropdown. */
+  poNotes?: string | null;
+};
+
+/**
+ * The inline receive feedback shown below the label. Replaces the old
+ * bottom-right toast entirely:
+ *   - `success`    → animated ReceiveSuccessChecklist (green checks)
+ *   - `diagnostic` → the existing ReceiveResponsePanel (skip / cooldown / error)
+ */
+export type ReceiveResult =
+  | {
+      kind: 'success';
+      at: number;
+      summary: ReceiveSummary;
+      receivingId: number;
+      /** receiving_line ids touched — used to match the realtime reconcile. */
+      lineIds: number[];
+      /** Watch the realtime `zohoReceive` verdict to confirm/flip on failure. */
+      reconcile: boolean;
+      /** Raw API response — surfaced in the success card's details dropdown. */
+      response: ReceiveResponseRecord;
+    }
+  | { kind: 'diagnostic'; response: ReceiveResponseRecord };
+
+export type ReceiveInFlight = { startedAt: number; intent: ReceiveIntent };
 
 /**
  * The Receive / Mark-as-scanned action for a single line. Runs as a
- * fire-and-forget background task (the Zoho roundtrip can take many seconds) —
- * the button does NOT visually lock; progress is surfaced in a sticky
- * bottom-right toast and a ref guards against double-clicks. The last response
- * is exposed for the inline ReceiveResponsePanel.
+ * fire-and-forget background task (the local commit returns in a few seconds;
+ * Zoho is synced server-side in after()) — the button does NOT visually lock; a
+ * ref guards against double-clicks. All feedback is inline below the label:
+ * `receiving` drives a compact progress strip, `receiveResult` the success
+ * checklist or the diagnostic panel.
  */
 export function useReceiveAction(
   row: ReceivingLineRow,
@@ -73,6 +100,8 @@ export function useReceiveAction(
     zendesk,
     listingLink,
     serialInput,
+    serialAbsent,
+    serialAbsentReason,
     staffId,
   }: {
     qa: string;
@@ -82,82 +111,69 @@ export function useReceiveAction(
     zendesk: string;
     listingLink: string;
     serialInput: string;
+    serialAbsent: boolean;
+    serialAbsentReason: string | null;
     staffId: string;
   },
 ) {
   const queryClient = useQueryClient();
   const receiveInFlightRef = useRef(false);
-  const [lastReceiveResponse, setLastReceiveResponse] = useState<ReceiveResponseRecord | null>(null);
+  const [receiving, setReceiving] = useState<ReceiveInFlight | null>(null);
+  const [receiveResult, setReceiveResult] = useState<ReceiveResult | null>(null);
+  // Kept only for the diagnostic panel's raw-response expander.
   const [responseExpanded, setResponseExpanded] = useState(false);
+
+  // Unfound, return, and sales-order-linked cartons receive locally — never Zoho.
+  const isUnfound = shouldUseLocalReceiveOnly(row);
+  // Multimodal confirmation cue (gated by org master switch + per-staff toggles).
+  const { playScanFeedback } = useScanFeedback();
 
   const handleReceive = useCallback(
     (receiveIntent: ReceiveIntent = 'zoho_receive') => {
       if (receiveInFlightRef.current) return;
       if (row.receiving_id == null) {
-        toast.error('Cannot receive — link this item to a shipment first.', {
-          description: 'Scan tracking or use lookup so this line has a receiving (package) id.',
-          duration: 6000,
+        // Pre-condition failure surfaces inline (no toast) so every receive
+        // signal lives in the same place below the label.
+        setReceiveResult({
+          kind: 'diagnostic',
+          response: {
+            at: Date.now(),
+            durationMs: 0,
+            httpStatus: 0,
+            ok: false,
+            body: {
+              error:
+                'Cannot receive — link this item to a shipment first. Scan tracking or use lookup so this line has a receiving (package) id.',
+            },
+          },
         });
+        setResponseExpanded(false);
         return;
       }
       receiveInFlightRef.current = true;
       const startedAt = Date.now();
-      // Stable per-click id used as both the Idempotency-Key header and the
-      // body's client_event_id so api_idempotency_responses replays the
-      // cached response on retry / double-click instead of re-running the
-      // receive flow (which would double-call Zoho).
-      const clientEventId = randomId();
-      // Sticky progress toast (bottom-right via the global <Toaster>). Same
-      // id is reused on settle so success/error replaces the loading card
-      // in place instead of stacking another card on top.
-      const toastId = toast.loading(
-        <ReceiveProgressToast startedAt={startedAt} intent={receiveIntent} />,
-        { duration: Infinity, closeButton: false },
-      );
+      setReceiving({ startedAt, intent: receiveIntent });
+      // Clear the prior result while a fresh receive is in flight so the
+      // progress strip isn't competing with a stale checklist.
+      setReceiveResult(null);
+      setResponseExpanded(false);
 
-      // Fire-and-forget — operator keeps working while Zoho responds. The
-      // print popup was opened synchronously by the caller (runPrintLabel)
-      // before we got here, so no await blocks it.
+      // Stable per-click id used as both the Idempotency-Key header and the
+      // body's client_event_id so api_idempotency_responses replays the cached
+      // response on retry / double-click instead of re-running the receive flow
+      // (which would double-call Zoho).
+      const clientEventId = randomId();
+
+      // Fire-and-forget — operator keeps working while the local commit + Zoho
+      // sync settle. The print popup was opened synchronously by the caller
+      // (runPrintLabel) before we got here, so no await blocks it.
+      //
+      // NOTE: the former /api/zoho/health circuit pre-check (up to 3s on EVERY
+      // receive) is gone. The server now reads its own in-process breaker and
+      // returns skip_reason 'zoho_circuit_open' inline, so a cooldown surfaces
+      // with zero added latency on the happy path.
       void (async () => {
         try {
-          // Circuit-breaker pre-check: if Zoho is in cooldown, bail with a
-          // specific "retry in Ns" message instead of firing the receive
-          // (which would either skip Zoho silently or wait for the
-          // background after() to fail). Only relevant for the zoho_receive
-          // intent — scan_only doesn't touch Zoho. The check is best-effort
-          // and never blocks the receive on its own failure.
-          if (receiveIntent === 'zoho_receive') {
-            try {
-              const healthRes = await fetch('/api/zoho/health', {
-                signal: AbortSignal.timeout(3_000),
-              });
-              const healthData = await healthRes.json().catch(() => null);
-              const circuit = healthData?.zoho?.circuit as
-                | { isOpen?: boolean; retryAfterMs?: number; consecutiveFailures?: number }
-                | undefined;
-              if (circuit?.isOpen) {
-                const secs = Math.max(1, Math.ceil((circuit.retryAfterMs ?? 0) / 1000));
-                toast.error(`Zoho cooldown — retry in ~${secs}s.`, {
-                  id: toastId,
-                  description: `Circuit breaker open after ${circuit.consecutiveFailures ?? 0} recent Zoho failures. The PO will NOT be marked received until Zoho recovers.`,
-                  duration: 7000,
-                });
-                setLastReceiveResponse({
-                  at: Date.now(),
-                  durationMs: Date.now() - startedAt,
-                  httpStatus: 0,
-                  ok: false,
-                  body: { skip_reason: 'zoho_circuit_open', circuit },
-                });
-                setResponseExpanded(true);
-                return;
-              }
-            } catch {
-              /* health check itself failed — fall through; the real
-                 receive call below surfaces any genuine error */
-            }
-          }
-
           const perLineNotes = notes.trim() || null;
 
           const markRes = await fetch('/api/receiving/mark-received-po', {
@@ -174,17 +190,19 @@ export function useReceiveAction(
               disposition_code: disp,
               condition_grade: cond,
               serial_number: serialInput.trim() || undefined,
+              serial_absent: serialAbsent || undefined,
+              serial_absent_reason: serialAbsent ? serialAbsentReason || undefined : undefined,
               zendesk_ticket: zendesk.trim() || undefined,
               listing_link: listingLink.trim() || undefined,
               notes: perLineNotes || undefined,
               staff_id: Number(staffId),
               client_event_id: clientEventId,
             }),
-            // Hard ceiling so a server-side hang can never re-pin the
-            // loading toast. The handler returns optimistically within a
-            // few seconds; anything past 30s is a real failure and the
-            // operator should retry — the same Idempotency-Key replays
-            // the cached response if the server actually did complete.
+            // Hard ceiling so a server-side hang can never wedge the progress
+            // strip. The handler returns optimistically within a few seconds;
+            // anything past 30s is a real failure and the operator should retry
+            // — the same Idempotency-Key replays the cached response if the
+            // server actually did complete.
             signal: AbortSignal.timeout(30_000),
           });
           const markData = await markRes.json().catch(() => null);
@@ -196,124 +214,87 @@ export function useReceiveAction(
             ok: markRes.ok && Boolean(markData?.success),
             body: markData,
           };
-          setLastReceiveResponse(respRecord);
 
-          if (!markRes.ok || !markData?.success) {
-            console.error('receiving/mark-received-po failed', { status: markRes.status, error: markData?.error });
-            toast.error(markData?.error || `Receive failed (HTTP ${markRes.status})`, {
-              id: toastId,
-              duration: 6000,
+          if (!respRecord.ok) {
+            console.error('receiving/mark-received-po failed', {
+              status: markRes.status,
+              error: (markData as { error?: unknown })?.error,
             });
+            setReceiveResult({ kind: 'diagnostic', response: respRecord });
             setResponseExpanded(true);
+            playScanFeedback('reject');
           } else {
-            const zoho = markData?.zoho as
-              | {
-                  attempted?: number;
-                  ok?: boolean;
-                  pending?: boolean;
-                  rate_limited?: boolean;
-                  error?: string | null;
-                  skip_reason?: string | null;
-                  results?: Array<{ purchaseorder_id?: string; receive_id: string | null; error: string | null; error_kind?: string | null }>;
-                }
-              | undefined;
-            if (zoho?.attempted) {
-              // Optimistic flow: server already committed locally; Zoho sync
-              // is running in the background. UI shows immediate success;
-              // any Zoho-side failure surfaces via the receiving-logs
-              // realtime channel and a follow-up refresh.
-              if (zoho.pending) {
-                toast.success('Marked as received — Zoho sync in progress', {
-                  id: toastId,
-                  duration: 4500,
-                });
-                setResponseExpanded(false);
-              } else if (zoho.rate_limited) {
-                toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Lines stay in Scanned until Zoho succeeds.', {
-                  id: toastId,
-                  description: 'Wait for the daily reset or reduce other Zoho-touching workflows for now.',
-                  duration: 8000,
-                });
-                setResponseExpanded(true);
-              } else if (!zoho.ok) {
-                // Treat "already received in Zoho" as success — Zoho is ahead
-                // of us, local SoT now matches.
-                const alreadyReceived = /already\s+created\s+a\s+receive\s+for\s+all\s+the\s+items/i.test(
-                  String(zoho.error || ''),
-                );
-                if (alreadyReceived) {
-                  toast.success('Already marked as received in Zoho', {
-                    id: toastId,
-                    description: 'Local state now matches the Zoho dashboard.',
-                    duration: 5000,
-                  });
-                  setResponseExpanded(false);
-                } else {
-                  toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, {
-                    id: toastId,
-                    duration: 6000,
-                  });
-                  setResponseExpanded(true);
-                }
-              } else if (zoho.skip_reason === 'zoho_already_fully_received') {
-                toast.success('Zoho already shows this PO as fully received.', {
-                  id: toastId,
-                  description: 'Purchase receive was not needed; inventory matches the dashboard.',
-                  duration: 5000,
-                });
-                setResponseExpanded(false);
-              } else {
-                toast.success(
-                  <div className="flex flex-col gap-1 text-left">
-                    <span className="leading-snug">Successfully added SN# & notes to PO item</span>
-                    <span className="leading-snug">Successfully marked the PO as Received</span>
-                  </div>,
-                  { id: toastId, duration: 6000 },
-                );
-                setResponseExpanded(false);
-              }
+            // Reuse the panel's verdict taxonomy: emerald = a genuine success
+            // (received / scanned / already-received) → animated checklist;
+            // amber/rose (no-PO-link, cooldown, rate-limit, api error) → the
+            // detailed diagnostic panel.
+            const classification = classifyReceiveResponse(respRecord);
+            if (classification.tone === 'emerald') {
+              const serverSummary = (markData?.summary || {}) as Partial<{
+                marked_received: boolean;
+                descriptions_updated: number;
+                notes_updated: boolean;
+                local_only: boolean;
+              }>;
+              const zoho = (markData?.zoho || {}) as {
+                attempted?: number;
+                skip_reason?: string | null;
+              };
+              const attempted = Number(zoho.attempted ?? 0);
+              const alreadyReceived = zoho.skip_reason === 'zoho_already_fully_received';
+              const lineIds = Array.isArray(markData?.receiving_lines)
+                ? (markData.receiving_lines as Array<{ id?: unknown }>)
+                    .map((r) => Number(r?.id))
+                    .filter((n) => Number.isFinite(n) && n > 0)
+                : [];
+
+              const summary: ReceiveSummary = {
+                markedReceived:
+                  serverSummary.marked_received ??
+                  (receiveIntent === 'zoho_receive' && attempted > 0),
+                descriptionsUpdated:
+                  serverSummary.descriptions_updated ??
+                  (receiveIntent === 'zoho_receive' && attempted > 0 && serialInput.trim() ? 1 : 0),
+                notesUpdated:
+                  serverSummary.notes_updated ??
+                  Boolean(perLineNotes && attempted > 0 && receiveIntent === 'zoho_receive'),
+                localOnly: serverSummary.local_only ?? attempted === 0,
+                intent: receiveIntent,
+                isUnfound,
+                alreadyReceived,
+                itemDescription: row.zoho_notes?.trim() || null,
+                poNotes: perLineNotes || row.receiving_zoho_notes?.trim() || null,
+              };
+
+              setReceiveResult({
+                kind: 'success',
+                at: respRecord.at,
+                summary,
+                receivingId: row.receiving_id!,
+                lineIds,
+                reconcile: receiveIntent === 'zoho_receive' && attempted > 0 && !alreadyReceived,
+                response: respRecord,
+              });
+              playScanFeedback('success');
             } else {
-              const skipReason = zoho?.skip_reason;
-              if (skipReason === 'scan_only') {
-                toast.success('Marked as scanned locally (Zoho not updated). Run Receive when ready to sync inventory.', {
-                  id: toastId,
-                  duration: 6500,
-                });
-                setResponseExpanded(false);
-              } else if (skipReason === 'zoho_already_fully_received') {
-                toast.success('Zoho already shows this PO as fully received.', {
-                  id: toastId,
-                  description: 'Purchase receive was not needed; inventory matches the dashboard.',
-                  duration: 5000,
-                });
-                setResponseExpanded(false);
-              } else if (skipReason === 'no_receiving_lines') {
-                toast.message('No receiving lines on this shipment.', { id: toastId, duration: 5000 });
-                setResponseExpanded(true);
-              } else {
-                toast.error('Lines saved locally — Zoho was NOT updated (no PO link found).', {
-                  id: toastId,
-                  description: 'Sync with Zoho first (refresh icon) to link this package to a PO.',
-                  duration: 7000,
-                });
-                setResponseExpanded(true);
-              }
+              setReceiveResult({ kind: 'diagnostic', response: respRecord });
+              setResponseExpanded(true);
+              playScanFeedback('reject');
             }
           }
 
           // Refresh every receiving feed atomically via the shared helper.
-          // `usav-refresh-data` stays for non-receiving listeners that also
-          // key off the global signal.
+          // `usav-refresh-data` stays for non-receiving listeners that also key
+          // off the global signal.
           invalidateReceivingFeeds(queryClient);
           window.dispatchEvent(new CustomEvent('usav-refresh-data'));
 
-          // Fire-and-forget refresh AFTER the toast has settled. The
-          // /api/receiving-lines query can run 10–30s under load and used
-          // to be awaited inline, which pinned "Receiving in Zoho…" on
-          // screen for the full statement_timeout window even when the
-          // receive itself had already succeeded. The receiving-logs
-          // realtime channel and the usav-refresh-data event above
-          // reconcile the row independently if this refresh is slow.
+          // Fire-and-forget row refresh. The /api/receiving-lines query can run
+          // 10–30s under load; awaiting it inline used to pin the loading state
+          // for the full statement_timeout window even when the receive itself
+          // had already succeeded. The receiving-logs realtime channel and the
+          // usav-refresh-data event above reconcile the row independently if
+          // this is slow.
           if (markRes.ok) {
             void (async () => {
               try {
@@ -326,33 +307,56 @@ export function useReceiveAction(
                 for (const r of rows) {
                   dispatchLineUpdated(r as ReceivingLineRow);
                 }
-              } catch { /* table may still reflect partial state — realtime channel reconciles */ }
+              } catch {
+                /* table may still reflect partial state — realtime channel reconciles */
+              }
             })();
           }
         } catch (err) {
           console.error('receiving/mark-received-po threw', err);
           const message = err instanceof Error ? err.message : 'Receive failed';
-          toast.error(message, { id: toastId, duration: 6000 });
-          setLastReceiveResponse({
-            at: Date.now(),
-            durationMs: Date.now() - startedAt,
-            httpStatus: 0,
-            ok: false,
-            body: null,
-            networkError: message,
+          setReceiveResult({
+            kind: 'diagnostic',
+            response: {
+              at: Date.now(),
+              durationMs: Date.now() - startedAt,
+              httpStatus: 0,
+              ok: false,
+              body: null,
+              networkError: message,
+            },
           });
           setResponseExpanded(true);
+          playScanFeedback('reject');
         } finally {
           receiveInFlightRef.current = false;
+          setReceiving(null);
         }
       })();
     },
-    [row.receiving_id, row.id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId, queryClient],
+    [
+      row.receiving_id,
+      row.id,
+      isUnfound,
+      qa,
+      disp,
+      cond,
+      notes,
+      zendesk,
+      listingLink,
+      serialInput,
+      serialAbsent,
+      serialAbsentReason,
+      staffId,
+      queryClient,
+      playScanFeedback,
+    ],
   );
 
   return {
-    lastReceiveResponse,
-    setLastReceiveResponse,
+    receiving,
+    receiveResult,
+    setReceiveResult,
     responseExpanded,
     setResponseExpanded,
     handleReceive,

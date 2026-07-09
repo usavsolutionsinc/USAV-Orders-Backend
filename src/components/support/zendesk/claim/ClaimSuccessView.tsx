@@ -22,9 +22,9 @@ export function ClaimSuccessView({ result, onClose }: { result: ClaimResult; onC
       </div>
 
       <div className="space-y-1.5">
-        <h3 className="text-lg font-bold tracking-tight text-gray-900">Ticket {verb}</h3>
-        <p className="max-w-xs text-sm leading-relaxed text-gray-500">
-          Ticket <span className="font-bold text-gray-700">{result.number}</span> was {verb}
+        <h3 className="text-lg font-bold tracking-tight text-text-default">Ticket {verb}</h3>
+        <p className="max-w-xs text-sm leading-relaxed text-text-soft">
+          Ticket <span className="font-bold text-text-muted">{result.number}</span> was {verb}
           {result.attached > 0
             ? ` with ${result.attached} photo${result.attached === 1 ? '' : 's'} attached`
             : ''}
@@ -36,7 +36,7 @@ export function ClaimSuccessView({ result, onClose }: { result: ClaimResult; onC
         {result.url ? (
           <a href={result.url} target="_blank" rel="noopener noreferrer">
             <Button variant="secondary" icon={<ExternalLink className="h-4 w-4" />}>
-              Open in Zendesk
+              Open in Support
             </Button>
           </a>
         ) : null}

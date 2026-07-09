@@ -11,6 +11,7 @@ import {
   normalizeDashboardOrderViewParams,
   type DashboardOrderView,
 } from '@/utils/dashboard-search-state';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
 export interface MobileContextOption {
   id: string;
@@ -23,7 +24,7 @@ export function getMobileAppTitle(pathname: string | null): string {
   if (pathname === '/m/home' || pathname?.startsWith('/m/home/')) return 'Home';
   const key = getSidebarRouteKey(pathname);
   const nav = APP_SIDEBAR_NAV.find((item) => item.id === key);
-  return nav?.label || 'USAV';
+  return nav?.label || PRODUCT_NAME;
 }
 
 export interface MobileContextRowConfig {

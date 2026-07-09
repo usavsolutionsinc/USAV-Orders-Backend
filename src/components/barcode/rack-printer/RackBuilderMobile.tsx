@@ -1,4 +1,5 @@
 import { ChevronLeft, Settings } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { WorkspaceCard } from '@/design-system/components';
 import { STEPS } from './rack-printer-config';
 import { StepPills } from './StepPills';
@@ -16,13 +17,13 @@ export function RackBuilderMobile({ c, variant }: { c: RackLabelPrinterControlle
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className={variant === 'sidebar'
-            ? 'text-base font-bold tracking-tight text-gray-900'
-            : 'text-2xl font-bold tracking-tight text-gray-900'}
+            ? 'text-base font-bold tracking-tight text-text-default'
+            : 'text-2xl font-bold tracking-tight text-text-default'}
           >
             {variant === 'sidebar' ? 'Build a rack label' : 'Rack Label Printer'}
           </h1>
           {variant === 'main' && (
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-text-soft">
               Pick a room, then drill down to the rack level. Prints one large
               QR-only label per rack — no position needed.
             </p>
@@ -30,23 +31,16 @@ export function RackBuilderMobile({ c, variant }: { c: RackLabelPrinterControlle
         </div>
         <div className="flex items-center gap-2">
           {(c.selectedRoom || c.aisle != null) && (
-            <button
-              type="button"
-              onClick={c.resetAll}
-              className="flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[11.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
+            <Button variant="secondary" size="md" icon={<ChevronLeft />} onClick={c.resetAll}>
               Reset
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
+          <IconButton
+            icon={<Settings className="h-4 w-4" />}
+            ariaLabel="Configure rack printer"
             onClick={() => c.setConfigOpen(true)}
-            aria-label="Configure rack printer"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
+            className="h-9 w-9 rounded-full border border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover"
+          />
         </div>
       </header>
 
@@ -66,19 +60,15 @@ export function RackBuilderMobile({ c, variant }: { c: RackLabelPrinterControlle
             <div className="flex min-w-0 items-center gap-3">
               <ZoneLetterTile letter={c.zoneLetter} />
               <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-gray-900">{c.selectedRoom}</p>
-                <p className="mt-0.5 text-[11.5px] text-gray-500">
+                <p className="truncate text-base font-semibold text-text-default">{c.selectedRoom}</p>
+                <p className="mt-0.5 text-[11.5px] text-text-soft">
                   {c.zoneLetter ? `Zone ${c.zoneLetter}` : 'No zone letter yet — set one in the Rooms tab.'}
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => c.setOverrideStep('zone')}
-              className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-caption font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-            >
+            <Button variant="secondary" size="sm" onClick={() => c.setOverrideStep('zone')} className="shrink-0">
               Change
-            </button>
+            </Button>
           </div>
         </WorkspaceCard>
       )}

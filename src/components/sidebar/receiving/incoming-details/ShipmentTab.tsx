@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Link2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { EventTimeline } from '@/components/ui/EventTimeline';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { carrierEventsToTimeline } from '@/lib/timeline';
 import { toast } from '@/lib/toast';
 import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
@@ -63,13 +65,14 @@ export function ShipmentTab({ data }: { data: DetailsResponse }) {
                 queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
               }}
               trigger={
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-caption font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Link2 />}
+                  className="border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                 >
-                  <Link2 className="h-3.5 w-3.5" />
                   Add tracking
-                </button>
+                </Button>
               }
             />
           </div>
@@ -94,7 +97,7 @@ export function ShipmentTab({ data }: { data: DetailsResponse }) {
       <div className={`mb-3 rounded-xl border p-3 ${tone.wrap}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="flex items-center gap-1 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+            <div className="flex items-center gap-1 text-eyebrow font-black uppercase tracking-wider text-text-soft">
               <span>{shortCarrier(s.carrier) || s.carrier || 'Carrier'}</span>
               {s.tracking_number ? (
                 <>
@@ -108,27 +111,30 @@ export function ShipmentTab({ data }: { data: DetailsResponse }) {
               {headline}
             </div>
             {subLine ? (
-              <div className="mt-1 text-caption font-semibold text-gray-600">{subLine}</div>
+              <div className="mt-1 text-caption font-semibold text-text-muted">{subLine}</div>
             ) : null}
-            <div className="mt-0.5 text-eyebrow font-semibold text-gray-400">
+            <div className="mt-0.5 text-eyebrow font-semibold text-text-faint">
               Last checked {fmtDateTime(s.last_checked_at)}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void repoll()}
-            disabled={repolling}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-gray-900 px-2 text-eyebrow font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
-            title="Force a fresh poll against the carrier API"
-          >
-            <RefreshCw className={`h-3 w-3 ${repolling ? 'animate-spin' : ''}`} />
-            {repolling ? 'Polling…' : 'Re-poll'}
-          </button>
+          <HoverTooltip label="Force a fresh poll against the carrier API" asChild>
+            <Button
+              variant="brand"
+              size="sm"
+              icon={<RefreshCw />}
+              loading={repolling}
+              onClick={() => void repoll()}
+              ariaLabel="Force a fresh poll against the carrier API"
+              className="h-7 shrink-0 bg-none bg-surface-inverse px-2 text-white hover:bg-surface-inverse-hover"
+            >
+              {repolling ? 'Polling…' : 'Re-poll'}
+            </Button>
+          </HoverTooltip>
         </div>
       </div>
 
       <div>
-        <h3 className="mb-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+        <h3 className="mb-2 text-eyebrow font-black uppercase tracking-wider text-text-soft">
           Recent carrier events
         </h3>
         <EventTimeline

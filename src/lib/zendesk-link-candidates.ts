@@ -50,12 +50,12 @@ export async function listTicketLinkCandidates(args: {
 
   let tickets: ZendeskTicket[];
   if (!query) {
-    tickets = (await listTickets({ perPage })).tickets;
+    tickets = (await listTickets({ perPage }, args.orgId)).tickets;
   } else if (idMatch) {
-    const ticket = await getTicket(Number(idMatch[1]));
+    const ticket = await getTicket(Number(idMatch[1]), args.orgId);
     tickets = ticket ? [ticket] : [];
   } else {
-    tickets = (await searchTickets(query, { perPage })).results;
+    tickets = (await searchTickets(query, { perPage }, args.orgId)).results;
   }
 
   // Resolve existing links for the whole result page in two bulk queries

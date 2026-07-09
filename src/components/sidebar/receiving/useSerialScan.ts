@@ -122,6 +122,8 @@ export function useSerialScan({
                 line_id: state.id,
                 sku: state.sku,
                 prior_status: data.prior_status ?? null,
+                // Originating order resolved server-side on the scan (shipped↔returned).
+                order_id: data.matched_order?.order_id ?? null,
                 at: Date.now(),
               },
               ...prev,

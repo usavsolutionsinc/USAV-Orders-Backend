@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Check } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { DEFAULT_GLN, QR_BASE_URL } from '@/lib/barcode-routing';
 import { DEFAULT_CONFIG, type PrinterConfig } from './types';
 import { clampMax } from './storage';
@@ -42,7 +43,7 @@ export function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps)
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Configure counts">
-      <p className="mb-4 text-center text-label text-gray-500">
+      <p className="mb-4 text-center text-label text-text-soft">
         Match these to your warehouse layout. Saved locally — no rebuild required.
       </p>
 
@@ -54,41 +55,41 @@ export function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps)
       </div>
 
       <div className="mt-4">
-        <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+        <label className="text-micro font-semibold uppercase tracking-wider text-text-soft">
           GLN (Global Location Number)
         </label>
         <input
           type="text"
           value={draft.gln}
           onChange={(e) => set('gln')(e.target.value)}
-          className="mt-1 h-11 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 font-mono text-sm font-semibold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
+          className="mt-1 h-11 w-full rounded-2xl border border-border-default bg-surface-canvas px-4 font-mono text-sm font-semibold text-text-default outline-none focus:border-blue-500 focus:bg-surface-card focus:ring-2 focus:ring-blue-200"
         />
-        <p className="mt-1 text-micro text-gray-400">
+        <p className="mt-1 text-micro text-text-faint">
           Default is the GS1 documentation placeholder ({DEFAULT_GLN}). Replace once registered with
           GS1 US.
         </p>
       </div>
 
-      <div className="mt-3 text-micro text-gray-400">
+      <div className="mt-3 text-micro text-text-faint">
         Domain in QR: <span className="font-mono">{QR_BASE_URL}</span>
       </div>
 
       <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={handleSave}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-semibold tracking-wide text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98] sm:flex-1"
+          icon={<Check className="h-4 w-4" />}
+          className="h-12 w-full sm:flex-1"
         >
-          <Check className="mr-1.5 h-4 w-4" />
           Save
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={handleReset}
-          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 sm:flex-1"
+          className="h-12 w-full sm:flex-1"
         >
           Reset
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );
@@ -105,7 +106,7 @@ function NumField({
 }) {
   return (
     <div>
-      <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+      <label className="text-micro font-semibold uppercase tracking-wider text-text-soft">
         {label}
       </label>
       <input
@@ -115,7 +116,7 @@ function NumField({
         max={99}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 h-12 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 text-center text-lg font-semibold tabular-nums text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
+        className="mt-1 h-12 w-full rounded-2xl border border-border-default bg-surface-canvas px-4 text-center text-lg font-semibold tabular-nums text-text-default outline-none focus:border-blue-500 focus:bg-surface-card focus:ring-2 focus:ring-blue-200"
       />
     </div>
   );

@@ -56,6 +56,56 @@ export async function recomputeCartonSourceLink(
   const isEcwidDerived = carton.source_platform === 'ecwid' && !carton.zoho_purchaseorder_id;
   const isUnmatched = carton.source === 'unmatched';
 
+  // ── Zoho-PO promotion ──────────────────────────────────────────────────────
+  // A line carrying a REAL Zoho PO id means this carton is matched — even when
+  // the carton header was never updated. This is the "No PO on a paired carton"
+  // bug: a tracking-scanned box duplicates an already-imported PO carton (or a
+  // scope='line' relink rewrote only the line), so the line gets the PO but the
+  // carton stays source='unmatched' with a NULL header PO and reads "No PO".
+  // Promote an UNMATCHED, PO-less carton to its line's PO so it stops lying.
+  // A carton already matched to a real Zoho PO is canonical — never touched.
+  if (isUnmatched && !carton.zoho_purchaseorder_id) {
+    const zohoLinked = await db.query(
+      `SELECT zoho_purchaseorder_id, zoho_purchaseorder_number
+         FROM receiving_lines
+        WHERE receiving_id = $1
+          AND zoho_purchaseorder_id IS NOT NULL
+          AND btrim(zoho_purchaseorder_id) <> ''
+        ORDER BY id ASC
+        LIMIT 1`,
+      [receivingId],
+    );
+    if (zohoLinked.rows.length > 0) {
+      const poId = String(zohoLinked.rows[0].zoho_purchaseorder_id ?? '').trim();
+      const rawNum = zohoLinked.rows[0].zoho_purchaseorder_number;
+      const poNumber = rawNum == null ? null : String(rawNum).trim() || null;
+      // Collision guard: `ux_receiving_zoho_po_matched` allows exactly ONE
+      // source='zoho_po' carton per PO id. If another matched carton already
+      // holds this PO (the empty Zoho-import "PO shell" duplicate case), writing
+      // it here would violate that unique index and throw. That's a duplicate-
+      // carton dedupe, not a simple promotion — leave it to the dedupe path and
+      // skip rather than crash the relink. Only promote when the PO id is free.
+      const held = await db.query(
+        `SELECT 1 FROM receiving
+          WHERE zoho_purchaseorder_id = $1 AND source = 'zoho_po' AND id <> $2
+          LIMIT 1`,
+        [poId, receivingId],
+      );
+      if (held.rows.length === 0) {
+        await db.query(
+          `UPDATE receiving
+              SET zoho_purchaseorder_id = $2,
+                  zoho_purchaseorder_number = COALESCE($3, zoho_purchaseorder_number),
+                  source = 'zoho_po',
+                  updated_at = NOW()
+            WHERE id = $1 AND source = 'unmatched'`,
+          [receivingId, poId, poNumber],
+        );
+      }
+      return;
+    }
+  }
+
   if (linked.rows.length > 0) {
     // ≥1 linked line — carton leaves the Unfound queue; representative = first.
     // Don't touch a carton matched to a real Zoho PO.

@@ -27,7 +27,7 @@ export function FolderView({
     <div className="space-y-3">
       {subfolders.length > 0 && (
         <div className="space-y-1.5">
-          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-gray-400">
+          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-text-faint">
             Folders · {subfolders.length}
           </p>
           {subfolders.map((node) => (
@@ -44,7 +44,7 @@ export function FolderView({
       )}
       {files.length > 0 && (
         <div className="space-y-1.5">
-          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-gray-400">
+          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-text-faint">
             Files · {files.length}
           </p>
           {files.map((f) => (
@@ -76,8 +76,8 @@ export function SearchResults({
   if (folderHits.length === 0 && fileHits.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-        <Search className="mb-3 h-8 w-8 text-gray-300" />
-        <p className={`${tableHeader} text-gray-500`}>No matches</p>
+        <Search className="mb-3 h-8 w-8 text-text-faint" />
+        <p className={`${tableHeader} text-text-soft`}>No matches</p>
       </div>
     );
   }
@@ -85,7 +85,7 @@ export function SearchResults({
     <div className="space-y-3">
       {folderHits.length > 0 && (
         <div className="space-y-1.5">
-          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-gray-400">
+          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-text-faint">
             Folders · {folderHits.length}
           </p>
           {folderHits.slice(0, 50).map((hit) => (
@@ -103,7 +103,7 @@ export function SearchResults({
       )}
       {fileHits.length > 0 && (
         <div className="space-y-1.5">
-          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-gray-400">
+          <p className="px-2 text-eyebrow font-black uppercase tracking-wider text-text-faint">
             Files · {fileHits.length}
           </p>
           {fileHits.slice(0, 100).map((hit) => (

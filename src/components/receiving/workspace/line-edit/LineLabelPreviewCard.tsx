@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { WorkspaceCard } from '@/design-system/components';
 import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Pencil } from '@/components/Icons';
 import { ReceivingPoLabelPreview } from '../ReceivingPoLabelPreview';
 import { ReceivingProductLabelPreview } from '../ReceivingProductLabelPreview';
@@ -48,22 +49,25 @@ export function LineLabelPreviewCard({
   return (
     <>
       <WorkspaceCard
+        variant="glass"
         label="Label"
         actions={
           scanValue ? (
-            <IconButton
-              icon={<Pencil className="h-4 w-4" />}
-              ariaLabel="Edit label"
-              title="Edit label — custom print"
-              tone="accent"
-              onClick={() => setEditorOpen(true)}
-            />
+            <HoverTooltip label="Edit label — custom print" asChild>
+              <IconButton
+                icon={<Pencil className="h-4 w-4" />}
+                ariaLabel="Edit label"
+                tone="accent"
+                onClick={() => setEditorOpen(true)}
+              />
+            </HoverTooltip>
           ) : undefined
         }
       >
-        {/* Bordered box matches the testing/products LabelPreviewCard so all
-            label previews read identically. */}
-        <div className="rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
+        {/* Themed frame matching the testing/products LabelPreviewCard so all label
+            previews read identically. The label face inside is theme-aware (dark
+            card + inverted barcode in dark mode); print stays black-on-white. */}
+        <div className="rounded border border-border-soft bg-surface-card px-2 py-2 shadow-sm">
           {scanValue ? (
             <ReceivingPoLabelPreview {...labelPayload} embedded />
           ) : sku ? (

@@ -28,7 +28,7 @@ export interface ReceivingModeState {
   mode: ReceivingModeDescriptor;
   isIncomingMode: boolean;
   isHistoryMode: boolean;
-  /** History day-band/sort axis resolved from `?sort=` ('scanned' default). */
+  /** Lifecycle timestamp History day-bands + within-day order on (from `?sort=`). */
   historyAxis: ReceivingActivityAxis;
   /** 1-based Incoming page from `?page=` (>=1). */
   incomingPage: number;
@@ -79,10 +79,13 @@ export function useReceivingModeContext(): ReceivingModeState {
   // IncomingSidebarPanel (date range). All flow straight into the API query
   // string; no client-side filtering of the date range (server already narrows).
   const incomingSort = isIncomingMode ? (searchParams.get('sort') || '').trim() : '';
-  // History reuses the shared `?sort=` param (modes are exclusive). The axis it
-  // resolves to drives both the server window and the client day-banding.
+  // History reuses the shared `?sort=` param (modes are exclusive). The resolved
+  // axis drives client day-banding + within-day order; the same sort is sent to
+  // the API for the server ORDER BY window.
   const historySort = isHistoryMode ? (searchParams.get('sort') || '').trim() : '';
-  const historyAxis = isHistoryMode ? historySortGroupAxis(historySort) : 'scanned';
+  const historyAxis: ReceivingActivityAxis = isHistoryMode
+    ? historySortGroupAxis(historySort)
+    : 'scanned';
   const incomingPoFrom = isIncomingMode ? (searchParams.get('po_from') || '').trim() : '';
   const incomingPoTo = isIncomingMode ? (searchParams.get('po_to') || '').trim() : '';
   // Pagination — server-side LIMIT 50 + page offset. Page numbers are 1-based in

@@ -59,7 +59,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 CASE WHEN missing.fnsku LIKE 'B0%' THEN missing.fnsku ELSE NULL END,
                 NULL, $2, TRUE, NOW(), NOW()
          FROM UNNEST($1::text[]) AS missing(fnsku)
-         ON CONFLICT (fnsku) DO UPDATE
+         ON CONFLICT (organization_id, fnsku) DO UPDATE
            SET is_active = TRUE,
                asin = CASE
                  WHEN fba_fnskus.asin IS NULL AND EXCLUDED.fnsku LIKE 'B0%'

@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 
 interface SetPinDialogProps {
   open: boolean;
@@ -52,16 +53,16 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) { reset(); onClose(); } }}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-gray-900">Set PIN for {staffName}</h2>
-        <p className="mt-1 text-xs text-gray-500">
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim/60 p-4" onClick={() => { if (!busy) { reset(); onClose(); } }}>
+      <div className="w-full max-w-sm rounded-2xl bg-surface-card p-5" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-text-default">Set PIN for {staffName}</h2>
+        <p className="mt-1 text-xs text-text-soft">
           Push a specific PIN to this staff member. They&apos;ll be able to sign in immediately with the new code.
         </p>
 
         <div className="mt-5 space-y-3">
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">New PIN</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">New PIN</span>
             <input
               autoFocus
               type="password"
@@ -69,12 +70,12 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
               maxLength={6}
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="••••"
             />
           </label>
           <label className="block">
-            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Confirm PIN</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-text-soft">Confirm PIN</span>
             <input
               type="password"
               inputMode="numeric"
@@ -82,7 +83,7 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
               value={confirm}
               onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))}
               onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+              className="mt-1 w-full rounded-md border border-border-default px-2.5 py-1.5 text-sm tracking-widest outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
               placeholder="••••"
             />
           </label>
@@ -91,12 +92,12 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
         {err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={() => { reset(); onClose(); }} disabled={busy} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          <Button variant="secondary" onClick={() => { reset(); onClose(); }} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" onClick={submit} disabled={busy || pin.length < 4} className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-blue-700">
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={busy || pin.length < 4}>
             {busy ? 'Saving…' : 'Set PIN'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -28,6 +28,7 @@ import {
   type JourneyEvent,
   type JourneyFilters,
   type JourneySource,
+  type SerialProvenance,
 } from './journey-helpers';
 
 // Re-export the pure helpers + types so callers import a single module.
@@ -202,6 +203,68 @@ export async function resolveEntity(
   return { ...anchors, kind: 'tracking' };
 }
 
+/**
+ * Per-serial provenance (SKU · grade · status · originating PO) for the By-unit
+ * band headers. Org-scoped on `serial_units`; a unit received off-PO simply
+ * yields `poNumber: null`. Empty input → empty result (no query).
+ *
+ * The PO joins via each unit's CURRENT receiving line — its most recent
+ * inventory_events touch, falling back to the frozen `origin_receiving_line_id`
+ * — NOT `origin_receiving_line_id` alone. That column COALESCE-freezes to the
+ * FIRST-ever receiving line on attach and never advances, so a unit that
+ * shipped, was returned, and got re-received under a different PO/carton kept
+ * showing its original (now stale) PO here forever. Mirrors
+ * `resolveCurrentReceivingLineIds` (src/lib/neon/serial-units-queries.ts).
+ */
+export async function readSerialProvenance(
+  client: PoolClient,
+  orgId: OrgId,
+  serialUnitIds: number[],
+): Promise<SerialProvenance[]> {
+  if (serialUnitIds.length === 0) return [];
+  const res = await client.query<{
+    serial_unit_id: number;
+    serial_number: string | null;
+    sku: string | null;
+    condition_grade: string | null;
+    current_status: string | null;
+    po_number: string | null;
+  }>(
+    `WITH current_line AS (
+       SELECT DISTINCT ON (ie.serial_unit_id)
+              ie.serial_unit_id, ie.receiving_line_id
+         FROM inventory_events ie
+        WHERE ie.serial_unit_id = ANY($2::int[])
+          AND ie.receiving_line_id IS NOT NULL
+          AND ie.organization_id = $1
+        ORDER BY ie.serial_unit_id, ie.occurred_at DESC, ie.id DESC
+     )
+     SELECT su.id AS serial_unit_id,
+            su.serial_number,
+            su.sku,
+            su.condition_grade,
+            su.current_status,
+            rl.zoho_purchaseorder_number AS po_number
+       FROM serial_units su
+       JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+       LEFT JOIN current_line cl ON cl.serial_unit_id = su.id
+       LEFT JOIN receiving_lines rl
+         ON rl.id = COALESCE(cl.receiving_line_id, vo.origin_receiving_line_id)
+        AND rl.organization_id = su.organization_id
+      WHERE su.organization_id = $1
+        AND su.id = ANY($2::int[])`,
+    [orgId, serialUnitIds],
+  );
+  return res.rows.map((r) => ({
+    serialUnitId: Number(r.serial_unit_id),
+    serial: (r.serial_number || '').trim(),
+    sku: r.sku,
+    grade: r.condition_grade,
+    status: r.current_status,
+    poNumber: (r.po_number || '').trim() || null,
+  }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Entity mode — fan out indexed point-lookups, merge in JS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,6 +298,7 @@ export async function readJourneyEntity(
   // 1) SAL — all stations (the journey wants PACK/SHIP, not just TECH/OUTBOUND).
   if (want('sal') && anchors.shipmentId != null) {
     const stationFilter = filters.stations?.length ? mapStationsToSpines(filters.stations).sal : null;
+    const typeFilter = filters.types?.length ? filters.types : null;
     const sal = await client.query<StationActivityRow>(
       `SELECT sal.id, sal.created_at, sal.station, sal.activity_type, s.name AS actor_name,
               sal.scan_ref, sal.tech_serial_number_id,
@@ -247,9 +311,10 @@ export async function readJourneyEntity(
           AND (sal.shipment_id = $2 OR (sal.activity_type = 'SERIAL_ADDED' AND tsn.shipment_id = $2))
           AND sal.created_at >= $3 AND sal.created_at < $4
           AND ($5::text[] IS NULL OR sal.station = ANY($5::text[]))
+          AND ($6::text[] IS NULL OR sal.activity_type = ANY($6::text[]))
         ORDER BY sal.created_at DESC, sal.id DESC
-        LIMIT $6`,
-      [orgId, anchors.shipmentId, from, to, stationFilter, limit],
+        LIMIT $7`,
+      [orgId, anchors.shipmentId, from, to, stationFilter, typeFilter, limit],
     );
     for (const r of sal.rows) {
       const raw: StationActivityRow = {
@@ -277,7 +342,12 @@ export async function readJourneyEntity(
   // 2) inventory_events — the unit lifecycle (reuse the shared spine reader).
   if (want('inventory') && anchors.serialUnitIds.length > 0) {
     const spine = await deps.readInventorySpine(
-      { serialUnitIds: anchors.serialUnitIds, order: 'desc', limit },
+      {
+        serialUnitIds: anchors.serialUnitIds,
+        order: 'desc',
+        limit,
+        eventTypes: filters.types?.length ? filters.types : undefined,
+      },
       orgId,
     );
     for (const r of spine) {
@@ -305,7 +375,7 @@ export async function readJourneyEntity(
   // 3) audit_logs — order-anchored edits.
   if (want('audit') && anchors.orderId != null) {
     const audit = await client.query<OrderAuditRow>(
-      `SELECT al.id, al.created_at, al.action, al.after_data, al.metadata, s.name AS actor_name
+      `SELECT al.id, al.created_at, al.action, al.before_data, al.after_data, al.metadata, s.name AS actor_name
          FROM audit_logs al
          LEFT JOIN staff s ON s.id = al.actor_staff_id
         WHERE lower(al.entity_type) = 'order' AND al.entity_id = $1 AND al.organization_id = $2
@@ -358,10 +428,13 @@ export async function readJourneyEntity(
       to_status: string | null;
       created_at: string | null;
       serial_number: string | null;
+      actor_name: string | null;
     }>(
-      `SELECT ev.id, ev.event_type, ev.from_status, ev.to_status, ev.created_at, wc.serial_number
+      `SELECT ev.id, ev.event_type, ev.from_status, ev.to_status, ev.created_at, wc.serial_number,
+              s.name AS actor_name
          FROM warranty_claim_events ev
          JOIN warranty_claims wc ON wc.id = ev.claim_id AND wc.organization_id = ev.organization_id AND wc.deleted_at IS NULL
+         LEFT JOIN staff s ON s.id = ev.actor_staff_id AND s.organization_id = ev.organization_id
         WHERE ev.organization_id = $1
           AND (($2::int IS NOT NULL AND wc.order_id = $2::int) OR wc.serial_unit_id = ANY($3::int[]))
           AND ev.created_at >= $4 AND ev.created_at < $5
@@ -376,6 +449,7 @@ export async function readJourneyEntity(
         fromStatus: r.from_status,
         toStatus: r.to_status,
         createdAt: r.created_at,
+        actorName: r.actor_name,
       };
       out.push({
         source: 'warranty',

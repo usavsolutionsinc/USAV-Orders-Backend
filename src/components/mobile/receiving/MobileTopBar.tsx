@@ -3,6 +3,7 @@
 import { ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 
 interface MobileTopBarProps {
   title: string;
@@ -28,22 +29,20 @@ export function MobileTopBar({ title, subtitle, backHref, right }: MobileTopBarP
   }, [backHref, router]);
 
   return (
-    <header className="sticky top-0 z-header flex h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-      <button
-        type="button"
+    <header className="sticky top-0 z-header flex h-14 items-center gap-2 border-b border-border-hairline bg-surface-card/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-surface-card/80">
+      <IconButton
         onClick={handleBack}
-        aria-label="Back"
-        className="-ml-1 flex h-11 w-11 items-center justify-center rounded-full text-gray-900 active:bg-gray-100"
-      >
-        <ChevronLeft className="h-6 w-6" />
-      </button>
+        ariaLabel="Back"
+        icon={<ChevronLeft className="h-6 w-6 text-text-default" />}
+        className="-ml-1 flex h-11 w-11 items-center justify-center rounded-full active:bg-surface-sunken"
+      />
       <div className="min-w-0 flex-1">
         {subtitle ? (
-          <p className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-500">
+          <p className="truncate text-micro font-black uppercase tracking-[0.18em] text-text-soft">
             {subtitle}
           </p>
         ) : null}
-        <p className="truncate text-base font-black tracking-tight text-gray-900">
+        <p className="truncate text-base font-black tracking-tight text-text-default">
           {title}
         </p>
       </div>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { Loader2, Plus, Wrench, AlertTriangle, Check, ShieldCheck } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { timeAgo } from '@/utils/_date';
 import { qualityRiskToneClass } from '@/lib/quality-risk-tone';
 import { qualitySeverityToneClass } from '@/lib/quality-severity-tone';
@@ -64,8 +65,8 @@ interface FailureMode {
   category: string;
 }
 
-const CARD = 'rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60';
-const HEAD = 'text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500';
+const CARD = 'rounded-2xl bg-surface-card shadow-sm ring-1 ring-border-soft/60';
+const HEAD = 'text-eyebrow font-black uppercase tracking-[0.14em] text-text-soft';
 
 function prettyReason(r: string): string {
   return r.replace(/_/g, ' ');
@@ -98,7 +99,7 @@ export function UnitQualityPanel({ serialUnitId }: { serialUnitId: number }) {
   if (isLoading) {
     return (
       <section className={CARD}>
-        <div className="flex items-center gap-2 px-5 py-4 text-caption text-gray-400">
+        <div className="flex items-center gap-2 px-5 py-4 text-caption text-text-faint">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading quality…
         </div>
       </section>
@@ -142,26 +143,26 @@ function QualityCard({ quality, grade }: { quality: QualityScore | null; grade: 
         </span>
       </div>
       <div className="flex items-end gap-3">
-        <span className="text-4xl font-black tabular-nums text-gray-900">{quality.quality_score}</span>
-        <span className="pb-1 text-caption font-semibold text-gray-400">/ 100</span>
-        <div className="ml-auto text-right text-micro text-gray-400">
-          {grade ? <div className="font-bold text-gray-700">{grade}</div> : null}
+        <span className="text-4xl font-black tabular-nums text-text-default">{quality.quality_score}</span>
+        <span className="pb-1 text-caption font-semibold text-text-faint">/ 100</span>
+        <div className="ml-auto text-right text-micro text-text-faint">
+          {grade ? <div className="font-bold text-text-muted">{grade}</div> : null}
           {quality.ebay_condition_id ? <div>eBay cond {quality.ebay_condition_id}</div> : null}
         </div>
       </div>
-      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-sunken">
         <div className={`h-full rounded-full ${barColor}`} style={{ width: `${quality.quality_score}%` }} />
       </div>
       {quality.risk_reasons.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {quality.risk_reasons.map((r) => (
-            <span key={r} className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-medium text-gray-600">
+            <span key={r} className="rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-medium text-text-muted">
               {prettyReason(r)}
             </span>
           ))}
         </div>
       )}
-      <p className="mt-2 text-micro text-gray-400">Updated {timeAgo(quality.computed_at)}</p>
+      <p className="mt-2 text-micro text-text-faint">Updated {timeAgo(quality.computed_at)}</p>
     </section>
   );
 }
@@ -228,22 +229,24 @@ function FailureTagsCard({
     <section className={CARD}>
       <header className="flex items-center justify-between px-5 py-4">
         <h3 className={HEAD}>Failure tags</h3>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setAdding((v) => !v)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-50"
+          className="text-blue-600 hover:bg-blue-50"
+          icon={<Plus />}
         >
-          <Plus className="h-3.5 w-3.5" /> Tag
-        </button>
+          Tag
+        </Button>
       </header>
 
       {adding && (
-        <div className="border-t border-gray-100 px-5 py-3">
+        <div className="border-t border-border-hairline px-5 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={modeId}
               onChange={(e) => setModeId(e.target.value)}
-              className="min-w-[12rem] flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-caption font-medium text-gray-900"
+              className="min-w-[12rem] flex-1 rounded-md border border-border-soft bg-surface-canvas px-2 py-1.5 text-caption font-medium text-text-default"
             >
               <option value="">{modes.isLoading ? 'Loading…' : 'Select failure mode…'}</option>
               {(modes.data ?? []).map((m) => (
@@ -254,57 +257,59 @@ function FailureTagsCard({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Note (optional)"
-              className="min-w-[8rem] flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-caption font-medium text-gray-900 placeholder:text-gray-400"
+              className="min-w-[8rem] flex-1 rounded-md border border-border-soft bg-surface-canvas px-2 py-1.5 text-caption font-medium text-text-default placeholder:text-text-faint"
             />
-            <button
-              type="button"
+            <Button
+              variant="brand"
+              size="sm"
+              className="shrink-0"
               disabled={!modeId || addTag.isPending}
               onClick={() => addTag.mutate()}
-              className="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
             >
               {addTag.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {tags.length === 0 ? (
-        <p className="border-t border-gray-100 px-5 py-3 text-caption text-gray-400">No failures tagged.</p>
+        <p className="border-t border-border-hairline px-5 py-3 text-caption text-text-faint">No failures tagged.</p>
       ) : (
-        <ul className="border-t border-gray-100 divide-y divide-gray-100">
+        <ul className="border-t border-border-hairline divide-y divide-border-hairline">
           {[...open, ...resolved].map((t) => {
             const isOpen = t.resolution_status === 'open';
             return (
               <li key={t.id} className="flex items-start gap-2 px-5 py-3">
-                <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${isOpen ? 'text-rose-500' : 'text-gray-300'}`} />
+                <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${isOpen ? 'text-rose-500' : 'text-text-faint'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`text-label font-bold ${isOpen ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                    <span className={`text-label font-bold ${isOpen ? 'text-text-default' : 'text-text-faint line-through'}`}>
                       {t.label ?? t.code ?? `Mode #${t.failure_mode_id}`}
                     </span>
                     {t.severity && (
-                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase ${qualitySeverityToneClass(t.severity)}`}>
+                      <span className={`rounded-full border px-1.5 py-0.5 text-micro font-bold uppercase ${qualitySeverityToneClass(t.severity)}`}>
                         {t.severity}
                       </span>
                     )}
                     {!isOpen && (
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">{t.resolution_status}</span>
+                      <span className="text-micro font-bold uppercase tracking-wider text-emerald-600">{t.resolution_status}</span>
                     )}
                   </div>
-                  <div className="mt-0.5 text-micro text-gray-500">
+                  <div className="mt-0.5 text-micro text-text-soft">
                     {timeAgo(t.detected_at)} · {t.source}{t.detected_by_name ? ` · ${t.detected_by_name}` : ''}
                   </div>
-                  {t.notes && <p className="mt-0.5 text-caption text-gray-600">{t.notes}</p>}
+                  {t.notes && <p className="mt-0.5 text-caption text-text-muted">{t.notes}</p>}
                 </div>
                 {isOpen && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 text-emerald-600 hover:bg-emerald-50"
                     disabled={resolveTag.isPending}
                     onClick={() => resolveTag.mutate(t.id)}
-                    className="shrink-0 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
                   >
                     Resolve
-                  </button>
+                  </Button>
                 )}
               </li>
             );
@@ -365,28 +370,31 @@ function RepairsCard({
     <section className={CARD}>
       <header className="flex items-center justify-between px-5 py-4">
         <h3 className={HEAD}>Repair history</h3>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setOpening((v) => !v)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-50"
+          className="text-blue-600 hover:bg-blue-50"
+          icon={<Plus />}
         >
-          <Plus className="h-3.5 w-3.5" /> Log repair
-        </button>
+          Log repair
+        </Button>
       </header>
 
       {opening && (
-        <div className="space-y-2 border-t border-gray-100 px-5 py-3">
+        <div className="space-y-2 border-t border-border-hairline px-5 py-3">
           <input
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             placeholder="What's being repaired?"
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-medium text-gray-900 placeholder:text-gray-400"
+            className="w-full rounded-md border border-border-soft bg-surface-canvas px-2.5 py-1.5 text-caption font-medium text-text-default placeholder:text-text-faint"
           />
           {openFailureModes.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {openFailureModes.map((m) => {
                 const on = linked.has(m.id);
                 return (
+                  // ds-raw-button: two-state toggle chip (conditional active styling), no DS variant
                   <button
                     key={m.id}
                     type="button"
@@ -396,7 +404,7 @@ function RepairsCard({
                       return n;
                     })}
                     className={`rounded-full border px-2 py-0.5 text-micro font-medium transition-colors ${
-                      on ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                      on ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-border-soft text-text-soft hover:bg-surface-hover'
                     }`}
                   >
                     {on ? '✓ ' : ''}{m.label}
@@ -405,22 +413,23 @@ function RepairsCard({
               })}
             </div>
           )}
-          <button
-            type="button"
+          <Button
+            variant="brand"
+            size="sm"
             disabled={!summary.trim() || openRepair.isPending}
             onClick={() => openRepair.mutate()}
-            className="flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+            loading={openRepair.isPending}
+            icon={<Wrench />}
           >
-            {openRepair.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
             Open repair
-          </button>
+          </Button>
         </div>
       )}
 
       {repairs.length === 0 ? (
-        <p className="border-t border-gray-100 px-5 py-3 text-caption text-gray-400">No repairs logged.</p>
+        <p className="border-t border-border-hairline px-5 py-3 text-caption text-text-faint">No repairs logged.</p>
       ) : (
-        <ul className="border-t border-gray-100 divide-y divide-gray-100">
+        <ul className="border-t border-border-hairline divide-y divide-border-hairline">
           {repairs.map((r) => (
             <RepairRowItem key={r.id} repair={r} onComplete={(costDollars) => completeRepair.mutate({ id: r.id, costDollars })} completing={completeRepair.isPending} />
           ))}
@@ -444,13 +453,13 @@ function RepairRowItem({
   return (
     <li className="px-5 py-3">
       <div className="flex items-center gap-2">
-        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${repairOutcomeToneClass(repair.status)}`}>
+        <span className={`rounded-md px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${repairOutcomeToneClass(repair.status)}`}>
           {repair.status.replace(/_/g, ' ')}
         </span>
-        <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-900">{repair.summary}</span>
-        {repair.cost_cents != null && <span className="text-micro font-semibold text-gray-500">{dollars(repair.cost_cents)}</span>}
+        <span className="min-w-0 flex-1 truncate text-label font-bold text-text-default">{repair.summary}</span>
+        {repair.cost_cents != null && <span className="text-micro font-semibold text-text-soft">{dollars(repair.cost_cents)}</span>}
       </div>
-      <div className="mt-0.5 text-micro text-gray-500">
+      <div className="mt-0.5 text-micro text-text-soft">
         {timeAgo(repair.created_at)}
         {repair.started_by_name ? ` · ${repair.started_by_name}` : ''}
         {repair.completed_at ? ` · done ${timeAgo(repair.completed_at)}` : ''}
@@ -458,7 +467,7 @@ function RepairRowItem({
       {repair.failure_modes && repair.failure_modes.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
           {repair.failure_modes.map((m) => (
-            <span key={m.id} className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{m.label}</span>
+            <span key={m.id} className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-micro font-medium text-text-muted">{m.label}</span>
           ))}
         </div>
       )}
@@ -469,16 +478,18 @@ function RepairRowItem({
             onChange={(e) => setCost(e.target.value)}
             inputMode="decimal"
             placeholder="Cost $ (opt)"
-            className="w-28 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-caption font-medium text-gray-900 placeholder:text-gray-400"
+            className="w-28 rounded-md border border-border-soft bg-surface-canvas px-2 py-1 text-caption font-medium text-text-default placeholder:text-text-faint"
           />
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={completing}
             onClick={() => onComplete(cost)}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+            className="text-emerald-600 hover:bg-emerald-50"
+            icon={<Check />}
           >
-            <Check className="h-3.5 w-3.5" /> Complete
-          </button>
+            Complete
+          </Button>
         </div>
       )}
     </li>

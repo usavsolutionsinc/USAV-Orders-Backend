@@ -3,7 +3,7 @@
 /**
  * Operations master-page sidebar — the single contextual panel for `/operations`.
  *
- * It owns the four-mode switcher (Live · Analytics · Insights · History) and,
+ * It owns the five-mode switcher (Live · Analytics · Insights · History · Signals) and,
  * per mode, the contextual search / filters / quick-nav. The right pane
  * (OperationsWorkspace) is purely visual and reacts to the same `?mode=` /
  * `?range=` / `?section=` / `?q=` URL params. Follows the house sidebar-mode
@@ -14,9 +14,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/utils/_cn';
-import { SIDEBAR_GUTTER, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { SidebarNavOverlaySlider } from '@/components/sidebar/SidebarNavOverlaySlider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { OperationsModeToggle } from '@/components/sidebar/operations/OperationsModeToggle';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav/MasterNavContext';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import {
@@ -26,14 +29,10 @@ import {
   Layers,
   MessageSquare,
   PackageCheck,
-  Plus,
   RefreshCw,
   Sparkles,
-  Star,
-  Trash2,
   TrendingUp,
   Wrench,
-  X,
 } from '@/components/Icons';
 import { emitAiChatNew, emitAiChatPrompt } from '@/components/ai/ai-chat-events';
 import { useQuery } from '@tanstack/react-query';
@@ -41,21 +40,30 @@ import { OPERATIONS_QUERY_KEY } from '@/features/operations/components/operation
 import type { DashboardData } from '@/features/operations/types';
 import {
   ANALYTICS_RANGE_LABELS,
-  OPERATIONS_MODE_ITEMS,
   JOURNEY_DIMENSION_ITEMS,
-  JOURNEY_STATION_ITEMS,
-  JOURNEY_TYPE_ITEMS,
   parseAnalyticsRange,
   type AnalyticsRange,
   type OperationsMode,
 } from '@/components/sidebar/operations/operations-sidebar-shared';
 import { useOperationsMode } from '@/components/sidebar/operations/useOperationsMode';
 import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
-import { useOperationsSavedViews } from '@/hooks/useOperationsSavedViews';
-import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
-import type { DateRange } from 'react-day-picker';
-import { startOfDay, endOfDay } from 'date-fns';
+import { usePageHeaderSearch } from '@/hooks/usePageHeader';
+import { useSearchRecents } from '@/hooks/useSearchRecents';
+import { SearchRecentsDropdown } from '@/components/search/SearchRecentsDropdown';
+import { useOperationsSearchBusy } from '@/components/operations/operations-search-status';
+import { isUnifiedHeaderSearchEnabled } from '@/lib/search/unified-header-search';
+import { isOperationsHistoryBrowseEnabled } from '@/lib/operations/operations-history-flags';
+import { HistoryBrowseFilters } from '@/components/sidebar/operations/HistoryBrowseFilters';
+import { pushSearchRecent } from '@/lib/search/search-recents';
+import { looksLikeIdentifier } from '@/lib/search/search-hit';
 import type { JourneyDimension } from '@/lib/timeline/journey';
+import {
+  parseSignalsView,
+  replaceOperationsSignalsUrl,
+  SIGNALS_VIEW_ITEMS,
+  type SignalsView,
+} from '@/features/signals/signals-url';
+import { SIGNAL_KIND_LIST, SIGNAL_KINDS } from '@/lib/surfaces/registry';
 
 const ANALYTICS_RANGES: AnalyticsRange[] = ['24h', '7d', '30d'];
 
@@ -87,29 +95,20 @@ export function OperationsSidebarPanel() {
 
   // The mode rail is suppressed when the master-nav drives mode switching
   // (operations isn't in MASTER_NAV_RAIL_PAGES today, so it renders its own).
-  const modeRail = masterNavEnabled ? null : (
-    <div className={cn(sidebarHeaderPillRowClass, 'gap-0')}>
-      <HorizontalButtonSlider
-        items={OPERATIONS_MODE_ITEMS}
-        value={mode}
-        onChange={(id) => updateMode(id as OperationsMode)}
-        variant="nav"
-        dense
-        className="w-full"
-        aria-label="Operations mode"
-      />
-    </div>
+  const modeToggle = masterNavEnabled ? null : (
+    <OperationsModeToggle value={mode} onChange={(id) => updateMode(id as OperationsMode)} />
   );
 
-  if (mode === 'analytics') return <AnalyticsSidebar modeRail={modeRail} />;
-  if (mode === 'insights') return <InsightsSidebar modeRail={modeRail} />;
-  if (mode === 'history') return <HistorySidebar modeRail={modeRail} />;
-  return <LiveSidebar modeRail={modeRail} />;
+  if (mode === 'analytics') return <AnalyticsSidebar modeToggle={modeToggle} />;
+  if (mode === 'insights') return <InsightsSidebar modeToggle={modeToggle} />;
+  if (mode === 'history') return <HistorySidebar modeToggle={modeToggle} />;
+  if (mode === 'signals') return <SignalsSidebar modeToggle={modeToggle} />;
+  return <LiveSidebar modeToggle={modeToggle} />;
 }
 
 // ── Live ────────────────────────────────────────────────────────────────────
 
-function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+function LiveSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const [q, setQ] = useState('');
   // Read-only view of the shared dashboard cache. The right-pane
   // OperationsDashboard owns the fetch + Ably subscription (Live mode mounts
@@ -148,16 +147,17 @@ function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
   return (
     <SidebarShell
-      headerAbove={modeRail}
       search={{ value: q, onChange: setQ, placeholder: 'Search live activity…', variant: 'blue' }}
+      bodyClassName="pt-0 pb-6"
     >
-      <div className={cn('space-y-4', SIDEBAR_GUTTER, 'pb-6')}>
+      {modeToggle}
+      <div className={cn('space-y-4 pt-4')}>
         <div className="grid grid-cols-2 gap-2">
           {kpis.map((k) => {
             const cell = data?.summary?.[k.key];
             return (
-              <div key={k.key} className="rounded-xl border border-gray-200 bg-white p-2.5">
-                <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{k.label}</p>
+              <div key={k.key} className="rounded-xl border border-border-soft bg-surface-card p-2.5">
+                <p className="text-eyebrow font-black uppercase tracking-widest text-text-soft">{k.label}</p>
                 <p className={cn('mt-0.5 text-xl font-black tabular-nums leading-none', k.tone)}>
                   {cell ? cell.value.toLocaleString() : isLoading ? '·' : '0'}
                 </p>
@@ -169,20 +169,20 @@ function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
         <div>
           <p className={cn(sectionLabel, 'mb-2')}>Live feed</p>
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border-hairline">
             {feed.slice(0, 24).map((r) => (
               <li key={r.id} className="flex items-start gap-2 py-1.5">
                 <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-400" aria-hidden />
                 <div className="min-w-0">
-                  <p className="truncate text-caption font-semibold text-gray-900">{r.summary || r.type}</p>
-                  <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+                  <p className="truncate text-caption font-semibold text-text-default">{r.summary || r.type}</p>
+                  <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-text-soft">
                     {r.source} · {r.actor_name ?? 'system'}
                   </p>
                 </div>
               </li>
             ))}
             {feed.length === 0 && (
-              <li className="py-6 text-center text-caption text-gray-400">
+              <li className="py-6 text-center text-caption text-text-faint">
                 {isLoading ? 'Loading live activity…' : 'No matching activity.'}
               </li>
             )}
@@ -195,7 +195,7 @@ function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
-function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+function AnalyticsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const range = parseAnalyticsRange(searchParams.get('range'));
@@ -212,10 +212,11 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
   );
 
   return (
-    <SidebarShell headerAbove={modeRail}>
-      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pt-3 pb-6')}>
+    <SidebarShell bodyClassName="pt-0 pb-6">
+      {modeToggle}
+      <div className={cn('space-y-5 pt-3')}>
         <header>
-          <h2 className="text-xl font-black uppercase leading-none tracking-tighter text-gray-900">Analytics</h2>
+          <h2 className="text-xl font-black uppercase leading-none tracking-tighter text-text-default">Analytics</h2>
           <p className="mt-1 text-eyebrow font-bold uppercase tracking-widest text-blue-600">
             Trends · breakdowns · inventory health
           </p>
@@ -229,11 +230,12 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
                 key={r}
                 type="button"
                 onClick={() => setParam('range', r)}
+                /* ds-raw-button: vertical segmented time-range toggle (selection ring) — not a Button shape */
                 className={cn(
-                  'flex items-center justify-between rounded-lg border px-3 py-1.5 text-left text-caption font-semibold transition-colors',
+                  'ds-raw-button flex items-center justify-between rounded-lg border px-3 py-1.5 text-left text-caption font-semibold transition-colors',
                   range === r
                     ? 'border-blue-400 bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-400'
-                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                    : 'border-border-soft bg-surface-card text-text-muted hover:bg-surface-hover',
                 )}
               >
                 {ANALYTICS_RANGE_LABELS[r]}
@@ -251,14 +253,15 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setParam('section', s.id)}
+                  /* ds-raw-button: jump-to nav row (icon + label, selection ring) — not a Button shape */
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-caption font-semibold transition-colors',
+                    'ds-raw-button flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-caption font-semibold transition-colors',
                     activeSection === s.id
                       ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-400'
-                      : 'text-gray-700 hover:bg-gray-50',
+                      : 'text-text-muted hover:bg-surface-hover',
                   )}
                 >
-                  <s.icon className="h-3.5 w-3.5 text-gray-400" />
+                  <s.icon className="h-3.5 w-3.5 text-text-faint" />
                   {s.label}
                 </button>
               </li>
@@ -272,54 +275,55 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
 // ── Insights (AI) ─────────────────────────────────────────────────────────────
 
-function InsightsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+function InsightsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   return (
-    <SidebarShell headerAbove={modeRail}>
-      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pt-3 pb-6')}>
+    <SidebarShell bodyClassName="pt-0 pb-6">
+      {modeToggle}
+      <div className={cn('space-y-5 pt-3')}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-inverse text-white">
               <Sparkles className="h-4 w-4" />
             </div>
-            <p className="text-base font-semibold tracking-tight text-gray-900">Ops Assistant</p>
+            <p className="text-base font-semibold tracking-tight text-text-default">Ops Assistant</p>
           </div>
-          <button
-            type="button"
-            onClick={() => emitAiChatNew()}
-            aria-label="New chat"
-            title="New chat"
-            className="-my-1 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
+          <HoverTooltip label="New chat" asChild>
+            <IconButton
+              icon={<RefreshCw className="h-4 w-4" />}
+              ariaLabel="New chat"
+              onClick={() => emitAiChatNew()}
+              className="-my-1 rounded-md p-1.5 hover:bg-surface-sunken"
+            />
+          </HoverTooltip>
         </div>
 
-        <p className="text-caption leading-5 text-gray-600">
+        <p className="text-caption leading-5 text-text-muted">
           Ask about the floor in plain English. The assistant streams its reply in the panel on the
           right with live operations + inventory context.
         </p>
 
         <div className="flex flex-col gap-2.5">
           {INSIGHTS_CAPABILITIES.map((c) => (
-            <div key={c.title} className="rounded-xl border border-gray-200 bg-white p-3">
-              <div className="flex items-center gap-2 text-gray-900">
+            <div key={c.title} className="rounded-xl border border-border-soft bg-surface-card p-3">
+              <div className="flex items-center gap-2 text-text-default">
                 <c.icon className="h-4 w-4 text-blue-500" />
                 <p className="text-caption font-semibold tracking-tight">{c.title}</p>
               </div>
-              <p className="mt-1 text-micro leading-5 text-gray-600">{c.detail}</p>
+              <p className="mt-1 text-micro leading-5 text-text-muted">{c.detail}</p>
             </div>
           ))}
         </div>
 
         <div>
-          <p className="text-micro font-black uppercase tracking-[0.2em] text-gray-500">Try asking</p>
+          <p className="text-micro font-black uppercase tracking-[0.2em] text-text-soft">Try asking</p>
           <div className="mt-3 flex flex-col gap-2">
             {INSIGHTS_PROMPTS.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => emitAiChatPrompt(p)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
+                /* ds-raw-button: multi-line text-left prompt suggestion card — not a Button shape */
+                className="ds-raw-button rounded-lg border border-border-soft bg-surface-card px-3 py-2 text-left text-caption leading-5 text-text-muted transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-text-default"
               >
                 {p}
               </button>
@@ -331,29 +335,125 @@ function InsightsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
   );
 }
 
-// ── History ───────────────────────────────────────────────────────────────────
+// ── Signals ───────────────────────────────────────────────────────────────────
 
-function ToggleChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+const SIGNALS_WINDOWS: Array<{ id: string; label: string; days: number | null }> = [
+  { id: '7d', label: '7 days', days: 7 },
+  { id: '30d', label: '30 days', days: 30 },
+  { id: '90d', label: '90 days', days: 90 },
+  { id: 'all', label: 'All time', days: null },
+];
+
+const SIGNALS_FILTER_SELECT_CLASS =
+  'w-full rounded-md border border-border-soft bg-surface-card px-2 py-1.5 text-caption font-semibold text-text-muted focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400';
+
+function SignalsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const signalsView = parseSignalsView(searchParams.get('signalsView'));
+  const windowId = searchParams.get('window') ?? '30d';
+  const kind = searchParams.get('signalKind') ?? '';
+
+  const setSignalsView = (next: SignalsView) => {
+    replaceOperationsSignalsUrl(router, searchParams, (sp) => {
+      if (next === 'browse') sp.set('signalsView', 'browse');
+      else sp.delete('signalsView');
+      sp.delete('signalId');
+      sp.delete('window');
+      sp.delete('signalKind');
+      sp.delete('q');
+    });
+  };
+
+  const setParam = useCallback(
+    (key: string, value: string) => {
+      replaceOperationsSignalsUrl(router, searchParams, (sp) => {
+        if (value) sp.set(key, value);
+        else sp.delete(key);
+      });
+    },
+    [router, searchParams],
+  );
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'rounded-md px-2 py-1 text-eyebrow font-bold uppercase tracking-wide ring-1 ring-inset transition-colors',
-        active ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50',
-      )}
+    <SidebarShell
+      headerAbove={modeToggle}
+      headerRows={[
+        <HorizontalButtonSlider
+          key="signals-view"
+          items={SIGNALS_VIEW_ITEMS}
+          value={signalsView}
+          onChange={(id) => setSignalsView(id as SignalsView)}
+          variant="nav"
+          dense
+          className="w-full"
+          aria-label="Signals view"
+        />,
+      ]}
+      bodyClassName="pt-0 pb-6"
     >
-      {label}
-    </button>
+      <div className={cn('space-y-4 pt-3')}>
+        {signalsView === 'timeline' ? (
+          <>
+            <p className="text-caption leading-5 text-text-muted">
+              Org-scoped timeline — returns, test fails, receiving exceptions, denials, buyer notes.
+            </p>
+            <div className="space-y-2">
+              <label className="block space-y-1">
+                <span className={cn(sectionLabel)}>Time window</span>
+                <select
+                  className={SIGNALS_FILTER_SELECT_CLASS}
+                  value={windowId}
+                  onChange={(e) => setParam('window', e.target.value === '30d' ? '' : e.target.value)}
+                  aria-label="Time window"
+                >
+                  {SIGNALS_WINDOWS.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className={cn(sectionLabel)}>Signal kind</span>
+                <select
+                  className={SIGNALS_FILTER_SELECT_CLASS}
+                  value={kind}
+                  onChange={(e) => setParam('signalKind', e.target.value)}
+                  aria-label="Signal kind"
+                >
+                  <option value="">All kinds</option>
+                  {SIGNAL_KIND_LIST.map((k) => (
+                    <option key={k} value={k}>
+                      {SIGNAL_KINDS[k].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </>
+        ) : (
+          <p className="text-caption leading-5 text-text-muted">
+            Search from the header bar, then select a signal to inspect its detail.
+          </p>
+        )}
+      </div>
+    </SidebarShell>
   );
 }
 
-function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
+// ── History ───────────────────────────────────────────────────────────────────
+
+function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const url = useOperationsTimelineUrlState();
-  const savedViews = useOperationsSavedViews();
-  const [naming, setNaming] = useState(false);
-  const [draftName, setDraftName] = useState('');
+  const unifiedOn = isUnifiedHeaderSearchEnabled();
+  // Browse-feed filters show when the browse region is on-screen (flag on, not
+  // focused on a record). The URL setters they drive already exist.
+  const showFilters = isOperationsHistoryBrowseEnabled() && !url.focused;
+  const { recents, remove, clear } = useSearchRecents({ scope: 'operations:history' });
+  // Reflect the browse fetch on the header pill's spinner (results pane owns
+  // the fetch; this is the cross-subtree bridge).
+  const searchBusy = useOperationsSearchBusy();
 
   const placeholder =
     url.dim === 'order'
@@ -362,186 +462,84 @@ function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
         ? 'Search a serial number…'
         : 'Search a tracking number…';
 
-  const dateValue: DateRange | undefined =
-    url.from || url.until
-      ? { from: url.from ? new Date(url.from) : undefined, to: url.until ? new Date(url.until) : undefined }
-      : undefined;
+  // Flag ON: the GLOBAL header drives an operations ?q= browse (results in the
+  // right pane); recents live here. Enter on an exact identifier fast-paths
+  // straight to that record's timeline (keeps today's paste-a-number reflex).
+  // Flag OFF: control is null → header stays global, sidebar owns entity search.
+  usePageHeaderSearch(
+    unifiedOn
+      ? {
+          value: url.q,
+          onChange: (v) => url.setQ(v),
+          onClear: () => url.setQ(''),
+          onSearch: (v) => {
+            const t = v.trim();
+            if (!t) return;
+            if (looksLikeIdentifier(t)) {
+              url.setEntity(t);
+              return;
+            }
+            pushSearchRecent({
+              query: t,
+              scope: 'operations:history',
+              scopeLabel: 'Operations · History',
+              scopeHref: `/operations?mode=history&q=${encodeURIComponent(t)}`,
+            });
+            url.setQ(t);
+          },
+          placeholder: 'Search shipped orders, serials, tracking…',
+          debounceMs: 300,
+          isSearching: searchBusy,
+        }
+      : null,
+    [unifiedOn, url.q, url.dim, searchBusy],
+  );
 
-  const onDateChange = (r: DateRange | undefined) => {
-    url.setRange(
-      r?.from ? startOfDay(r.from).toISOString() : null,
-      r?.to ? endOfDay(r.to).toISOString() : null,
-    );
-  };
-
-  const handleSaveView = () => {
-    const name = draftName.trim();
-    if (!name) return;
-    savedViews.create({ name, filters: url.filters });
-    setDraftName('');
-    setNaming(false);
-  };
-
-  return (
-    <SidebarShell
-      headerAbove={modeRail}
-      search={{
-        value: url.entityValue,
-        onChange: (v) => url.setEntity(v),
-        placeholder,
-        variant: 'blue',
-        debounceMs: 250,
-      }}
-      headerRows={[
-        <HorizontalButtonSlider
-          key="dimension"
+  // Flag OFF: pure record lookup — pick a dimension, paste a number. The right
+  // pane teaches the empty state; the body stays clean.
+  if (!unifiedOn) {
+    return (
+      <SidebarShell
+        search={{
+          value: url.entityValue,
+          onChange: (v) => url.setEntity(v),
+          placeholder,
+          variant: 'blue',
+          debounceMs: 250,
+        }}
+        bodyClassName="pt-0"
+      >
+        {modeToggle}
+        <SidebarNavOverlaySlider
           items={JOURNEY_DIMENSION_ITEMS}
           value={url.dim}
           onChange={(id) => url.setDim(id as JourneyDimension)}
-          variant="nav"
-          dense
-          className="w-full"
           aria-label="Journey dimension"
-        />,
-      ]}
-    >
-      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pb-6 pt-1')}>
-        {/* Date range */}
-        <div className="space-y-1.5">
-          <p className={sectionLabel}>Date range</p>
-          <DateRangePickerField value={dateValue} onChange={onDateChange} placeholder="Any time" className="w-full" />
-        </div>
+        />
+        {showFilters ? <HistoryBrowseFilters url={url} /> : null}
+      </SidebarShell>
+    );
+  }
 
-        {/* Stations */}
-        <div className="space-y-1.5">
-          <p className={sectionLabel}>Stations</p>
-          <div className="flex flex-wrap gap-1.5">
-            {JOURNEY_STATION_ITEMS.map((s) => (
-              <ToggleChip
-                key={s.id}
-                label={s.label}
-                active={url.stations.includes(s.id)}
-                onClick={() => url.toggleStation(s.id)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Event types */}
-        <div className="space-y-1.5">
-          <p className={sectionLabel}>Event types</p>
-          <div className="flex flex-wrap gap-1.5">
-            {JOURNEY_TYPE_ITEMS.map((t) => (
-              <ToggleChip
-                key={t.id}
-                label={t.label}
-                active={url.types.includes(t.id)}
-                onClick={() => url.toggleType(t.id)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {url.activeFilterCount > 0 ? (
-          <button
-            type="button"
-            onClick={url.clearFilters}
-            className="inline-flex items-center gap-1.5 text-caption font-semibold text-gray-500 hover:text-gray-700"
-          >
-            <X className="h-3.5 w-3.5" /> Clear {url.activeFilterCount} filter
-            {url.activeFilterCount === 1 ? '' : 's'}
-          </button>
-        ) : null}
-
-        {/* Saved views */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <p className={sectionLabel}>Saved views</p>
-            <button
-              type="button"
-              onClick={() => setNaming((v) => !v)}
-              className="-my-0.5 inline-flex items-center gap-0.5 text-eyebrow font-bold uppercase tracking-wide text-blue-600 hover:text-blue-700"
-            >
-              <Plus className="h-3.5 w-3.5" /> Save
-            </button>
-          </div>
-
-          {naming ? (
-            <div className="flex items-center gap-1.5">
-              <input
-                autoFocus
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveView();
-                  if (e.key === 'Escape') {
-                    setNaming(false);
-                    setDraftName('');
-                  }
-                }}
-                placeholder="Name this view…"
-                className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-caption text-gray-900 focus:border-blue-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleSaveView}
-                disabled={!draftName.trim() || savedViews.creating}
-                className="rounded-md bg-blue-600 px-2 py-1 text-eyebrow font-bold uppercase tracking-wide text-white disabled:opacity-50"
-              >
-                Save
-              </button>
-            </div>
-          ) : null}
-          {savedViews.createError ? (
-            <p className="text-micro font-semibold text-rose-600">{savedViews.createError}</p>
-          ) : null}
-
-          {savedViews.views.length > 0 ? (
-            <ul className="divide-y divide-gray-100">
-              {savedViews.views.map((v) => (
-                <li key={v.id} className="flex items-center gap-2 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => url.applyView(v.filters)}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                  >
-                    <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                    <span className="truncate text-caption font-semibold text-gray-700">{v.name}</span>
-                    {v.is_shared ? (
-                      <span className="shrink-0 rounded bg-gray-100 px-1 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-gray-500">
-                        Shared
-                      </span>
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Delete the saved view “${v.name}”?`)) savedViews.remove(v.id);
-                    }}
-                    aria-label={`Delete view ${v.name}`}
-                    className="-my-0.5 shrink-0 text-gray-300 hover:text-rose-500"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : !naming ? (
-            <p className="text-micro leading-5 text-gray-400">
-              Save the current filters as a named view to reuse later.
-            </p>
-          ) : null}
-        </div>
-
-        {/* Teaching card */}
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4">
-          <p className="text-caption font-semibold text-gray-700">Operations journey</p>
-          <p className="mt-1 text-micro leading-5 text-gray-500">
-            Search a serial, order, or tracking number to see its complete journey across every
-            station — or browse recent journeys here. Pick the dimension above.
-          </p>
-        </div>
-      </div>
+  // Flag ON: no sidebar search bar (the header owns it). Dimension toggle scopes
+  // the exact-id fast-path and the drill dimension; recent searches re-run ?q=.
+  return (
+    <SidebarShell bodyClassName="pt-0">
+      {modeToggle}
+      <SidebarNavOverlaySlider
+        items={JOURNEY_DIMENSION_ITEMS}
+        value={url.dim}
+        onChange={(id) => url.setDim(id as JourneyDimension)}
+        aria-label="Journey dimension"
+      />
+      <SearchRecentsDropdown
+        recents={recents}
+        onSelect={(entry) => url.setQ(entry.query)}
+        onRemove={remove}
+        onClearAll={() => clear('operations:history')}
+        className="mt-2"
+      />
+      {showFilters ? <HistoryBrowseFilters url={url} /> : null}
     </SidebarShell>
   );
 }
@@ -549,7 +547,7 @@ function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
 // ── Shared bits ───────────────────────────────────────────────────────────────
 
 function DeltaPill({ delta, invert = false }: { delta: number; invert?: boolean }) {
-  if (!delta) return <p className="mt-1 text-eyebrow font-semibold text-gray-400">No change</p>;
+  if (!delta) return <p className="mt-1 text-eyebrow font-semibold text-text-faint">No change</p>;
   const positive = invert ? delta < 0 : delta > 0;
   return (
     <p

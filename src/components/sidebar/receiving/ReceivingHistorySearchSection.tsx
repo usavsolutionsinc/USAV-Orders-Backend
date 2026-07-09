@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useIsFetching } from '@tanstack/react-query';
 import {
-  ClipboardList,
-  Layout,
   Hash,
   Layers,
   FileText,
@@ -15,9 +13,10 @@ import {
   AlertTriangle,
   Plus,
   PackageOpen,
-  PackageCheck,
+  Layout,
 } from '@/components/Icons';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useDebounce } from '@/hooks';
 import {
   RECEIVING_HISTORY_SEARCH_FIELDS,
@@ -41,8 +40,7 @@ type ChipIcon = React.FC<{ className?: string }>;
 
 const SCOPE_ITEMS: { id: ReceivingHistorySearchScope; label: string; icon: ChipIcon }[] = [
   { id: 'all', label: 'All', icon: Layout },
-  { id: 'zoho_po', label: 'PO', icon: ClipboardList },
-  { id: 'unmatched', label: 'Unmatched', icon: AlertTriangle },
+  { id: 'unmatched', label: 'Unfound', icon: AlertTriangle },
 ];
 
 const FIELD_ICONS: Record<ReceivingHistorySearchField, ChipIcon> = {
@@ -60,7 +58,6 @@ const FIELD_ICONS: Record<ReceivingHistorySearchField, ChipIcon> = {
 const SORT_ICONS: Record<string, ChipIcon> = {
   scanned_newest: Barcode,
   unboxed_newest: PackageOpen,
-  received_newest: PackageCheck,
 };
 
 interface Props {
@@ -156,7 +153,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
   // unfiltered default, so it doesn't count) and surface as a removable chip.
   const refinements = useMemo(() => {
     const out: { id: string; label: string; onRemove: () => void }[] = [];
-    // Non-default sort reads as a removable chip (default Scanned is implicit).
+    // Non-default sort reads as a removable chip (default Unboxed is implicit).
     if (sort !== HISTORY_DEFAULT_SORT) {
       const label = HISTORY_SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort;
       out.push({ id: 'sort', label: `Sort: ${label}`, onRemove: () => setSort(HISTORY_DEFAULT_SORT) });
@@ -184,7 +181,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
     // shrink-0 section (not a full panel) — override the shell's h-full +
     // overflow-hidden so it sizes to content and the filter popover isn't clipped.
     <SidebarShell
-      className="h-auto shrink-0 overflow-visible bg-white"
+      className="h-auto shrink-0 overflow-visible bg-surface-card"
       search={{
         value: draft,
         onChange: setDraft,
@@ -192,20 +189,21 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
         isSearching: tableFetching,
         variant: 'blue',
         rightElement: (
-          <button
-            type="button"
-            onClick={() => {
-              onSwitchToReceiving();
-              queueMicrotask(() => {
-                window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
-              });
-            }}
-            className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-            title="Receive — scan a new tracking number"
-            aria-label="Switch to receiving tab and focus scan field"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
+          <HoverTooltip label="Receive — scan a new tracking number" asChild>
+            <button
+              type="button"
+              onClick={() => {
+                onSwitchToReceiving();
+                queueMicrotask(() => {
+                  window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
+                });
+              }}
+              className="ds-raw-button rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-surface-strong"
+              aria-label="Switch to receiving tab and focus scan field"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </HoverTooltip>
         ),
       }}
       filter={{
@@ -214,11 +212,9 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
         onClearAll: activeFilterCount > 0 ? clearFilters : undefined,
         renderDropdown: () => (
           <div className="space-y-3">
-            {/* Sort by — the History time axis (Scanned vs Unboxed). Drives both
-                the day-band a row lands in and the order within it. Options come
-                from the History mode descriptor (HISTORY_SORT_OPTIONS). */}
+            {/* Sort by — lifecycle axis for day headers + server ORDER BY. */}
             <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Sort by
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -231,10 +227,10 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                       type="button"
                       onClick={() => setSort(option.id)}
                       aria-pressed={active}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+                      className={`ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                         active
                           ? 'bg-blue-600 text-white ring-blue-600'
-                          : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                          : 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -245,9 +241,9 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
               </div>
             </div>
 
-            {/* Carton source — was the scope slider (All / PO / Unmatched). */}
+            {/* Carton source — All vs unfound (unmatched) cartons only. */}
             <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Carton source
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -260,10 +256,10 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                       type="button"
                       onClick={() => setScope(item.id)}
                       aria-pressed={active}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+                      className={`ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                         active
                           ? 'bg-blue-600 text-white ring-blue-600'
-                          : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                          : 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -276,7 +272,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
 
             {/* Search field — was the field slider (All / PO # / … / Serial #). */}
             <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-text-soft">
                 Search field
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -289,10 +285,10 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                       type="button"
                       onClick={() => setField(field.id)}
                       aria-pressed={active}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+                      className={`ds-raw-button inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                         active
                           ? 'bg-blue-600 text-white ring-blue-600'
-                          : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                          : 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -301,7 +297,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
                   );
                 })}
               </div>
-              <p className={`${microBadge} mt-1.5 px-0.5 text-gray-500`}>
+              <p className={`${microBadge} mt-1.5 px-0.5 text-text-soft`}>
                 {getReceivingHistoryHelperText(searchField)}
               </p>
             </div>

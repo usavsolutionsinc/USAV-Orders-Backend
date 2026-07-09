@@ -10,6 +10,8 @@ import { WarrantyTicketButton } from '@/components/warranty/WarrantyTicketPopove
 import { WarrantyQuotesSection } from '@/components/warranty/WarrantyQuotesSection';
 import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
 import { EventTimeline } from '@/components/ui/EventTimeline';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { warrantyEventsToTimeline } from '@/lib/timeline';
 import { formatDateTimePST } from '@/utils/date';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
@@ -23,16 +25,16 @@ interface WarrantyClaimDetailPanelProps {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{label}</dt>
-      <dd className="mt-0.5 text-sm text-gray-800">{value || <span className="text-gray-300">—</span>}</dd>
+      <dt className="text-caption font-medium uppercase tracking-wide text-text-faint">{label}</dt>
+      <dd className="mt-0.5 text-sm text-text-default">{value || <span className="text-text-faint">—</span>}</dd>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-t border-gray-100 px-5 py-4">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</h3>
+    <section className="border-t border-border-hairline px-5 py-4">
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-faint">{title}</h3>
       {children}
     </section>
   );
@@ -57,14 +59,14 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 420, opacity: 0 }}
       transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-      className="flex h-full w-[420px] shrink-0 flex-col border-l border-gray-200 bg-white shadow-xl"
+      className="flex h-full w-[420px] shrink-0 flex-col border-l border-border-soft bg-surface-card shadow-xl"
     >
-      <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+      <header className="flex items-center justify-between border-b border-border-hairline px-5 py-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-gray-900">
+          <div className="truncate text-sm font-semibold text-text-default">
             {claim?.productTitle || claim?.sku || claim?.serialNumber || 'Warranty claim'}
           </div>
-          <div className="font-mono text-[11px] text-gray-400">{claim?.claimNumber}</div>
+          <div className="font-mono text-caption text-text-faint">{claim?.claimNumber}</div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {claim && (claim.productTitle || claim.sku) && (
@@ -72,44 +74,41 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
           )}
           {claim && <WarrantyTicketButton claimId={claim.id} linked={claim.zendeskTicketId != null} />}
           {claim && (
-            <button
-              type="button"
-              onClick={deleteClaim}
-              disabled={remove.isPending}
-              className="rounded-md p-1.5 text-gray-300 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-              aria-label="Delete claim"
-              title="Delete claim"
-            >
-              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            </button>
+            <HoverTooltip label="Delete claim" asChild>
+              <IconButton
+                onClick={deleteClaim}
+                disabled={remove.isPending}
+                ariaLabel="Delete claim"
+                className="rounded-md p-1.5 text-text-faint transition hover:bg-surface-danger hover:text-text-danger disabled:opacity-50"
+                icon={remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              />
+            </HoverTooltip>
           )}
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close"
+            className="rounded-full p-1.5 text-text-faint transition hover:bg-surface-sunken hover:text-text-muted"
+            icon={<X className="h-4 w-4" />}
+          />
         </div>
       </header>
 
       {remove.isError && (
-        <p className="border-b border-rose-100 bg-rose-50 px-5 py-2 text-xs text-rose-600">
+        <p className="border-b border-border-danger bg-surface-danger px-5 py-2 text-xs text-text-danger">
           {remove.error instanceof Error ? remove.error.message : 'Delete failed.'}
         </p>
       )}
 
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-text-faint" />
         </div>
       ) : error ? (
-        <div className="p-5 text-sm text-rose-600">
+        <div className="p-5 text-sm text-text-danger">
           {error instanceof Error ? error.message : 'Failed to load claim.'}
         </div>
       ) : !claim ? (
-        <div className="p-5 text-sm text-gray-400">Claim not found.</div>
+        <div className="p-5 text-sm text-text-faint">Claim not found.</div>
       ) : (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -160,7 +159,7 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
               value={
                 claim.zendeskTicketId != null && zendeskTicketUrl(claim.zendeskTicketId) ? (
                   <a
-                    className="text-blue-600 underline"
+                    className="text-text-accent underline"
                     href={zendeskTicketUrl(claim.zendeskTicketId) ?? undefined}
                     target="_blank"
                     rel="noreferrer"
@@ -192,7 +191,7 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
             label="Proof"
             value={
               claim.purchaseProofUrl ? (
-                <a className="text-blue-600 underline" href={claim.purchaseProofUrl} target="_blank" rel="noreferrer">
+                <a className="text-text-accent underline" href={claim.purchaseProofUrl} target="_blank" rel="noreferrer">
                   View
                 </a>
               ) : null
@@ -212,19 +211,19 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
 
       <Section title={`Repair attempts (${claim.repairAttempts.length})`}>
         {claim.repairAttempts.length === 0 ? (
-          <p className="text-sm text-gray-400">No repair attempts logged.</p>
+          <p className="text-sm text-text-faint">No repair attempts logged.</p>
         ) : (
           <ul className="space-y-3">
             {claim.repairAttempts.map((a) => (
-              <li key={a.id} className="rounded-lg border border-gray-100 p-3">
+              <li key={a.id} className="rounded-lg border border-border-hairline p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-600">Attempt #{a.attemptNo}</span>
+                  <span className="text-xs font-semibold text-text-muted">Attempt #{a.attemptNo}</span>
                   {a.outcome && (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">{a.outcome}</span>
+                    <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-caption text-text-muted">{a.outcome}</span>
                   )}
                 </div>
-                {a.diagnosis && <p className="mt-1 text-sm text-gray-700">{a.diagnosis}</p>}
-                {a.notes && <p className="mt-1 text-[12px] text-gray-500">{a.notes}</p>}
+                {a.diagnosis && <p className="mt-1 text-sm text-text-muted">{a.diagnosis}</p>}
+                {a.notes && <p className="mt-1 text-label text-text-soft">{a.notes}</p>}
               </li>
             ))}
           </ul>
@@ -248,7 +247,7 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
 
       {claim.notes && (
         <Section title="Notes">
-          <p className="whitespace-pre-wrap text-sm text-gray-700">{claim.notes}</p>
+          <p className="whitespace-pre-wrap text-sm text-text-muted">{claim.notes}</p>
         </Section>
       )}
     </>

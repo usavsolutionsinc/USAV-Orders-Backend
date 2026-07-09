@@ -54,6 +54,7 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                     const isActive = mode === id;
                     const accent = MODE_ACCENT[id];
                     return (
+                        // ds-raw-button: segmented mode toggle (role=tab)
                         <button
                             key={id}
                             role="tab"
@@ -64,20 +65,20 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                             }}
                             className={`group relative flex flex-col items-start gap-2 rounded-2xl p-3 text-left transition-all duration-150 outline-none ${
                                 isActive
-                                    ? `bg-white shadow-sm ring-2 ${accent.ring}`
-                                    : 'bg-gray-50 ring-1 ring-gray-200/60 hover:bg-white hover:ring-gray-300'
+                                    ? `bg-surface-card shadow-sm ring-2 ${accent.ring}`
+                                    : 'bg-surface-canvas ring-1 ring-border-soft/60 hover:bg-surface-card hover:ring-border-default'
                             }`}
                         >
                             <span className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
-                                isActive ? accent.active : 'bg-white text-gray-500 ring-1 ring-gray-200 group-hover:text-gray-800'
+                                isActive ? accent.active : 'bg-surface-card text-text-soft ring-1 ring-border-soft group-hover:text-text-default'
                             }`}>
                                 <Icon className="h-4 w-4" />
                             </span>
                             <span className="flex flex-col">
-                                <span className={`text-label font-semibold leading-tight ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                                <span className={`text-label font-semibold leading-tight ${isActive ? 'text-text-default' : 'text-text-muted'}`}>
                                     {label}
                                 </span>
-                                <span className="text-micro font-medium leading-tight text-gray-500">
+                                <span className="text-micro font-medium leading-tight text-text-soft">
                                     {description}
                                 </span>
                             </span>
@@ -93,11 +94,12 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
             <nav
                 aria-label="Barcode mode"
                 role="tablist"
-                className="flex h-full flex-col gap-1 border-r border-gray-100 bg-gray-50/60 p-2"
+                className="flex h-full flex-col gap-1 border-r border-border-hairline bg-surface-canvas/60 p-2"
             >
                 {MODES.map(({ id, label, description, Icon }) => {
                     const isActive = mode === id;
                     return (
+                        // ds-raw-button: segmented mode toggle (role=tab)
                         <button
                             key={id}
                             role="tab"
@@ -107,13 +109,13 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                                 onModeChange(id);
                             }}
                             className={`group relative flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors duration-150 outline-none ${
-                                isActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-800'
+                                isActive ? 'text-text-default' : 'text-text-soft hover:text-text-default'
                             }`}
                         >
                             {isActive && (
                                 <motion.span
                                     layoutId="mode-selector-pill"
-                                    className="absolute inset-0 rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.12)] ring-1 ring-gray-200/60"
+                                    className="absolute inset-0 rounded-xl bg-surface-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.12)] ring-1 ring-border-soft/60"
                                     transition={
                                         reduceMotion
                                             ? { duration: 0 }
@@ -122,15 +124,15 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                                 />
                             )}
                             <span className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                                isActive ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 ring-1 ring-gray-200 group-hover:text-gray-800'
+                                isActive ? 'bg-blue-600 text-white' : 'bg-surface-card text-text-soft ring-1 ring-border-soft group-hover:text-text-default'
                             }`}>
                                 <Icon className="h-4 w-4" />
                             </span>
                             <span className="relative z-10 flex min-w-0 flex-col">
-                                <span className={`text-label font-black uppercase tracking-[0.14em] ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                                <span className={`text-label font-black uppercase tracking-[0.14em] ${isActive ? 'text-text-default' : 'text-text-muted'}`}>
                                     {label}
                                 </span>
-                                <span className="truncate text-micro font-semibold text-gray-500">
+                                <span className="truncate text-micro font-semibold text-text-soft">
                                     {description}
                                 </span>
                             </span>
@@ -146,11 +148,12 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
             <div
                 role="tablist"
                 aria-label="Barcode mode"
-                className="relative flex items-stretch gap-1 rounded-2xl bg-gray-100/80 p-1 backdrop-blur"
+                className="relative flex items-stretch gap-1 rounded-2xl bg-surface-sunken/80 p-1 backdrop-blur"
             >
                 {MODES.map(({ id, label, Icon }) => {
                     const isActive = mode === id;
                     return (
+                        // ds-raw-button: segmented mode toggle (role=tab)
                         <button
                             key={id}
                             role="tab"
@@ -160,13 +163,13 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                                 onModeChange(id);
                             }}
                             className={`relative flex-1 flex flex-col items-center justify-center gap-1 rounded-xl py-2 transition-colors duration-150 outline-none ${
-                                isActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-800'
+                                isActive ? 'text-text-default' : 'text-text-soft hover:text-text-default'
                             }`}
                         >
                             {isActive && (
                                 <motion.span
                                     layoutId="mode-selector-pill"
-                                    className="absolute inset-0 rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.12)]"
+                                    className="absolute inset-0 rounded-xl bg-surface-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.12)]"
                                     transition={
                                         reduceMotion
                                             ? { duration: 0 }

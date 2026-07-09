@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fbaPaths } from '@/lib/fba/api-paths';
 import { X, Package, Loader2 } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
@@ -108,33 +109,34 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
               <p className="text-micro font-black uppercase tracking-[0.14em] text-purple-800">
                 Station FNSKU scan
               </p>
-              <p className="mt-0.5 truncate font-mono text-caption font-black text-gray-900">
+              <p className="mt-0.5 truncate font-mono text-caption font-black text-text-default">
                 {detail.fnsku}
               </p>
               {detail.productTitle ? (
-                <p className="mt-0.5 truncate text-micro text-gray-600">{detail.productTitle}</p>
+                <p className="mt-0.5 truncate text-micro text-text-muted">{detail.productTitle}</p>
               ) : null}
 
               {addedMsg ? (
                 <p className="mt-1.5 text-micro font-bold text-emerald-700">{addedMsg}</p>
               ) : pendingPlans.length === 0 ? (
-                <p className="mt-1.5 text-micro text-gray-500">No open plans to add to.</p>
+                <p className="mt-1.5 text-micro text-text-soft">No open plans to add to.</p>
               ) : pendingPlans.length === 1 ? (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={handleAdd}
-                  disabled={adding}
-                  className={`mt-1.5 flex items-center gap-1 rounded-full border border-purple-300 bg-white px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-50 ${chrome.cardFocusRing}`}
+                  loading={adding}
+                  className={`mt-1.5 rounded-full border border-purple-300 bg-surface-card px-2.5 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 ring-0 hover:bg-purple-100 ${chrome.cardFocusRing}`}
                 >
-                  {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                   Add to {pendingPlans[0].shipment_ref || 'plan'}
-                </button>
+                </Button>
               ) : (
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <select
                     value={selectedPlanId}
                     onChange={(e) => setSelectedPlanId(e.target.value)}
-                    className="rounded-lg border border-purple-200 bg-white px-2 py-1 text-micro font-bold text-gray-900 outline-none focus:border-purple-400"
+                    className="rounded-lg border border-purple-200 bg-surface-card px-2 py-1 text-micro font-bold text-text-default outline-none focus:border-purple-400"
                   >
                     <option value="">Pick plan…</option>
                     {pendingPlans.map((p) => (
@@ -143,25 +145,26 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
                       </option>
                     ))}
                   </select>
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={handleAdd}
                     disabled={adding || !selectedPlanId}
-                    className={`flex items-center gap-1 rounded-full border border-purple-300 bg-white px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-40 ${chrome.cardFocusRing}`}
+                    className={`rounded-full border border-purple-300 bg-surface-card px-2.5 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 ring-0 hover:bg-purple-100 disabled:opacity-40 ${chrome.cardFocusRing}`}
                   >
                     {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add'}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
-            <button
+            <IconButton
               type="button"
               onClick={dismiss}
-              className="shrink-0 rounded-full p-1 text-purple-400 transition-colors hover:bg-purple-100 hover:text-purple-700"
-              aria-label="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              className="shrink-0 rounded-full p-1 text-purple-400 hover:bg-purple-100 hover:text-purple-700"
+              ariaLabel="Dismiss"
+              icon={<X className="h-3.5 w-3.5" />}
+            />
           </div>
         </motion.div>
       ) : null}

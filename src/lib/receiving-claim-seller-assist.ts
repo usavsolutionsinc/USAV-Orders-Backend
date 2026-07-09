@@ -1,4 +1,3 @@
-import { getHermesApiUrl, getHermesHeaders } from '@/lib/ai/hermes-client';
 import { sanitizeSellerMessage } from '@/lib/ai/seller-message-guard';
 import {
   CLAIM_TYPE_LABEL,
@@ -94,6 +93,9 @@ function extractSellerJson(text: string): { seller_message?: unknown } {
 }
 
 async function fetchHermes(body: unknown): Promise<Response> {
+  // Lazy import: hermes-client is `server-only`, so keep it off this module's
+  // static graph — the pure buildDeterministicSellerMessage stays unit-testable.
+  const { getHermesApiUrl, getHermesHeaders } = await import('@/lib/ai/hermes-client');
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const request = fetch(`${getHermesApiUrl()}/chat/completions`, {

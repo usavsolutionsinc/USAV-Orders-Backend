@@ -18,11 +18,14 @@
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { withZohoCredential } from '@/lib/zoho/with-zoho-credential';
+import { mergeEbayLinesIntoZohoPo } from '@/lib/inbound/merge-purchase-lines';
+import { isIncomingUniversal } from '@/lib/feature-flags';
 import { getPurchaseOrderById, getPurchaseReceiveById, listPurchaseOrders } from '@/lib/zoho';
 import { formatApiOffsetTimestamp, formatPSTTimestamp } from '@/utils/date';
 import type { PoolClient } from 'pg';
 import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { isLocalPickupPo } from '@/lib/receiving/fulfillment-mode';
 
 type AnyRow = Record<string, unknown>;
 type WorkflowStatus = 'EXPECTED' | 'MATCHED';
@@ -75,18 +78,6 @@ function getZohoLastModifiedTime(row: AnyRow): string | null {
     row.modified_time,
     row.created_time
   );
-}
-
-// A Zoho PO with "LCPU" or "LOCALPICKUP" in its reference#, PO number, or PO id
-// is intake-marked as a local pickup, not a carrier-shipped package. Detection
-// is case-insensitive and checks any of the three identifiers so a single
-// convention (whichever Zoho field operations populates) is enough.
-function isLocalPickupPo(...candidates: Array<string | null | undefined>): boolean {
-  const re = /(LCPU|LOCALPICKUP)/i;
-  for (const value of candidates) {
-    if (typeof value === 'string' && re.test(value)) return true;
-  }
-  return false;
 }
 
 type LocalPickupSyncInput = {
@@ -265,7 +256,7 @@ async function syncPurchaseOrderLines(
     const shipment = await registerShipmentPermissive({
       trackingNumber: poReference,
       sourceSystem: 'zoho_po',
-    });
+    }, orgId);
     shipmentId = shipment?.id ?? null;
   }
 
@@ -297,16 +288,18 @@ async function syncPurchaseOrderLines(
     // survives the loud-fail org default once receiving has FORCE isolation,
     // and so a re-sync from another tenant can never adopt this PO's carton.
     await client.query(
-      `INSERT INTO receiving
+      // Base table (not the `receiving` compat view): ON CONFLICT is unsupported
+      // on auto-updatable views. 2026-07-05d.
+      `INSERT INTO receiving_carton
          (source, zoho_purchaseorder_id, zoho_purchaseorder_number,
           shipment_id, organization_id, created_at, updated_at)
        VALUES ('zoho_po', $1, $2, $3, $4, NOW(), NOW())
        ON CONFLICT (zoho_purchaseorder_id)
          WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
        DO UPDATE SET
-         zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, receiving.zoho_purchaseorder_number),
-         shipment_id               = COALESCE(receiving.shipment_id, EXCLUDED.shipment_id),
-         organization_id           = COALESCE(receiving.organization_id, EXCLUDED.organization_id),
+         zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, receiving_carton.zoho_purchaseorder_number),
+         shipment_id               = COALESCE(receiving_carton.shipment_id, EXCLUDED.shipment_id),
+         organization_id           = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id),
          updated_at                = NOW()`,
       [normalizedPoId, poNumber, shipmentId, orgId],
     );
@@ -372,7 +365,9 @@ async function syncPurchaseOrderLines(
       disposition_code: 'HOLD',
       condition_grade: 'BRAND_NEW',
       disposition_audit: JSON.stringify([]),
-      notes: asString(line.description),
+      // Zoho line description → its own read-only column (NOT `notes`, which is
+      // operator-owned) so a re-sync can never clobber operator notes. 2026-06-24.
+      zoho_notes: asString(line.description),
       workflow_status: workflowStatus,
       receiving_id: desiredReceivingId,
       zoho_sync_source: 'purchase_order',
@@ -389,7 +384,7 @@ async function syncPurchaseOrderLines(
         'sku',
         'unit_price',
         'quantity_expected',
-        'notes',
+        'zoho_notes',
         'zoho_sync_source',
         'zoho_last_modified_time',
         'zoho_synced_at',
@@ -477,6 +472,29 @@ async function syncPurchaseOrderLines(
     );
   }
 
+  // Overall PO note (Zoho PO header `notes`) → carton-level receiving.zoho_notes
+  // (the "Zoho Notes" tab's primary content; distinct from the per-line item
+  // description in receiving_lines.zoho_notes). Best-effort — never breaks the sync.
+  const poNotes = asString(po.notes);
+  if (poNotes) {
+    try {
+      if (options.receivingId) {
+        await client.query(
+          `UPDATE receiving SET zoho_notes = $1, updated_at = NOW() WHERE id = $2`,
+          [poNotes, options.receivingId],
+        );
+      } else {
+        await client.query(
+          `UPDATE receiving SET zoho_notes = $1, updated_at = NOW()
+            WHERE source = 'zoho_po' AND zoho_purchaseorder_id = $2 AND organization_id = $3`,
+          [poNotes, normalizedPoId, orgId],
+        );
+      }
+    } catch (err) {
+      console.warn('[zoho-sync] receiving.zoho_notes update skipped:', err instanceof Error ? err.message : err);
+    }
+  }
+
   return {
     purchaseorder_id: normalizedPoId,
     purchaseorder_number: poNumber,
@@ -502,9 +520,27 @@ export async function importZohoPurchaseOrderToReceiving(
   // withTenantTransaction opens the transaction, sets the `app.current_org`
   // GUC via SET LOCAL, and uses the tenant pool — so every write inside (incl.
   // the advisory locks that need a transaction) is org-scoped and RLS-subject.
-  return withTenantTransaction(orgId, (client) =>
+  const result = await withTenantTransaction(orgId, (client) =>
     syncPurchaseOrderLines(client, orgId, purchaseOrderId, options),
   );
+
+  // Universal Incoming (Phase 3, plan §5.4): collapse any eBay-buyer Incoming line
+  // that is the same real purchase as this Zoho PO into ONE spine row (equivalence
+  // + secondary zoho link + conservative loser-row merge). Flag-gated per org and
+  // fire-and-forget — a merge fault (or the inbound tables not yet migrated) never
+  // fails the Zoho import.
+  try {
+    if (await isIncomingUniversal(orgId)) {
+      await mergeEbayLinesIntoZohoPo(orgId, {
+        zohoPurchaseOrderId: result.purchaseorder_id,
+        poNumber: result.purchaseorder_number,
+      });
+    }
+  } catch (err) {
+    console.warn('[zoho-sync] mergeEbayLinesIntoZohoPo skipped:', err instanceof Error ? err.message : err);
+  }
+
+  return result;
 }
 
 export type BulkSyncOptions = {
@@ -724,7 +760,7 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
         disposition_code: 'HOLD',
         condition_grade: 'BRAND_NEW',
         disposition_audit: JSON.stringify([]),
-        notes: null,
+        zoho_notes: asString(line.description),
         zoho_sync_source: 'purchase_receive',
         zoho_last_modified_time: lastModifiedTime,
         zoho_synced_at: syncedAt,
@@ -740,7 +776,7 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
           'unit_price',
           'quantity_received',
           'quantity_expected',
-          'notes',
+          'zoho_notes',
           'zoho_sync_source',
           'zoho_last_modified_time',
           'zoho_synced_at',

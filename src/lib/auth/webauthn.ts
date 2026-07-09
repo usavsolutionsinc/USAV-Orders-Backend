@@ -23,6 +23,7 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/types';
 import pool from '@/lib/db';
+import { WEBAUTHN_RP_NAME_DEFAULT } from '@/lib/branding/constants';
 
 export const PASSKEY_CHALLENGE_COOKIE = 'usav_wac';
 
@@ -41,7 +42,7 @@ export function getRpFromRequest(req: NextRequest): {
   const rpID = new URL(origin).hostname;
   return {
     rpID,
-    rpName: process.env.WEBAUTHN_RP_NAME || 'USAV Solutions',
+    rpName: process.env.WEBAUTHN_RP_NAME || WEBAUTHN_RP_NAME_DEFAULT,
     origin,
   };
 }

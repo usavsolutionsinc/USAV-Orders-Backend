@@ -11,6 +11,12 @@ export const maxDuration = 120;
  * GET /api/cron/refresh-reports  (Vercel cron, daily)
  * Nightly REFRESH MATERIALIZED VIEW pass. Each view has a unique pkey index
  * so CONCURRENTLY refreshes don't block reads.
+ *
+ * Tenancy: intentionally GLOBAL / cross-org (Phase D category B). These MVs
+ * aggregate across all orgs and REFRESH MATERIALIZED VIEW requires the
+ * privileged role, so this stays on the owner pool — never a per-org tenant
+ * sweep. Phase E follow-up: the MVs must gain an organization_id column (or go
+ * per-org) before the tenant role can own them.
  */
 export async function GET(request: NextRequest) {
   if (!isAuthorizedCronRequest(request.headers)) {

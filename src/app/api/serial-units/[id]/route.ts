@@ -4,6 +4,7 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { listPhotosForEntity } from '@/lib/photos/service';
+import { resolveCurrentReceivingLineIds } from '@/lib/neon/serial-units-queries';
 
 /**
  * GET /api/serial-units/:id
@@ -31,13 +32,18 @@ export async function GET(
       );
     }
 
-    const SELECT_COLS = `id, serial_number, normalized_serial, sku, sku_catalog_id,
-                unit_uid,
-                zoho_item_id, current_status::text AS current_status,
-                current_location, condition_grade::text AS condition_grade,
-                origin_source, origin_receiving_line_id,
-                received_at, received_by,
-                created_at, updated_at`;
+    // Phase 3: origin_source / origin_receiving_line_id come from the
+    // reconstruction view (single-row lookups below, so the join is cheap).
+    // origin_source is the semantic label ('tsn' where the column held
+    // 'legacy_tsn_backfill') — display-only, accepted.
+    const SELECT_COLS = `su.id, su.serial_number, su.normalized_serial, su.sku, su.sku_catalog_id,
+                su.unit_uid,
+                su.zoho_item_id, su.current_status::text AS current_status,
+                su.current_location, su.condition_grade::text AS condition_grade,
+                vo.origin_source, vo.origin_receiving_line_id,
+                su.received_at, su.received_by,
+                su.created_at, su.updated_at`;
+    const SELECT_FROM = `FROM serial_units su JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id`;
 
     // Resolve in order: numeric id → normalized serial → minted unit_uid.
     // The unit_uid branch is what makes a scanned products-label QR resolve
@@ -46,7 +52,7 @@ export async function GET(
     if (/^\d+$/.test(raw)) {
       const r = await tenantQuery(
         orgId,
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.id = $1 AND su.organization_id = $2 LIMIT 1`,
         [Number(raw), orgId],
       );
       unit = r.rows[0] ?? null;
@@ -54,7 +60,7 @@ export async function GET(
     if (!unit) {
       const r = await tenantQuery(
         orgId,
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) AND organization_id = $2 LIMIT 1`,
+        `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.normalized_serial = UPPER(TRIM($1)) AND su.organization_id = $2 LIMIT 1`,
         [raw, orgId],
       );
       unit = r.rows[0] ?? null;
@@ -62,7 +68,7 @@ export async function GET(
     if (!unit) {
       const r = await tenantQuery(
         orgId,
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE unit_uid = $1 AND organization_id = $2 LIMIT 1`,
+        `SELECT ${SELECT_COLS} ${SELECT_FROM} WHERE su.unit_uid = $1 AND su.organization_id = $2 LIMIT 1`,
         [raw, orgId],
       );
       unit = r.rows[0] ?? null;
@@ -89,6 +95,16 @@ export async function GET(
       serial_unit_id: Number(unit.id),
       limit: 50,
     }, orgId);
+
+    // The line this unit is CURRENTLY on — origin_receiving_line_id freezes to
+    // the FIRST-ever receiving line (upsertSerialUnit COALESCEs it) and never
+    // advances when a unit ships, returns, and is re-received under a
+    // different PO/carton. Exposed alongside the raw column (never replacing
+    // it — some callers legitimately want the immutable origin) so "jump to
+    // this unit's PO" style lookups can read the field that's actually kept
+    // current.
+    const currentLineMap = await resolveCurrentReceivingLineIds([Number(unit.id)], orgId);
+    const currentReceivingLineId = currentLineMap.get(Number(unit.id)) ?? null;
 
     // Inline product title + receiver name for display.
     let productTitle: string | null = null;
@@ -255,7 +271,12 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      serial_unit: { ...unit, product_title: productTitle, received_by_name: receivedByName },
+      serial_unit: {
+        ...unit,
+        current_receiving_line_id: currentReceivingLineId,
+        product_title: productTitle,
+        received_by_name: receivedByName,
+      },
       events,
       ...(fullDetail ?? {}),
     });
@@ -412,6 +433,7 @@ async function buildPrintFallback(unitId: string, orgId: OrgId) {
     condition_grade: liveUnit?.condition_grade ?? condition,
     origin_source: 'label_print',
     origin_receiving_line_id: null,
+    current_receiving_line_id: null,
     received_at: liveUnit?.received_at ?? row.created_at,
     received_by: liveUnit?.received_by ?? row.staff_id,
     received_by_name: staffRow,

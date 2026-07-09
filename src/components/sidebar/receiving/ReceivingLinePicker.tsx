@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface Props {
@@ -22,14 +23,12 @@ export function ReceivingLinePicker({ rows, onPick, onCancel }: Props) {
         <p className="text-eyebrow font-black uppercase tracking-wider text-blue-700">
           Pick a line
         </p>
-        <button
-          type="button"
+        <IconButton
+          icon={<X className="h-3.5 w-3.5 text-blue-400 group-hover:text-blue-700" />}
+          ariaLabel="Cancel scan"
           onClick={onCancel}
-          aria-label="Cancel scan"
-          className="text-blue-400 transition-colors hover:text-blue-700"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          className="group transition-colors"
+        />
       </div>
       <div className="flex flex-col gap-1">
         {rows.map((line) => {
@@ -41,10 +40,10 @@ export function ReceivingLinePicker({ rows, onPick, onCancel }: Props) {
               key={line.id}
               type="button"
               onClick={() => onPick(line)}
-              className={`rounded border px-2 py-1 text-left text-micro font-bold transition-colors ${
+              className={`ds-raw-button rounded border px-2 py-1 text-left text-micro font-bold transition-colors ${
                 open
-                  ? 'border-blue-200 bg-white text-blue-900 hover:bg-blue-100'
-                  : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'
+                  ? 'border-blue-200 bg-surface-card text-blue-900 hover:bg-blue-100'
+                  : 'border-border-soft bg-surface-canvas text-text-soft hover:bg-surface-sunken'
               }`}
             >
               <span className="truncate">

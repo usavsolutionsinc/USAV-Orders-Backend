@@ -23,6 +23,7 @@ import {
 } from '@/lib/auth/session';
 import { audit } from '@/lib/auth/audit';
 import { findActiveShift, clockIn } from '@/lib/auth/shift-clock';
+import { getStaffAuthMethod } from '@/lib/auth/auth-policy';
 
 export const runtime = 'nodejs';
 
@@ -58,6 +59,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'INVALID_REQUEST', field: 'staffId' }, { status: 400 });
     }
     staffIdForAudit = staffId;
+
+    // WS6.1: staff forced onto password auth must use the account
+    // (email + password) entry point — refuse the station PIN/pinless path.
+    // Defaults to 'pin' (incl. when the column is absent pre-migration), so
+    // every existing staff signs in exactly as before.
+    if ((await getStaffAuthMethod(staffId)) === 'password') {
+      await audit({
+        staffId, event: 'signin.pin', result: 'denied', ip, userAgent: ua,
+        detail: { reason: 'auth_method_password' },
+      });
+      return NextResponse.json(
+        { error: 'AUTH_METHOD_PASSWORD_REQUIRED', hint: 'Sign in with your email and password.' },
+        { status: 403 },
+      );
+    }
 
     const pinless = !pin && isPinlessEnabled();
 

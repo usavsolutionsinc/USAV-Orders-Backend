@@ -11,7 +11,7 @@ interface StationFbaProps {
 export default function StationFba({ embedded = false, children }: StationFbaProps) {
   return (
     <div
-      className={`flex h-full min-h-0 flex-col overflow-hidden bg-white ${embedded ? '' : 'border-r border-gray-100'}`}
+      className={`flex h-full min-h-0 flex-col overflow-hidden bg-surface-card ${embedded ? '' : 'border-r border-border-hairline'}`}
     >
       {children}
     </div>

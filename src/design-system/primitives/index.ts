@@ -18,7 +18,6 @@ export * from './Panel';
 export * from './PanelRow';
 export * from './Popover';
 export * from './Toolbar';
-export * from './PrimaryButton';
 export * from './SearchField';
 export * from './StatusText';
 export * from './TextField';

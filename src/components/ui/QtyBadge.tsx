@@ -22,7 +22,7 @@ export function QtyBadge({ quantity, className = '' }: QtyBadgeProps) {
         `px-2 py-0.5 rounded-md ${chipText} uppercase border`,
         isMulti
           ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
-          : 'bg-gray-100 text-gray-600 border-gray-200',
+          : 'bg-surface-sunken text-text-muted border-border-soft',
         className
       ].join(' ')}
     >

@@ -17,9 +17,9 @@ export interface ActionButtonGroupProps {
 }
 
 const variantClass: Record<string, string> = {
-  neutral: 'text-gray-400 hover:text-gray-600',
-  accent: 'text-gray-400 hover:text-purple-600',
-  danger: 'text-gray-400 hover:text-red-600',
+  neutral: 'text-text-faint hover:text-text-muted',
+  accent: 'text-text-faint hover:text-purple-600',
+  danger: 'text-text-faint hover:text-red-600',
 };
 
 /**

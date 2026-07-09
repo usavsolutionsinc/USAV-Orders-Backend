@@ -18,7 +18,7 @@ interface BinsOverviewResponse {
 }
 
 const CARDS = [
-  { key: 'total',         label: 'Bins total',     Icon: Package,      tone: { ring: 'bg-[#F5F3EF]',  text: 'text-[#6B6356]' } },
+  { key: 'total',         label: 'Bins total',     Icon: Package,      tone: { ring: 'bg-surface-canvas',  text: 'text-text-muted' } },
   { key: 'low_stock',     label: 'Low stock',      Icon: TrendingUp,   tone: { ring: 'bg-amber-50',   text: 'text-amber-700' } },
   { key: 'stale',         label: 'Stale > 90d',    Icon: Activity,     tone: { ring: 'bg-blue-50',    text: 'text-blue-700' } },
   { key: 'over_capacity', label: 'Over capacity',  Icon: AlertCircle,  tone: { ring: 'bg-rose-50',    text: 'text-rose-700' } },
@@ -42,8 +42,8 @@ export function InventoryHealthRow() {
     <section>
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <span className={`${sectionLabel} !text-[#A89F91]`}>Inventory health</span>
-          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-[#2D2A26] mt-0.5">
+          <span className={`${sectionLabel} !text-text-muted`}>Inventory health</span>
+          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-text-default mt-0.5">
             Where the warehouse needs attention
           </h2>
         </div>
@@ -61,22 +61,22 @@ export function InventoryHealthRow() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
               whileHover={{ y: -2 }}
-              className="block bg-white rounded-2xl border border-[#F0EDE8] p-4 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+              className="block bg-surface-card rounded-2xl border border-border-soft p-4 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${c.tone.ring} ${c.tone.text}`}>
                   <c.Icon className="w-4 h-4" />
                 </div>
                 {isAlert && (
-                  <span className="text-[9px] font-black uppercase tracking-[0.14em] bg-rose-50 text-rose-700 rounded-full px-1.5 py-0.5">
+                  <span className="text-eyebrow font-black uppercase tracking-[0.14em] bg-rose-50 text-rose-700 rounded-full px-1.5 py-0.5">
                     Alert
                   </span>
                 )}
               </div>
-              <div className="text-[28px] font-extrabold text-[#2D2A26] leading-none tabular-nums">
+              <div className="text-[28px] font-extrabold text-text-default leading-none tabular-nums">
                 {isLoading ? '–' : (value ?? 0)}
               </div>
-              <p className="text-[11px] font-medium text-[#A89F91] mt-1.5 leading-tight">{c.label}</p>
+              <p className="text-caption font-medium text-text-muted mt-1.5 leading-tight">{c.label}</p>
             </motion.a>
           );
         })}

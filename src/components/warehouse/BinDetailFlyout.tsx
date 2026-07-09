@@ -12,6 +12,7 @@ import { AuditTimeline } from '@/components/audit/AuditTimeline';
 import { FillBar } from './FillBar';
 import { StatusChips } from './StatusChip';
 import { X, ExternalLink } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import DeleteButton from '@/components/ui/DeleteButton';
 
 interface BinContentRow {
@@ -82,7 +83,7 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]"
+        className="fixed inset-0 z-40 bg-scrim/30 backdrop-blur-[1px]"
         onClick={onClose}
         aria-hidden
       />
@@ -91,44 +92,43 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
       <aside
         role="dialog"
         aria-label={`Bin ${row.barcode ?? row.name}`}
-        className="fixed inset-y-0 right-0 z-panel flex w-full max-w-md flex-col overflow-hidden bg-white shadow-2xl"
+        className="fixed inset-y-0 right-0 z-panel flex w-full max-w-md flex-col overflow-hidden bg-surface-card shadow-2xl"
       >
-        <header className="flex items-start gap-3 border-b border-gray-200 px-4 py-3">
+        <header className="flex items-start gap-3 border-b border-border-soft px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-micro font-bold uppercase tracking-wider text-gray-500">
+            <div className="text-micro font-bold uppercase tracking-wider text-text-soft">
               Bin
             </div>
-            <div className="truncate font-mono text-lg font-semibold text-gray-900">
+            <div className="truncate font-mono text-lg font-semibold text-text-default">
               {row.barcode ?? row.name}
             </div>
-            <div className="mt-0.5 text-caption text-gray-500">
+            <div className="mt-0.5 text-caption text-text-soft">
               {row.room ?? '—'}{row.zone_letter ? ` [${row.zone_letter}]` : ''} · Row {row.row_label ?? '—'} · Col {row.col_label ?? '—'}
             </div>
           </div>
           {row.barcode && (
             <Link
               href={`/bin/${encodeURIComponent(row.barcode)}`}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-text-soft hover:bg-surface-sunken"
               aria-label="Open full bin page"
               title="Open full bin page"
             >
               <ExternalLink className="h-4 w-4" />
             </Link>
           )}
-          <button
+          <IconButton
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
-            aria-label="Close bin detail"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close bin detail"
+            icon={<X className="h-4 w-4" />}
+            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface-sunken"
+          />
         </header>
 
         <div className="flex-1 overflow-y-auto">
           <div className="space-y-4 p-4">
             {/* Summary */}
-            <section className="rounded-2xl border border-gray-200 bg-white p-3">
+            <section className="rounded-2xl border border-border-soft bg-surface-card p-3">
               <div className="grid grid-cols-3 gap-3 text-center">
                 <Stat label="Total qty" value={String(row.total_qty)} />
                 <Stat label="SKUs" value={String(row.sku_count)} />
@@ -149,21 +149,21 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
 
             {/* Contents */}
             <section>
-              <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
+              <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
                 Contents
               </h3>
               {loading && (
-                <div className="rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-400">
+                <div className="rounded-xl border border-border-soft bg-surface-card p-3 text-xs text-text-faint">
                   Loading…
                 </div>
               )}
               {!loading && contents.length === 0 && (
-                <div className="rounded-xl border border-dashed border-gray-200 bg-white p-4 text-center text-xs text-gray-400">
+                <div className="rounded-xl border border-dashed border-border-soft bg-surface-card p-4 text-center text-xs text-text-faint">
                   No SKUs in this bin.
                 </div>
               )}
               {!loading && contents.length > 0 && (
-                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+                <ul className="divide-y divide-border-hairline rounded-xl border border-border-soft bg-surface-card">
                   {contents.map((c) => (
                     <li key={c.id} className="px-3 py-2">
                       <div className="flex items-baseline justify-between gap-2">
@@ -173,17 +173,17 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
                         >
                           {c.sku}
                         </Link>
-                        <span className="font-mono text-sm font-semibold tabular-nums text-gray-900">
+                        <span className="font-mono text-sm font-semibold tabular-nums text-text-default">
                           {c.qty}
                         </span>
                       </div>
                       {c.productTitle && (
-                        <div className="mt-0.5 line-clamp-1 text-caption text-gray-500">
+                        <div className="mt-0.5 line-clamp-1 text-caption text-text-soft">
                           {c.productTitle}
                         </div>
                       )}
                       {(c.minQty != null || c.maxQty != null) && (
-                        <div className="mt-0.5 text-micro text-gray-400">
+                        <div className="mt-0.5 text-micro text-text-faint">
                           min {c.minQty ?? '—'} · max {c.maxQty ?? '—'}
                         </div>
                       )}
@@ -195,7 +195,7 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
 
             {/* History */}
             <section>
-              <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
+              <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
                 Recent history
               </h3>
               <AuditTimeline binId={row.id} limit={20} compact noHeader />
@@ -205,7 +205,7 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
 
         {/* Footer — soft-delete this bin (endpoint refuses non-empty bins). */}
         {row.barcode ? (
-          <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+          <div className="shrink-0 border-t border-border-soft bg-surface-card px-4 py-3">
             {deleteError ? (
               <p className="mb-2 text-caption font-semibold text-rose-600">{deleteError}</p>
             ) : null}
@@ -229,10 +229,10 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">
+      <div className="text-eyebrow font-semibold uppercase tracking-wider text-text-soft">
         {label}
       </div>
-      <div className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900">
+      <div className="mt-0.5 text-lg font-semibold tabular-nums text-text-default">
         {value}
       </div>
     </div>

@@ -34,7 +34,7 @@ const MODE_PILLS: {
   label: string;
   activeClass: string;
 }[] = [
-  { mode: null, label: 'Auto', activeClass: 'bg-white/25 text-white border-white/40' },
+  { mode: null, label: 'Auto', activeClass: 'bg-glass/25 text-white border-glass/40' },
   { mode: 'tracking', label: 'Track', activeClass: 'bg-blue-500/30 text-white border-blue-400/50' },
   { mode: 'serial', label: 'Serial', activeClass: 'bg-emerald-500/30 text-white border-emerald-400/50' },
   { mode: 'fba', label: 'FBA', activeClass: 'bg-violet-500/30 text-white border-violet-400/50' },
@@ -197,7 +197,7 @@ export function MobileScanSheet({
           animate={framerPresenceMobile.camera.animate}
           exit={framerPresenceMobile.camera.exit}
           transition={framerTransitionMobile.cameraEnter}
-          className="fixed inset-0 z-modal flex flex-col bg-black"
+          className="fixed inset-0 z-modal flex flex-col bg-stage"
         >
           {/* ── Top bar ── */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
@@ -212,7 +212,7 @@ export function MobileScanSheet({
               type="button"
               onClick={onClose}
               aria-label="Close scanner"
-              className="h-11 w-11 flex items-center justify-center rounded-full bg-white/10 text-white active:bg-white/20 transition-colors"
+              className="h-11 w-11 flex items-center justify-center rounded-full bg-glass/10 text-white active:bg-glass/20 transition-colors"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -236,13 +236,13 @@ export function MobileScanSheet({
             {scanner.scanStatus === 'error' ? (
               // Camera failed — show error + retry button + manual fallback
               <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-                <div className="h-16 w-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
-                  <svg className="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="h-16 w-16 rounded-full bg-stage-raised flex items-center justify-center mb-4">
+                  <svg className="h-8 w-8 text-text-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <p className="text-sm font-bold text-white mb-1">Camera unavailable</p>
-                <p className="text-xs text-gray-400 mb-4">
+                <p className="text-xs text-text-faint mb-4">
                   {scanner.error || 'Enable camera access in your browser settings.'}
                 </p>
                 <div className="flex flex-col gap-2 w-full max-w-[200px]">
@@ -256,7 +256,7 @@ export function MobileScanSheet({
                   <button
                     type="button"
                     onClick={handleOpenManual}
-                    className="h-11 px-5 rounded-xl bg-white/10 text-white text-caption font-black uppercase tracking-wider active:bg-white/20 transition-colors"
+                    className="h-11 px-5 rounded-xl bg-glass/10 text-white text-caption font-black uppercase tracking-wider active:bg-glass/20 transition-colors"
                   >
                     Type Manually
                   </button>
@@ -264,13 +264,13 @@ export function MobileScanSheet({
               </div>
             ) : scanner.scanStatus === 'idle' ? (
               <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-                <div className="h-16 w-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
-                  <svg className="h-8 w-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="h-16 w-16 rounded-full bg-stage-raised flex items-center justify-center mb-4">
+                  <svg className="h-8 w-8 text-stage-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <p className="text-sm font-bold text-white mb-1">Preparing camera</p>
-                <p className="text-xs text-gray-400 mb-4">Starting the scanner...</p>
+                <p className="text-xs text-text-faint mb-4">Starting the scanner...</p>
               </div>
             ) : (
               <>
@@ -310,7 +310,7 @@ export function MobileScanSheet({
                     type="button"
                     onClick={() => scanner.toggleTorch()}
                     className={`h-10 w-10 rounded-full flex items-center justify-center transition-colors ${
-                      scanner.torchOn ? 'bg-yellow-400/30 text-yellow-300 border border-yellow-400/50' : 'bg-white/10 text-white/60 border border-white/20'
+                      scanner.torchOn ? 'bg-yellow-400/30 text-yellow-300 border border-yellow-400/50' : 'bg-glass/10 text-white/60 border border-glass/20'
                     }`}
                     aria-label={scanner.torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
                   >
@@ -328,7 +328,7 @@ export function MobileScanSheet({
                         type="button"
                         onClick={() => onModeChange(mode)}
                         className={`rounded-full border px-3.5 min-h-[44px] text-micro font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
-                          isActive ? activeClass : 'bg-white/10 text-white/60 border-white/20'
+                          isActive ? activeClass : 'bg-glass/10 text-white/60 border-glass/20'
                         }`}
                       >
                         {label}
@@ -357,7 +357,7 @@ export function MobileScanSheet({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute inset-0 bg-black/60"
+                    className="absolute inset-0 bg-scrim/60"
                   />
                   <MobileScanConfirmation
                     scannedValue={confirmedValue}
@@ -373,7 +373,7 @@ export function MobileScanSheet({
 
           {/* ── Manual entry mode ── */}
           {phase === 'manual' && (
-            <div className="flex-shrink-0 bg-black/80 backdrop-blur-sm px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="flex-shrink-0 bg-scrim/80 backdrop-blur-sm px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div className="flex items-center gap-2 mb-2">
                 <button
                   type="button"
@@ -392,7 +392,7 @@ export function MobileScanSheet({
                   placeholder="Enter code manually..."
                   autoComplete="off"
                   autoCapitalize="characters"
-                  className="flex-1 h-12 rounded-xl bg-white/10 border border-white/20 px-4 text-sm font-bold text-white placeholder:text-white/40 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400/50"
+                  className="flex-1 h-12 rounded-xl bg-glass/10 border border-glass/20 px-4 text-sm font-bold text-white placeholder:text-white/40 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400/50"
                 />
                 <button
                   type="submit"

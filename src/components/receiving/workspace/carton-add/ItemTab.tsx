@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { DEBOUNCE_MS, type CartonAddSelection, type CatalogItem } from './carton-add-types';
@@ -111,8 +112,8 @@ export function ItemTab({
   return (
     <>
       {hint ? <HintBanner text={hint} /> : null}
-      <div className="border-b border-gray-50 px-2 pb-2 pt-2">
-        <span className={`${microBadge} mb-1.5 block px-1 text-gray-400`}>Internal catalog</span>
+      <div className="border-b border-border-hairline px-2 pb-2 pt-2">
+        <span className={`${microBadge} mb-1.5 block px-1 text-text-faint`}>Internal catalog</span>
         {manualMode ? (
           <div className="flex items-center gap-2 px-1">
             <input
@@ -123,16 +124,16 @@ export function ItemTab({
                 if (e.key === 'Enter') void submitManual();
               }}
               placeholder="Type a product title…"
-              className="flex-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
+              className="flex-1 rounded-md border border-border-soft bg-surface-card px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
             />
-            <button
-              type="button"
-              onClick={() => void submitManual()}
+            <Button
+              variant="primary"
+              size="sm"
               disabled={!manualTitle.trim() || submitting != null}
-              className="rounded-md bg-blue-600 px-2.5 py-1.5 text-mini font-bold uppercase tracking-wider text-white hover:bg-blue-700 disabled:opacity-50"
+              onClick={() => void submitManual()}
             >
               {submitting === 'manual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
-            </button>
+            </Button>
           </div>
         ) : (
           <SearchBar
@@ -164,17 +165,17 @@ export function ItemTab({
             ))}
           </ul>
         ) : !manualMode && query.trim() && !loading ? (
-          <p className="px-2 py-3 text-label text-gray-400">No catalog matches.</p>
+          <p className="px-2 py-3 text-label text-text-faint">No catalog matches.</p>
         ) : null}
       </div>
-      <div className="border-t border-gray-100 px-3 py-2">
+      <div className="border-t border-border-hairline px-3 py-2">
         <button
           type="button"
           onClick={() => {
             setManualMode((m) => !m);
             setManualTitle('');
           }}
-          className="text-mini font-bold uppercase tracking-wider text-blue-700 hover:text-blue-900"
+          className="ds-raw-button text-mini font-bold uppercase tracking-wider text-blue-700 hover:text-blue-900"
         >
           {manualMode ? '← Back to catalog search' : 'Product not in catalog? Add by title'}
         </button>

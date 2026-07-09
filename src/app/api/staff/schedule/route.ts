@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { STAFF_SCHEDULE_TIMEZONE, getCurrentStaffDayOfWeek } from '@/lib/staff-schedule';
@@ -37,7 +38,7 @@ function isValidIsoDate(value: string | null | undefined): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('includeInactive') !== 'false';
@@ -85,14 +86,14 @@ export const GET = withAuth(async (request: NextRequest) => {
               ELSE true
             END AS is_allowed
         ) sar ON true
-        ${includeInactive ? '' : 'WHERE s.active = true'}
+        WHERE s.organization_id = $3${includeInactive ? '' : ' AND s.active = true'}
         ORDER BY s.id ASC, d.schedule_date ASC
       `;
 
       let resultByDate;
       try {
         resultByDate = await queryWithRetry(
-          () => pool.query(sqlByDate, [startDate, endDate]),
+          () => tenantQuery(ctx.organizationId, sqlByDate, [startDate, endDate, ctx.organizationId]),
           { retries: 3, delayMs: 1000 }
         );
       } catch (queryError: any) {
@@ -165,12 +166,12 @@ export const GET = withAuth(async (request: NextRequest) => {
               END AS is_allowed
           ) sar ON true
           `}
-          ${includeInactive ? '' : 'WHERE s.active = true'}
+          WHERE s.organization_id = $3${includeInactive ? '' : ' AND s.active = true'}
           ORDER BY s.id ASC, d.schedule_date ASC
         `;
 
         resultByDate = await queryWithRetry(
-          () => pool.query(fallbackByDateSql, [startDate, endDate]),
+          () => tenantQuery(ctx.organizationId, fallbackByDateSql, [startDate, endDate, ctx.organizationId]),
           { retries: 1, delayMs: 250 }
         );
       }
@@ -199,14 +200,14 @@ export const GET = withAuth(async (request: NextRequest) => {
       LEFT JOIN staff_weekly_schedule sws
         ON sws.staff_id = s.id
        AND sws.day_of_week = d.day_of_week
-      ${includeInactive ? '' : 'WHERE s.active = true'}
+      WHERE s.organization_id = $1${includeInactive ? '' : ' AND s.active = true'}
       ORDER BY s.id ASC, d.day_of_week ASC
     `;
 
     let result;
     try {
       result = await queryWithRetry(
-        () => pool.query(sql),
+        () => tenantQuery(ctx.organizationId, sql, [ctx.organizationId]),
         { retries: 3, delayMs: 1000 }
       );
     } catch (queryError) {
@@ -220,11 +221,11 @@ export const GET = withAuth(async (request: NextRequest) => {
           true AS is_scheduled
         FROM staff s
         CROSS JOIN generate_series(0, 6) AS d(day_of_week)
-        ${includeInactive ? '' : 'WHERE s.active = true'}
+        WHERE s.organization_id = $1${includeInactive ? '' : ' AND s.active = true'}
         ORDER BY s.id ASC, d.day_of_week ASC
       `;
       result = await queryWithRetry(
-        () => pool.query(fallbackSql),
+        () => tenantQuery(ctx.organizationId, fallbackSql, [ctx.organizationId]),
         { retries: 1, delayMs: 250 }
       );
     }

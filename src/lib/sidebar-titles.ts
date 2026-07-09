@@ -7,7 +7,7 @@ import { getSidebarRouteKey } from '@/lib/sidebar-navigation';
 export const SIDEBAR_TITLES: Record<string, string> = {
   dashboard: 'Orders / Shipping',
   operations: 'Operations',
-  'ops-photos': 'Photo library',
+  'ops-photos': 'Media library',
   studio: 'Operations Studio',
   fba: 'Amazon FBA',
   receiving: 'Receiving',
@@ -24,7 +24,6 @@ export const SIDEBAR_TITLES: Record<string, string> = {
   outbound: 'Outbound',
   support: 'Support',
   'ai-chat': 'AI Chat',
-  'previous-quarters': 'Quarters',
   admin: 'Admin',
   'audit-log': 'Audit Log',
   settings: 'Settings',

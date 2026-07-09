@@ -1,6 +1,7 @@
 'use client';
 
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
+import { Button } from '@/design-system/primitives';
 
 /** The subset of the search meta this empty state reads. */
 export interface ShippedSearchMeta {
@@ -48,19 +49,19 @@ export function ShippedTableEmptyState({
             onClear={onClearSearch}
           />
           {suggestion ? (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               type="button"
               onClick={() => onApplySuggestedFilter(suggestion.filter)}
-              className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+              className="mt-4 h-auto whitespace-normal border border-border-warning bg-surface-warning px-3 py-2 text-text-warning hover:bg-surface-warning/80"
             >
               Found {suggestion.count} match{suggestion.count === 1 ? '' : 'es'} in the <span className="uppercase">{suggestion.filter}</span> tab — switch?
-            </button>
+            </Button>
           ) : null}
         </>
       ) : (
-        <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-          <p className="text-gray-500 font-semibold italic opacity-20">No shipped records for this week</p>
-        </div>
+        <div className="mx-auto max-w-xs rounded-xl border border-dashed border-border-soft bg-surface-canvas px-4 py-6 text-center text-caption text-text-muted">No shipped records for this week</div>
       )}
     </div>
   );

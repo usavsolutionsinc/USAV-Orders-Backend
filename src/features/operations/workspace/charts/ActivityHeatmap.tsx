@@ -60,7 +60,7 @@ export function ActivityHeatmap({
       <svg width={width} height={height} role="img" aria-label="Activity heatmap">
         {/* column labels */}
         {colLabels && (
-          <g className="text-gray-400">
+          <g className="text-text-faint">
             {colLabels.map((label, c) =>
               c % Math.max(1, Math.ceil(cols / 12)) === 0 ? (
                 <text
@@ -69,7 +69,7 @@ export function ActivityHeatmap({
                   y={12}
                   textAnchor="middle"
                   fill="currentColor"
-                  className="text-[8px] font-semibold"
+                  className="text-mini font-semibold"
                 >
                   {label}
                 </text>
@@ -80,7 +80,7 @@ export function ActivityHeatmap({
 
         {/* row labels */}
         {rowLabels && (
-          <g className="text-gray-400">
+          <g className="text-text-faint">
             {rowLabels.map((label, r) => (
               <text
                 key={r}
@@ -88,7 +88,7 @@ export function ActivityHeatmap({
                 y={TOP_PAD + r * ROW_H + ROW_H / 2 + 3}
                 textAnchor="end"
                 fill="currentColor"
-                className="text-[8px] font-semibold uppercase tracking-wider"
+                className="text-mini font-semibold uppercase tracking-wider"
               >
                 {label}
               </text>
@@ -105,7 +105,7 @@ export function ActivityHeatmap({
             const cy = TOP_PAD + r * ROW_H + ROW_H / 2;
             if (intensity === 0) {
               return (
-                <g key={`${r}:${c}`} className="text-gray-200">
+                <g key={`${r}:${c}`} className="text-surface-strong">
                   <circle cx={cx} cy={cy} r={2.5} fill="currentColor" />
                 </g>
               );

@@ -5,7 +5,7 @@ import { Trash2 } from '@/components/Icons';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { DetailsStackProps } from './types';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
-import { ShippedNotesComposer } from '@/components/shipped/details-panel/ShippedNotesComposer';
+import { Button } from '@/design-system/primitives';
 
 export function PackerDetailsStack({
   shipped,
@@ -15,16 +15,9 @@ export function PackerDetailsStack({
   onUpdate,
   actionBar: _actionBar,
   activeSection,
-  activeInput = 'none',
-  setActiveInput,
-  notes = '',
-  setNotes,
-  isSavingNotes = false,
-  onSaveNotes,
 }: DetailsStackProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
-  const hasSavedNotes = String(shipped.notes || '').trim().length > 0;
   const deleteArmTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -96,46 +89,26 @@ export function PackerDetailsStack({
         copiedAll={copiedAll}
         onCopyAll={onCopyAll}
         onUpdate={onUpdate}
-        showTestingInformation={false}
         activeSection={activeSection}
       />
       </div>
 
-      {(activeInput === 'notes' || hasSavedNotes) && (
-        activeInput === 'notes' && setNotes && onSaveNotes ? (
-          <ShippedNotesComposer
-            value={notes}
-            onChange={setNotes}
-            onCancel={() => {
-              setNotes(shipped.notes || '');
-              setActiveInput?.('none');
-            }}
-            onSubmit={onSaveNotes}
-            isSaving={isSavingNotes}
-          />
-        ) : (
-          <ShippedNotesComposer
-            value={String(shipped.notes || '')}
-            readOnly
-            onClick={() => setActiveInput?.('notes')}
-          />
-        )
-      )}
-
       <section className="mx-8 pt-2">
-        <button
+        <Button
           type="button"
+          variant="danger"
+          size="lg"
           onClick={deletePackerLog}
           disabled={isDeleting}
-          className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
+          icon={<Trash2 className="w-3.5 h-3.5" />}
+          className="w-full"
         >
-          <Trash2 className="w-3.5 h-3.5" />
           {isDeleting
             ? 'Deleting...'
             : isDeleteArmed
               ? 'Click Again To Confirm'
               : 'Delete'}
-        </button>
+        </Button>
       </section>
     </div>
   );

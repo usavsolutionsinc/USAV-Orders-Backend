@@ -69,7 +69,7 @@ export function CustomerInfoForm({
 
     return (
         <div className="space-y-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
+            <p className="text-micro font-black uppercase tracking-[0.16em] text-text-faint">
                 {fieldIndex + 1} of {fieldCount} · {fieldLabel}
             </p>
 
@@ -124,17 +124,17 @@ export function CustomerInfoForm({
                     />
 
                     <div className="relative w-full">
-                        <span className="pointer-events-none absolute left-3.5 top-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                        <span className="pointer-events-none absolute left-3.5 top-1.5 text-micro font-semibold uppercase tracking-wide text-text-soft">
                             Price
                         </span>
-                        <div className="flex h-11 items-center overflow-hidden rounded-xl border border-gray-200 bg-white px-3.5 pt-3 focus-within:border-gray-900 focus-within:ring-2 focus-within:ring-gray-900/10">
+                        <div className="flex h-11 items-center overflow-hidden rounded-xl border border-border-soft bg-surface-card px-3.5 pt-3 focus-within:border-border-strong focus-within:ring-2 focus-within:ring-border-strong/10">
                             <span className="pr-1 text-sm font-black text-emerald-500">$</span>
                             <input
                                 type="text"
                                 inputMode="decimal"
                                 value={price}
                                 onChange={(e) => onPriceChange(e.target.value)}
-                                className="flex-1 bg-transparent text-sm font-black text-emerald-600 outline-none placeholder:font-normal placeholder:text-gray-300"
+                                className="flex-1 bg-transparent text-sm font-black text-emerald-600 outline-none placeholder:font-normal placeholder:text-text-faint"
                                 placeholder="130"
                                 required
                             />

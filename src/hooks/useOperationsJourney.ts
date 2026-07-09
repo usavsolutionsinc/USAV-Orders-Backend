@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import {
@@ -14,15 +14,15 @@ import type { OperationsTimelineUrlState } from '@/components/sidebar/operations
 import {
   journeyKeys,
   operationsJourneyFocusedQuery,
-  operationsJourneyBrowseQueryConfig,
   type JourneyEntitySummary,
 } from '@/lib/queries/operations-journey-queries';
 
 /**
- * Drives the Master Operations Journey right pane. Focused mode (a serial/order/
- * tracking in the URL) fetches that entity's full journey; browse mode paginates
- * recent activity. Merges the bucketed-by-source events through the shared
- * adapters and exposes the grouping map for `EventTimeline`'s `groupKeyOf`.
+ * Drives the Master Operations Journey right pane. This is a RECORD LOOKUP — it
+ * only fetches once a specific order/serial/tracking number is in the URL; there
+ * is no "browse all events" firehose. The fetched record's events (bucketed by
+ * source) merge through the shared adapters; the grouping map feeds
+ * `EventTimeline`'s `groupKeyOf`.
  *
  * Realtime: this is a Monitor (observe-only), so a station/order nudge triggers a
  * debounced query *invalidation* (refetch), never an in-place patch.
@@ -33,24 +33,19 @@ export function useOperationsJourney(url: OperationsTimelineUrlState) {
   const orgId = user?.organizationId;
   const focused = url.focused;
 
-  const focusedQuery = useQuery({
+  const query = useQuery({
     ...operationsJourneyFocusedQuery(url.filters),
     enabled: focused,
   });
 
-  const browseQuery = useInfiniteQuery({
-    ...operationsJourneyBrowseQueryConfig(url.filters),
-    enabled: !focused,
-  });
-
-  const events: JourneyEvent[] = useMemo(() => {
-    if (focused) return focusedQuery.data?.events ?? [];
-    return browseQuery.data?.pages.flatMap((p) => p.events) ?? [];
-  }, [focused, focusedQuery.data, browseQuery.data]);
+  const events: JourneyEvent[] = useMemo(
+    () => (focused ? query.data?.events ?? [] : []),
+    [focused, query.data],
+  );
 
   const { items, groupOf } = useMemo(() => mergeJourney(events), [events]);
 
-  const entity: JourneyEntitySummary | null = focused ? focusedQuery.data?.entity ?? null : null;
+  const entity: JourneyEntitySummary | null = focused ? query.data?.entity ?? null : null;
 
   // ── Realtime: debounced invalidate (Monitor: refetch, never patch) ──
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,9 +55,12 @@ export function useOperationsJourney(url: OperationsTimelineUrlState) {
       queryClient.invalidateQueries({ queryKey: journeyKeys.all });
     }, 750);
   }, [queryClient]);
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    },
+    [],
+  );
 
   const ordersChannel = safeChannelName(() => getOrdersChannelName(orgId!));
   const stationChannel = safeChannelName(() => getStationChannelName(orgId!));
@@ -70,8 +68,7 @@ export function useOperationsJourney(url: OperationsTimelineUrlState) {
   // Subscribe only to the meaningful, lower-frequency journey nudges (tech
   // serial-add → order.tested; order edits → order.changed; receiving →
   // receiving-log.changed). We deliberately do NOT subscribe to the dashboard
-  // `activity_event` firehose (fires per scan), which would re-run the browse
-  // UNION every ~750ms during active station work.
+  // `activity_event` firehose (fires per scan).
   useAblyChannel(ordersChannel, 'order.tested', invalidate, !!ordersChannel);
   useAblyChannel(ordersChannel, 'order.changed', invalidate, !!ordersChannel);
   useAblyChannel(stationChannel, 'receiving-log.changed', invalidate, !!stationChannel);
@@ -81,14 +78,8 @@ export function useOperationsJourney(url: OperationsTimelineUrlState) {
     items,
     groupOf,
     entity,
-    // focused-mode state
-    isLoading: focused ? focusedQuery.isLoading : browseQuery.isLoading,
-    isError: focused ? focusedQuery.isError : browseQuery.isError,
-    refetch: focused ? focusedQuery.refetch : browseQuery.refetch,
-    // browse-mode pagination
-    hasNextPage: !focused && browseQuery.hasNextPage,
-    isFetchingNextPage: browseQuery.isFetchingNextPage,
-    fetchNextPage: browseQuery.fetchNextPage,
-    notFound: focused && focusedQuery.isError,
+    isLoading: focused && query.isLoading,
+    isError: focused && query.isError,
+    refetch: query.refetch,
   };
 }

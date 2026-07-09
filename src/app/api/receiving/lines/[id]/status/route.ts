@@ -9,9 +9,11 @@ import {
   type InventoryEventStation,
 } from '@/lib/inventory/events';
 import { applyTransition } from '@/lib/workflow/applyTransition';
+import { transitionReceivingLine } from '@/lib/receiving/state-machine';
 import { isUnifiedEngineApplyTransition } from '@/lib/feature-flags';
 import type { SerialState } from '@/lib/inventory/state-machine';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 const ALLOWED_EVENT_TYPES: ReadonlySet<InventoryEventType> = new Set([
   'TEST_START',
@@ -73,9 +75,11 @@ export async function POST(
     }
     const eventType: InventoryEventType = eventTypeRaw;
 
-    const staffIdRaw = Number(body?.staff_id ?? body?.staffId);
+    // Server-trusted actor — never honour client-supplied staff_id.
     const staffId =
-      Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+      ctx.staffId != null && Number.isFinite(ctx.staffId) && ctx.staffId > 0
+        ? Math.floor(ctx.staffId)
+        : null;
 
     const serialUnitIdRaw = Number(body?.serial_unit_id);
     const serialUnitId =
@@ -135,19 +139,34 @@ export async function POST(
     const nextWorkflow = WORKFLOW_FOR_EVENT[eventType] ?? null;
     const nextSerialStatus = SERIAL_STATUS_FOR_EVENT[eventType] ?? null;
 
-    // ─── Update line metadata + workflow_status (org-scoped) ────────────────
+    // ─── Advance workflow_status via the guarded chokepoint (was a raw-UPDATE
+    //     bypass with its own WORKFLOW_FOR_EVENT map — §7 Step D). skipEvent: this
+    //     route emits ONE combined line+serial inventory_event below, so the
+    //     chokepoint must not double-write a line event. The guard is permissive
+    //     (unmodeled edges log, never reject) so re-test bounce-backs still pass. ─
+    if (nextWorkflow) {
+      const tr = await transitionReceivingLine(
+        { receivingLineId: lineId, to: nextWorkflow, actorStaffId: staffId, station, skipEvent: true },
+        undefined,
+        orgId,
+      );
+      if (!tr.ok) {
+        return NextResponse.json({ success: false, error: tr.error }, { status: tr.status });
+      }
+    }
+    // Testing facts (qa/disposition/condition) + notes — the non-lifecycle half of
+    // the former combined UPDATE (same COALESCE-only semantics + guard condition).
     if (nextWorkflow || qaStatus || dispositionCode || conditionGrade) {
       await tenantQuery(
         orgId,
         `UPDATE receiving_lines
-         SET workflow_status  = COALESCE($2::inbound_workflow_status_enum, workflow_status),
-             qa_status        = COALESCE($3, qa_status),
-             disposition_code = COALESCE($4, disposition_code),
-             condition_grade  = COALESCE($5, condition_grade),
-             notes            = COALESCE($6, notes),
+         SET qa_status        = COALESCE($2, qa_status),
+             disposition_code = COALESCE($3, disposition_code),
+             condition_grade  = COALESCE($4, condition_grade),
+             notes            = COALESCE($5, notes),
              updated_at       = NOW()
-         WHERE id = $1 AND organization_id = $7`,
-        [lineId, nextWorkflow, qaStatus, dispositionCode, conditionGrade, notes, orgId],
+         WHERE id = $1 AND organization_id = $6`,
+        [lineId, qaStatus, dispositionCode, conditionGrade, notes, orgId],
       );
     }
 
@@ -252,6 +271,34 @@ export async function POST(
       } catch (err) {
         console.warn('receiving/lines/status: cache/realtime failed', err);
       }
+    });
+
+    // Audit the lifecycle advance (inventory_events is the lifecycle spine; the
+    // audit_log is the operator/who-did-what trail and was missing here). Never
+    // throws — failures are logged + dropped inside recordAudit.
+    await recordAudit(pool, ctx, request, {
+      source: 'receiving-station',
+      action: AUDIT_ACTION.RECEIVING_LINE_ADVANCE,
+      entityType: AUDIT_ENTITY.RECEIVING_LINE,
+      entityId: lineId,
+      method: 'scan',
+      scanRef: scanToken,
+      before: {
+        workflow_status: line.workflow_status,
+        serial_status: priorSerialStatus,
+      },
+      after: {
+        workflow_status: nextWorkflow ?? line.workflow_status,
+        serial_status: nextSerialStatus ?? priorSerialStatus,
+      },
+      extra: {
+        event_type: eventType,
+        serial_unit_id: serialUnitId,
+        qa_status: qaStatus,
+        disposition_code: dispositionCode,
+        condition_grade: conditionGrade,
+        event_id: event?.id ?? null,
+      },
     });
 
     return NextResponse.json({

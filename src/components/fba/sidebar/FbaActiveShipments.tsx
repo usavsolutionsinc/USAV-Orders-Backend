@@ -26,7 +26,7 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
   if (loading) {
     return (
       <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4`}>
-        <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse mb-3" />
+        <div className="h-4 w-32 bg-surface-sunken rounded animate-pulse mb-3" />
         <SkeletonList count={3} type="card" />
       </div>
     );
@@ -66,7 +66,7 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
 
         {recentShipped.length > 0 && (
           <div className="mt-6">
-            <p className={`mb-3 px-4 ${sectionLabel} text-gray-500`}>Recent shipments</p>
+            <p className={`mb-3 px-4 ${sectionLabel} text-text-soft`}>Recent shipments</p>
             {recentShipped.map((shipment) => (
               <ActiveShipmentCard
                 key={shipment.id}

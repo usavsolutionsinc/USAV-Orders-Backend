@@ -29,7 +29,7 @@ export function StickyHeader({
       className={[
         positionClass[position],
         'z-10',
-        frosted ? 'bg-white/90 backdrop-blur-sm' : 'bg-white',
+        frosted ? 'bg-surface-card/90 backdrop-blur-sm' : 'bg-surface-card',
         className,
       ].join(' ').trim()}
     >

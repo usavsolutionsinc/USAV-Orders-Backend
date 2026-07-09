@@ -48,10 +48,9 @@ export interface SerialUnitRow {
   current_status: SerialStatus;
   current_location: string | null;
   condition_grade: string | null;
-  origin_source: string | null;
-  origin_receiving_line_id: number | null;
-  origin_tsn_id: number | null;
-  origin_sku_id: number | null;
+  // origin_* columns dropped in Phase 4 (2026-07-03b); origin provenance now
+  // lives in serial_unit_provenance (read via v_serial_unit_origins). The WRITE
+  // input (UpsertSerialUnitInput) still accepts origin_* and routes them there.
   received_at: string | null;
   received_by: number | null;
   notes: string | null;
@@ -164,6 +163,57 @@ export async function findByNormalizedSerial(
   return result.rows[0] ?? null;
 }
 
+/** One resolved (serial → canonical uid) row from the batch reprint resolver. */
+export interface SerialUidRow {
+  id: number;
+  normalized_serial: string;
+  serial_number: string;
+  unit_uid: string | null;
+  sku: string | null;
+}
+
+/**
+ * Batch reprint resolver: given many manufacturer serials, return each matched
+ * unit's canonical `unit_uid` in ONE indexed lookup (`normalized_serial = ANY`).
+ * Powers bulk / history label print so a reprint encodes the SAME minted uid the
+ * unit was born with (the reprint guarantee) instead of a bare serial.
+ *
+ * Read-only — never mints. A serial with no row, or a row not yet stamped with a
+ * uid, is simply absent / has `unit_uid: null`, letting the caller keep its bare
+ * -serial fallback. Org-scoped: `normalized_serial` is a string key that collides
+ * across tenants, so the explicit org predicate + GUC-wrapped connection keep a
+ * serial from resolving another tenant's unit. Inputs are de-duped after
+ * normalization; the result is one row per DISTINCT matched normalized serial.
+ */
+export async function findUnitUidsBySerials(
+  serials: string[],
+  orgId?: OrgId,
+): Promise<SerialUidRow[]> {
+  const normalized = Array.from(
+    new Set((serials || []).map((s) => normalizeSerial(s)).filter(Boolean)),
+  );
+  if (normalized.length === 0) return [];
+
+  if (orgId) {
+    const scoped = await tenantQuery<SerialUidRow>(
+      orgId,
+      `SELECT id, normalized_serial, serial_number, unit_uid, sku
+         FROM serial_units
+        WHERE normalized_serial = ANY($1::text[]) AND organization_id = $2`,
+      [normalized, orgId],
+    );
+    return scoped.rows;
+  }
+
+  const result = await pool.query<SerialUidRow>(
+    `SELECT id, normalized_serial, serial_number, unit_uid, sku
+       FROM serial_units
+      WHERE normalized_serial = ANY($1::text[])`,
+    [normalized],
+  );
+  return result.rows;
+}
+
 /**
  * Resolve a unit by its minted unit_uid ({SKU_SHORT}-{YYWW}-{SEQ6}). This is
  * the indexed lookup behind scanning a printed label's QR and behind reprint
@@ -213,6 +263,10 @@ export async function findByUnitUid(
 export interface MatchedOrderForSerial {
   order_pk: number;
   order_id: string | null;
+  /** Marketplace item number (eBay item / Amazon ASIN) — feeds the listing link. */
+  item_number: string | null;
+  /** Denormalized channel/platform (ebay/amazon/fba/...) — maps to return_platform. */
+  account_source: string | null;
   product_title: string | null;
   sku: string | null;
   condition: string | null;
@@ -233,6 +287,8 @@ export async function findShippedOrderForSerialUnit(
   const effectiveOrg = orgId ?? options?.organizationId ?? null;
   const sql = `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
+            o.item_number           AS item_number,
+            o.account_source        AS account_source,
             o.product_title         AS product_title,
             o.sku                   AS sku,
             o.condition             AS condition,
@@ -292,6 +348,8 @@ export async function findShippedOrderByTsnSerial(
       orgId,
       `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
+            o.item_number           AS item_number,
+            o.account_source        AS account_source,
             o.product_title         AS product_title,
             o.sku                   AS sku,
             o.condition             AS condition,
@@ -319,6 +377,8 @@ export async function findShippedOrderByTsnSerial(
   const result = await executor.query<MatchedOrderForSerial & { serial_number: string }>(
     `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
+            o.item_number           AS item_number,
+            o.account_source        AS account_source,
             o.product_title         AS product_title,
             o.sku                   AS sku,
             o.condition             AS condition,
@@ -359,6 +419,13 @@ export async function findShippedOrderByTsnSerial(
 export interface PriorOutbound {
   orderPk: number;
   orderId: string | null;
+  /** Marketplace item number → listing link (getExternalUrlByItemNumber). */
+  itemNumber: string | null;
+  /** Channel/platform of the outbound order → maps to the return platform. */
+  accountSource: string | null;
+  productTitle: string | null;
+  sku: string | null;
+  condition: string | null;
   trackingNumber: string | null;
   via: 'allocation' | 'tsn';
   allocationState: string;
@@ -380,6 +447,11 @@ export async function resolvePriorOutbound(
     return {
       orderPk: viaAlloc.order_pk,
       orderId: viaAlloc.order_id,
+      itemNumber: viaAlloc.item_number,
+      accountSource: viaAlloc.account_source,
+      productTitle: viaAlloc.product_title,
+      sku: viaAlloc.sku,
+      condition: viaAlloc.condition,
       trackingNumber: viaAlloc.tracking_number,
       via: 'allocation',
       allocationState: viaAlloc.allocation_state,
@@ -391,6 +463,11 @@ export async function resolvePriorOutbound(
     return {
       orderPk: viaTsn.order_pk,
       orderId: viaTsn.order_id,
+      itemNumber: viaTsn.item_number,
+      accountSource: viaTsn.account_source,
+      productTitle: viaTsn.product_title,
+      sku: viaTsn.sku,
+      condition: viaTsn.condition,
       trackingNumber: viaTsn.tracking_number,
       via: 'tsn',
       allocationState: viaTsn.allocation_state,
@@ -400,15 +477,73 @@ export async function resolvePriorOutbound(
   return null;
 }
 
+/**
+ * The receiving_line each serial is CURRENTLY associated with — resolved from
+ * the unit's most recent `inventory_events` row carrying a `receiving_line_id`
+ * (falling back to `origin_receiving_line_id` for a unit with no such event,
+ * e.g. legacy rows pre-dating the event log).
+ *
+ * Deliberately NOT `serial_units.origin_receiving_line_id` alone: that column
+ * is a birth fact — `upsertSerialUnit`'s UPDATE path COALESCEs it, so it is
+ * set once on first attach and never advances. A unit that ships, returns,
+ * and is re-received under a different PO/carton gets a NEW receiving_lines
+ * row, but `origin_receiving_line_id` keeps pointing at the very first one
+ * forever — every "which PO is this serial on" display that joined on it
+ * directly showed stale, first-ever data instead of the latest. (Other call
+ * sites, e.g. "was this carton ever opened" and the detach safety-scope
+ * check, correctly WANT the immutable origin and must keep reading that
+ * column directly — this resolver is only for "current" lookups.)
+ */
+export async function resolveCurrentReceivingLineIds(
+  serialUnitIds: number[],
+  orgId: OrgId,
+): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  if (serialUnitIds.length === 0) return map;
+  const result = await tenantQuery<{ serial_unit_id: number; receiving_line_id: number | null }>(
+    orgId,
+    // Phase 3 (serial_unit_provenance): the frozen-origin fallback now comes
+    // from the reconstruction view (vo.origin_receiving_line_id), not the
+    // serial_units.origin_receiving_line_id column (dropped in Phase 4). The
+    // view join is bounded to the passed id-set, so no full-table scan.
+    `SELECT su.id AS serial_unit_id,
+            COALESCE(cur.receiving_line_id, vo.origin_receiving_line_id) AS receiving_line_id
+       FROM serial_units su
+       JOIN v_serial_unit_origins vo ON vo.serial_unit_id = su.id
+       LEFT JOIN LATERAL (
+         SELECT ie.receiving_line_id
+           FROM inventory_events ie
+          WHERE ie.serial_unit_id = su.id
+            AND ie.receiving_line_id IS NOT NULL
+            AND ie.organization_id = $2
+          ORDER BY ie.occurred_at DESC, ie.id DESC
+          LIMIT 1
+       ) cur ON true
+      WHERE su.id = ANY($1::int[]) AND su.organization_id = $2`,
+    [serialUnitIds, orgId],
+  );
+  for (const row of result.rows) {
+    if (row.receiving_line_id != null) {
+      map.set(Number(row.serial_unit_id), Number(row.receiving_line_id));
+    }
+  }
+  return map;
+}
+
 export async function listByReceivingLine(
   receivingLineId: number,
   orgId?: OrgId,
 ): Promise<SerialUnitRow[]> {
+  // Phase 3: filter-by-origin now uses the indexed provenance reverse lookup
+  // (idx_serial_unit_provenance_origin) instead of serial_units.origin_receiving_line_id.
   if (orgId) {
     const scoped = await tenantQuery<SerialUnitRow>(
       orgId,
       `SELECT * FROM serial_units
-       WHERE origin_receiving_line_id = $1 AND organization_id = $2
+       WHERE id IN (
+         SELECT p.serial_unit_id FROM serial_unit_provenance p
+          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1 AND p.organization_id = $2)
+         AND organization_id = $2
        ORDER BY created_at ASC, id ASC`,
       [receivingLineId, orgId],
     );
@@ -416,7 +551,9 @@ export async function listByReceivingLine(
   }
   const result = await pool.query<SerialUnitRow>(
     `SELECT * FROM serial_units
-     WHERE origin_receiving_line_id = $1
+     WHERE id IN (
+       SELECT p.serial_unit_id FROM serial_unit_provenance p
+        WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1)
      ORDER BY created_at ASC, id ASC`,
     [receivingLineId],
   );
@@ -427,12 +564,16 @@ export async function countByReceivingLine(
   receivingLineId: number,
   orgId?: OrgId,
 ): Promise<number> {
+  // Phase 3: count-by-origin via the indexed provenance reverse lookup.
   if (orgId) {
     const scoped = await tenantQuery<{ count: number }>(
       orgId,
       `SELECT COUNT(*)::int AS count
        FROM serial_units
-       WHERE origin_receiving_line_id = $1 AND organization_id = $2`,
+       WHERE id IN (
+         SELECT p.serial_unit_id FROM serial_unit_provenance p
+          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1 AND p.organization_id = $2)
+         AND organization_id = $2`,
       [receivingLineId, orgId],
     );
     return scoped.rows[0]?.count ?? 0;
@@ -440,7 +581,9 @@ export async function countByReceivingLine(
   const result = await pool.query<{ count: number }>(
     `SELECT COUNT(*)::int AS count
      FROM serial_units
-     WHERE origin_receiving_line_id = $1`,
+     WHERE id IN (
+       SELECT p.serial_unit_id FROM serial_unit_provenance p
+        WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $1)`,
     [receivingLineId],
   );
   return result.rows[0]?.count ?? 0;
@@ -466,6 +609,62 @@ export interface UpsertSerialUnitOptions {
    * the first txn and hit Neon "Query read timeout".
    */
   dbClient?: import('pg').PoolClient;
+}
+
+/**
+ * Phase 4: record serial-unit origin provenance edges app-side — the replacement
+ * for the dropped serial_units.origin_* columns + the dual-write trigger
+ * (fn_sync_serial_unit_provenance). Mirrors the 2026-07-01n backfill / trigger
+ * mapping exactly: independent concrete edges for a receiving line / tech serial
+ * / sku import, else a text-only edge derived from origin_source. FIRST-WINS per
+ * origin_type (NOT EXISTS guard) reproduces the old COALESCE-once column
+ * semantics — the FOR UPDATE lock on the serial_units row serializes concurrent
+ * upserts of the same unit. Runs on the caller's txn client so it commits/rolls
+ * back atomically with the unit write. Best-effort per edge (idempotent).
+ */
+export async function recordOriginProvenance(
+  client: Queryable,
+  orgId: OrgId,
+  serialUnitId: number,
+  input: {
+    origin_source?: string | null;
+    origin_receiving_line_id?: number | null;
+    origin_tsn_id?: number | null;
+    origin_sku_id?: number | null;
+  },
+  occurredAtIso: string,
+): Promise<void> {
+  const edges: Array<{ type: string; id: number | null }> = [];
+  if (input.origin_receiving_line_id != null) {
+    edges.push({ type: 'RECEIVING_LINE', id: input.origin_receiving_line_id });
+  }
+  if (input.origin_tsn_id != null) edges.push({ type: 'TECH_SERIAL', id: input.origin_tsn_id });
+  if (input.origin_sku_id != null) edges.push({ type: 'SKU_IMPORT', id: input.origin_sku_id });
+  if (edges.length === 0) {
+    // Text-only fallback (no concrete id) — same map as the backfill/trigger.
+    const textMap: Record<string, string> = {
+      receiving: 'RECEIVING_LINE',
+      tsn: 'TECH_SERIAL',
+      sku: 'SKU_IMPORT',
+      manual: 'MANUAL',
+      legacy: 'LEGACY',
+    };
+    const t = input.origin_source ? textMap[input.origin_source] : undefined;
+    if (t) edges.push({ type: t, id: null });
+  }
+  for (const e of edges) {
+    await client.query(
+      `INSERT INTO serial_unit_provenance
+         (organization_id, serial_unit_id, origin_type, origin_id, occurred_at)
+       SELECT $1, $2, $3, $4, $5
+        WHERE NOT EXISTS (
+          SELECT 1 FROM serial_unit_provenance
+           WHERE organization_id = $1 AND serial_unit_id = $2 AND origin_type = $3
+        )
+       ON CONFLICT DO NOTHING`,
+      [orgId, serialUnitId, e.type, e.id, occurredAtIso],
+    );
+  }
 }
 
 export async function upsertSerialUnit(
@@ -548,17 +747,16 @@ export async function upsertSerialUnit(
         created_at_iso: nowIso,
       };
 
+      // Phase 4: origin_* columns dropped — provenance is written app-side below.
       const inserted = await client.query<SerialUnitRow>(
         `INSERT INTO serial_units (
            serial_number, normalized_serial, sku, sku_catalog_id, zoho_item_id,
            current_status, current_location, condition_grade,
-           origin_source, origin_receiving_line_id, origin_tsn_id, origin_sku_id,
            received_at, received_by, metadata, unit_uid, organization_id
          ) VALUES (
            $1, $2, $3, $4, $5,
            $6, $7, $8::condition_grade_enum,
-           $9, $10, $11, $12,
-           $13, $14, $15::jsonb, $16, $17
+           $9, $10, $11::jsonb, $12, $13
          )
          RETURNING *`,
         [
@@ -570,10 +768,6 @@ export async function upsertSerialUnit(
           targetStatus,
           trimmedLocation,
           trimmedGrade,
-          input.origin_source,
-          input.origin_receiving_line_id ?? null,
-          input.origin_tsn_id ?? null,
-          input.origin_sku_id ?? null,
           isReceivingTouch ? nowIso : null,
           isReceivingTouch ? input.actor_id ?? null : null,
           JSON.stringify(insertMetadata),
@@ -581,6 +775,8 @@ export async function upsertSerialUnit(
           orgId,
         ],
       );
+
+      await recordOriginProvenance(client, orgId, inserted.rows[0].id, input, nowIso);
 
       return {
         unit: inserted.rows[0],
@@ -616,14 +812,10 @@ export async function upsertSerialUnit(
          current_status = $5,
          current_location = COALESCE($6, current_location),
          condition_grade = COALESCE($7::condition_grade_enum, condition_grade),
-         origin_source = COALESCE(origin_source, $8),
-         origin_receiving_line_id = COALESCE(origin_receiving_line_id, $9),
-         origin_tsn_id = COALESCE(origin_tsn_id, $10),
-         origin_sku_id = COALESCE(origin_sku_id, $11),
-         received_at = COALESCE(received_at, $12),
-         received_by = COALESCE(received_by, $13),
-         metadata = metadata || $14::jsonb,
-         unit_uid = COALESCE(unit_uid, $15),
+         received_at = COALESCE(received_at, $8),
+         received_by = COALESCE(received_by, $9),
+         metadata = metadata || $10::jsonb,
+         unit_uid = COALESCE(unit_uid, $11),
          updated_at = NOW()`;
     const updateParams = [
       prior.id,
@@ -633,10 +825,6 @@ export async function upsertSerialUnit(
       next,
       trimmedLocation,
       trimmedGrade,
-      input.origin_source,
-      input.origin_receiving_line_id ?? null,
-      input.origin_tsn_id ?? null,
-      input.origin_sku_id ?? null,
       isReceivingTouch && !prior.received_at ? nowIso : null,
       isReceivingTouch && !prior.received_by ? input.actor_id ?? null : null,
       JSON.stringify(metadataPatch),
@@ -644,10 +832,14 @@ export async function upsertSerialUnit(
     ];
     const updated = await client.query<SerialUnitRow>(
       `${updateSet}
-       WHERE id = $1 AND organization_id = $16
+       WHERE id = $1 AND organization_id = $12
        RETURNING *`,
       [...updateParams, orgId],
     );
+
+    // Phase 4: origin_* columns dropped — provenance written app-side (first-wins
+    // per type reproduces the old COALESCE-once column semantics for a re-touch).
+    await recordOriginProvenance(client, orgId, prior.id, input, nowIso);
 
     return {
       unit: updated.rows[0],
@@ -877,22 +1069,16 @@ export async function enrichSerialUnitCatalog(params: {
   sku?: string | null;
   zoho_item_id?: string | null;
   zoho_purchaseorder_id?: string | null;
-}, orgId?: OrgId): Promise<void> {
+}, orgId: OrgId): Promise<void> {
   try {
-    // serial_units is tenant-owned; when org is threaded, scope both the read
-    // and the write to the org and run them GUC-wrapped. ensureSkuCatalogEntry
-    // is not yet org-aware (Phase 1 pending there), so we leave that call as-is.
-    const current = orgId
-      ? await tenantQuery<{ sku_catalog_id: number | null }>(
-          orgId,
-          `SELECT sku_catalog_id FROM serial_units
-           WHERE id = $1 AND organization_id = $2 LIMIT 1`,
-          [params.serial_unit_id, orgId],
-        )
-      : await pool.query<{ sku_catalog_id: number | null }>(
-          `SELECT sku_catalog_id FROM serial_units WHERE id = $1 LIMIT 1`,
-          [params.serial_unit_id],
-        );
+    // serial_units is tenant-owned; orgId is required, so scope both the read
+    // and the catalog ensure to the org and run them GUC-wrapped.
+    const current = await tenantQuery<{ sku_catalog_id: number | null }>(
+      orgId,
+      `SELECT sku_catalog_id FROM serial_units
+       WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [params.serial_unit_id, orgId],
+    );
     if (current.rows.length === 0) return;
     if (current.rows[0].sku_catalog_id != null) return;
 
@@ -901,7 +1087,7 @@ export async function enrichSerialUnitCatalog(params: {
     const catalog = await ensureSkuCatalogEntry(params.sku ?? '', {
       zoho_item_id: params.zoho_item_id ?? undefined,
       zoho_purchaseorder_id: params.zoho_purchaseorder_id ?? undefined,
-    });
+    }, orgId);
     if (!catalog) return;
 
     if (orgId) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ByUnitView } from '@/components/inventory/ByUnitView';
 import { Check, Loader2, ShieldCheck } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { microBadge, sectionLabel } from '@/design-system/tokens/typography/presets';
 import { CONDITION_GRADE_VALUES } from '@/components/inventory/types';
 import { toast } from '@/lib/toast';
@@ -62,7 +63,7 @@ export function UnitDetailsPanel({ ref, onClose }: UnitDetailsPanelProps) {
             onClose={onClose}
         >
             {summary ? (
-                <div className="border-b border-gray-200 bg-gray-50 px-5 py-4 space-y-4">
+                <div className="border-b border-border-soft bg-surface-canvas px-5 py-4 space-y-4">
                     {summary.condition_grade === 'PARTS' ? (
                         <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-eyebrow font-bold uppercase tracking-wide text-amber-800 ring-1 ring-inset ring-amber-200">
                             Parts · Tech Room
@@ -133,16 +134,17 @@ function GradeActionCard({ unitId, currentGrade, onMutated }: GradeActionCardPro
     };
 
     return (
-        <section className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+        <section className="rounded-xl border border-border-soft bg-surface-card px-4 py-3">
             <div className="flex items-center justify-between gap-2">
                 <p className={sectionLabel}>Grade</p>
-                <p className={`${microBadge} text-gray-500`}>Current: {currentGrade ?? '—'}</p>
+                <p className={`${microBadge} text-text-soft`}>Current: {currentGrade ?? '—'}</p>
             </div>
             <div className="mt-3 space-y-3">
                 <div className="flex flex-wrap gap-2">
                     {CONDITION_GRADE_VALUES.map((g) => {
                         const active = g === newGrade;
                         return (
+                            // ds-raw-button — segmented grade toggle
                             <button
                                 key={g}
                                 type="button"
@@ -151,7 +153,7 @@ function GradeActionCard({ unitId, currentGrade, onMutated }: GradeActionCardPro
                                     'rounded-full border px-2.5 py-1 text-eyebrow font-semibold uppercase tracking-wide transition-colors',
                                     active
                                         ? 'border-blue-400 bg-blue-50 text-blue-700'
-                                        : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-600',
+                                        : 'border-border-soft bg-surface-card text-text-muted hover:border-blue-200 hover:text-blue-600',
                                 ].join(' ')}
                             >
                                 {g.replace(/_/g, ' ')}
@@ -163,24 +165,25 @@ function GradeActionCard({ unitId, currentGrade, onMutated }: GradeActionCardPro
                     value={cosmetic}
                     onChange={(e) => setCosmetic(e.target.value)}
                     placeholder="Cosmetic notes (optional)"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-400 focus:bg-white focus:outline-none"
+                    className="w-full rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-sm focus:border-blue-400 focus:bg-surface-card focus:outline-none"
                 />
                 <input
                     value={functional}
                     onChange={(e) => setFunctional(e.target.value)}
                     placeholder="Functional notes (optional)"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-400 focus:bg-white focus:outline-none"
+                    className="w-full rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-sm focus:border-blue-400 focus:bg-surface-card focus:outline-none"
                 />
                 {error ? <p className={`${microBadge} text-red-600`}>{error}</p> : null}
-                <button
-                    type="button"
+                <Button
+                    variant="primary"
+                    size="md"
+                    icon={<Check className="h-4 w-4" />}
+                    loading={busy}
                     disabled={disabled}
                     onClick={submit}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                 >
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     {busy ? 'Saving…' : 'Save grade'}
-                </button>
+                </Button>
             </div>
         </section>
     );
@@ -230,10 +233,10 @@ function HoldActionCard({ unitId, currentStatus, onMutated }: HoldActionCardProp
     };
 
     return (
-        <section className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+        <section className="rounded-xl border border-border-soft bg-surface-card px-4 py-3">
             <div className="flex items-center justify-between gap-2">
                 <p className={sectionLabel}>Hold</p>
-                <p className={`${microBadge} ${onHold ? 'text-red-600' : 'text-gray-500'}`}>
+                <p className={`${microBadge} ${onHold ? 'text-red-600' : 'text-text-soft'}`}>
                     Status: {currentStatus.replace(/_/g, ' ')}
                 </p>
             </div>
@@ -242,9 +245,10 @@ function HoldActionCard({ unitId, currentStatus, onMutated }: HoldActionCardProp
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder={onHold ? 'Release reason (optional)' : 'Hold reason (required)'}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-400 focus:bg-white focus:outline-none"
+                    className="w-full rounded-lg border border-border-soft bg-surface-canvas px-3 py-2 text-sm focus:border-blue-400 focus:bg-surface-card focus:outline-none"
                 />
                 {error ? <p className={`${microBadge} text-red-600`}>{error}</p> : null}
+                {/* ds-raw-button — solid-emerald/red conditional hold CTA */}
                 <button
                     type="button"
                     disabled={busy}

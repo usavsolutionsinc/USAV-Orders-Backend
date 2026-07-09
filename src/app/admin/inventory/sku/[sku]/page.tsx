@@ -1,5 +1,6 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw, queryOne } from '@/lib/neon-client';
+import { unitStatusBadgeClass } from '@/lib/unit-status';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -217,30 +218,9 @@ async function loadEvents(sku: string): Promise<EventRow[]> {
 }
 
 function StatusBadge({ status }: { status: string | null }) {
-  if (!status) return <span className="text-xs text-gray-400">—</span>;
-  const palette: Record<string, string> = {
-    UNKNOWN: 'bg-gray-100 text-gray-600',
-    RECEIVED: 'bg-blue-100 text-blue-700',
-    TRIAGED: 'bg-blue-100 text-blue-700',
-    IN_TEST: 'bg-indigo-100 text-indigo-700',
-    IN_REPAIR: 'bg-amber-100 text-amber-700',
-    REPAIR_DONE: 'bg-amber-100 text-amber-700',
-    GRADED: 'bg-emerald-100 text-emerald-700',
-    TESTED: 'bg-emerald-100 text-emerald-700',
-    STOCKED: 'bg-green-100 text-green-700',
-    ALLOCATED: 'bg-purple-100 text-purple-700',
-    PICKED: 'bg-purple-100 text-purple-700',
-    PACKED: 'bg-purple-100 text-purple-700',
-    LABELED: 'bg-purple-100 text-purple-700',
-    STAGED: 'bg-purple-100 text-purple-700',
-    SHIPPED: 'bg-gray-200 text-gray-700',
-    RETURNED: 'bg-orange-100 text-orange-700',
-    RMA: 'bg-orange-100 text-orange-700',
-    ON_HOLD: 'bg-red-100 text-red-700',
-    SCRAPPED: 'bg-red-100 text-red-700',
-  };
+  if (!status) return <span className="text-xs text-text-faint">—</span>;
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${palette[status] ?? 'bg-gray-100 text-gray-600'}`}>
+    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${unitStatusBadgeClass(status)}`}>
       {status}
     </span>
   );
@@ -253,12 +233,12 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
   const cleaned = decodeURIComponent(sku || '').trim();
   if (!cleaned) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-surface-canvas p-8">
         <div className="mx-auto max-w-3xl space-y-2">
           <Link href="/admin/inventory" className="text-sm text-blue-600 hover:underline">
             ← back
           </Link>
-          <h1 className="text-2xl font-semibold text-gray-900">SKU required</h1>
+          <h1 className="text-2xl font-semibold text-text-default">SKU required</h1>
         </div>
       </div>
     );
@@ -278,20 +258,20 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
   const totalUnits = statusCounts.reduce((sum, r) => sum + Number(r.count || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-surface-canvas p-8">
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="space-y-2">
           <Link href="/admin/inventory" className="text-sm text-blue-600 hover:underline">
             ← back to dashboard
           </Link>
           <div className="flex items-baseline gap-4">
-            <h1 className="font-mono text-2xl font-semibold text-gray-900">{cleaned}</h1>
+            <h1 className="font-mono text-2xl font-semibold text-text-default">{cleaned}</h1>
             {catalog?.is_active === false ? (
               <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">inactive</span>
             ) : null}
           </div>
           {catalog ? (
-            <p className="text-sm text-gray-700">{catalog.product_title}</p>
+            <p className="text-sm text-text-muted">{catalog.product_title}</p>
           ) : (
             <p className="text-sm text-amber-700">
               No sku_catalog row for this SKU. Stock and event data still shown below.
@@ -301,9 +281,9 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
 
         {/* Catalog identifiers */}
         {catalog ? (
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-            <header className="border-b border-gray-100 px-6 py-4">
-              <h2 className="text-lg font-medium text-gray-900">Catalog</h2>
+          <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+            <header className="border-b border-border-hairline px-6 py-4">
+              <h2 className="text-lg font-medium text-text-default">Catalog</h2>
             </header>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 text-sm md:grid-cols-4">
               <Field label="Category">{catalog.category ?? '—'}</Field>
@@ -315,37 +295,37 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
         ) : null}
 
         {/* Stock summary */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-            <h2 className="text-lg font-medium text-gray-900">Current stock</h2>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-4">
+            <h2 className="text-lg font-medium text-text-default">Current stock</h2>
             {stock?.updated_at ? (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-text-soft">
                 updated {new Date(stock.updated_at).toLocaleString()}
               </span>
             ) : null}
           </header>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 text-sm md:grid-cols-3">
             <div>
-              <dt className="text-xs uppercase tracking-wide text-gray-500">Warehouse</dt>
+              <dt className="text-xs uppercase tracking-wide text-text-soft">Warehouse</dt>
               <dd className="mt-1 text-2xl font-semibold text-green-700">{stock?.stock ?? 0}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-gray-500">Boxed</dt>
+              <dt className="text-xs uppercase tracking-wide text-text-soft">Boxed</dt>
               <dd className="mt-1 text-2xl font-semibold text-purple-700">{stock?.boxed_stock ?? 0}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-gray-500">Serial units (any state)</dt>
-              <dd className="mt-1 text-2xl font-semibold text-gray-900">{totalUnits}</dd>
+              <dt className="text-xs uppercase tracking-wide text-text-soft">Serial units (any state)</dt>
+              <dd className="mt-1 text-2xl font-semibold text-text-default">{totalUnits}</dd>
             </div>
           </dl>
           {statusCounts.length > 0 ? (
-            <div className="border-t border-gray-100 px-6 py-3">
-              <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Units by status</p>
+            <div className="border-t border-border-hairline px-6 py-3">
+              <p className="mb-2 text-xs uppercase tracking-wide text-text-soft">Units by status</p>
               <div className="flex flex-wrap gap-2">
                 {statusCounts.map((s) => (
-                  <span key={s.current_status} className="inline-flex items-center gap-2 rounded-md bg-gray-50 px-3 py-1 text-xs">
+                  <span key={s.current_status} className="inline-flex items-center gap-2 rounded-md bg-surface-canvas px-3 py-1 text-xs">
                     <StatusBadge status={s.current_status} />
-                    <span className="font-semibold text-gray-900">{s.count}</span>
+                    <span className="font-semibold text-text-default">{s.count}</span>
                   </span>
                 ))}
               </div>
@@ -354,16 +334,16 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
         </section>
 
         {/* Bin distribution */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-            <h2 className="text-lg font-medium text-gray-900">Bin distribution</h2>
-            <span className="text-xs text-gray-500">{bins.length} bins</span>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-4">
+            <h2 className="text-lg font-medium text-text-default">Bin distribution</h2>
+            <span className="text-xs text-text-soft">{bins.length} bins</span>
           </header>
           {bins.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-gray-600">No bin assignments for this SKU.</p>
+            <p className="px-6 py-4 text-sm text-text-muted">No bin assignments for this SKU.</p>
           ) : (
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full divide-y divide-border-hairline text-sm">
+              <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                 <tr>
                   <th className="px-6 py-2 text-left font-medium">Bin</th>
                   <th className="px-6 py-2 text-right font-medium">Qty</th>
@@ -372,14 +352,14 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                   <th className="px-6 py-2 text-left font-medium">Last counted</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-hairline">
                 {bins.map((b) => (
                   <tr key={b.location_id}>
                     <td className="px-6 py-2 font-mono text-xs">{b.bin_name ?? b.bin_barcode ?? `#${b.location_id}`}</td>
                     <td className="px-6 py-2 text-right font-semibold">{b.qty}</td>
-                    <td className="px-6 py-2 text-right text-gray-500">{b.min_qty ?? '—'}</td>
-                    <td className="px-6 py-2 text-right text-gray-500">{b.max_qty ?? '—'}</td>
-                    <td className="px-6 py-2 text-xs text-gray-500">
+                    <td className="px-6 py-2 text-right text-text-soft">{b.min_qty ?? '—'}</td>
+                    <td className="px-6 py-2 text-right text-text-soft">{b.max_qty ?? '—'}</td>
+                    <td className="px-6 py-2 text-xs text-text-soft">
                       {b.last_counted ? new Date(b.last_counted).toLocaleString() : '—'}
                     </td>
                   </tr>
@@ -391,13 +371,13 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
 
         {/* Recent serial units */}
         {recentUnits.length > 0 ? (
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-            <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h2 className="text-lg font-medium text-gray-900">Recent serial units</h2>
-              <span className="text-xs text-gray-500">last 25 of {totalUnits}</span>
+          <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+            <header className="flex items-center justify-between border-b border-border-hairline px-6 py-4">
+              <h2 className="text-lg font-medium text-text-default">Recent serial units</h2>
+              <span className="text-xs text-text-soft">last 25 of {totalUnits}</span>
             </header>
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full divide-y divide-border-hairline text-sm">
+              <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                 <tr>
                   <th className="px-6 py-2 text-left font-medium">Serial</th>
                   <th className="px-6 py-2 text-left font-medium">Status</th>
@@ -406,7 +386,7 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                   <th className="px-6 py-2 text-left font-medium">Updated</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-hairline">
                 {recentUnits.map((u) => (
                   <tr key={u.id}>
                     <td className="px-6 py-2 font-mono text-xs">
@@ -415,9 +395,9 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                       </Link>
                     </td>
                     <td className="px-6 py-2"><StatusBadge status={u.current_status} /></td>
-                    <td className="px-6 py-2 text-xs text-gray-600">{u.condition_grade ?? '—'}</td>
-                    <td className="px-6 py-2 text-xs text-gray-600">{u.current_location ?? '—'}</td>
-                    <td className="px-6 py-2 text-xs text-gray-500">{new Date(u.updated_at).toLocaleString()}</td>
+                    <td className="px-6 py-2 text-xs text-text-muted">{u.condition_grade ?? '—'}</td>
+                    <td className="px-6 py-2 text-xs text-text-muted">{u.current_location ?? '—'}</td>
+                    <td className="px-6 py-2 text-xs text-text-soft">{new Date(u.updated_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -427,12 +407,12 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
 
         {/* Open allocations */}
         {allocations.length > 0 ? (
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-            <header className="border-b border-gray-100 px-6 py-4">
-              <h2 className="text-lg font-medium text-gray-900">Open allocations</h2>
+          <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+            <header className="border-b border-border-hairline px-6 py-4">
+              <h2 className="text-lg font-medium text-text-default">Open allocations</h2>
             </header>
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full divide-y divide-border-hairline text-sm">
+              <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                 <tr>
                   <th className="px-6 py-2 text-left font-medium">Order</th>
                   <th className="px-6 py-2 text-left font-medium">Unit</th>
@@ -441,7 +421,7 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                   <th className="px-6 py-2 text-left font-medium">By</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-hairline">
                 {allocations.map((a) => (
                   <tr key={a.id}>
                     <td className="px-6 py-2 font-mono text-xs">#{a.order_id}</td>
@@ -451,8 +431,8 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                       </Link>
                     </td>
                     <td className="px-6 py-2"><StatusBadge status={a.state} /></td>
-                    <td className="px-6 py-2 text-xs text-gray-500">{new Date(a.allocated_at).toLocaleString()}</td>
-                    <td className="px-6 py-2 text-xs text-gray-600">{a.allocated_by_name ?? 'system'}</td>
+                    <td className="px-6 py-2 text-xs text-text-soft">{new Date(a.allocated_at).toLocaleString()}</td>
+                    <td className="px-6 py-2 text-xs text-text-muted">{a.allocated_by_name ?? 'system'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -461,16 +441,16 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
         ) : null}
 
         {/* Ledger */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-            <h2 className="text-lg font-medium text-gray-900">Stock ledger</h2>
-            <span className="text-xs text-gray-500">last 100</span>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-4">
+            <h2 className="text-lg font-medium text-text-default">Stock ledger</h2>
+            <span className="text-xs text-text-soft">last 100</span>
           </header>
           {ledger.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-gray-600">No ledger entries for this SKU yet.</p>
+            <p className="px-6 py-4 text-sm text-text-muted">No ledger entries for this SKU yet.</p>
           ) : (
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full divide-y divide-border-hairline text-sm">
+              <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                 <tr>
                   <th className="px-6 py-2 text-left font-medium">When</th>
                   <th className="px-6 py-2 text-right font-medium">Δ</th>
@@ -480,23 +460,23 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                   <th className="px-6 py-2 text-left font-medium">By</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-hairline">
                 {ledger.map((l) => (
                   <tr key={l.id}>
-                    <td className="px-6 py-2 text-xs text-gray-500">{new Date(l.created_at).toLocaleString()}</td>
-                    <td className={`px-6 py-2 text-right font-semibold ${l.delta > 0 ? 'text-green-700' : l.delta < 0 ? 'text-red-700' : 'text-gray-500'}`}>
+                    <td className="px-6 py-2 text-xs text-text-soft">{new Date(l.created_at).toLocaleString()}</td>
+                    <td className={`px-6 py-2 text-right font-semibold ${l.delta > 0 ? 'text-green-700' : l.delta < 0 ? 'text-red-700' : 'text-text-soft'}`}>
                       {l.delta > 0 ? '+' : ''}{l.delta}
                     </td>
                     <td className="px-6 py-2 font-mono text-xs">{l.reason}</td>
-                    <td className="px-6 py-2 text-xs text-gray-500">{l.dimension}</td>
-                    <td className="px-6 py-2 text-xs text-gray-600">
+                    <td className="px-6 py-2 text-xs text-text-soft">{l.dimension}</td>
+                    <td className="px-6 py-2 text-xs text-text-muted">
                       {[
                         l.ref_order_id ? `ord#${l.ref_order_id}` : null,
                         l.ref_receiving_line_id ? `rl#${l.ref_receiving_line_id}` : null,
                         l.ref_serial_unit_id ? `su#${l.ref_serial_unit_id}` : null,
                       ].filter(Boolean).join(' · ') || '—'}
                     </td>
-                    <td className="px-6 py-2 text-xs text-gray-600">{l.staff_name ?? 'system'}</td>
+                    <td className="px-6 py-2 text-xs text-text-muted">{l.staff_name ?? 'system'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -505,16 +485,16 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
         </section>
 
         {/* Events */}
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-            <h2 className="text-lg font-medium text-gray-900">Recent inventory events</h2>
-            <span className="text-xs text-gray-500">last 50</span>
+        <section className="rounded-lg border border-border-soft bg-surface-card shadow-sm">
+          <header className="flex items-center justify-between border-b border-border-hairline px-6 py-4">
+            <h2 className="text-lg font-medium text-text-default">Recent inventory events</h2>
+            <span className="text-xs text-text-soft">last 50</span>
           </header>
           {events.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-gray-600">No events recorded for this SKU yet.</p>
+            <p className="px-6 py-4 text-sm text-text-muted">No events recorded for this SKU yet.</p>
           ) : (
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full divide-y divide-border-hairline text-sm">
+              <thead className="bg-surface-canvas text-xs uppercase tracking-wide text-text-soft">
                 <tr>
                   <th className="px-6 py-2 text-left font-medium">When</th>
                   <th className="px-6 py-2 text-left font-medium">Event</th>
@@ -523,10 +503,10 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                   <th className="px-6 py-2 text-left font-medium">By</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-hairline">
                 {events.map((e) => (
                   <tr key={e.id}>
-                    <td className="px-6 py-2 text-xs text-gray-500">{new Date(e.occurred_at).toLocaleString()}</td>
+                    <td className="px-6 py-2 text-xs text-text-soft">{new Date(e.occurred_at).toLocaleString()}</td>
                     <td className="px-6 py-2 font-mono text-xs">{e.event_type}</td>
                     <td className="px-6 py-2 font-mono text-xs">
                       {e.serial_unit_id ? (
@@ -535,12 +515,12 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
                         </Link>
                       ) : '—'}
                     </td>
-                    <td className="px-6 py-2 text-xs text-gray-600">
+                    <td className="px-6 py-2 text-xs text-text-muted">
                       {e.prev_status && e.next_status
                         ? <><StatusBadge status={e.prev_status} /> → <StatusBadge status={e.next_status} /></>
                         : e.next_status ?? '—'}
                     </td>
-                    <td className="px-6 py-2 text-xs text-gray-600">{e.actor_name ?? 'system'}</td>
+                    <td className="px-6 py-2 text-xs text-text-muted">{e.actor_name ?? 'system'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -555,8 +535,8 @@ export default async function SkuDetailPage({ params }: { params: Promise<{ sku:
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wide text-gray-500">{label}</dt>
-      <dd className="mt-0.5 text-sm text-gray-900">{children}</dd>
+      <dt className="text-xs uppercase tracking-wide text-text-soft">{label}</dt>
+      <dd className="mt-0.5 text-sm text-text-default">{children}</dd>
     </div>
   );
 }

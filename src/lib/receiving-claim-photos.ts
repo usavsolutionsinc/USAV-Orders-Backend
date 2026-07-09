@@ -321,5 +321,5 @@ export async function archiveClaimViaAgent(opts: {
  * the wrong surface for whoever opens the ticket later.
  */
 export function poReceivingLink(req: NextRequest, receivingId: number): string {
-  return `${req.nextUrl.origin}/receiving?recvId=${receivingId}`;
+  return `${req.nextUrl.origin}/unbox?recvId=${receivingId}`;
 }

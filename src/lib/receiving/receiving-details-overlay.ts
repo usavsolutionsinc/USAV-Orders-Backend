@@ -49,7 +49,8 @@ export function receivingLineRowToDetailsSeed(row: ReceivingLineRow): Partial<Re
     condition_grade: row.condition_grade,
     needs_test: row.needs_test,
     assigned_tech_id: row.assigned_tech_id,
-    received_at: row.received_at ?? undefined,
+    // "Received" = terminal DONE time; "Unboxed" = first unbox scan (carton stamp).
+    received_at: row.received_done_at ?? undefined,
     unboxed_at: row.unboxed_at ?? undefined,
     unboxed_by_name: row.unboxed_by_name ?? undefined,
     received_by_name: row.received_by_name ?? undefined,

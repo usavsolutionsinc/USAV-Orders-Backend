@@ -23,6 +23,9 @@ export const ebayAccounts = pgTable('ebay_accounts', {
   marketplaceId: varchar('marketplace_id', { length: 20 }).default('EBAY_US'),
   // Added by 2026-03-09_ebay_accounts_add_platform_zoho.sql (EBAY | ZOHO).
   platform: varchar('platform', { length: 20 }),
+  /** seller (sell.fulfillment) | buyer (buy.order purchasing). CHECK ('seller','buyer').
+   *  2026-07-01l — Universal Incoming Phase 1. One eBay OAuth app, discriminated tokens. */
+  accountRole: text('account_role').notNull().default('seller'),
   lastSyncDate: timestamp('last_sync_date', { withTimezone: true }),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -31,6 +34,7 @@ export const ebayAccounts = pgTable('ebay_accounts', {
   orgEbayUserIdx: uniqueIndex('ux_ebay_accounts_org_ebay_user').on(table.organizationId, table.ebayUserId),
   orgAccountIdx: uniqueIndex('ux_ebay_accounts_org_account').on(table.organizationId, table.accountName),
   orgIdx: index('idx_ebay_accounts_organization').on(table.organizationId),
+  orgRoleIdx: index('idx_ebay_accounts_org_role').on(table.organizationId, table.accountRole),
 }));
 
 // ─── Platform / Account / Type catalog ──────────────────────────────────────
@@ -688,6 +692,40 @@ export const itemLocationStock = pgTable('item_location_stock', {
   itemLocationUnique: uniqueIndex('ux_item_location_stock_item_location').on(table.itemId, table.locationId),
 }));
 
+/**
+ * part_links — SaaS-owned part→parent pairing for the inventory parts graph
+ * (2026-06-28g). Keyed on the logical part (base+color+condition, from
+ * parsePartSku().logicalKey) and the Zoho `items` scheme (parent_item_id FK),
+ * never the sku string (items/sku_catalog are independent numbering schemes
+ * that collide on the same string — see .claude/rules/source-of-truth.md).
+ * status='confirmed' → parent_item_id NOT NULL (many parents allowed).
+ * status='not_a_part' → parent_item_id NULL (at most one row per child).
+ */
+export const partLinks = pgTable('part_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  /** parsePartSku().logicalKey — stable across the trailing stock-index churn. */
+  childLogicalKey: text('child_logical_key').notNull(),
+  /** Denormalized base code for grouping/display. */
+  childBase: text('child_base').notNull(),
+  /** confirmed | not_a_part */
+  status: text('status').notNull().default('confirmed'),
+  parentItemId: uuid('parent_item_id').references(() => items.id, { onDelete: 'cascade' }),
+  /** Denormalized for resilience across Zoho re-sync (items rows can be re-keyed). */
+  parentZohoItemId: text('parent_zoho_item_id'),
+  qty: integer('qty').notNull().default(1),
+  notes: text('notes'),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  childParentUx: uniqueIndex('ux_part_links_child_parent').on(table.organizationId, table.childLogicalKey, table.parentItemId),
+  childNotAPartUx: uniqueIndex('ux_part_links_child_not_a_part').on(table.organizationId, table.childLogicalKey).where(sql`status = 'not_a_part'`),
+  orgBaseIdx: index('idx_part_links_org_base').on(table.organizationId, table.childBase),
+  orgChildIdx: index('idx_part_links_org_child').on(table.organizationId, table.childLogicalKey),
+  parentIdx: index('idx_part_links_parent').on(table.organizationId, table.parentItemId),
+}));
+
 export const replenishmentRequests = pgTable('replenishment_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
   itemId: uuid('item_id').notNull().references(() => items.id),
@@ -805,22 +843,9 @@ export const packages = pgTable('packages', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const shipmentOrders = pgTable('shipment_orders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  zohoShipmentId: text('zoho_shipment_id').unique(),
-  packageId: uuid('package_id').notNull().references(() => packages.id, { onDelete: 'cascade' }),
-  salesOrderId: uuid('sales_order_id').notNull().references(() => salesOrders.id, { onDelete: 'cascade' }),
-  status: text('status'),
-  date: date('date'),
-  trackingNumber: text('tracking_number'),
-  carrier: text('carrier'),
-  shipstationOrderId: text('shipstation_order_id'),
-  shipstationLabelUrl: text('shipstation_label_url'),
-  shipmentId: bigint('shipment_id', { mode: 'number' }),
-  syncedAt: timestamp('synced_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+// shipment_orders — DROPPED 2026-06-28 (dead, 0 rows; pre-STN Zoho-shipment table
+// with duplicated tracking/carrier). Superseded by shipment_links + the STN master.
+// See migration 2026-06-28q_drop_legacy_shipment_link_tables.sql.
 
 export const invoices = pgTable('invoices', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -937,6 +962,10 @@ export const orders = pgTable('orders', {
   shipmentId: bigint('shipment_id', { mode: 'number' }),
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
+  /** Marketplace buyer checkout note (eBay buyerCheckoutNotes), mirrored raw
+   *  by the sync; projected into entity_signals by buyer-note-derivation.
+   *  Migration 2026-07-03p. */
+  buyerNote: text('buyer_note'),
   quantity: text('quantity').default('1'),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   status: text('status'),
@@ -962,21 +991,9 @@ export const orders = pgTable('orders', {
   typeId: bigint('type_id', { mode: 'number' }),
 });
 
-// Multi-shipment links per order row. Keeps orders.shipment_id as canonical
-// primary link while allowing additional shipment IDs to be associated.
-export const orderShipmentLinks = pgTable('order_shipment_links', {
-  orderRowId: integer('order_row_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
-  shipmentId: bigint('shipment_id', { mode: 'number' }).notNull(),
-  isPrimary: boolean('is_primary').notNull().default(false),
-  source: text('source'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.orderRowId, table.shipmentId] }),
-  orderIdx: index('order_shipment_links_order_row_id_idx').on(table.orderRowId),
-  shipmentIdx: index('order_shipment_links_shipment_id_idx').on(table.shipmentId),
-  primaryIdx: index('order_shipment_links_primary_idx').on(table.orderRowId, table.isPrimary),
-}));
+// order_shipment_links — DROPPED 2026-06-28. Subsumed by shipment_links
+// (owner_type='ORDER', OUTBOUND). orders.shipment_id stays as the primary cache.
+// See migration 2026-06-28q_drop_legacy_shipment_link_tables.sql.
 
 // Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)
 // Photos are stored in the photos table (entity_type='PACKER_LOG', entity_id=packer_logs.id)
@@ -1021,24 +1038,53 @@ export const stationActivityLogs = pgTable('station_activity_logs', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-// Unified photos table — polymorphic: entity_type IN ('PACKER_LOG','RECEIVING')
-// Cascade delete via DB triggers (trg_delete_photos_on_packer_log_delete / _receiving_delete)
+// Photo bytes/metadata row. The polymorphic entity_type/entity_id/url columns
+// that used to live here were dropped 2026-06-21 (Phase E) once
+// photo_entity_links took over as the polymorphic hub — see photoEntityLinks
+// below. Cascade delete on parent-delete now runs through that table's rows,
+// not these columns.
 export const photos = pgTable('photos', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
-  entityType: text('entity_type').notNull(),
-  entityId: integer('entity_id').notNull(),
-  url: text('url').notNull(),
+  organizationId: orgIdCol(),
   takenByStaffId: integer('taken_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
   photoType: text('photo_type'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedFromBlobAt: timestamp('deleted_from_blob_at', { withTimezone: true }),
+  poRef: text('po_ref'),
 });
+
+/**
+ * photo_entity_links — the polymorphic hub for every photo↔entity relationship
+ * (2026-06-18). Superseded photos.entity_type/entity_id/url (dropped 2026-06-21,
+ * Phase E). link_role is a second discriminator axis: 'primary' | 'claim_evidence'
+ * | 'insurance_share'. Cascade delete on the entity side runs through
+ * fn_delete_photos_on_parent_delete(), which now reads this table instead of
+ * the old photos columns.
+ */
+export const photoEntityLinks = pgTable('photo_entity_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  photoId: bigint('photo_id', { mode: 'number' }).notNull().references(() => photos.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  /** RECEIVING | RECEIVING_LINE | PACKER_LOG | SERIAL_UNIT | SKU | SKU_STOCK | BIN_ADJUSTMENT | SHARE_PACK | ZENDESK_TICKET */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  /** primary | claim_evidence | insurance_share */
+  linkRole: text('link_role').notNull().default('primary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueLink: uniqueIndex('ux_photo_entity_links_unique').on(table.photoId, table.entityType, table.entityId, table.linkRole),
+}));
 
 // Receiving table - work_assignments linked via entity_type='RECEIVING', entity_id=receiving.id
 // BEFORE DELETE trigger trg_cancel_wa_on_receiving_delete auto-cancels related work_assignments
-export const receiving = pgTable('receiving', {
+// Base table renamed to receiving_carton (2026-07-05d); the `receiving` VIEW
+// (security_invoker compat shim) still serves legacy raw SQL. JS export name kept
+// as `receiving` so importers are unchanged; the model targets the real table.
+export const receiving = pgTable('receiving_carton', {
   id: serial('id').primaryKey(),
-  receivingTrackingNumber: text('receiving_tracking_number'),
+  // receiving_tracking_number dropped — tracking lives in shipping_tracking_numbers
+  // (via shipmentId). See migration 2026-06-28_drop_receiving_tracking_number.sql.
   carrier: text('carrier'),
   receivedAt: timestamp('received_at', { withTimezone: true }),
   receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
@@ -1060,13 +1106,14 @@ export const receiving = pgTable('receiving', {
   quantity: text('quantity'),
   /** Carton-level support / ops notes (not per receiving_lines row). */
   supportNotes: text('support_notes'),
+  /** Zoho PO header notes (overall, carton-level) — the "Zoho Notes" tab's primary
+   *  content; distinct from receiving_lines.zoho_notes (per-line item desc). 2026-06-25. */
+  zohoNotes: text('zoho_notes'),
   /** Filed Zendesk ticket # for a package-level claim, stored as "#<id>". */
   zendeskTicket: text('zendesk_ticket'),
-  /**
-   * Receiver-entered total carton count for a multi-box PO (denominator for the
-   * boxes-received rollup; NULL = open-ended). docs/multi-tracking-po-plan.md.
-   */
-  expectedBoxCount: integer('expected_box_count'),
+  // expected_box_count dropped 2026-06-28o — never wired (inert stub, 0 rows);
+  // multi-box PO rollup never consumed it. See migration
+  // 2026-06-28o_drop_receiving_expected_box_count.sql.
   /**
    * Catalog flow type (org `types` row). Additive FK from the platform/type
    * catalog (2026-06-14f); the carton's effective type still comes from
@@ -1091,38 +1138,17 @@ export const receiving = pgTable('receiving', {
   zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
   zohoPurchaseOrderNumber: text('zoho_purchaseorder_number'),
   listingUrl: text('listing_url'),
-  /** License plate — stable carton identity (unified inbound model Phase 3). 2026-06-08. */
-  lpn: text('lpn'),
+  // lpn dropped 2026-07-05e — dead 'RC-<id>' alias of the PK (carton identity is
+  // id / handling_unit_id). See migration 2026-07-05e_receiving_drop_dead_lpn.sql.
   /** Legacy denormalized intake timestamp. 2026-03-05. */
   receivingDateTime: timestamp('receiving_date_time', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/**
- * receiving_shipments — PO ↔ shipment junction (multi-box per PO).
- *
- * One row per carton/tracking attached to a `receiving` carton. The `isPrimary`
- * row mirrors `receiving.shipment_id` (the Zoho reference# anchor, box_seq 1);
- * extra boxes get box_seq 2..N via /api/receiving/[id]/attach-box. Makes the
- * PO↔shipment relationship many-to-many without touching the one-row-per-PO
- * anchor. docs/multi-tracking-po-plan.md Phase 1.
- */
-export const receivingShipments = pgTable('receiving_shipments', {
-  id: bigserial('id', { mode: 'number' }).primaryKey(),
-  receivingId: integer('receiving_id').notNull().references(() => receiving.id, { onDelete: 'cascade' }),
-  shipmentId: bigint('shipment_id', { mode: 'number' }).notNull(),
-  boxSeq: integer('box_seq').notNull().default(1),
-  isPrimary: boolean('is_primary').notNull().default(false),
-  receivedAt: timestamp('received_at', { withTimezone: true }),
-  receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  receivingShipmentUx: uniqueIndex('ux_receiving_shipments').on(table.receivingId, table.shipmentId),
-  receivingIdx: index('idx_receiving_shipments_receiving').on(table.receivingId),
-  shipmentIdx: index('idx_receiving_shipments_shipment').on(table.shipmentId),
-  primaryUx: uniqueIndex('ux_receiving_shipments_primary').on(table.receivingId).where(sql`is_primary`),
-}));
+// receiving_shipments — DROPPED 2026-06-28. Subsumed by shipment_links
+// (owner_type='RECEIVING', INBOUND); received_at/received_by map to
+// linked_at/linked_by. See 2026-06-28q_drop_legacy_shipment_link_tables.sql.
 
 /**
  * shipment_links — UNIFIED polymorphic owner↔tracking linkage (inbound + outbound).
@@ -1192,13 +1218,18 @@ export const localPickupItems = pgTable('local_pickup_items', {
  * receiving_lines is the authoritative operational unit.
  * Every tech-facing action resolves to one or more receiving_lines rows.
  */
-export const receivingLines = pgTable('receiving_lines', {
+// Base table renamed to receiving_line (2026-07-05d); the `receiving_lines` VIEW
+// (security_invoker compat shim) still serves legacy raw SQL. JS export name kept
+// as `receivingLines` so importers are unchanged; the model targets the real table.
+export const receivingLines = pgTable('receiving_line', {
   id: serial('id').primaryKey(),
   /** NULL until a physical scan is matched (Zoho PO pre-staging rows start NULL) */
   receivingId: integer('receiving_id').references(() => receiving.id, { onDelete: 'cascade' }),
 
-  // Zoho identifiers — at least one is required for Zoho-originated rows
-  zohoItemId: text('zoho_item_id').notNull(),
+  // Zoho identifiers — required for Zoho-originated rows (guarded by
+  // receiving_lines_zoho_item_required_chk), NULLABLE since 2026-07-01l so
+  // marketplace-only lines (eBay/Amazon, no Zoho item) can live on the spine.
+  zohoItemId: text('zoho_item_id'),
   zohoLineItemId: text('zoho_line_item_id'),
   zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
   zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
@@ -1235,6 +1266,9 @@ export const receivingLines = pgTable('receiving_lines', {
   zohoSyncedAt: timestamp('zoho_synced_at', { withTimezone: true }),
 
   notes: text('notes'),
+  /** Zoho PO line description (read-only import); split from `notes` so a Zoho
+   *  re-sync can't clobber operator notes. 2026-06-24 notes-collision fix. */
+  zohoNotes: text('zoho_notes'),
   /** Filed Zendesk ticket # for a line-level claim, stored as "#<id>". */
   zendeskTicket: text('zendesk_ticket'),
   // ── Drift reconciliation (2026-06-19): DB columns added via raw-SQL
@@ -1261,6 +1295,16 @@ export const receivingLines = pgTable('receiving_lines', {
   receivedDoneAt: timestamp('received_done_at', { withTimezone: true }),
   sourceSystem: text('source_system'),
   sourceOrderId: text('source_order_id'),
+  // ── Universal Incoming Phase 1 (2026-07-01l): transition cache of the primary
+  //    inbound_purchase_order_links row. Links table is the identity SoT; these
+  //    denormalized columns keep existing Incoming readers green until cutover,
+  //    then get dropped. ───────────────────────────────────────────────────────
+  /** Primary source badge/filter. CHECK (NULL | 'zoho' | 'ebay' | 'amazon' | 'manual'). */
+  inboundSourceType: text('inbound_source_type'),
+  /** Primary external line id (source_order_id already exists above). */
+  sourceLineItemId: text('source_line_item_id'),
+  /** Buyer/storefront account for the Incoming account chip. */
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
   isRepairService: boolean('is_repair_service').notNull().default(false),
   // ── Receiving redesign Phase 0 (2026-06-24): line-level lifecycle facts ────
   /** Read-only mirror of Zoho PO line.rate (unit cost); Zoho stays SoR. */
@@ -1314,6 +1358,266 @@ export const receivingExceptions = pgTable('receiving_exceptions', {
   orgReceivingIdx: index('idx_receiving_exceptions_org_receiving').on(table.organizationId, table.receivingId),
 }));
 
+// ─── Receiving polymorphic refactor — Layer 2 (typed facts) ─────────────────
+// Additive side-tables that the one-street columns on receiving_lines move into
+// during the per-street cutover. See docs/todo/polymorphic-tables-database-refactor-plan.md §4
+// and migration 2026-06-29c_receiving_line_facts_tables.sql (RLS armed, not forced).
+
+/** Zoho-PO-origin line facts (the Zoho cluster + unit_price). 1:1 with the line. */
+export const receivingLineZoho = pgTable('receiving_line_zoho', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  zohoItemId: text('zoho_item_id'),
+  zohoLineItemId: text('zoho_line_item_id'),
+  zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
+  zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
+  zohoPurchaseOrderNumber: text('zoho_purchaseorder_number'),
+  zohoReferenceNumber: text('zoho_reference_number'),
+  zohoSyncSource: text('zoho_sync_source'),
+  zohoLastModifiedTime: text('zoho_last_modified_time'),
+  zohoSyncedAt: timestamp('zoho_synced_at', { withTimezone: true }),
+  zohoNotes: text('zoho_notes'),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgPoLineIdx: uniqueIndex('ux_receiving_line_zoho_org_po_line').on(table.organizationId, table.zohoPurchaseOrderId, table.zohoLineItemId),
+  orgPrLineIdx: uniqueIndex('ux_receiving_line_zoho_org_pr_line').on(table.organizationId, table.zohoPurchaseReceiveId, table.zohoLineItemId),
+  orgPoIdx: index('idx_receiving_line_zoho_org_po').on(table.organizationId, table.zohoPurchaseOrderId),
+}));
+
+/** Line-level testing/QA routing facts. Per-unit verdicts stay on serial_units/testing_results. 1:1. */
+export const receivingLineTesting = pgTable('receiving_line_testing', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  needsTest: boolean('needs_test').notNull().default(true),
+  assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
+  qaStatus: qaStatusEnum('qa_status').notNull().default('PENDING'),
+  dispositionCode: dispositionEnum('disposition_code').notNull().default('HOLD'),
+  conditionGrade: conditionGradeEnum('condition_grade').notNull().default('BRAND_NEW'),
+  dispositionFinal: text('disposition_final'),
+  dispositionAudit: jsonb('disposition_audit').notNull().default([]),
+  /** When the operator explicitly picked condition_grade (distinct from the DB default). Moved from receiving_lines (2026-07-05c). */
+  conditionSetAt: timestamp('condition_set_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgNeedsTestIdx: index('idx_receiving_line_testing_org_needs_test').on(table.organizationId),
+  orgTechIdx: index('idx_receiving_line_testing_org_tech').on(table.organizationId, table.assignedTechId),
+}));
+
+/** RETURN/TRADE_IN intake facts (return_platform, return_reason, source_order_id, rma_ref). 1:1. */
+export const receivingLineReturn = pgTable('receiving_line_return', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  returnPlatform: returnPlatformEnum('return_platform'),
+  returnReason: text('return_reason'),
+  sourceOrderId: text('source_order_id'),
+  rmaRef: text('rma_ref'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgSourceOrderIdx: index('idx_receiving_line_return_org_source_order').on(table.organizationId, table.sourceOrderId),
+}));
+
+/** Putaway facts (location_code, bin, put_away_*). 1:1. */
+export const receivingLinePutaway = pgTable('receiving_line_putaway', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  locationCode: text('location_code'),
+  bin: text('bin'),
+  putAwayAt: timestamp('put_away_at', { withTimezone: true }),
+  putAwayBy: integer('put_away_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgLocationIdx: index('idx_receiving_line_putaway_org_location').on(table.organizationId, table.locationCode),
+}));
+
+/**
+ * Long-tail / org-custom receiving-line typed facts: (line_id, fact_kind, payload).
+ * fact_kind is validated by src/lib/receiving/facts/registry.ts at write time (code
+ * registry, not a DB CHECK) so a new kind needs no migration — same governance as
+ * workflow_nodes.type → configSchema.
+ */
+export const receivingLineFacts = pgTable('receiving_line_facts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  receivingLineId: integer('receiving_line_id').notNull().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  factKind: text('fact_kind').notNull(),
+  payload: jsonb('payload').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  lineKindIdx: uniqueIndex('ux_receiving_line_facts_line_kind').on(table.organizationId, table.receivingLineId, table.factKind),
+  orgKindIdx: index('idx_receiving_line_facts_org_kind').on(table.organizationId, table.factKind),
+  lineIdx: index('idx_receiving_line_facts_line').on(table.receivingLineId),
+}));
+
+// ─── Receiving polymorphic refactor — carton-grain street ops (step 3b) ──────
+// Triage and Unbox are INDEPENDENT operator streets on one carton. Their state
+// leaves the wide `receiving` spine into these 1:1 side-tables. Interim shadow of
+// the receiving.* triage/unbox columns; kept live by the trg_sync_receiving_street
+// dual-write trigger. RLS armed (not forced). Migration 2026-07-05c; plan §4.2(a).
+
+/** Carton-grain TRIAGE street ops (door received, staging, pairing, save-for-unbox). 1:1 with receiving. */
+export const receivingTriage = pgTable('receiving_triage', {
+  receivingId: integer('receiving_id').primaryKey().references(() => receiving.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  /** Mirror of receiving.received_at — first triage door scan. */
+  doorReceivedAt: timestamp('door_received_at', { withTimezone: true }),
+  doorReceivedBy: integer('door_received_by').references(() => staff.id, { onDelete: 'set null' }),
+  stagingLocationId: integer('staging_location_id').references(() => locations.id),
+  priorityLane: text('priority_lane'),
+  /** CHECK: UNFOUND | MATCHED | WAIVED (nullable). */
+  pairingState: text('pairing_state'),
+  triageComplete: boolean('triage_complete').notNull().default(false),
+  triageCompletedAt: timestamp('triage_completed_at', { withTimezone: true }),
+  triageCompletedBy: integer('triage_completed_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgCompleteIdx: index('idx_receiving_triage_org_complete').on(table.organizationId, table.triageCompletedAt).where(sql`triage_complete`),
+  stagingIdx: index('idx_receiving_triage_staging').on(table.stagingLocationId).where(sql`staging_location_id IS NOT NULL`),
+}));
+
+/** Carton-grain UNBOX street ops (bench opened, unboxed milestone, intake_path). 1:1 with receiving. */
+export const receivingUnbox = pgTable('receiving_unbox', {
+  receivingId: integer('receiving_id').primaryKey().references(() => receiving.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  /** Mirror of receiving.unbox_opened_at — bench queue entry. */
+  openedAt: timestamp('opened_at', { withTimezone: true }),
+  openedBy: integer('opened_by').references(() => staff.id, { onDelete: 'set null' }),
+  /** Operator "Unboxed" action (NOT scan-owned). */
+  unboxedAt: timestamp('unboxed_at', { withTimezone: true }),
+  unboxedBy: integer('unboxed_by').references(() => staff.id, { onDelete: 'set null' }),
+  /** CHECK: triage_first | unbox_only | unknown. Mirrors receiving.unbox_only_intake / received_at. */
+  intakePath: text('intake_path').notNull().default('unknown'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  intakePathIdx: index('idx_receiving_unbox_intake_path').on(table.organizationId, table.intakePath).where(sql`intake_path = 'unbox_only'`),
+}));
+
+// ─── Universal Incoming — polymorphic purchase identity ─────────────────────
+// receiving_lines is the ONE Incoming spine; external purchase identity lives in
+// these polymorphic side-tables so Zoho, eBay buyer purchases, and future
+// channels share one queue and one dedup model. See
+// docs/incoming-universal-purchase-orders-plan.md §3 and migrations
+// 2026-07-01k (tables) / 2026-07-01l (spine cache) / 2026-07-01m (backfill).
+// source_type discriminator CHECK: ('zoho' | 'ebay' | 'amazon' | 'manual').
+
+/**
+ * Polymorphic purchase-identity SoT: (receiving_line, source_type,
+ * source_order_id, source_line_item_id). A merged eBay+Zoho purchase is multiple
+ * link rows on ONE receiving_line (ebay is_primary + zoho secondary), never two
+ * spine rows. FORCE-RLS tenant-from-birth (2026-07-01k).
+ */
+export const inboundPurchaseOrderLinks = pgTable('inbound_purchase_order_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  receivingLineId: integer('receiving_line_id').notNull().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  /** 'zoho' | 'ebay' | 'amazon' | 'manual' (named CHECK inbound_purchase_order_links_source_type_chk). */
+  sourceType: text('source_type').notNull(),
+  sourceOrderId: text('source_order_id').notNull(),
+  sourceLineItemId: text('source_line_item_id'),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
+  linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  // Real DDL keys COALESCE(source_line_item_id,'') so a NULL line id participates uniquely.
+  naturalUx: uniqueIndex('ux_inbound_po_links_natural').on(
+    table.organizationId, table.receivingLineId, table.sourceType, table.sourceOrderId,
+    sql`COALESCE(${table.sourceLineItemId}, '')`,
+  ),
+  onePrimaryUx: uniqueIndex('ux_inbound_po_links_one_primary')
+    .on(table.organizationId, table.receivingLineId)
+    .where(sql`is_primary`),
+  sourceLookupIdx: index('idx_inbound_po_links_source_lookup').on(table.organizationId, table.sourceType, table.sourceOrderId),
+  lineIdx: index('idx_inbound_po_links_line').on(table.organizationId, table.receivingLineId),
+}));
+
+/**
+ * ONE read-only reconcile mirror for all inbound sources (replaces per-channel
+ * mirror tables). Legacy zoho_po_mirror keeps running; Zoho sync dual-writes both
+ * until readers cut over. Queryable facts are real columns; vendor tail in raw_payload.
+ */
+export const inboundPurchaseOrderMirror = pgTable('inbound_purchase_order_mirror', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  sourceType: text('source_type').notNull(),
+  sourceOrderId: text('source_order_id').notNull(),
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
+  orderNumber: text('order_number'),
+  vendorOrSellerName: text('vendor_or_seller_name'),
+  status: text('status'),
+  paymentStatus: text('payment_status'),
+  poDate: date('po_date'),
+  expectedDeliveryDate: date('expected_delivery_date'),
+  trackingNumber: text('tracking_number'),
+  carrierCode: text('carrier_code'),
+  lineItems: jsonb('line_items').notNull().default([]),
+  rawPayload: jsonb('raw_payload'),
+  lastModifiedAt: timestamp('last_modified_at', { withTimezone: true }),
+  syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalUx: uniqueIndex('ux_inbound_po_mirror_natural').on(table.organizationId, table.sourceType, table.sourceOrderId),
+  accountIdx: index('idx_inbound_po_mirror_account').on(table.organizationId, table.platformAccountId).where(sql`platform_account_id IS NOT NULL`),
+}));
+
+/**
+ * Cross-source dedup graph: "eBay order ≡ Zoho PO" edges. The writer canonicalizes
+ * the pair (LEAST/GREATEST) so (a,b) and (b,a) collapse to one row. Consulted by
+ * the merge algorithm before touching spine rows.
+ */
+export const inboundPurchaseOrderEquivalence = pgTable('inbound_purchase_order_equivalence', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  sourceTypeA: text('source_type_a').notNull(),
+  sourceOrderIdA: text('source_order_id_a').notNull(),
+  sourceTypeB: text('source_type_b').notNull(),
+  sourceOrderIdB: text('source_order_id_b').notNull(),
+  /** 'tracking' | 'order_number' | 'manual' | 'fuzzy_sku'. */
+  linkReason: text('link_reason').notNull(),
+  linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+  linkedByStaffId: integer('linked_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  // Order-independent pair uniqueness (canonical least/greatest).
+  pairUx: uniqueIndex('ux_inbound_po_equivalence_pair').on(
+    table.organizationId,
+    sql`LEAST(${table.sourceTypeA}, ${table.sourceTypeB})`,
+    sql`LEAST(${table.sourceOrderIdA}, ${table.sourceOrderIdB})`,
+    sql`GREATEST(${table.sourceTypeA}, ${table.sourceTypeB})`,
+    sql`GREATEST(${table.sourceOrderIdA}, ${table.sourceOrderIdB})`,
+  ),
+  aIdx: index('idx_inbound_po_equivalence_a').on(table.organizationId, table.sourceTypeA, table.sourceOrderIdA),
+  bIdx: index('idx_inbound_po_equivalence_b').on(table.organizationId, table.sourceTypeB, table.sourceOrderIdB),
+}));
+
+/** Append-only audit of eBay↔Zoho spine-row merges. */
+export const inboundPurchaseMergeLog = pgTable('inbound_purchase_merge_log', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  winnerLineId: integer('winner_line_id').notNull().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  loserLineId: integer('loser_line_id').references(() => receivingLines.id, { onDelete: 'set null' }),
+  mergeReason: text('merge_reason').notNull(),
+  primarySourceType: text('primary_source_type').notNull(),
+  primarySourceOrderId: text('primary_source_order_id').notNull(),
+  secondarySourceType: text('secondary_source_type'),
+  secondarySourceOrderId: text('secondary_source_order_id'),
+  mergedAt: timestamp('merged_at', { withTimezone: true }).notNull().defaultNow(),
+  mergedByStaffId: integer('merged_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgWinnerIdx: index('idx_inbound_purchase_merge_log_org_winner').on(table.organizationId, table.winnerLineId),
+}));
+
 /**
  * work_assignments — unified assignment queue for orders, receiving, repairs, FBA.
  *
@@ -1330,6 +1634,7 @@ export const receivingExceptions = pgTable('receiving_exceptions', {
  */
 export const workAssignments = pgTable('work_assignments', {
   id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
   entityType: workEntityTypeEnum('entity_type').notNull(),
   /** id of the referenced orders, receiving, repair_service, etc. row */
   entityId: integer('entity_id').notNull(),
@@ -1404,6 +1709,10 @@ export const repairService = pgTable('repair_service', {
   price: text('price'),
   issue: text('issue'),
   serialNumber: text('serial_number'),
+  // Optional link to the inventory unit when the repaired device IS inventory
+  // (2026-07-03s). NULL for customer-owned devices — repair_service is the
+  // customer-repair domain, NOT a consolidation onto unit_repairs.
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
   notes: text('notes'),
   statusHistory: jsonb('status_history').default([]),
   status: text('status').default('Pending Repair'),
@@ -1424,6 +1733,7 @@ export const repairService = pgTable('repair_service', {
 // Generic documents table for storing signed agreements, forms, etc.
 export const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
   entityType: text('entity_type').notNull(),
   entityId: integer('entity_id').notNull(),
   documentType: text('document_type').notNull().default('intake_agreement'),
@@ -1624,8 +1934,6 @@ export type SalesOrder = typeof salesOrders.$inferSelect;
 export type NewSalesOrder = typeof salesOrders.$inferInsert;
 export type Package = typeof packages.$inferSelect;
 export type NewPackage = typeof packages.$inferInsert;
-export type ShipmentOrder = typeof shipmentOrders.$inferSelect;
-export type NewShipmentOrder = typeof shipmentOrders.$inferInsert;
 export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type CreditNote = typeof creditNotes.$inferSelect;
@@ -1826,6 +2134,22 @@ export const skuPlatformIds = pgTable('sku_platform_ids', {
   accountName: text('account_name'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // 2026-07-04: model reconciled to the live 18 columns (was 8). The pairing +
+  // presentation columns below were added by later migrations. This model is
+  // read-for-types only (the table is accessed via raw SQL in the pairing route
+  // + picking sessions), so this is a documentation-accuracy fix, not a behavior
+  // change. sku_platform_ids is the LIVE per-channel SKU→external-id mapping home
+  // (platform_listings is separate scaffolding — see its comment).
+  displayName: text('display_name'),
+  imageUrl: text('image_url'),
+  organizationId: orgIdCol(),
+  listingTitle: text('listing_title'),
+  listingUrl: text('listing_url'),
+  listingStatus: text('listing_status').default('unknown'),
+  confidence: smallint('confidence'),
+  pairedBy: integer('paired_by'),
+  pairedAt: timestamp('paired_at', { withTimezone: true }),
+  doNotSuggestUntil: timestamp('do_not_suggest_until', { withTimezone: true }),
 });
 
 /**
@@ -1843,6 +2167,12 @@ export const platformListings = pgTable('platform_listings', {
   skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
   platform: text('platform').notNull(),
   accountName: text('account_name'),
+  // Catalog FK (2026-07-03r) — deliberate FORWARD-PREP, not dead code.
+  // platform_listings is intentional scaffolding for a planned listings feature
+  // (currently 0 rows / 0 writers by design); this FK is the normalized channel
+  // link that feature will populate at write time (resolve platform_account_id;
+  // platform/accountName remain the read-through cache). Do NOT drop as "unused".
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
   externalRefId: text('external_ref_id'),
   merchantSku: text('merchant_sku'),
   listedName: text('listed_name'),
@@ -2168,10 +2498,9 @@ export const serialUnits = pgTable('serial_units', {
   currentStatus: serialStatusEnum('current_status').notNull().default('UNKNOWN'),
   currentLocation: text('current_location'),
   conditionGrade: conditionGradeEnum('condition_grade'),
-  originSource: text('origin_source'),
-  originReceivingLineId: integer('origin_receiving_line_id').references(() => receivingLines.id, { onDelete: 'set null' }),
-  originTsnId: integer('origin_tsn_id'),
-  originSkuId: integer('origin_sku_id'),
+  // origin_source / origin_receiving_line_id / origin_tsn_id / origin_sku_id
+  // dropped in Phase 4 (2026-07-03b) — origin provenance moved to
+  // serial_unit_provenance (see serialUnitProvenance below). Do not re-add.
   receivedAt: timestamp('received_at', { withTimezone: true }),
   receivedBy: integer('received_by'),
   notes: text('notes'),
@@ -2183,10 +2512,134 @@ export const serialUnits = pgTable('serial_units', {
   legacyDateTime: timestamp('legacy_date_time'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Handling-unit (H-#### testing tote) this unit currently sits in, if any. */
+  handlingUnitId: bigint('handling_unit_id', { mode: 'number' }),
   // NOTE: the org-scoped partial unique index ux_serial_units_org_unit_uid
   // and the organization_id column (added 2026-05-23) live in SQL migrations,
   // which are the source of truth for this table — not expressed here.
 });
+
+/**
+ * label_print_jobs — immutable per-print ledger (serial↔label pairing plan §5.1,
+ * migration 2026-07-06a). One row per PHYSICAL label print; reprints append a
+ * new row (isReprint=true) pointing at the same unitUid — identity is never
+ * re-minted. `jobType` is a CHECK-constrained discriminator:
+ * 'UNIT' | 'MANIFEST' | 'HANDLING_UNIT' | 'REPRINT'. `manifestId`'s FK to
+ * label_manifests is added in Phase 3 (the table doesn't exist yet). RLS +
+ * org-default installed by enforce_tenant_isolation() in the migration.
+ */
+export const labelPrintJobs = pgTable('label_print_jobs', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  /** Discriminator: 'UNIT' | 'MANIFEST' | 'HANDLING_UNIT' | 'REPRINT'. */
+  jobType: text('job_type').notNull(),
+  serialUnitId: integer('serial_unit_id'),
+  manifestId: bigint('manifest_id', { mode: 'number' }),
+  handlingUnitId: bigint('handling_unit_id', { mode: 'number' }),
+  unitUid: text('unit_uid'),
+  qrPayload: text('qr_payload').notNull(),
+  symbology: text('symbology').notNull().default('datamatrix'),
+  templateId: text('template_id'),
+  printerProfileId: integer('printer_profile_id'),
+  copies: smallint('copies').notNull().default(1),
+  isReprint: boolean('is_reprint').notNull().default(false),
+  reprintOfId: bigint('reprint_of_id', { mode: 'number' }),
+  actorStaffId: integer('actor_staff_id'),
+  clientEventId: text('client_event_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * label_manifests — "one label, many serials" preboxed-kit grouping (serial↔
+ * label pairing plan §5.2, migration 2026-07-06b). status: OPEN|SEALED|DISSOLVED;
+ * manifest_type: PREBOX|KIT|MASTER_CARTON (both CHECK-constrained). manifest_uid
+ * is KIT-{SKU_SHORT}-{YYWW}-{SEQ6}. RLS + org-default installed by
+ * enforce_tenant_isolation().
+ */
+export const labelManifests = pgTable('label_manifests', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  manifestUid: text('manifest_uid').notNull(),
+  /** Discriminator: 'PREBOX' | 'KIT' | 'MASTER_CARTON'. */
+  manifestType: text('manifest_type').notNull(),
+  sku: text('sku'),
+  skuCatalogId: integer('sku_catalog_id'),
+  conditionGrade: text('condition_grade'),
+  /** Lifecycle: 'OPEN' | 'SEALED' | 'DISSOLVED'. */
+  status: text('status').notNull().default('OPEN'),
+  notes: text('notes'),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  sealedAt: timestamp('sealed_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * label_manifest_items — membership rows for a manifest (migration 2026-07-06b).
+ * A unit appears once per manifest (ux natural); at most one LIVE manifest per
+ * unit (ux one_live — dissolve deletes items to free the unit).
+ */
+export const labelManifestItems = pgTable('label_manifest_items', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  manifestId: bigint('manifest_id', { mode: 'number' }).notNull(),
+  serialUnitId: integer('serial_unit_id').notNull(),
+  ordinal: smallint('ordinal').notNull().default(0),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * label_manifest_sequences — per-org+year running counter for the KIT SEQ6
+ * (migration 2026-07-06b). Allocated atomically via INSERT … ON CONFLICT DO
+ * UPDATE next_seq = next_seq + 1 RETURNING.
+ */
+export const labelManifestSequences = pgTable('label_manifest_sequences', {
+  organizationId: uuid('organization_id').notNull(),
+  year: integer('year').notNull(),
+  nextSeq: integer('next_seq').notNull().default(0),
+});
+
+/**
+ * serial_unit_provenance — typed origin spine for serial_units (Phase 1 of the
+ * schema-wide polymorphic refactor; migration 2026-07-01n). Collapses the
+ * denormalized origin_source / origin_receiving_line_id / origin_tsn_id /
+ * origin_sku_id family onto the polymorphic reference contract: an
+ * `origin_type` discriminator (named CHECK) + a BIGINT `origin_id`. `origin_id`
+ * is nullable for text-only origins (MANUAL/LEGACY, or a source with no row id).
+ *
+ * origin_type ∈ RECEIVING_LINE | TECH_SERIAL | SKU_IMPORT | RETURN | FBA |
+ *   MANUAL | LEGACY  (CHECK: serial_unit_provenance_origin_type_chk;
+ *   RETURN/FBA reserved for the FBA-fold + returns work, Tier-1 #7).
+ *
+ * Additive/Phase-1: nothing reads this yet; serial_units.origin_* stay the live
+ * source until a later reader-migration phase. Tenant-from-birth (FORCE RLS via
+ * enforce_tenant_isolation in the birth migration).
+ */
+export const serialUnitProvenance = pgTable('serial_unit_provenance', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  serialUnitId: integer('serial_unit_id').notNull().references(() => serialUnits.id, { onDelete: 'cascade' }),
+  originType: text('origin_type').notNull(),
+  originId: bigint('origin_id', { mode: 'number' }),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalUx: uniqueIndex('ux_serial_unit_provenance_natural').on(
+    table.organizationId, table.serialUnitId, table.originType, table.originId,
+  ),
+  textOnlyUx: uniqueIndex('ux_serial_unit_provenance_text_only')
+    .on(table.organizationId, table.serialUnitId, table.originType)
+    .where(sql`origin_id IS NULL`),
+  unitIdx: index('idx_serial_unit_provenance_unit').on(
+    table.organizationId, table.serialUnitId, table.occurredAt.desc(),
+  ),
+  originIdx: index('idx_serial_unit_provenance_origin').on(
+    table.organizationId, table.originType, table.originId,
+  ),
+}));
+
+export type SerialUnitProvenance = typeof serialUnitProvenance.$inferSelect;
+export type NewSerialUnitProvenance = typeof serialUnitProvenance.$inferInsert;
 
 /**
  * sku_stock_ledger — authoritative signed-delta ledger for SKU quantities.
@@ -2267,10 +2720,13 @@ export const inventoryEvents = pgTable('inventory_events', {
  */
 export const reasonCodes = pgTable('reason_codes', {
   id: serial('id').primaryKey(),
-  code: text('code').notNull().unique(),
+  // NOT globally unique — superseded by the org-led composite
+  // reason_codes_org_flow_code_key (organization_id, flow_context, code), so
+  // the same code string may legitimately repeat across orgs/flow_contexts.
+  code: text('code').notNull(),
   label: text('label').notNull(),
-  /** shrinkage | adjustment | sale | return | movement | initial */
-  category: text('category').notNull(),
+  /** shrinkage | adjustment | sale | return | movement | initial | warranty_denial | NULL */
+  category: text('category'),
   /** in | out | either */
   direction: text('direction').notNull(),
   requiresNote: boolean('requires_note').notNull().default(false),
@@ -2278,7 +2734,24 @@ export const reasonCodes = pgTable('reason_codes', {
   isActive: boolean('is_active').notNull().default(true),
   sortOrder: integer('sort_order').notNull().default(100),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+  organizationId: orgIdCol(),
+  /**
+   * Multi-vocabulary discriminator (2026-06-28): which subsystem this row's
+   * `code` vocabulary belongs to — inventory_event | substitution | short_pick |
+   * receiving_exception | repair_failure | verdict_detail | warranty_denial |
+   * inventory_adjust | lifecycle_unshipped | lifecycle_outbound |
+   * serial_absent_reason. See reason_codes_flow_context_chk for the live list.
+   */
+  flowContext: text('flow_context').notNull().default('inventory_event'),
+  /** Which UI surfaces may offer this code; label-vocabulary-layer (2026-06-28d). */
+  appliesTo: jsonb('applies_to'),
+  /** Presentation tone for the label-vocabulary layer (2026-06-28d). */
+  tone: text('tone'),
+  /** Presentation icon key for the label-vocabulary layer (2026-06-28d). */
+  icon: text('icon'),
+}, (table) => ({
+  orgFlowCodeUx: uniqueIndex('reason_codes_org_flow_code_key').on(table.organizationId, table.flowContext, table.code),
+}));
 
 /**
  * printer_profiles — targets for /api/print/dispatch (2026-05-14).
@@ -2669,6 +3142,36 @@ export const organizations = pgTable('organizations', {
 export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;
 
+/**
+ * organization_integrations — per-tenant OAuth/API credential store (2026-05-22).
+ * Accessed today only via raw pool.query in src/lib/integrations/credentials.ts
+ * (this model exists so type-level readers/reviewers aren't blind to the live
+ * shape; it is not wired into that module's queries). `provider` is validated
+ * at the app layer only (the `IntegrationProvider` union in credentials.ts,
+ * currently 15 values) — there is no DB CHECK/enum. Secrets stay opaque in
+ * `payloadEncrypted`; queryable status lives in real columns.
+ */
+export const organizationIntegrations = pgTable('organization_integrations', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  /** IntegrationProvider union (src/lib/integrations/credentials.ts) — app-validated only. */
+  provider: text('provider').notNull(),
+  payloadEncrypted: text('payload_encrypted').notNull(),
+  displayLabel: text('display_label'),
+  status: text('status').notNull().default('active'),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  scope: text('scope'),
+  createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Added 2026-06-20_zoho_webhook_org_resolution.sql — resolves inbound webhooks to an org. */
+  webhookToken: text('webhook_token'),
+}, (table) => ({
+  providerScopeUx: uniqueIndex('uq_org_integrations_provider_scope').on(table.organizationId, table.provider, sql`COALESCE(${table.scope}, '')`),
+  webhookTokenUx: uniqueIndex('ux_org_integrations_webhook_token').on(table.webhookToken).where(sql`webhook_token IS NOT NULL`),
+}));
+
 // ─── Identity layer (2026-06-20e_identity_layer_phase1.sql) ──────────────────
 // GLOBAL, tenant-agnostic tables. They are read at login, before any
 // app.current_org GUC exists, so they intentionally carry NO tenant_isolation
@@ -2849,6 +3352,127 @@ export const ragDocumentChunks = pgTable('rag_document_chunks', {
   docIdx: index('idx_rag_document_chunks_document_id').on(table.documentId),
 }));
 
+/**
+ * 768-dim variant of pgVector for the AI-search index (EMBEDDING_DIMS in
+ * src/lib/ai/provider.ts). Deliberately separate from the 1536-dim `pgVector`
+ * above so rag_document_chunks is untouched — the two embedding schemes are
+ * independent (RAG = Gemini 1536; entity search = text-embedding-3-small /
+ * nomic-embed-text @ 768).
+ */
+export const pgVector768 = customType<{ data: number[] }>({
+  dataType() {
+    return 'vector(768)';
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (typeof value === 'string') {
+      return value.slice(1, -1).split(',').map(Number);
+    }
+    return value as number[];
+  }
+});
+
+/**
+ * entity_search_docs — the hybrid AI-search index for the P0 CommandBar
+ * entities (migration 2026-07-03d, per .claude/rules/polymorphic-tables.md).
+ * entity_type CHECK (entity_search_docs_entity_type_chk):
+ *   'ORDER' | 'SERIAL_UNIT' | 'RECEIVING' | 'SKU' | 'REPAIR' | 'FBA_SHIPMENT'
+ * Written ONLY by the search-outbox worker (src/lib/search/search-outbox-worker.ts);
+ * freshness flows from parent-table triggers → entity_search_outbox → worker.
+ * embedding is nullable by design: keyword search works before the async embed
+ * lands. Tenant-from-birth (FORCE RLS via enforce_tenant_isolation in the
+ * birth migration). SQL indexes (org-led natural unique, trgm GIN, HNSW
+ * cosine) live in the migration, the schema source of truth.
+ */
+export const entitySearchDocs = pgTable('entity_search_docs', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  searchText: text('search_text').notNull(),
+  embedding: pgVector768('embedding'),
+  embeddedAt: timestamp('embedded_at', { withTimezone: true }),
+  status: text('status'),
+  conditionGrade: text('condition_grade'),
+  sourcePlatform: text('source_platform'),
+  // Order/receiving carrier + tracking facets (migration 2026-07-06a) — surface
+  // a carrier + last-4 tracking chip on the order row without a second fetch.
+  trackingNumber: text('tracking_number'),
+  carrier: text('carrier'),
+  happenedAt: timestamp('happened_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalUx: uniqueIndex('ux_entity_search_docs_natural').on(
+    table.organizationId, table.entityType, table.entityId,
+  ),
+  orgHappenedIdx: index('idx_entity_search_docs_org_happened').on(
+    table.organizationId, table.happenedAt.desc(),
+  ),
+}));
+
+export type EntitySearchDoc = typeof entitySearchDocs.$inferSelect;
+export type NewEntitySearchDoc = typeof entitySearchDocs.$inferInsert;
+
+/**
+ * entity_search_outbox — freshness queue behind entity_search_docs (same
+ * migration). Parent-table triggers (fn_enqueue_entity_search_outbox) insert
+ * one pending row per changed entity, deduped by the partial unique
+ * ux_entity_search_outbox_pending (organization_id, entity_type, entity_id)
+ * WHERE processed_at IS NULL. entity_type CHECK mirrors entity_search_docs.
+ */
+export const entitySearchOutbox = pgTable('entity_search_outbox', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  enqueuedAt: timestamp('enqueued_at', { withTimezone: true }).notNull().defaultNow(),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  /** Set while a drain is processing the row (2026-07-04a) — a claimed row no
+   *  longer matches the pending-dedupe unique, so parent writes during the
+   *  drain enqueue a fresh row instead of being lost. Reset on failure/crash. */
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+});
+
+export type EntitySearchOutboxRow = typeof entitySearchOutbox.$inferSelect;
+
+/**
+ * ai_usage_events — per-org AI usage metering (migration 2026-07-04b): one
+ * row per billable AI call. CHECKs: capability IN ('chat','embed')
+ * (ai_usage_events_capability_chk); context IN
+ * ('query_embed','doc_embed','ask_ai') (ai_usage_events_context_chk).
+ * cost_microcents = estimated PROVIDER cost (1e-8 USD, integer math; NULL =
+ * unknown model rate); the billed price applies the per-org margin at read
+ * time (getAiUsageMarginPercent). stripe_reported_at set by the env-gated
+ * meter reporter (src/lib/billing/ai-meter-reporter.ts). Tenant-from-birth
+ * (FORCE RLS in the birth migration).
+ */
+export const aiUsageEvents = pgTable('ai_usage_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  capability: text('capability').notNull(),
+  provider: text('provider').notNull(),
+  model: text('model').notNull(),
+  context: text('context').notNull(),
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  costMicrocents: bigint('cost_microcents', { mode: 'number' }),
+  stripeReportedAt: timestamp('stripe_reported_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgCreatedIdx: index('idx_ai_usage_events_org_created').on(
+    table.organizationId, table.createdAt.desc(),
+  ),
+}));
+
+export type AiUsageEvent = typeof aiUsageEvents.$inferSelect;
+
 // ─── Workflow graph layer ─────────────────────────────────────
 //
 // Node-based "Operations" engine (see docs/operations-studio/NODE_WORKFLOW_ARCHITECTURE.md and
@@ -2932,6 +3556,10 @@ export const workflowTemplates = pgTable('workflow_templates', {
   // { nodes:[{id,type,x,y,config}], edges:[{id,source,sourcePort,target}] }
   graph: jsonb('graph').notNull().default(sql`'{"nodes":[],"edges":[]}'::jsonb`),
   isSystem: boolean('is_system').notNull().default(true),
+  // The blessed default blueprint a fresh org is seeded with (migration
+  // 2026-06-28m). Added to the model in universal-feed Phase 5 so the template
+  // catalog can mark/order the recommended vertical.
+  isDefault: boolean('is_default').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   slugIdx: uniqueIndex('ux_workflow_templates_slug').on(table.slug),
@@ -2995,6 +3623,10 @@ export const workflowNodeStats = pgTable('workflow_node_stats', {
   queueDepth: integer('queue_depth').notNull().default(0),
   blockedCount: integer('blocked_count').notNull().default(0),
   errorCount: integer('error_count').notNull().default(0),
+  // Captured daily THROUGHPUT: units that exited this node on snapshot_date
+  // (derived from workflow_runs). SUM over a date range = throughput for the
+  // range — see 2026-06-28n migration + node-stats.ts.
+  completedCount: integer('completed_count').notNull().default(0),
   oldestEnteredAt: timestamp('oldest_entered_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -3117,6 +3749,12 @@ export const warrantyRepairAttempts = pgTable('warranty_repair_attempts', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   organizationId: orgIdCol(),
   claimId: bigint('claim_id', { mode: 'number' }).notNull().references(() => warrantyClaims.id, { onDelete: 'cascade' }),
+  // Spine links (2026-07-03t) — kept separate from unit_repairs, but anchored to
+  // the serial + inventory_events the same way. serial_unit_id denormalized from
+  // the claim at write time; nullable for non-inventory warranty devices.
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
+  startEventId: bigint('start_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+  doneEventId: bigint('done_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
   attemptNo: integer('attempt_no').notNull().default(1),
   technicianStaffId: integer('technician_staff_id').references(() => staff.id, { onDelete: 'set null' }),
   diagnosis: text('diagnosis'),
@@ -3166,3 +3804,257 @@ export type WarrantyClaimEvent = typeof warrantyClaimEvents.$inferSelect;
 export type WarrantyRepairAttempt = typeof warrantyRepairAttempts.$inferSelect;
 export type WarrantyQuote = typeof warrantyQuotes.$inferSelect;
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Universal feed / AI-first linkage family (Phase 0 of
+// docs/todo/universal-feed-polymorphic-plan.md; migrations 2026-07-03j..o).
+// All second-axis vocabularies (feed_key, signal_kind, linkage_type,
+// mutation_kind, node_surface.role, target_kind) are validated by the app
+// registry in src/lib/surfaces/registry.ts — the runtime SoT the AI reads.
+// entity_type has a DB CHECK: RECEIVING | RECEIVING_LINE | SERIAL_UNIT |
+// ORDER | FBA_SHIPMENT | REPAIR | WARRANTY_CLAIM.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Postgres tsvector (read-only projection of a GENERATED ALWAYS column). */
+export const pgTsVector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
+
+/**
+ * feed_memberships — universal rail/feed working set (plan §2.1). Projection
+ * of the domain masters; rebuildable. One row per (feed_key, entity); display
+ * fields denormalized for rail speed. state CHECK: active | needs_match |
+ * done. tone CHECK mirrors TimelineTone. Parent-delete integrity via
+ * fn_delete_feed_memberships_on_parent_delete() triggers on all 7 parents.
+ */
+export const feedMemberships = pgTable('feed_memberships', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  feedKey: text('feed_key').notNull(),
+  /** CHECK: RECEIVING | RECEIVING_LINE | SERIAL_UNIT | ORDER | FBA_SHIPMENT | REPAIR | WARRANTY_CLAIM */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  /** Denorm of the Studio linkage; SoT is node_surfaces + item_workflow_state. */
+  workflowDefinitionId: integer('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
+  /** No FK by design — workflow_nodes rows are replaced wholesale on draft save. */
+  nodeId: text('node_id'),
+  /** CHECK: active | needs_match | done | pending | tested | blocked
+   *  (orders_unshipped stores its fulfillment lane in `state` — migration 2026-07-04a). */
+  state: text('state').notNull().default('active'),
+  /** Tier-0 = priority (mirrors receiving.priority_tier convention). */
+  priorityTier: smallint('priority_tier'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  /** CHECK: default | info | success | warning | danger | muted (TimelineTone). */
+  tone: text('tone').notNull().default('default'),
+  meta: jsonb('meta'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalIdx: uniqueIndex('ux_feed_memberships_natural').on(table.organizationId, table.feedKey, table.entityType, table.entityId),
+  railIdx: index('idx_feed_memberships_org_feed_state_time').on(table.organizationId, table.feedKey, table.state, table.occurredAt.desc(), table.id.desc()),
+  entityIdx: index('idx_feed_memberships_org_entity').on(table.organizationId, table.entityType, table.entityId),
+  nodeIdx: index('idx_feed_memberships_org_node').on(table.organizationId, table.nodeId).where(sql`node_id IS NOT NULL`),
+}));
+
+/**
+ * staff_rail_exclusions — per-staff per-station non-destructive dismiss layer
+ * over feed_memberships (plan §2.2). Restore = delete row. Parent-delete
+ * integrity via fn_delete_staff_rail_exclusions_on_parent_delete() triggers.
+ */
+export const staffRailExclusions = pgTable('staff_rail_exclusions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  station: varchar('station', { length: 20 }).notNull(),
+  feedKey: text('feed_key').notNull(),
+  /** CHECK: same 7-value entity_type set as feed_memberships. */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  excludedAt: timestamp('excluded_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalIdx: uniqueIndex('ux_staff_rail_exclusions_natural').on(table.organizationId, table.staffId, table.station, table.feedKey, table.entityType, table.entityId),
+  entityIdx: index('idx_staff_rail_exclusions_org_entity').on(table.organizationId, table.entityType, table.entityId),
+}));
+
+/**
+ * entity_signals — structured "why" facts, the AI's primary read substrate
+ * (plan §2.3). Append-only; every insert also emits an ops_event via
+ * recordEntitySignal. source_ref = idempotency key for mirror-derived signals
+ * (partial unique (org, signal_kind, source_ref) WHERE source_ref IS NOT NULL);
+ * NULL for internal chokepoint emitters. notes_tsv is DB-GENERATED
+ * (to_tsvector('simple', notes || ' ' || reason_code)) — never write it.
+ * Parent-delete integrity via fn_delete_entity_signals_on_parent_delete().
+ */
+export const entitySignals = pgTable('entity_signals', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  /** CHECK: RECEIVING | RECEIVING_LINE | SERIAL_UNIT | ORDER | FBA_SHIPMENT | REPAIR | WARRANTY_CLAIM */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  /** Registry-validated: return_reason | buyer_note | exception_why | test_fail_reason | triage_outcome | ... */
+  signalKind: text('signal_kind').notNull(),
+  /** Soft ref → reason_codes.code (org + flow_context scoped there). */
+  reasonCode: text('reason_code'),
+  notes: text('notes'),
+  severity: smallint('severity'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  workflowDefinitionId: integer('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
+  nodeId: text('node_id'),
+  sourceRef: text('source_ref'),
+  meta: jsonb('meta'),
+  /** GENERATED ALWAYS ... STORED in the DB — excluded from $inferInsert. */
+  notesTsv: pgTsVector('notes_tsv').generatedAlwaysAs(
+    sql`to_tsvector('simple', coalesce(notes, '') || ' ' || coalesce(reason_code, ''))`,
+  ),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  sourceRefIdx: uniqueIndex('ux_entity_signals_source_ref').on(table.organizationId, table.signalKind, table.sourceRef).where(sql`source_ref IS NOT NULL`),
+  entityTimeIdx: index('idx_entity_signals_org_entity_time').on(table.organizationId, table.entityType, table.entityId, table.occurredAt.desc(), table.id.desc()),
+  nodeKindIdx: index('idx_entity_signals_org_node_kind').on(table.organizationId, table.nodeId, table.signalKind, table.reasonCode),
+  kindTimeIdx: index('idx_entity_signals_org_kind_time').on(table.organizationId, table.signalKind, table.occurredAt.desc(), table.id.desc()),
+  notesTsvIdx: index('idx_entity_signals_notes_tsv').using('gin', table.notesTsv),
+}));
+
+/**
+ * ops_events — polymorphic append-only ops event log ("SAL-style"), the
+ * long-term event spine (born 2026-06-30). Two orthogonal discriminator axes:
+ *   • entity_type / entity_id — WHAT business object (deploy-time-fixed;
+ *     CHECK ops_events_entity_type_chk added 2026-07-06 — its 9 values are the
+ *     SoT `OPS_EVENT_ENTITY_TYPES` in src/lib/ops-events.ts, pinned by
+ *     ops-events.test.ts).
+ *   • workflow_node_id — WHERE in the tenant's own Studio flow (workflow_nodes.id).
+ *     FK-FREE by design (added 2026-07-06): workflow_nodes rows are replaced
+ *     wholesale on every graph save, so a real FK would null this on ordinary
+ *     edits — same rationale as entity_signals.node_id / station_definitions.
+ * Writers: recordOpsEvent (src/lib/ops-events.ts) + recordEntitySignal's
+ * emission. Idempotent on client_event_id.
+ */
+export const opsEvents = pgTable('ops_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  eventType: text('event_type').notNull(),
+  /** CHECK ops_events_entity_type_chk — see OPS_EVENT_ENTITY_TYPES (SoT). */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  actorStaffId: integer('actor_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  clientEventId: text('client_event_id').unique(),
+  /** Soft (FK-free) ref → workflow_nodes.id. WHERE in the tenant's flow. */
+  workflowNodeId: text('workflow_node_id'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+}, (table) => ({
+  entityTimeIdx: index('idx_ops_events_org_entity_time').on(table.organizationId, table.entityType, table.entityId, table.occurredAt.desc(), table.id.desc()),
+  typeTimeIdx: index('idx_ops_events_org_type_time').on(table.organizationId, table.eventType, table.occurredAt.desc(), table.id.desc()),
+  nodeTimeIdx: index('idx_ops_events_org_node_time').on(table.organizationId, table.workflowNodeId, table.occurredAt.desc()).where(sql`workflow_node_id IS NOT NULL`),
+}));
+
+/**
+ * node_surfaces — Studio graph node ↔ feed/surface declaration (plan §2.4).
+ * node_id integrity is definition-scoped by design (graph saves replace
+ * workflow_nodes wholesale); orphaned surfaces are an app-level lint.
+ */
+export const nodeSurfaces = pgTable('node_surfaces', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  workflowDefinitionId: integer('workflow_definition_id').notNull().references(() => workflowDefinitions.id, { onDelete: 'cascade' }),
+  /** No FK by design — see migration 2026-07-03m header. */
+  nodeId: text('node_id').notNull(),
+  feedKey: text('feed_key').notNull(),
+  /** Registry-validated: inbox | outbox | display | ... */
+  role: text('role').notNull().default('inbox'),
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalIdx: uniqueIndex('ux_node_surfaces_natural').on(table.organizationId, table.workflowDefinitionId, table.nodeId, table.feedKey),
+  feedIdx: index('idx_node_surfaces_org_feed').on(table.organizationId, table.feedKey),
+}));
+
+/**
+ * insight_links — seeded + anonymized benchmark rows (plan §2.5).
+ * DELIBERATE TENANCY EXCEPTION: organization_id is NULLABLE (NULL = global
+ * seeded row readable by every org) with hand-written RLS — see migration
+ * 2026-07-03n header. Do NOT use orgIdCol() here.
+ */
+export const insightLinks = pgTable('insight_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  /** NULL = global/seeded benchmark row. GUC default auto-stamps tenant-path writes. */
+  organizationId: uuid('organization_id').default(sql`NULLIF(current_setting('app.current_org', true), '')::uuid`),
+  /** Registry-validated: industry_benchmark | power_user_comparison | suggestion_seed */
+  linkageType: text('linkage_type').notNull(),
+  /** Registry-validated: node_type | feed_key | signal_kind */
+  subjectKind: text('subject_kind').notNull(),
+  subjectRef: text('subject_ref'),
+  metrics: jsonb('metrics'),
+  /** CHECK: seeded | anonymized_agg */
+  source: text('source').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  globalSubjectIdx: uniqueIndex('ux_insight_links_global_subject').on(table.linkageType, table.subjectKind, table.subjectRef).where(sql`organization_id IS NULL AND subject_ref IS NOT NULL`),
+  orgSubjectIdx: uniqueIndex('ux_insight_links_org_subject').on(table.organizationId, table.linkageType, table.subjectKind, table.subjectRef).where(sql`organization_id IS NOT NULL AND subject_ref IS NOT NULL`),
+  subjectIdx: index('idx_insight_links_subject').on(table.subjectKind, table.subjectRef, table.linkageType),
+}));
+
+/**
+ * agent_mutations — AI proposal / apply / learning trail (plan §2.6).
+ * status CHECK: proposed | under_review | approved | applied | rejected |
+ * reverted. mutation_kind validated by src/lib/surfaces/registry.ts (the §8
+ * trust-class spec). Every apply runs through applyAgentMutation.
+ */
+export const agentMutations = pgTable('agent_mutations', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  proposedByStaffId: integer('proposed_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  aiChatSessionId: text('ai_chat_session_id').references(() => aiChatSessions.id, { onDelete: 'set null' }),
+  /** CHECK: proposed | under_review | approved | applied | rejected | reverted */
+  status: text('status').notNull().default('proposed'),
+  mutationKind: text('mutation_kind').notNull(),
+  payload: jsonb('payload'),
+  reviewNotes: text('review_notes'),
+  appliedBy: integer('applied_by').references(() => staff.id, { onDelete: 'set null' }),
+  appliedAt: timestamp('applied_at', { withTimezone: true }),
+  extraAudit: jsonb('extra_audit'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  statusTimeIdx: index('idx_agent_mutations_org_status_time').on(table.organizationId, table.status, table.createdAt.desc(), table.id.desc()),
+  sessionIdx: index('idx_agent_mutations_org_session').on(table.organizationId, table.aiChatSessionId).where(sql`ai_chat_session_id IS NOT NULL`),
+  kindStatusIdx: index('idx_agent_mutations_org_kind_status').on(table.organizationId, table.mutationKind, table.status),
+}));
+
+/**
+ * agent_mutation_affects — lean mutation → target junction by canonical ref
+ * (plan §2.6). Immutable audit/learning trail; refs may dangle after target
+ * deletion by design. target_kind registry-validated.
+ */
+export const agentMutationAffects = pgTable('agent_mutation_affects', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  agentMutationId: bigint('agent_mutation_id', { mode: 'number' }).notNull().references(() => agentMutations.id, { onDelete: 'cascade' }),
+  /** Registry-validated: staff | workflow_node | workflow_edge | feed_membership | entity_signal | node_surface | ... */
+  targetKind: text('target_kind').notNull(),
+  /** Canonical ref: '<table>:<axis>:<value>:entity:<id>' (src/lib/surfaces/canonical-ref.ts). */
+  targetRef: text('target_ref').notNull(),
+  roleInMutation: text('role_in_mutation'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  mutationIdx: index('idx_agent_mutation_affects_org_mutation').on(table.organizationId, table.agentMutationId),
+  targetIdx: index('idx_agent_mutation_affects_org_target').on(table.organizationId, table.targetKind, table.targetRef),
+}));
+
+export type FeedMembership = typeof feedMemberships.$inferSelect;
+export type NewFeedMembership = typeof feedMemberships.$inferInsert;
+export type StaffRailExclusion = typeof staffRailExclusions.$inferSelect;
+export type EntitySignal = typeof entitySignals.$inferSelect;
+export type NewEntitySignal = typeof entitySignals.$inferInsert;
+export type OpsEvent = typeof opsEvents.$inferSelect;
+export type NewOpsEvent = typeof opsEvents.$inferInsert;
+export type NodeSurface = typeof nodeSurfaces.$inferSelect;
+export type InsightLink = typeof insightLinks.$inferSelect;
+export type AgentMutation = typeof agentMutations.$inferSelect;
+export type NewAgentMutation = typeof agentMutations.$inferInsert;
+export type AgentMutationAffect = typeof agentMutationAffects.$inferSelect;

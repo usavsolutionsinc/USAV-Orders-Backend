@@ -42,7 +42,10 @@ export function RailPopover({
   }, [anchorEl]);
 
   useLayoutEffect(() => {
-    if (!anchorEl) return;
+    if (!anchorEl) {
+      setCoords(null);
+      return;
+    }
     const apply = () => { const next = measurePosition(); if (next) setCoords(next); };
     apply();
     window.addEventListener('resize', apply);
@@ -78,7 +81,7 @@ export function RailPopover({
       exit={{ opacity: 0, x: coords.flipped ? 8 : -8, scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.6 }}
       style={{ position: 'fixed', top: coords.top, left: coords.left, width: POPOVER_WIDTH, zIndex: zLayer.panelPopover }}
-      className="rounded-xl border border-gray-200 bg-white shadow-2xl ring-1 ring-black/5"
+      className="rounded-xl border border-border-soft bg-surface-card shadow-2xl ring-1 ring-black/5"
     >
       {children}
     </motion.div>,

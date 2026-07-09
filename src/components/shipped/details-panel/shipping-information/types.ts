@@ -13,13 +13,6 @@ export interface EditableShippingFields {
   onShipByDateBlur: () => void;
 }
 
-export interface ShippingMetaFields {
-  packedByName: string;
-  packingDuration: string;
-  testedByName: string;
-  testingDuration: string;
-}
-
 export interface PrepackedSkuInfo {
   staticSku: string;
   productTitle?: string | null;

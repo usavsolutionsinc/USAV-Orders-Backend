@@ -16,6 +16,8 @@ import {
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
 import { AlertTriangle, Check, Layers } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   AdminSidebarShell,
   AdminPickerRow,
@@ -126,52 +128,56 @@ export function FbaCatalogSidebarPanel() {
       }
       action={
         <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={emitOpenAddFba}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1.5 text-caption font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            className="border-dashed border-border-default bg-surface-card text-text-muted hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            }
           >
-            <svg
-              className="h-3 w-3"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
             Add row
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={emitOpenUploadFba}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1.5 text-caption font-semibold text-gray-700 transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+            className="border-dashed border-border-default bg-surface-card text-text-muted hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v12" />
+                <path d="M7 8l5-5 5 5" />
+                <path d="M5 21h14" />
+              </svg>
+            }
           >
-            <svg
-              className="h-3 w-3"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 3v12" />
-              <path d="M7 8l5-5 5 5" />
-              <path d="M5 21h14" />
-            </svg>
             Upload CSV
-          </button>
+          </Button>
         </div>
       }
     >
       {isLoading ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">Loading catalog…</div>
+        <div className="px-2 py-6 text-center text-xs text-text-faint">Loading catalog…</div>
       ) : visibleRows.length === 0 ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">
+        <div className="px-2 py-6 text-center text-xs text-text-faint">
           {rows.length === 0 ? 'No FNSKUs.' : `No ${filter} FNSKUs.`}
         </div>
       ) : (
@@ -188,12 +194,13 @@ export function FbaCatalogSidebarPanel() {
                   subtitle={fnsku}
                   trailing={
                     isStub ? (
-                      <span
-                        title="Stub row (needs hydration)"
-                        className="h-2 w-2 rounded-full bg-amber-500"
-                      />
+                      <HoverTooltip label="Stub row (needs hydration)" asChild focusable={false}>
+                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                      </HoverTooltip>
                     ) : (
-                      <span title="Hydrated" className="h-2 w-2 rounded-full bg-emerald-500" />
+                      <HoverTooltip label="Hydrated" asChild focusable={false}>
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      </HoverTooltip>
                     )
                   }
                 />

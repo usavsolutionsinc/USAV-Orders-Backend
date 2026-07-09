@@ -4,6 +4,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 import { useWarrantyClaims, useWarrantyUrlState, WARRANTY_EXPIRING_SOON_DAYS } from '@/hooks/useWarrantyClaims';
 import { WARRANTY_CLAIM_STATUSES, WARRANTY_STATUS_LABEL, type WarrantyClaimStatus } from '@/lib/warranty/types';
@@ -23,9 +24,9 @@ const EXPIRY_SORT_ITEMS: HorizontalSliderItem[] = [
   { id: 'soon', label: `${WARRANTY_EXPIRING_SOON_DAYS} days out` },
 ];
 
-const statusChip = 'rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset transition';
-const statusChipActive = 'bg-blue-600 text-white ring-blue-600';
-const statusChipIdle = 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50';
+const statusChip = 'rounded-full px-2.5 py-1 text-caption font-medium ring-1 ring-inset transition';
+const statusChipActive = 'bg-accent-bg text-accent-text ring-accent-bg';
+const statusChipIdle = 'bg-surface-card text-text-muted ring-border-soft hover:bg-surface-hover';
 
 export function WarrantyLoggerSidebar({
   filterControl,
@@ -63,7 +64,7 @@ export function WarrantyLoggerSidebar({
   const renderFilters = (onClose: () => void) => (
     <div className="space-y-3">
       <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Expiry</p>
+        <p className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-text-faint">Expiry</p>
         <HorizontalButtonSlider
           items={EXPIRY_SORT_ITEMS}
           value={expiringSoon ? 'soon' : 'all'}
@@ -75,8 +76,9 @@ export function WarrantyLoggerSidebar({
         />
       </div>
       <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
+        <p className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-text-faint">Status</p>
         <div className="flex flex-wrap gap-1.5">
+          {/* ds-raw-button: segmented status-filter chip (conditional active ring/fill), not a single DS variant */}
           <button
             type="button"
             onClick={() => setStatus(null)}
@@ -85,6 +87,7 @@ export function WarrantyLoggerSidebar({
             All
           </button>
           {WARRANTY_CLAIM_STATUSES.map((s) => (
+            // ds-raw-button: segmented status-filter chip (conditional active ring/fill), not a single DS variant
             <button
               key={s}
               type="button"
@@ -96,34 +99,31 @@ export function WarrantyLoggerSidebar({
           ))}
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="mt-2 w-full rounded-2xl bg-gray-900 py-3 text-sm font-black uppercase tracking-widest text-white"
-      >
+      <Button variant="brand" size="lg" onClick={onClose} className="mt-2 w-full">
         Done
-      </button>
+      </Button>
     </div>
   );
 
   const exportHref = `/api/warranty/reports/export${status ? `?status=${status}` : ''}`;
 
   const actionButtons = (
-    <div className="flex items-stretch gap-2 border-t border-gray-100 px-3 py-2">
+    <div className="flex items-stretch gap-2 border-t border-border-hairline px-3 py-2">
       <a
         href={exportHref}
-        className="inline-flex flex-1 items-center justify-center rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+        className="inline-flex flex-1 items-center justify-center rounded-md border border-border-soft px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-hover"
       >
         Export
       </a>
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="sm"
+        icon={<Plus className="h-3.5 w-3.5" />}
         onClick={() => setLogOpen(true)}
-        className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+        className="flex-1"
       >
-        <Plus className="h-3.5 w-3.5" />
         Log Claim
-      </button>
+      </Button>
     </div>
   );
 
@@ -150,13 +150,13 @@ export function WarrantyLoggerSidebar({
       footer={actionButtons}
     >
       {error ? (
-        <div className="px-1 py-6 text-sm text-rose-600">
+        <div className="px-1 py-6 text-sm text-text-danger">
           {error instanceof Error ? error.message : 'Failed to load warranty claims.'}
         </div>
       ) : isLoading ? (
-        <div className="px-1 py-6 text-sm text-gray-400">Loading warranty claims…</div>
+        <div className="px-1 py-6 text-sm text-text-faint">Loading warranty claims…</div>
       ) : claims.length === 0 ? (
-        <div className="px-1 py-10 text-center text-sm text-gray-400">
+        <div className="px-1 py-10 text-center text-sm text-text-faint">
           No warranty claims{status ? ` in ${WARRANTY_STATUS_LABEL[status]}` : ''}
           {expiringSoon ? ' expiring soon' : ''}.
         </div>
@@ -167,29 +167,30 @@ export function WarrantyLoggerSidebar({
             const title = claim.productTitle || claim.sku || claim.serialNumber || claim.claimNumber;
             return (
               <li key={claim.id}>
+                {/* ds-raw-button: multi-line text-left master-detail picker row (title + badge + clock + customer), not a standard action button */}
                 <button
                   type="button"
                   onClick={() => openClaim(selected ? null : claim.id)}
                   className={cn(
                     'w-full rounded-lg border px-3 py-2 text-left transition',
                     selected
-                      ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-200'
-                      : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50',
+                      ? 'bg-blue-50 ring-1 ring-inset ring-blue-400'
+                      : 'border-border-hairline bg-surface-card hover:border-border-soft hover:bg-surface-hover',
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium text-gray-900">{title}</span>
+                    <span className="truncate text-sm font-medium text-text-default">{title}</span>
                     <WarrantyStatusBadge status={claim.status} />
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-2">
-                    <span className="truncate font-mono text-[11px] text-gray-400">
+                    <span className="truncate font-mono text-caption text-text-faint">
                       {claim.claimNumber}
                       {claim.serialNumber ? ` · ${claim.serialNumber}` : ''}
                     </span>
                     <WarrantyClockChip daysRemaining={claim.daysRemaining} basis={claim.clockBasis} />
                   </div>
                   {claim.customerName && (
-                    <div className="mt-0.5 truncate text-[11px] text-gray-400">{claim.customerName}</div>
+                    <div className="mt-0.5 truncate text-caption text-text-faint">{claim.customerName}</div>
                   )}
                 </button>
               </li>

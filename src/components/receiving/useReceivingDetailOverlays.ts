@@ -25,6 +25,9 @@ export interface IncomingDetailsTarget {
   poId: string | null;
   poNumber: string | null;
   shipmentId: number | null;
+  /** Universal Incoming (§7.3): a non-Zoho row keys on its link identity. */
+  inboundSourceType?: string | null;
+  inboundSourceOrderId?: string | null;
 }
 
 export interface ReceivingDetailOverlays {
@@ -94,9 +97,14 @@ export function useReceivingDetailOverlays(isIncomingMode: boolean): ReceivingDe
       // anchored (synthetic row, receiving_id null). Recover its shipment id so
       // the panel can still open (shipment-only mode) and offer a hard delete.
       const shipmentId = shipmentIdFromDeliveredUnscannedRow(row);
-      if (!poId && shipmentId == null) {
-        // Neither a PO nor a shipment-anchored delivered box → nothing the panel
-        // can render. Deterministic feedback instead of a silent dead click.
+      // Universal Incoming (§7.3): a non-Zoho row (eBay buyer purchase) has no
+      // zoho PO — key the panel on its polymorphic link identity instead.
+      const inboundSource = (row.inbound_source_type || '').trim().toLowerCase();
+      const inboundOrderId = (row.source_order_id || '').trim();
+      const isInbound = !poId && inboundSource !== '' && inboundSource !== 'zoho' && inboundOrderId !== '';
+      if (!poId && shipmentId == null && !isInbound) {
+        // Neither a PO, a shipment-anchored delivered box, nor an inbound row →
+        // nothing the panel can render. Deterministic feedback, not a dead click.
         const tracking = (row.tracking_number || '').trim();
         toast.info(tracking ? 'Delivered box not linked to a PO yet' : 'No linked PO for this row yet');
         return;
@@ -104,9 +112,11 @@ export function useReceivingDetailOverlays(isIncomingMode: boolean): ReceivingDe
       setIncomingDetails({
         poId: poId || null,
         poNumber: row.zoho_purchaseorder_number ?? null,
-        // Prefer the richer PO view when a PO exists; only fall back to the
-        // shipment-only view when there's no PO.
+        // Prefer the richer PO view when a PO exists; fall back to shipment-only,
+        // else the inbound (eBay) identity.
         shipmentId: poId ? null : shipmentId,
+        inboundSourceType: isInbound ? inboundSource : null,
+        inboundSourceOrderId: isInbound ? inboundOrderId : null,
       });
     };
     window.addEventListener('receiving-select-line', handler);

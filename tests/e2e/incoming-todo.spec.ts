@@ -22,7 +22,7 @@ test.describe('Incoming email to-do list', () => {
     const todoReq = page.waitForRequest((r) =>
       /\/api\/receiving-lines\/incoming\/todo(\?|$)/.test(r.url()) && r.method() === 'GET',
     );
-    await page.goto('/receiving?mode=incoming');
+    await page.goto('/incoming');
     await todoReq;
 
     // The pinned to-do header is present.
@@ -30,7 +30,7 @@ test.describe('Incoming email to-do list', () => {
   });
 
   test('B — search narrows the list via ?q=', async ({ page }) => {
-    await page.goto('/receiving?mode=incoming');
+    await page.goto('/incoming');
     await expect(page.getByText(/Email to-do/i)).toBeVisible();
 
     const search = page.getByPlaceholder(/Search order #, subject/i);
@@ -42,7 +42,7 @@ test.describe('Incoming email to-do list', () => {
   });
 
   test('C — check-off PATCHes done:true and is reversible', async ({ page }) => {
-    await page.goto('/receiving?mode=incoming');
+    await page.goto('/incoming');
     await expect(page.getByText(/Email to-do/i)).toBeVisible();
 
     const checkBtn = page.getByRole('button', { name: /^Mark done$/i }).first();

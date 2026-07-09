@@ -6,6 +6,7 @@ import {
   type SerialUnitRow,
 } from '@/lib/neon/serial-units-queries';
 import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { queuePendingSku } from '@/lib/inventory/pending-skus';
 import {
   recordInventoryEvent,
   type InventoryEventStation,
@@ -13,6 +14,7 @@ import {
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { workflowStageLabel } from '@/lib/receiving/workflow-stages';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
+import { escapeLike } from '@/lib/sql-like';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,13 @@ export interface ReceiveLineUnitsInput {
   // ('RECEIVED' is *not* a valid value — the inbound_workflow_status_enum has no
   // such label; using it crashes the whole query at plan time in Postgres.)
   set_workflow_status?: 'UNBOXED' | 'DONE' | 'MATCHED' | null;
+
+  // Advance-only guard for `set_workflow_status: 'MATCHED'`. When true, a line that
+  // is already UNBOXED-or-beyond is NOT pushed back to MATCHED — the receive path
+  // passes this so a carton unboxed at first scan isn't transiently downgraded
+  // (which would also emit a spurious backward inventory_event). The `scan_only`
+  // "Mark as scanned" revert leaves it false so it can still walk a line back.
+  advanceOnly?: boolean;
 
   // Actor + provenance.
   staff_id?: number | null;
@@ -197,7 +206,14 @@ export async function receiveLineUnits(
   // serialize correctly. It also sets the org GUC, so every inventory_events /
   // sku_stock_ledger insert inside auto-stamps organization_id (the column
   // default reads current_setting('app.current_org')).
-  return withTenantTransaction(input.organizationId, async (client) => {
+  // Captured inside the txn, enqueued AFTER it commits (see below): an
+  // unresolved Zoho SKU is a "create in Zoho" to-do. Queuing post-commit keeps
+  // the side-effect off the transaction's connection, so a queue failure can
+  // never poison the receive write.
+  let pendingQueueRaw: string | null = null;
+  let pendingQueueTitle: string | null = null;
+
+  const result = await withTenantTransaction(input.organizationId, async (client) => {
     const line = await loadLineForUpdate(client, input.receiving_line_id);
     if (!line) {
       throw new Error(`receiving_line ${input.receiving_line_id} not found`);
@@ -215,6 +231,49 @@ export async function receiveLineUnits(
     const expectedForGuard =
       line.quantity_expected != null ? Number(line.quantity_expected) : null;
 
+    // Batch-level idempotency. If this client_event_id's batch already committed
+    // (any per-unit event from it exists on this line), this whole call is a
+    // retry — return the current state WITHOUT mutating. The entire op runs in
+    // one transaction holding the line's FOR UPDATE lock, so per-unit events
+    // exist iff the prior call committed; a rolled-back call left none, letting
+    // the retry proceed. Without this, the per-unit ordinal suffix
+    // (`${client_event_id}:unit-N`, N derived from the moving quantity_received)
+    // shifted on retry, so ON CONFLICT(client_event_id) missed and the counter +
+    // non-serial ledger double-applied. This makes receiveLineUnits idempotent
+    // independent of the caller (previously only mark-received-po's qty clamp
+    // masked it). A concurrent duplicate blocks on the FOR UPDATE lock above,
+    // then short-circuits here once the first call commits.
+    if (input.client_event_id) {
+      const replay = await client.query<{ id: number }>(
+        `SELECT id FROM inventory_events
+          WHERE receiving_line_id = $1
+            AND organization_id = $2
+            AND client_event_id LIKE $3
+          LIMIT 1`,
+        [line.id, input.organizationId, `${escapeLike(input.client_event_id)}:%`],
+      );
+      if (replay.rows[0]) {
+        return {
+          line_id: line.id,
+          units_added: 0,
+          serials_recorded: [],
+          ledger_event_ids: [],
+          inventory_event_ids: [],
+          already_received: true,
+          line_state: {
+            id: line.id,
+            sku: line.sku,
+            item_name: line.item_name,
+            quantity_received: priorReceivedForGuard,
+            quantity_expected: expectedForGuard,
+            workflow_status: line.workflow_status,
+            is_complete:
+              expectedForGuard != null && priorReceivedForGuard >= expectedForGuard,
+          },
+        };
+      }
+    }
+
     // Idempotent re-scan: if the caller sends exactly one serial and that SN is
     // already on this line, return success without mutating qty. Same-barcode or
     // retry UX should stay friendly. Only triggers when receiving would exceed
@@ -228,9 +287,11 @@ export async function receiveLineUnits(
       const normalized = normalizeSerial(serials[0]);
       if (normalized) {
         const existing = await client.query<{ id: number }>(
+          // Phase 3: line membership via provenance reverse lookup (RLS-scoped by the txn GUC).
           `SELECT id FROM serial_units
             WHERE normalized_serial = $1
-              AND origin_receiving_line_id = $2
+              AND id IN (SELECT p.serial_unit_id FROM serial_unit_provenance p
+                          WHERE p.origin_type = 'RECEIVING_LINE' AND p.origin_id = $2)
             LIMIT 1`,
           [normalized, line.id],
         );
@@ -286,6 +347,15 @@ export async function receiveLineUnits(
     const catalogId = line.sku
       ? await resolveSkuCatalogId(line.sku, line.zoho_item_id, guardTitle)
       : null;
+
+    // Additive (§6 / queue-on-miss): the SKU didn't resolve to sku_catalog —
+    // capture it so it lands in the pending_skus to-do after commit. This does
+    // NOT change catalogId or any downstream write; the row's sku_catalog_id
+    // stays NULL exactly as before (that NULL is the unmatched state).
+    if (line.sku && catalogId == null) {
+      pendingQueueRaw = line.sku;
+      pendingQueueTitle = guardTitle ?? line.item_name ?? null;
+    }
 
   const serialsRecorded: ReceivedSerialResult[] = [];
   const ledgerEventIds: number[] = [];
@@ -559,7 +629,15 @@ export async function receiveLineUnits(
            WHEN $7::text = 'UNBOXED'
              THEN 'UNBOXED'::inbound_workflow_status_enum
            WHEN $7::text = 'MATCHED'
-             THEN 'MATCHED'::inbound_workflow_status_enum
+             THEN CASE
+               -- Advance-only: never walk an already-unboxed/received line back to
+               -- MATCHED (a normal receive after a first-scan unbox). scan_only
+               -- passes advanceOnly=false so its "Mark as scanned" revert still works.
+               WHEN $8::boolean = true
+                    AND workflow_status IN ('UNBOXED','AWAITING_TEST','IN_TEST','PASSED','FAILED','RTV','SCRAP','DONE')
+                 THEN workflow_status
+               ELSE 'MATCHED'::inbound_workflow_status_enum
+             END
            WHEN quantity_expected IS NOT NULL
                 AND (quantity_received + $2) >= quantity_expected
              THEN 'UNBOXED'::inbound_workflow_status_enum
@@ -577,6 +655,7 @@ export async function receiveLineUnits(
       input.condition_grade ?? null,
       input.notes ?? null,
       explicitWorkflow,
+      input.advanceOnly ?? false,
     ],
   );
 
@@ -646,4 +725,22 @@ export async function receiveLineUnits(
       },
     };
   });
+
+  // Post-commit, best-effort: enqueue any unresolved SKU as a "create in Zoho"
+  // to-do. Runs on a fresh connection AFTER the receive transaction committed,
+  // so it can neither poison that transaction nor block the receive on a queue
+  // failure. The receive result is returned unchanged regardless of outcome.
+  if (pendingQueueRaw) {
+    try {
+      await queuePendingSku({
+        rawSku: pendingQueueRaw,
+        source: 'receiving',
+        suggestedTitle: pendingQueueTitle,
+      });
+    } catch (err) {
+      console.warn('receiveLineUnits: queuePendingSku failed (non-fatal)', err);
+    }
+  }
+
+  return result;
 }

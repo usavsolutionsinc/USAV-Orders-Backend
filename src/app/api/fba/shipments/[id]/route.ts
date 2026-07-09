@@ -3,6 +3,7 @@ import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { CACHE_TAGS } from '@/lib/cache/tags';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { AUDIT_ENTITY } from '@/lib/audit-logs';
@@ -186,6 +187,7 @@ export async function PATCH(
     }
 
     await invalidateCacheTags(['fba-board', 'fba-shipments']);
+    await invalidateCacheTags(gate.ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaShipmentChanged({ action: 'updated', shipmentId: Number(id), source: 'fba.shipments.update', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({ success: true, shipment: result.rows[0] });
@@ -260,6 +262,7 @@ export async function DELETE(
     });
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await invalidateCacheTags(gate.ctx.organizationId, [CACHE_TAGS.fbaBoard, CACHE_TAGS.fbaToday, CACHE_TAGS.fbaStageCounts]);
     await publishFbaShipmentChanged({ action: 'deleted', shipmentId: Number(id), source: 'fba.shipments.delete', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({ success: true, deleted_id: planId });

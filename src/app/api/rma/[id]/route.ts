@@ -17,7 +17,7 @@ import pool from '@/lib/db';
  *   PATCH  — edit mutable metadata (carrier / expiry / notes)
  *   DELETE — soft-cancel (AUTHORIZED → CANCELED)
  *
- * Gated by `orders.view`, matching the rest of the module.
+ * Gated by `rma.view` (GET) / `rma.manage` (PATCH, DELETE).
  */
 
 function parseId(raw: string): number | null {
@@ -29,7 +29,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requireRoutePerm(req, 'orders.view');
+  const gate = await requireRoutePerm(req, 'rma.view');
   if (gate.denied) return gate.denied;  try {
     const { id: rawId } = await params;
     const id = parseId(rawId);
@@ -53,7 +53,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requireRoutePerm(req, 'orders.view');
+  const gate = await requireRoutePerm(req, 'rma.manage');
   if (gate.denied) return gate.denied;  try {
     const { id: rawId } = await params;
     const id = parseId(rawId);
@@ -101,7 +101,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requireRoutePerm(req, 'orders.view');
+  const gate = await requireRoutePerm(req, 'rma.manage');
   if (gate.denied) return gate.denied;  try {
     const { id: rawId } = await params;
     const id = parseId(rawId);

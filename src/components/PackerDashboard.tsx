@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { PackerTable } from './PackerTable';
+import React, { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { PackerRightPane } from '@/components/packer/PackerRightPane';
+import { usePackerOrderPane } from '@/components/packer/usePackerOrderPane';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 
@@ -12,27 +14,36 @@ interface PackerDashboardProps {
 
 export default function PackerDashboard({ packerId, showStaffSelector = true }: PackerDashboardProps) {
     useRealtimeToasts('packer');
-    const [refreshNonce, setRefreshNonce] = useState(0);
+    const queryClient = useQueryClient();
+    const { activeOrderPane, setActiveOrderPane } = usePackerOrderPane();
+
     useEffect(() => {
         void showStaffSelector;
     }, [showStaffSelector]);
 
     useEffect(() => {
-        const handleRefresh = () => setRefreshNonce((value) => value + 1);
-        window.addEventListener('usav-refresh-data', handleRefresh as any);
+        // `usav-refresh-data` used to remount the whole pane via a `key` nonce
+        // (dropped cache + scroll). Invalidate the packer-logs query instead so
+        // React Query refetches in place (station-table-unification §Phase 2).
+        const handleRefresh = () => queryClient.invalidateQueries({ queryKey: ['packer-logs'] });
+        window.addEventListener('usav-refresh-data', handleRefresh as EventListener);
         return () => {
-            window.removeEventListener('usav-refresh-data', handleRefresh as any);
+            window.removeEventListener('usav-refresh-data', handleRefresh as EventListener);
         };
-    }, []);
+    }, [queryClient]);
 
     return (
         <>
-        <div className="flex h-full w-full relative">
-            <div className="flex-1 overflow-hidden">
-                <PackerTable key={`${packerId}-${refreshNonce}`} packedBy={parseInt(packerId)} />
+            <div className="relative flex h-full w-full">
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                    <PackerRightPane
+                        packerId={packerId}
+                        activeOrderPane={activeOrderPane}
+                        onCloseActiveOrder={() => setActiveOrderPane(null)}
+                    />
+                </div>
             </div>
-        </div>
-        <StationDetailsHandler stationRole="packer" />
+            <StationDetailsHandler stationRole="packer" />
         </>
     );
 }

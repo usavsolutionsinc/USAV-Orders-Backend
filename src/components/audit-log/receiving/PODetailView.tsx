@@ -20,12 +20,12 @@ export function PODetailView({ detail }: { detail: PODetail }) {
 
   return (
     <div className="px-6 py-5">
-      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+      <header className="flex items-start justify-between gap-4 border-b border-border-soft pb-4">
         <div>
           <div className="text-xs font-medium uppercase tracking-wide text-emerald-600">Purchase Order</div>
-          <h2 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-900">{po.po_number ?? po.po_id}</h2>
-          {po.vendor_name && <div className="text-sm text-slate-500">{po.vendor_name}</div>}
-          <div className="mt-1 text-caption text-slate-400">
+          <h2 className="mt-0.5 text-xl font-semibold tracking-tight text-text-default">{po.po_number ?? po.po_id}</h2>
+          {po.vendor_name && <div className="text-sm text-text-soft">{po.vendor_name}</div>}
+          <div className="mt-1 text-caption text-text-faint">
             Zoho PO id: <code className="font-mono">{po.po_id}</code>
           </div>
         </div>
@@ -39,15 +39,15 @@ export function PODetailView({ detail }: { detail: PODetail }) {
       {Object.keys(totals.byStatus).length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {Object.entries(totals.byStatus).map(([status, n]) => (
-            <span key={status} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-medium text-slate-700">
+            <span key={status} className="inline-flex items-center gap-1 rounded-full bg-surface-sunken px-2 py-0.5 text-caption font-medium text-text-muted">
               <span className="font-semibold">{n}</span>
-              <span className="text-slate-500">{status}</span>
+              <span className="text-text-soft">{status}</span>
             </span>
           ))}
         </div>
       )}
 
-      <nav className="mt-5 flex gap-1 border-b border-slate-200">
+      <nav className="mt-5 flex gap-1 border-b border-border-soft">
         {([
           ['timeline', `Timeline (${events.length})`],
           ['cartons', `Packages (${cartons.length})`],
@@ -56,8 +56,8 @@ export function PODetailView({ detail }: { detail: PODetail }) {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
-              activeTab === key ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+            className={`ds-raw-button -mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+              activeTab === key ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-text-soft hover:text-text-muted'
             }`}
           >
             {label}

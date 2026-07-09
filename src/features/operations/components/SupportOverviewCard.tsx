@@ -43,13 +43,13 @@ export function SupportOverviewCard() {
     <section>
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <span className={`${sectionLabel} !text-[#A89F91]`}>Customer support</span>
-          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-[#2D2A26] mt-0.5">
+          <span className={`${sectionLabel} !text-text-muted`}>Customer support</span>
+          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-text-default mt-0.5">
             Who needs a reply
           </h2>
         </div>
         {hasAttention && (
-          <span className="text-[10px] font-black uppercase tracking-[0.14em] bg-amber-50 text-amber-700 rounded-full px-2 py-1">
+          <span className="text-micro font-black uppercase tracking-[0.14em] bg-amber-50 text-amber-700 rounded-full px-2 py-1">
             {totals?.attentionItems} need attention
           </span>
         )}
@@ -60,28 +60,28 @@ export function SupportOverviewCard() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         whileHover={{ y: -2 }}
-        className="block bg-white rounded-2xl border border-[#F0EDE8] p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+        className="block bg-surface-card rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
       >
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-[#F5F3EF] text-[#6B6356] flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-surface-canvas text-text-muted flex items-center justify-center shrink-0">
             <Headset className="w-5 h-5" />
           </div>
           <div className="flex-1">
-            <p className="text-[13px] font-extrabold text-[#2D2A26] tracking-tight">Zendesk tickets</p>
-            <p className="text-[11px] font-medium text-[#A89F91]">Open support queue</p>
+            <p className="text-[13px] font-extrabold text-text-default tracking-tight">Zendesk tickets</p>
+            <p className="text-caption font-medium text-text-muted">Open support queue</p>
           </div>
         </div>
 
         {data === null ? (
-          <p className="text-[11px] text-[#A89F91]">Source unavailable.</p>
+          <p className="text-caption text-text-muted">Source unavailable.</p>
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {tiles.map((t) => (
               <div key={t.label} className={`rounded-xl p-3 ${t.ring}`}>
-                <div className="text-[24px] font-extrabold text-[#2D2A26] tabular-nums leading-none">
+                <div className="text-[24px] font-extrabold text-text-default tabular-nums leading-none">
                   {isLoading ? '–' : t.value}
                 </div>
-                <p className={`text-[10px] font-black uppercase tracking-[0.14em] mt-1.5 ${t.tone}`}>
+                <p className={`text-micro font-black uppercase tracking-[0.14em] mt-1.5 ${t.tone}`}>
                   {t.label}
                 </p>
               </div>

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Link2, Loader2, Plus, X } from '@/components/Icons';
+import { Link2, Plus, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { PRODUCT_HUB_PLATFORMS, platformStyle } from '../platform-style';
 import { manualAddPairing } from './sku-pair-api';
 
@@ -44,14 +45,15 @@ export function ManualPairForm({ skuCatalogId, onAdded }: { skuCatalogId: number
 
   if (!open) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen(true)}
-        className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-micro font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+        icon={<Plus className="h-3.5 w-3.5" />}
+        className="mb-3 rounded-md border border-dashed border-border-default text-micro font-bold uppercase tracking-wider text-text-muted hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
       >
-        <Plus className="h-3.5 w-3.5" />
         Pair a SKU manually
-      </button>
+      </Button>
     );
   }
 
@@ -59,25 +61,23 @@ export function ManualPairForm({ skuCatalogId, onAdded }: { skuCatalogId: number
     <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-micro font-bold uppercase tracking-wider text-blue-700">Manual pairing</span>
-        <button
-          type="button"
+        <IconButton
           onClick={() => {
             reset();
             setOpen(false);
           }}
-          aria-label="Cancel manual pairing"
-          className="rounded p-0.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          ariaLabel="Cancel manual pairing"
+          icon={<X className="h-3.5 w-3.5" />}
+          className="rounded p-0.5 text-text-faint hover:bg-surface-card hover:text-text-muted"
+        />
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-0.5">
-          <span className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">Platform</span>
+          <span className="text-eyebrow font-semibold uppercase tracking-wider text-text-soft">Platform</span>
           <select
             value={platform}
             onChange={(e) => setPlatform(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
+            className="rounded-md border border-border-default bg-surface-card px-2 py-1.5 text-xs font-semibold text-text-default focus:border-blue-400 focus:outline-none"
           >
             {PRODUCT_HUB_PLATFORMS.map((p) => (
               <option key={p} value={p}>
@@ -87,7 +87,7 @@ export function ManualPairForm({ skuCatalogId, onAdded }: { skuCatalogId: number
           </select>
         </label>
         <label className="flex min-w-[8rem] flex-1 flex-col gap-0.5">
-          <span className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">SKU / identifier</span>
+          <span className="text-eyebrow font-semibold uppercase tracking-wider text-text-soft">SKU / identifier</span>
           <input
             value={sku}
             onChange={(e) => setSku(e.target.value)}
@@ -98,29 +98,31 @@ export function ManualPairForm({ skuCatalogId, onAdded }: { skuCatalogId: number
               }
             }}
             placeholder="e.g. 01815"
-            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 font-mono text-xs text-gray-900 focus:border-blue-400 focus:outline-none"
+            className="w-full rounded-md border border-border-default bg-surface-card px-2 py-1.5 font-mono text-xs text-text-default focus:border-blue-400 focus:outline-none"
           />
         </label>
         <label className="flex min-w-[7rem] flex-1 flex-col gap-0.5">
-          <span className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">
-            Account <span className="font-normal normal-case text-gray-400">(optional)</span>
+          <span className="text-eyebrow font-semibold uppercase tracking-wider text-text-soft">
+            Account <span className="font-normal normal-case text-text-faint">(optional)</span>
           </span>
           <input
             value={account}
             onChange={(e) => setAccount(e.target.value)}
             placeholder="e.g. DRAGONH"
-            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-blue-400 focus:outline-none"
+            className="w-full rounded-md border border-border-default bg-surface-card px-2 py-1.5 text-xs text-text-default focus:border-blue-400 focus:outline-none"
           />
         </label>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => void submit()}
           disabled={saving || !sku.trim()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          loading={saving}
+          icon={<Link2 className="h-3.5 w-3.5" />}
+          className="rounded-md text-xs font-bold"
         >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
           Pair
-        </button>
+        </Button>
       </div>
       {error ? <p className="mt-1.5 text-micro font-semibold text-red-600">{error}</p> : null}
     </div>
