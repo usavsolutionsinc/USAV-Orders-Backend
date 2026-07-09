@@ -9,6 +9,7 @@
 import pool from '@/lib/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntegrationProvider } from '@/lib/integrations/credentials';
+import { EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 import { connectorsWithCapability, getConnector, listConnectors } from './registry';
 import type { ReconcileOutcome, SyncOutcome } from './types';
 import { tapBuyerNoteDerivation } from '@/lib/surfaces/buyer-note-derivation';
@@ -39,8 +40,10 @@ export async function syncConnection(orgId: OrgId, provider: IntegrationProvider
 async function connectedOrgsForProvider(provider: IntegrationProvider): Promise<OrgId[]> {
   if (provider === 'ebay' || provider === 'amazon') {
     const table = provider === 'ebay' ? 'ebay_accounts' : 'amazon_accounts';
+    const platformFilter =
+      provider === 'ebay' ? ` AND ${EBAY_PLATFORM_PREDICATE}` : '';
     const { rows } = await pool.query<{ organization_id: string }>(
-      `SELECT DISTINCT organization_id FROM ${table} WHERE is_active = true`,
+      `SELECT DISTINCT organization_id FROM ${table} WHERE is_active = true${platformFilter}`,
     );
     return rows.map((r) => r.organization_id as OrgId);
   }

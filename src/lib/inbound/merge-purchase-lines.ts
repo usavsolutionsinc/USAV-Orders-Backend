@@ -102,7 +102,13 @@ interface ZohoLoserRow {
   zoho_purchaseorder_number: string | null;
   zoho_line_item_id: string | null;
   zoho_item_id: string | null;
+}
+
+interface ZohoSignalRow {
+  tracking_number: string | null;
   zoho_reference_number: string | null;
+  zoho_notes: string | null;
+  zoho_purchaseorder_number: string | null;
 }
 
 /**
@@ -121,22 +127,36 @@ export async function mergeEbayLinesIntoZohoPo(
 
   return deps.withTx(orgId, async (client) => {
     // Fill in the PO's own match signals from the spine if not supplied.
+    // Tracking is canonical on receiving.shipment_id → shipping_tracking_numbers
+    // (receiving_lines.zoho_reference_number was dropped 2026-04-15). Narrow
+    // receiving_line_zoho.zoho_reference_number is a secondary fallback.
     let signals: ZohoPoSignals = { ...input, zohoPurchaseOrderId };
-    if (signals.referenceNumber == null || signals.notes == null) {
-      const sig = await client.query<{ zoho_reference_number: string | null; zoho_notes: string | null; zoho_purchaseorder_number: string | null }>(
-        `SELECT zoho_reference_number, zoho_notes, zoho_purchaseorder_number
-           FROM receiving_lines
-          WHERE organization_id = $1 AND zoho_purchaseorder_id = $2
-          ORDER BY id LIMIT 1`,
+    if (signals.tracking == null || signals.referenceNumber == null || signals.notes == null) {
+      const sig = await client.query<ZohoSignalRow>(
+        `SELECT stn.tracking_number_raw AS tracking_number,
+                rz.zoho_reference_number,
+                COALESCE(rc.zoho_notes, rl.zoho_notes) AS zoho_notes,
+                rl.zoho_purchaseorder_number
+           FROM receiving_lines rl
+           LEFT JOIN receiving rc
+             ON rc.id = rl.receiving_id AND rc.organization_id = rl.organization_id
+           LEFT JOIN shipping_tracking_numbers stn
+             ON stn.id = rc.shipment_id
+           LEFT JOIN receiving_line_zoho rz
+             ON rz.receiving_line_id = rl.id AND rz.organization_id = rl.organization_id
+          WHERE rl.organization_id = $1 AND rl.zoho_purchaseorder_id = $2
+          ORDER BY rl.id
+          LIMIT 1`,
         [orgId, zohoPurchaseOrderId],
       );
       const row = sig.rows[0];
+      const trackingRef = row?.tracking_number ?? row?.zoho_reference_number ?? null;
       signals = {
         ...signals,
         poNumber: signals.poNumber ?? row?.zoho_purchaseorder_number ?? null,
-        referenceNumber: signals.referenceNumber ?? row?.zoho_reference_number ?? null,
+        referenceNumber: signals.referenceNumber ?? trackingRef,
         // Zoho PO reference# carries the tracking number (inbound contract).
-        tracking: signals.tracking ?? row?.zoho_reference_number ?? null,
+        tracking: signals.tracking ?? trackingRef,
         notes: signals.notes ?? row?.zoho_notes ?? null,
       };
     }
@@ -181,7 +201,7 @@ export async function mergeEbayLinesIntoZohoPo(
     // The zoho-only spine rows the sync just created for this PO (no eBay link).
     const loserRes = await client.query<ZohoLoserRow>(
       `SELECT rl.id, rl.zoho_purchaseorder_id, rl.zoho_purchaseorder_number,
-              rl.zoho_line_item_id, rl.zoho_item_id, rl.zoho_reference_number
+              rl.zoho_line_item_id, rl.zoho_item_id
          FROM receiving_lines rl
         WHERE rl.organization_id = $1
           AND rl.zoho_purchaseorder_id = $2
@@ -211,7 +231,6 @@ export async function mergeEbayLinesIntoZohoPo(
                 zoho_purchaseorder_number = COALESCE($4, zoho_purchaseorder_number),
                 zoho_line_item_id         = COALESCE(zoho_line_item_id, $5),
                 zoho_item_id              = COALESCE(zoho_item_id, $6),
-                zoho_reference_number     = COALESCE(zoho_reference_number, $7),
                 updated_at                = now()
           WHERE id = $1 AND organization_id = $2`,
         [
@@ -221,7 +240,6 @@ export async function mergeEbayLinesIntoZohoPo(
           signals.poNumber ?? null,
           zohoLineItemId,
           loser?.zoho_item_id ?? null,
-          loser?.zoho_reference_number ?? signals.referenceNumber ?? null,
         ],
       );
 

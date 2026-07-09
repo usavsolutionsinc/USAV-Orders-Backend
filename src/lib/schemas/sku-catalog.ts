@@ -5,10 +5,11 @@ import { z } from 'zod';
 const trimmed = z.string().trim();
 /** Optional text that may be explicitly cleared with null. */
 const optNullableText = trimmed.min(1).nullable().optional();
+const optPackTier = z.enum(['SMALL', 'MEDIUM', 'LARGE']).nullable().optional();
+const optNonNegInt = z.number().int().nonnegative().nullable().optional();
 
 /** Sourcing lifecycle signal shared by create + update bodies (Bose engine). */
 const lifecycleStatusEnum = z.enum(['active', 'eol', 'discontinued', 'nrnd', 'unknown']);
-const optNonNegInt = z.number().int().nonnegative().nullable().optional();
 /** Per-SKU pack/handling guidance (multi-line, may be cleared with null). */
 const optPackNotes = trimmed.max(4000).nullable().optional();
 
@@ -36,6 +37,13 @@ export const SkuCatalogCreateBody = z
     replenishTargetCents: optNonNegInt,
     /** "How to pack this product" guidance shown to the packer (P1-PCK-02). */
     packNotes: optPackNotes,
+    /**
+     * Polymorphic pack-profile override linked to this SKU (not stored on sku_catalog).
+     * Null clears the link (falls back to rule-based defaults).
+     */
+    packTier: optPackTier,
+    /** Optional override minutes for this SKU (NULL clears). */
+    estimatedPackMinutes: optNonNegInt,
     idempotencyKey: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -62,6 +70,10 @@ export const SkuCatalogUpdateBody = z
     replenishTargetCents: optNonNegInt,
     /** "How to pack this product" guidance shown to the packer (P1-PCK-02). */
     packNotes: optPackNotes,
+    /** Optional pack-profile override linked to this SKU (polymorphic). */
+    packTier: optPackTier,
+    /** Optional minutes override linked to this SKU (polymorphic). */
+    estimatedPackMinutes: optNonNegInt,
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, {

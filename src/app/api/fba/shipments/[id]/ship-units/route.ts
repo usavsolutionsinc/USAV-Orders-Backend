@@ -143,12 +143,13 @@ export const POST = withAuth(async (request, ctx) => {
         if (link.sku) {
           const ledger = await client.query<{ id: number }>(
             `INSERT INTO sku_stock_ledger (
-               sku, delta, reason, dimension, staff_id,
+               organization_id, sku, delta, reason, dimension, staff_id,
                ref_serial_unit_id, notes
              )
-             VALUES ($1, -1, 'SOLD', 'WAREHOUSE', $2, $3, $4)
+             VALUES ($1, $2, -1, 'SOLD', 'WAREHOUSE', $3, $4, $5)
              RETURNING id`,
             [
+              ctx.organizationId,
               link.sku, actorStaffId, link.serial_unit_id,
               `fba.ship-units shipment=${fbaShipmentId} item=${link.fba_shipment_item_id}`,
             ],

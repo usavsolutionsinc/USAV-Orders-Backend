@@ -6,7 +6,7 @@ import type {
   RecentEventRow,
 } from './inventory-admin-data';
 
-/** Open DRIFT alerts — surfaced by /api/qstash/inventory/drift-check. */
+/** Open DRIFT alerts — surfaced by /api/cron/inventory/drift-check. */
 export function DriftAlertsSection({ openDriftAlerts }: { openDriftAlerts: DriftAlertRow[] }) {
   if (openDriftAlerts.length === 0) return null;
   return (

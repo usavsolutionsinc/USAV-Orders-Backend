@@ -19,7 +19,7 @@
  */
 
 import pool from '@/lib/db';
-import { decryptIntegrationPayload, encryptIntegrationPayload } from './crypto';
+import { parseIntegrationPayload, serializeIntegrationPayload } from './crypto';
 import { USAV_ORG_ID, type OrgId } from '../tenancy/constants';
 import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 
@@ -347,35 +347,37 @@ function envFallback(provider: IntegrationProvider): unknown | null {
   }
 }
 
-// ─── Legacy DB bridge (USAV Zoho only, transitional) ───────────────────────
-// USAV's durable Zoho refresh token lives in `ebay_accounts.ZOHO_MAIN`, NOT in
-// env (ZOHO_REFRESH_TOKEN is unset). The sync env fallback above therefore
-// returns null for zoho, which used to let the vault-gated path
-// (withCredentialScope → getIntegrationCredentials) throw CredentialNotConnected
-// even though the runtime token path (zoho/core.ts loadZohoCredentials) worked
-// off this same bridge — the asymmetry that produced "matched PO, empty carton".
-// Mirror core.ts loadLegacyZohoCredentials here so BOTH paths resolve identically.
-async function legacyZohoFromDb(): Promise<ZohoCredentials | null> {
+// ─── Legacy env bridge (USAV Zoho only, transitional) ───────────────────────
+// USAV may still resolve Zoho from ZOHO_* env vars when the vault row is absent.
+// Refresh token: ZOHO_REFRESH_TOKEN env, else ebay_accounts.ZOHO_MAIN (pre-vault).
+async function readLegacyZohoRefreshToken(): Promise<string> {
+  const fromEnv = (process.env.ZOHO_REFRESH_TOKEN ?? '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const { rows } = await pool.query<{ refresh_token: string | null }>(
+      `SELECT refresh_token FROM ebay_accounts
+        WHERE account_name = 'ZOHO_MAIN' AND platform = 'ZOHO'
+        LIMIT 1`,
+    );
+    return (rows[0]?.refresh_token ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function legacyZohoFromEnv(): Promise<ZohoCredentials | null> {
   const clientId = (process.env.ZOHO_CLIENT_ID ?? '').trim();
   const clientSecret = (process.env.ZOHO_CLIENT_SECRET ?? '').trim();
   const zohoOrgId = (process.env.ZOHO_ORG_ID || process.env.ZOHO_ORGANIZATION_ID || '').trim();
   const domain = (process.env.ZOHO_DOMAIN ?? '').trim() || 'accounts.zoho.com';
-  if (!clientId || !clientSecret || !zohoOrgId) return null;
-
-  let refreshToken = (process.env.ZOHO_REFRESH_TOKEN ?? '').trim();
-  if (!refreshToken) {
-    try {
-      const { rows } = await pool.query<{ refresh_token: string | null }>(
-        `SELECT refresh_token FROM ebay_accounts WHERE account_name = 'ZOHO_MAIN' LIMIT 1`,
-      );
-      refreshToken = (rows[0]?.refresh_token ?? '').trim();
-    } catch {
-      /* table/row may not exist — treat as not connected */
-    }
-  }
-  if (!refreshToken) return null;
-
+  const refreshToken = await readLegacyZohoRefreshToken();
+  if (!clientId || !clientSecret || !zohoOrgId || !refreshToken) return null;
   return { clientId, clientSecret, refreshToken, orgId: zohoOrgId, domain };
+}
+
+/** USAV transitional Zoho creds from env + legacy ZOHO_MAIN row (no vault). */
+export async function resolveUsavLegacyZohoCredentials(): Promise<ZohoCredentials | null> {
+  return legacyZohoFromEnv();
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -410,7 +412,7 @@ export async function getIntegrationCredentials<T = unknown>(
     );
     const row = r.rows[0];
     if (row) {
-      const value = decryptIntegrationPayload<T>(row.payload_encrypted);
+      const value = parseIntegrationPayload<T>(row.payload_encrypted);
       credCache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
       return value;
     }
@@ -426,11 +428,9 @@ export async function getIntegrationCredentials<T = unknown>(
       credCache.set(key, { value: fallback, expiresAt: Date.now() + CACHE_TTL_MS });
       return fallback;
     }
-    // Zoho's refresh token lives in ebay_accounts.ZOHO_MAIN, not env — so the
-    // sync envFallback can't see it. Bridge to the DB so the vault-gated import
-    // path resolves the same working credential the search path already uses.
+    // Zoho env bridge for USAV when vault row is absent (refresh token in env or vault).
     if (provider === 'zoho') {
-      const legacy = (await legacyZohoFromDb()) as T | null;
+      const legacy = (await legacyZohoFromEnv()) as T | null;
       if (legacy) {
         credCache.set(key, { value: legacy, expiresAt: Date.now() + CACHE_TTL_MS });
         return legacy;
@@ -452,7 +452,7 @@ export interface UpsertIntegrationInput {
 }
 
 export async function upsertIntegrationCredentials(input: UpsertIntegrationInput): Promise<void> {
-  const enc = encryptIntegrationPayload(input.payload);
+  const enc = serializeIntegrationPayload(input.payload);
   await pool.query(
     `INSERT INTO organization_integrations
        (organization_id, provider, scope, payload_encrypted, display_label, status, created_by)

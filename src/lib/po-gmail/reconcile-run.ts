@@ -14,7 +14,7 @@
  * since appeared, logs "ORDER DELIVERED" emails as delivery signals, and
  * stamps carrier tracking# onto matched POs that still lack a shipment.
  *
- * No Zoho API calls — webhooks + the QStash safety-net cron keep
+ * No Zoho API calls — webhooks + the shipping sync cron keep
  * receiving_lines populated.
  */
 

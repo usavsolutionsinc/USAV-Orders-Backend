@@ -1,6 +1,8 @@
 import pool from '../db';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { upsertSkuPackProfileLink } from '@/lib/neon/pack-profile-links';
+import { classifyPackTier } from '@/lib/packing/pack-tier-classifier';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -961,13 +963,22 @@ export async function ensureSkuCatalogEntry(
     if (hint?.zoho_item_id) {
       const item = await zohoClient.getItem(hint.zoho_item_id);
       if (item?.sku) {
-        return await upsertSkuCatalog({
+        const catalog = await upsertSkuCatalog({
           sku: item.sku,
           productTitle: item.name || 'Unknown Product',
           upc: item.upc ?? null,
           ean: item.ean ?? null,
           isActive: item.status !== 'inactive',
         }, orgId);
+        // Best-effort: seed a default/rules-based pack profile if none exists yet.
+        try {
+          const c = classifyPackTier({ productTitle: catalog.product_title, category: catalog.category, sku: catalog.sku });
+          await upsertSkuPackProfileLink(
+            { skuCatalogId: catalog.id, packTier: c.packTier, estimatedMinutes: c.estimatedMinutes, source: 'rules' },
+            orgId,
+          );
+        } catch {}
+        return catalog;
       }
     }
 
@@ -976,13 +987,21 @@ export async function ensureSkuCatalogEntry(
       const match =
         listRes.items?.find((i) => i.sku === trimmed) || listRes.items?.[0];
       if (match?.sku) {
-        return await upsertSkuCatalog({
+        const catalog = await upsertSkuCatalog({
           sku: match.sku,
           productTitle: match.name || 'Unknown Product',
           upc: match.upc ?? null,
           ean: match.ean ?? null,
           isActive: match.status !== 'inactive',
         }, orgId);
+        try {
+          const c = classifyPackTier({ productTitle: catalog.product_title, category: catalog.category, sku: catalog.sku });
+          await upsertSkuPackProfileLink(
+            { skuCatalogId: catalog.id, packTier: c.packTier, estimatedMinutes: c.estimatedMinutes, source: 'rules' },
+            orgId,
+          );
+        } catch {}
+        return catalog;
       }
     }
   } catch (err) {
@@ -1261,6 +1280,7 @@ export async function getSkuCatalogList(params: {
 
 export interface SkuCatalogDetailResult {
   catalog: SkuCatalogRow;
+  packProfile: { packTier: 'SMALL' | 'MEDIUM' | 'LARGE'; estimatedMinutes: number | null } | null;
   platformIds: SkuPlatformIdRow[];
   manuals: Array<{
     id: number;
@@ -1282,6 +1302,16 @@ export async function getSkuCatalogDetail(id: number, orgId?: OrgId): Promise<Sk
   const catalog = await getSkuCatalogById(id, orgId);
   if (!catalog) return null;
 
+  const packProfileSql = `
+    SELECT p.pack_tier, p.estimated_minutes
+      FROM pack_profile_links l
+      JOIN pack_profiles p ON p.id = l.pack_profile_id
+     WHERE l.owner_type = 'SKU_CATALOG'
+       AND l.owner_id = $1
+      ${orgId ? 'AND l.organization_id = $2' : ''}
+     LIMIT 1
+  `;
+
   // sku_platform_ids and qc_check_templates are tenant-owned — both get an org
   // filter + GUC wrapper when orgId is provided (qc_check_templates must be
   // GUC-safe so FORCE row-level security can be enabled on it). product_manuals
@@ -1290,7 +1320,14 @@ export async function getSkuCatalogDetail(id: number, orgId?: OrgId): Promise<Sk
   // orgId is omitted, behavior is identical to before.
   const platformSql = `SELECT * FROM sku_platform_ids WHERE sku_catalog_id = $1 AND is_active = true${orgId ? ' AND organization_id = $2' : ''} ORDER BY platform, created_at`;
   const qcSql = `SELECT * FROM qc_check_templates WHERE sku_catalog_id = $1${orgId ? ' AND organization_id = $2' : ''} ORDER BY sort_order, id`;
-  const [platformResult, manualResult, qcResult] = await Promise.all([
+  const [packProfileResult, platformResult, manualResult, qcResult] = await Promise.all([
+    orgId
+      ? tenantQuery<{ pack_tier: 'SMALL' | 'MEDIUM' | 'LARGE'; estimated_minutes: number | null }>(
+        orgId,
+        packProfileSql,
+        [id, orgId],
+      )
+      : pool.query<{ pack_tier: 'SMALL' | 'MEDIUM' | 'LARGE'; estimated_minutes: number | null }>(packProfileSql, [id]),
     orgId
       ? tenantQuery<SkuPlatformIdRow>(orgId, platformSql, [id, orgId])
       : pool.query<SkuPlatformIdRow>(platformSql, [id]),
@@ -1306,6 +1343,9 @@ export async function getSkuCatalogDetail(id: number, orgId?: OrgId): Promise<Sk
 
   return {
     catalog,
+    packProfile: packProfileResult.rows[0]
+      ? { packTier: packProfileResult.rows[0].pack_tier, estimatedMinutes: packProfileResult.rows[0].estimated_minutes }
+      : null,
     platformIds: platformResult.rows,
     manuals: manualResult.rows,
     qcChecks: qcResult.rows,

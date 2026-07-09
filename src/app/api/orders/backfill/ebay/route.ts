@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EbayClient } from '@/lib/ebay/client';
+import { EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 
@@ -116,7 +117,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // ebay_accounts is tenant-owned; only return this org's accounts.
     const { rows: accountRows } = await tenantQuery<{ account_name: string }>(
       ctx.organizationId,
-      'SELECT account_name FROM ebay_accounts WHERE is_active = true AND organization_id = $1 ORDER BY account_name',
+      `SELECT account_name FROM ebay_accounts
+        WHERE is_active = true AND organization_id = $1 AND ${EBAY_PLATFORM_PREDICATE}
+        ORDER BY account_name`,
       [ctx.organizationId]
     );
     const allAccountNames = accountRows.map((r) => r.account_name);

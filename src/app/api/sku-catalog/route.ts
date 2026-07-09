@@ -16,6 +16,7 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { CACHE_TAGS } from '@/lib/cache/tags';
+import { upsertSkuPackProfileLink } from '@/lib/neon/pack-profile-links';
 
 const ROUTE_SKU_CATALOG_POST = 'sku-catalog.post';
 
@@ -96,6 +97,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       replenishTargetCents: parsed.replenishTargetCents ?? null,
       notes: parsed.packNotes ?? null,
     }, ctx.organizationId);
+
+    if (parsed.packTier !== undefined || parsed.estimatedPackMinutes !== undefined) {
+      await upsertSkuPackProfileLink(
+        {
+          skuCatalogId: catalog.id,
+          packTier: parsed.packTier ?? null,
+          estimatedMinutes: parsed.estimatedPackMinutes ?? null,
+          source: 'manual',
+        },
+        ctx.organizationId,
+      );
+    }
 
     await recordAudit(pool, ctx, req, {
       source: 'sku-catalog-api',

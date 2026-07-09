@@ -9,6 +9,8 @@ import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-share
 import { classifyReceiveResponse } from '../../ReceiveResponsePanel';
 import { useScanFeedback } from '@/lib/scan-feedback/useScanFeedback';
 import { shouldUseLocalReceiveOnly } from '@/lib/receiving/intake-items-routing';
+import { enqueuePendingZohoSync } from '@/lib/receiving/zoho-sync-toast-tracker';
+import { useAuth } from '@/contexts/AuthContext';
 
 // 'local_receive' = unfound carton: mark RECEIVED locally, never touch Zoho.
 // Distinct from 'scan_only', which stays SCANNED.
@@ -120,6 +122,8 @@ export function useReceiveAction(
   const receiveInFlightRef = useRef(false);
   const [receiving, setReceiving] = useState<ReceiveInFlight | null>(null);
   const [receiveResult, setReceiveResult] = useState<ReceiveResult | null>(null);
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? null;
   // Kept only for the diagnostic panel's raw-response expander.
   const [responseExpanded, setResponseExpanded] = useState(false);
 
@@ -275,6 +279,18 @@ export function useReceiveAction(
                 reconcile: receiveIntent === 'zoho_receive' && attempted > 0 && !alreadyReceived,
                 response: respRecord,
               });
+
+              const reconcile =
+                receiveIntent === 'zoho_receive' && attempted > 0 && !alreadyReceived;
+              if (reconcile && orgId) {
+                enqueuePendingZohoSync({
+                  id: `zoho-sync:${orgId}:${clientEventId}`,
+                  orgId,
+                  lineIds,
+                  createdAt: respRecord.at,
+                  label: 'Syncing to Zoho…',
+                });
+              }
               playScanFeedback('success');
             } else {
               setReceiveResult({ kind: 'diagnostic', response: respRecord });
@@ -337,6 +353,7 @@ export function useReceiveAction(
     [
       row.receiving_id,
       row.id,
+      orgId,
       isUnfound,
       qa,
       disp,

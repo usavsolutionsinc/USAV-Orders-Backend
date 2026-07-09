@@ -26,6 +26,7 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { validateInboundPublish } from '@/lib/inbound/publish-validation';
 import { isIncomingUniversal } from '@/lib/feature-flags';
 import { resolveInboundSettings } from '@/lib/inbound/org-settings';
+import { EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,7 +78,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         const r = await tenantQuery<{ n: number }>(
           ctx.organizationId,
           `SELECT COUNT(*)::int AS n FROM ebay_accounts
-            WHERE organization_id = $1 AND account_role = 'buyer' AND is_active = true`,
+            WHERE organization_id = $1 AND account_role = 'buyer' AND is_active = true
+              AND ${EBAY_PLATFORM_PREDICATE}`,
           [ctx.organizationId],
         );
         return (r.rows[0]?.n ?? 0) > 0;

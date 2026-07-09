@@ -18,10 +18,11 @@
  * See docs/tenancy/multi-tenancy-execution-plan.md §Phase D2.
  */
 import type { PoolClient } from 'pg';
-import pool from '@/lib/db';
+import { adminPool } from '@/lib/db';
 import { withTenantConnection } from '@/lib/tenancy/db';
 import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
 import type { IntegrationProvider } from '@/lib/integrations/credentials';
+import { EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 
 export interface OrgRunResult<T> {
   orgId: OrgId;
@@ -36,7 +37,7 @@ export interface OrgRunResult<T> {
  *  already opens `withTenantTransaction`, so the forEachActiveOrg transaction
  *  wrapper would just hold an idle connection). */
 export async function listSweepOrgIds(): Promise<OrgId[]> {
-  const { rows } = await pool.query<{ id: string }>(
+  const { rows } = await adminPool.query<{ id: string }>(
     `SELECT id FROM organizations WHERE status <> 'cancelled'`,
   );
   return rows.map((r) => r.id as OrgId);
@@ -71,14 +72,20 @@ export async function forEachActiveOrg<T>(
  * the cron fan-out doesn't depend on the connector registry.
  */
 async function listOrgsWithProvider(provider: IntegrationProvider): Promise<OrgId[]> {
-  if (provider === 'ebay' || provider === 'amazon') {
-    const table = provider === 'ebay' ? 'ebay_accounts' : 'amazon_accounts';
-    const { rows } = await pool.query<{ organization_id: string }>(
-      `SELECT DISTINCT organization_id FROM ${table} WHERE is_active = true`,
+  if (provider === 'ebay') {
+    const { rows } = await adminPool.query<{ organization_id: string }>(
+      `SELECT DISTINCT organization_id FROM ebay_accounts
+        WHERE is_active = true AND ${EBAY_PLATFORM_PREDICATE}`,
     );
     return rows.map((r) => r.organization_id as OrgId);
   }
-  const { rows } = await pool.query<{ organization_id: string }>(
+  if (provider === 'amazon') {
+    const { rows } = await adminPool.query<{ organization_id: string }>(
+      `SELECT DISTINCT organization_id FROM amazon_accounts WHERE is_active = true`,
+    );
+    return rows.map((r) => r.organization_id as OrgId);
+  }
+  const { rows } = await adminPool.query<{ organization_id: string }>(
     `SELECT DISTINCT organization_id FROM organization_integrations
       WHERE provider = $1 AND status = 'active'`,
     [provider],

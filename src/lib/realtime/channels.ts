@@ -23,6 +23,7 @@ export const DEFAULT_STAFF_CHANNEL = 'staff:changes';
 export const DEFAULT_DB_CHANNEL_PREFIX = 'db';
 export const DEFAULT_FBA_CHANNEL = 'fba:changes';
 export const DEFAULT_DASHBOARD_CHANNEL = 'dashboard:operations';
+export const DEFAULT_OPS_PLANS_CHANNEL = 'ops_plans:changes';
 export const DEFAULT_WALKIN_CHANNEL = 'walkin:changes';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -94,6 +95,9 @@ export const getFbaChannelName = (orgId: string) =>
 
 export const getDashboardChannelName = (orgId: string) =>
   `${orgChannelPrefix(orgId)}:${DEFAULT_DASHBOARD_CHANNEL}`;
+
+export const getOpsPlansChannelName = (orgId: string) =>
+  `${orgChannelPrefix(orgId)}:${DEFAULT_OPS_PLANS_CHANNEL}`;
 
 export const getWalkInChannelName = (orgId: string) =>
   `${orgChannelPrefix(orgId)}:${DEFAULT_WALKIN_CHANNEL}`;

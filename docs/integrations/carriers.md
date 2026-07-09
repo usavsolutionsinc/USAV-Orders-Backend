@@ -28,8 +28,8 @@ receiving-history memory).
 
 | Schedule | Path | What |
 |---|---|---|
-| `*/15 * * * *` | `/api/cron/shipping/sync-due?limit=150&concurrency=8` | Rolling sweep of due shipments (all carriers) |
-| `0 0 * * 2-6` | `/api/cron/shipping/sync-due?limit=200&concurrency=8&carriers=UPS,FEDEX` | Nightly deep refresh (Tue–Sat) |
+| `7,22,37,52 * * * *` | `/api/cron/shipping/sync-due?limit=150&concurrency=8` | Rolling sweep of due shipments (all carriers); staggered off `:00` so it never collides with the deep tick |
+| `30 3 * * 2-6` | `/api/cron/shipping/sync-due?limit=200&concurrency=8&carriers=UPS,FEDEX` | Nightly deep refresh (Tue–Sat, 03:30 UTC) |
 | `20 * * * *` | `/api/cron/shipping/reconcile-delivered` | Reconcile delivered-but-unscanned |
 | `*/30 * * * *` | `/api/cron/shipping/metrics` | Sync-health metrics |
 | `10,25,40,55 * * * *` | `/api/cron/receiving/incoming-tracking-sync` | Re-poll the Incoming UI shipment set (keeps "Delivered · not scanned" fresh) |

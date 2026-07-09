@@ -11,6 +11,7 @@ import { SkuCatalogUpdateBody } from '@/lib/schemas/sku-catalog';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { tenantQuery } from '@/lib/tenancy/db';
 import pool from '@/lib/db';
+import { upsertSkuPackProfileLink } from '@/lib/neon/pack-profile-links';
 
 /**
  * GET /api/sku-catalog/[id] — Full detail for a single SKU catalog entry.
@@ -86,6 +87,20 @@ export async function PATCH(
       replenishTargetCents: parsed.replenishTargetCents !== undefined ? parsed.replenishTargetCents : before.replenish_target_cents,
       notes: parsed.packNotes !== undefined ? parsed.packNotes : before.notes,
     }, gate.ctx.organizationId);
+
+    // Optional polymorphic packing KPI override linked to this SKU.
+    // If both fields are explicitly null/empty, the helper deletes the link.
+    if (parsed.packTier !== undefined || parsed.estimatedPackMinutes !== undefined) {
+      await upsertSkuPackProfileLink(
+        {
+          skuCatalogId: id,
+          packTier: parsed.packTier ?? null,
+          estimatedMinutes: parsed.estimatedPackMinutes ?? null,
+          source: 'manual',
+        },
+        gate.ctx.organizationId,
+      );
+    }
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'sku-catalog-api',

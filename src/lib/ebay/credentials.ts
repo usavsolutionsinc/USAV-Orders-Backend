@@ -113,7 +113,7 @@ const ACCOUNT_COLUMNS = `id, account_name, ebay_user_id, access_token, refresh_t
 // ebay_accounts is dual-used for Zoho tokens (platform='ZOHO', see
 // 2026-03-09_ebay_accounts_add_platform_zoho.sql). eBay operations must only
 // touch eBay rows, or readEbayToken chokes on a Zoho token. NULL = legacy eBay.
-const EBAY_PLATFORM_PREDICATE = `(platform = 'EBAY' OR platform IS NULL)`;
+export const EBAY_PLATFORM_PREDICATE = `(platform = 'EBAY' OR platform IS NULL)`;
 
 /** Load a single eBay account (tokens decrypted) for an org, or null. */
 export async function getEbayAccount(orgId: OrgId, accountName: string): Promise<EbayAccount | null> {

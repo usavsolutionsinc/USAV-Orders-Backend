@@ -5,6 +5,7 @@ import { ENABLED_SYNC_CARRIERS } from './enabled-carriers';
 import type { PoolClient } from 'pg';
 import { withTenantConnection, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { resolveShipmentOrgId } from './resolve-shipment-org';
 
 // ─── Tenancy note ─────────────────────────────────────────────────────────────
 //
@@ -297,10 +298,8 @@ export async function updateShipmentSummary(
   orgId?: OrgId,
 ): Promise<void> {
   const { emitShippedLedgerForShipment } = await import('@/lib/neon/stock-ledger-helpers');
-  // shipping_tracking_numbers / shipment_tracking_events have no organization_id
-  // column (NEEDS-COL): GUC-wrap when orgId present; no org predicate possible on
-  // the read/UPDATE here. We DO thread orgId through to emitShippedLedgerForShipment
-  // (sku_stock_ledger IS org-bearing) so that downstream write is tenant-scoped.
+  const resolvedOrgId = orgId ?? (await resolveShipmentOrgId(shipmentId));
+
   const run = async (client: PoolClient): Promise<void> => {
     const status = result.latestStatusCategory;
 
@@ -419,15 +418,15 @@ export async function updateShipmentSummary(
       try {
         await emitShippedLedgerForShipment(client, shipmentId, {
           source: `carrier-sync.${status}`,
-        }, orgId);
+        }, resolvedOrgId ?? undefined);
       } catch (err) {
         console.warn('[updateShipmentSummary] SHIPPED ledger emit failed', err);
       }
     }
   };
 
-  if (orgId) {
-    await withTenantTransaction(orgId, (client) => run(client));
+  if (resolvedOrgId) {
+    await withTenantTransaction(resolvedOrgId, (client) => run(client));
     return;
   }
   const client = await pool.connect();

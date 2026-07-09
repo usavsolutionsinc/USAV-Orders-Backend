@@ -342,3 +342,13 @@ test('assistant mutation revert route is gated by studio.manage', () => {
   const paths = routesGatedBy('studio.manage').map((r) => r.path);
   assert.ok(paths.includes('/api/assistant/mutations/[id]/revert/route.ts'));
 });
+
+test('regression: operations.plans.* gates ops-plans routes', () => {
+  const viewPaths = routesGatedBy('operations.plans.view').map((r) => r.path);
+  const managePaths = routesGatedBy('operations.plans.manage').map((r) => r.path);
+  const claimPaths = routesGatedBy('operations.plans.claim').map((r) => r.path);
+  assert.ok(viewPaths.includes('/api/ops-plans/route.ts'));
+  assert.ok(viewPaths.includes('/api/ops-plans/inbox/route.ts'));
+  assert.ok(managePaths.includes('/api/ops-plans/from-template/route.ts'));
+  assert.ok(claimPaths.includes('/api/ops-plans/tasks/[taskId]/claim/route.ts'));
+});

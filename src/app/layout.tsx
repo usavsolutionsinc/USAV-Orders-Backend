@@ -21,6 +21,7 @@ import { OfflineBanner } from "../components/layout/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
 import { AppearanceApplier } from "../components/settings/AppearanceApplier";
 import { ElectronDragStrip } from "../components/electron/ElectronDragStrip";
+import { ReceivingZohoSyncToaster } from "../components/receiving/ReceivingZohoSyncToaster";
 import { getInitialAuthUser } from "@/lib/auth/server-session";
 import { Analytics } from "@vercel/analytics/next";
 import { PostHogProvider } from "../components/analytics/PostHogProvider";
@@ -98,6 +99,7 @@ export default async function RootLayout({
                                             </StudioWorkspaceProvider>
                                         </FbaWorkspaceProvider>
                                     </HeaderProvider>
+                                    <ReceivingZohoSyncToaster />
                                     <SwitchStaffSheet />
                                     <ScanHotkeySync />
                                     <ThemeSync />

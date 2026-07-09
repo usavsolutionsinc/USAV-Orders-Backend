@@ -1,6 +1,7 @@
 import pool from '../db';
 import { tenantQuery, withTenantTransaction } from '../tenancy/db';
 import type { OrgId } from '../tenancy/constants';
+import { writeLedgerDelta } from '../inventory/write-ledger-delta';
 import {
   locationCode,
   locationCodeFlat,
@@ -1142,7 +1143,7 @@ export async function upsertBinContentIfVersion(data: {
 
 /**
  * Adjust bin quantity by delta (positive = put, negative = take).
- * Also adjusts sku_stock in the same transaction for consistency.
+ * Stock aggregate is updated via sku_stock_ledger → fn_recompute_sku_stock only.
  */
 export async function adjustBinQty(data: {
   locationId: number;
@@ -1154,79 +1155,43 @@ export async function adjustBinQty(data: {
   reasonCodeId?: number | null;
   /** Free-text note (used by reason codes like DAMAGED / FOUND that require explanation). */
   notes?: string | null;
-}, orgId?: OrgId): Promise<{ binContent: BinContent; newStockQty: number; ledgerId: number | null }> {
+}, orgId: OrgId): Promise<{ binContent: BinContent; newStockQty: number; ledgerId: number | null }> {
   const rawSku = data.sku.trim();
   const baseSku = rawSku.includes(':') ? rawSku.split(':')[0].trim() : rawSku;
 
-  // db = org-scoped tenant transaction client, or the raw pool. Conflict
-  // targets stay as the live schema unique keys — bin_contents
-  // UNIQUE(location_id, sku) and sku_stock UNIQUE(sku) (both still bare-global
-  // today; the composite-unique migration is unapplied). We only STAMP
-  // organization_id on fresh INSERTs so new rows land on the right tenant.
-  const run = async (db: { query: typeof pool.query }): Promise<{ binContent: BinContent; newStockQty: number; ledgerId: number | null }> => {
-    // 1. Adjust bin qty (floor at 0)
+  return withTenantTransaction(orgId, async (db) => {
     const binResult = await db.query<BinContent>(
-      `INSERT INTO bin_contents (location_id, sku, qty${orgId ? ', organization_id' : ''})
-       VALUES ($1, $2, GREATEST(0, $3)${orgId ? ', $4' : ''})
+      `INSERT INTO bin_contents (location_id, sku, qty, organization_id)
+       VALUES ($1, $2, GREATEST(0, $3), $4)
        ON CONFLICT (location_id, sku)
        DO UPDATE SET
          qty = GREATEST(0, bin_contents.qty + $3),
          updated_at = NOW()
        RETURNING *`,
-      orgId ? [data.locationId, baseSku, data.delta, orgId] : [data.locationId, baseSku, data.delta],
+      [data.locationId, baseSku, data.delta, orgId],
     );
 
-    // 2. Adjust sku_stock aggregate
+    const ledgerRow = await writeLedgerDelta(db, {
+      orgId,
+      sku: baseSku,
+      delta: data.delta,
+      reason: data.reason || 'BIN_ADJUST',
+      staffId: data.staffId ?? null,
+      reasonCodeId: data.reasonCodeId ?? null,
+      notes: data.notes ?? null,
+    });
+
     const stockResult = await db.query<{ stock: number }>(
-      `INSERT INTO sku_stock (sku, stock${orgId ? ', organization_id' : ''})
-       VALUES ($1, GREATEST(0, $2)${orgId ? ', $3' : ''})
-       ON CONFLICT (sku)
-       DO UPDATE SET stock = GREATEST(0, sku_stock.stock + $2)
-       RETURNING stock`,
-      orgId ? [baseSku, data.delta, orgId] : [baseSku, data.delta],
+      `SELECT stock FROM sku_stock WHERE sku = $1 AND organization_id = $2`,
+      [baseSku, orgId],
     );
-
-    // 3. Log to stock ledger — preserves the text `reason` for back-compat
-    //    while also stamping `reason_code_id` so reporting can group cleanly.
-    let ledgerId: number | null = null;
-    try {
-      const ledgerRes = await db.query<{ id: number }>(
-        `INSERT INTO sku_stock_ledger
-           (sku, delta, reason, staff_id, reason_code_id, notes${orgId ? ', organization_id' : ''})
-         VALUES ($1, $2, $3, $4, $5, $6${orgId ? ', $7' : ''})
-         RETURNING id`,
-        orgId
-          ? [baseSku, data.delta, data.reason || 'BIN_ADJUST', data.staffId || null, data.reasonCodeId ?? null, data.notes ?? null, orgId]
-          : [baseSku, data.delta, data.reason || 'BIN_ADJUST', data.staffId || null, data.reasonCodeId ?? null, data.notes ?? null],
-      );
-      ledgerId = ledgerRes.rows[0]?.id ?? null;
-    } catch {
-      /* best-effort — adjustment still succeeds even if ledger write fails */
-    }
 
     return {
       binContent: binResult.rows[0],
       newStockQty: Number(stockResult.rows[0]?.stock) || 0,
-      ledgerId,
+      ledgerId: ledgerRow?.id ?? null,
     };
-  };
-
-  if (orgId) {
-    return withTenantTransaction(orgId, (client) => run(client));
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await run(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /** Mark a bin as physically counted (cycle count). */

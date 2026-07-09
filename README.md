@@ -68,28 +68,31 @@ The app has many route handlers under `src/app/api`. Core groups include:
 - sync + migration helpers: `sync-sheets`, `import-orders` (legacy setup routes like migrate-process/drizzle-setup/setup-db removed; use `npm run db:migrate`)
 - integrations: `ebay/*`, `ecwid-square/sync`, `google-sheets/*`, `manuals/resolve`, `orders-exceptions/*`
 - realtime/ai: `realtime/token`, `ai/chat`, `ai/search`, `ai/health`
+- `packing/kpi`: per-packer daily KPI summary (tier counts + weighted minutes)
 
-## Schedules (Vercel Cron + QStash hybrid)
+## Packing capacity report (CLI)
 
-Recurring scheduled jobs are primarily driven by **Vercel Cron** (defined in `vercel.json`).
+Download a per-packer CSV for today (PST) — same data as `GET /api/packing/kpi`:
 
-A small number of jobs (or legacy/manual triggers) may still use Upstash QStash.
+```bash
+npm run report:packing-today -- --orgId=<organization-uuid>
+npm run report:packing-today -- --orgId=<uuid> --date=2026-07-08
+npm run report:packing-today -- --orgId=<uuid> --out=reports/packing.csv
+npm run report:packing-today -- --orgId=<uuid> --backfill   # recompute enrichment first
+```
 
-- Source of truth for Vercel crons: `vercel.json` → `"crons"` array.
-- Legacy/transition QStash schedules are still declared in `src/config/qstash-schedules.json` (entries with `"managedBy": "vercel"` are skipped by bootstrap and sync scripts).
-- Route handlers support **both** triggers via `isAuthorizedCronRequest()` in `src/lib/qstash.ts` (QStash signature or `CRON_SECRET` + `x-vercel-cron`).
+CSV columns: `Packer`, `Small`, `Medium`, `Large`, `Weighted min`, `% of day`.
 
-| Worker Path | Schedule (UTC) | Purpose | System |
-|-------------|----------------|---------|--------|
-| `/api/qstash/shipping/sync-due` | `0 */2 * * *` | Sync USPS/UPS/FedEx tracking every 2 hours | Vercel |
-| `/api/qstash/ebay/refresh-tokens` | `0 * * * *` | Refresh eBay tokens every hour | Vercel |
-| `/api/qstash/google-sheets/transfer-orders` | 15:30 / 18:00 / 22:00 daily (weekdays) | Transfer Google Sheet orders | Vercel |
-| `/api/qstash/staff-goals/history` | `00:30` daily | Nightly staff goal snapshot | Vercel |
-| ... (see vercel.json for full current list) | | | |
+- **Weighted min** — sum of per-scan minutes (SKU pack profile when linked, else tier defaults: Small=5, Medium=13, Large=45).
+- **% of day** — weighted minutes ÷ `org_pack_capacity.workday_minutes` (default 480) per packer.
 
-**To (re)register any remaining QStash schedules:** `POST /api/qstash/schedules/bootstrap` (admin only).
+Query logic lives in `src/lib/packing/packer-kpi-queries.ts`; tier enrichment in `src/lib/neon/packer-log-enrichment.ts`.
 
-**Important:** Set the `CRON_SECRET` environment variable in your Vercel project for secure Vercel Cron invocations.
+## Schedules (Vercel Cron)
+
+Recurring scheduled jobs are driven by **Vercel Cron** (defined in `vercel.json` → `"crons"` array). Handlers live under `/api/cron/*` and verify `Authorization: Bearer ${CRON_SECRET}` (Vercel injects this header on each invocation).
+
+See `vercel.json` for the full schedule list. Set `CRON_SECRET` in your Vercel project.
 
 ## Database Model (Current Core Tables)
 

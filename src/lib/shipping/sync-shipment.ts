@@ -10,6 +10,7 @@ import {
 } from './repository';
 import { publishShipmentStatusChange } from './publish-on-status-change';
 import { isCarrierSyncEnabled } from './enabled-carriers';
+import { resolveShipmentOrgId } from './resolve-shipment-org';
 import * as ups from './providers/ups';
 import * as usps from './providers/usps';
 import * as fedex from './providers/fedex';
@@ -79,6 +80,12 @@ export async function syncShipment(
     };
   }
 
+  const effectiveOrgId =
+    orgId ??
+    (shipment.organization_id as OrgId | null) ??
+    (await resolveShipmentOrgId(shipment.id)) ??
+    undefined;
+
   if (shipment.is_terminal) {
     return {
       ok: true,
@@ -112,16 +119,21 @@ export async function syncShipment(
       carrier,
       shipment.tracking_number_normalized,
       result.events,
-      orgId,
+      effectiveOrgId,
     );
 
-    await updateShipmentSummary(shipment.id, result, orgId);
+    await updateShipmentSummary(shipment.id, result, effectiveOrgId);
     // Only notify clients when the poll actually surfaced new carrier events —
     // otherwise every 2-hour sweep would publish a no-op realtime message per
     // shipment and trigger needless client refetches. Webhook pushes are the
     // real-time path; this poll is the fallback that fires on genuine movement.
     if (inserted > 0) {
-      await publishShipmentStatusChange(shipment.id, 'shipping-sync', shipment.tracking_number_normalized, orgId);
+      await publishShipmentStatusChange(
+        shipment.id,
+        'shipping-sync',
+        shipment.tracking_number_normalized,
+        effectiveOrgId,
+      );
     }
 
     return {
@@ -133,7 +145,7 @@ export async function syncShipment(
   } catch (err: any) {
     const code = err?.code ?? 'SYNC_ERROR';
     const message = err?.message ?? 'Unknown sync error';
-    await updateShipmentError(shipment.id, code, message, carrier, orgId);
+    await updateShipmentError(shipment.id, code, message, carrier, effectiveOrgId);
 
     return {
       ok: false,

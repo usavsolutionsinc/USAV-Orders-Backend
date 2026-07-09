@@ -17,6 +17,7 @@
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import pool from '@/lib/db';
+import { EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronLock } from '@/lib/cron/lock';
 import { withCronRun } from '@/lib/cron/run-log';
@@ -40,7 +41,8 @@ export async function GET(request: NextRequest) {
     const locked = await withCronLock(JOB, () =>
       withCronRun(JOB, async () => {
         const { rows } = await pool.query<{ organization_id: string }>(
-          `SELECT DISTINCT organization_id FROM ebay_accounts WHERE is_active = true`,
+          `SELECT DISTINCT organization_id FROM ebay_accounts
+            WHERE is_active = true AND ${EBAY_PLATFORM_PREDICATE}`,
         );
 
         let orgsEnabled = 0;

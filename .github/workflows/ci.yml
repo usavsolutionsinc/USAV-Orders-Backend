@@ -92,6 +92,9 @@ jobs:
         continue-on-error: true
         run: npm run tenancy:guard:check -- --static-only
 
+      - name: Schema drift guard (dropped columns)
+        run: npm run schema:drift-guard:check
+
   audit-permissions:
     name: Permission drift audit
     runs-on: ubuntu-latest

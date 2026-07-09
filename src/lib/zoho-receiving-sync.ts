@@ -173,6 +173,8 @@ async function syncLocalPickupOrder(
   return {
     purchaseorder_id: normalizedPoId,
     purchaseorder_number: poNumber,
+    reference_number: poReference || null,
+    po_notes: null,
     line_items_synced: synced,
     line_items_skipped: skipped,
     line_items_linked: 0,
@@ -195,6 +197,10 @@ type SyncPOLinesOptions = {
 type SyncPOLinesResult = {
   purchaseorder_id: string;
   purchaseorder_number: string;
+  /** Zoho PO Reference# — inbound tracking identity (also registered on receiving.shipment_id). */
+  reference_number: string | null;
+  /** Zoho PO header notes — used for eBay order# substring matching during merge. */
+  po_notes: string | null;
   line_items_synced: number;
   line_items_skipped: number;
   line_items_linked: number;
@@ -498,6 +504,8 @@ async function syncPurchaseOrderLines(
   return {
     purchaseorder_id: normalizedPoId,
     purchaseorder_number: poNumber,
+    reference_number: poReference || null,
+    po_notes: poNotes || null,
     line_items_synced: synced,
     line_items_skipped: skipped,
     line_items_linked: linked,
@@ -534,10 +542,16 @@ export async function importZohoPurchaseOrderToReceiving(
       await mergeEbayLinesIntoZohoPo(orgId, {
         zohoPurchaseOrderId: result.purchaseorder_id,
         poNumber: result.purchaseorder_number,
+        tracking: result.reference_number,
+        referenceNumber: result.reference_number,
+        notes: result.po_notes,
       });
     }
   } catch (err) {
-    console.warn('[zoho-sync] mergeEbayLinesIntoZohoPo skipped:', err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    // Merge is best-effort (must not fail the Zoho import), but schema/code faults
+    // are logged at error severity so production monitoring catches them.
+    console.error('[zoho-sync] mergeEbayLinesIntoZohoPo failed:', message);
   }
 
   return result;

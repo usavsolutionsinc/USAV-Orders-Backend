@@ -39,10 +39,7 @@ async function runDriftCheck() {
   const startedAt = Date.now();
 
   // Fan out per active org: each pass runs inside that org's tenant connection
-  // (GUC set). v_sku_stock_drift carries no organization_id, so every read of
-  // it is scoped by joining back to sku_stock on (sku, organization_id) — this
-  // constrains each pass to the swept org BOTH before and after RLS FORCE lands
-  // (defense in depth) and aligns the otherwise-bare sku string join.
+  // (GUC set). v_sku_stock_drift is org-scoped on (organization_id, sku).
   const perOrg = await forEachActiveOrg((orgId, client) =>
     runDriftCheckForOrg(orgId, client),
   );
@@ -97,7 +94,7 @@ async function runDriftCheckForOrg(orgId: OrgId, c: PoolClient): Promise<OrgDrif
          ),
          $1
        FROM v_sku_stock_drift d
-       JOIN sku_stock ss ON ss.sku = d.sku AND ss.organization_id = $1
+       WHERE d.organization_id = $1
        ON CONFLICT DO NOTHING
        RETURNING 1
      )
@@ -114,8 +111,7 @@ async function runDriftCheckForOrg(orgId: OrgId, c: PoolClient): Promise<OrgDrif
           AND sa.organization_id = $1
           AND NOT EXISTS (
             SELECT 1 FROM v_sku_stock_drift d
-            JOIN sku_stock ss ON ss.sku = d.sku AND ss.organization_id = $1
-            WHERE d.sku = sa.sku
+            WHERE d.organization_id = $1 AND d.sku = sa.sku
           )
        RETURNING 1
      )
@@ -126,7 +122,7 @@ async function runDriftCheckForOrg(orgId: OrgId, c: PoolClient): Promise<OrgDrif
   const worst = await c.query<{ sku: string; warehouse_drift: number; boxed_drift: number }>(
     `SELECT d.sku, d.warehouse_drift, d.boxed_drift
        FROM v_sku_stock_drift d
-       JOIN sku_stock ss ON ss.sku = d.sku AND ss.organization_id = $1
+       WHERE d.organization_id = $1
       ORDER BY ABS(d.warehouse_drift) + ABS(d.boxed_drift) DESC
       LIMIT 5`,
     [orgId],
