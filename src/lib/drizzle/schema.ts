@@ -1276,7 +1276,6 @@ export const receivingLines = pgTable('receiving_line', {
   organizationId: orgIdCol(),
   /** Direct line→shipment link (retires the LATERAL PO#-guess). FK shipping_tracking_numbers (plain bigint). 2026-06-08. */
   shipmentId: bigint('shipment_id', { mode: 'number' }),
-  zohoReferenceNumber: text('zoho_reference_number'),
   zohoPurchaseOrderNumber: text('zoho_purchaseorder_number'),
   /** PO | RETURN | TRADE_IN | PICKUP (line-level override of carton intake_type). 2026-04-13. */
   receivingType: text('receiving_type').default('PO'),
@@ -2124,6 +2123,60 @@ export const skuCatalog = pgTable('sku_catalog', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─── Packing profiles (polymorphic) ─────────────────────────────────────────
+
+export const packProfiles = pgTable('pack_profiles', {
+  organizationId: orgIdCol(),
+  id: bigint('id', { mode: 'number' }).primaryKey(),
+  packTier: text('pack_tier').notNull(),
+  estimatedMinutes: integer('estimated_minutes'),
+  source: text('source').notNull().default('manual'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const packProfileLinks = pgTable(
+  'pack_profile_links',
+  {
+    organizationId: orgIdCol(),
+    id: bigint('id', { mode: 'number' }).primaryKey(),
+    ownerType: text('owner_type').notNull(),
+    ownerId: bigint('owner_id', { mode: 'number' }).notNull(),
+    packProfileId: bigint('pack_profile_id', { mode: 'number' })
+      .notNull()
+      .references(() => packProfiles.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    ownerUnique: uniqueIndex('pack_profile_links_owner_unique').on(
+      table.organizationId,
+      table.ownerType,
+      table.ownerId,
+    ),
+    profileIdx: index('pack_profile_links_profile_id_idx').on(table.organizationId, table.packProfileId),
+  }),
+);
+
+// ─── Org packing capacity defaults ──────────────────────────────────────────
+
+export const orgPackCapacity = pgTable(
+  'org_pack_capacity',
+  {
+    organizationId: orgIdCol(),
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    packerHeadcount: integer('packer_headcount').notNull().default(2),
+    workdayMinutes: integer('workday_minutes').notNull().default(480),
+    dailyMediumTarget: integer('daily_medium_target').notNull().default(60),
+    dailyLargeTarget: integer('daily_large_target').notNull().default(16),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    orgUnique: uniqueIndex('ux_org_pack_capacity_org').on(table.organizationId),
+  }),
+);
 
 export const skuPlatformIds = pgTable('sku_platform_ids', {
   id: serial('id').primaryKey(),
@@ -4058,3 +4111,88 @@ export type InsightLink = typeof insightLinks.$inferSelect;
 export type AgentMutation = typeof agentMutations.$inferSelect;
 export type NewAgentMutation = typeof agentMutations.$inferInsert;
 export type AgentMutationAffect = typeof agentMutationAffects.$inferSelect;
+
+// ─── Operations strategic plans (2026-07-08c_ops_plans_core.sql) ─────────────
+
+export const opsPlanStatusEnum = pgEnum('ops_plan_status', [
+  'draft', 'active', 'paused', 'done', 'archived',
+]);
+
+export const opsPlanPhaseStatusEnum = pgEnum('ops_plan_phase_status', [
+  'open', 'in_progress', 'done', 'canceled',
+]);
+
+export const opsPlanTaskStatusEnum = pgEnum('ops_plan_task_status', [
+  'open', 'in_progress', 'done', 'canceled',
+]);
+
+export const opsPlans = pgTable('ops_plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: orgIdCol(),
+  title: text('title').notNull(),
+  description: text('description'),
+  status: opsPlanStatusEnum('status').notNull().default('draft'),
+  targetDate: date('target_date'),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgStatusIdx: index('idx_ops_plans_org_status').on(table.organizationId, table.status),
+  orgTargetIdx: index('idx_ops_plans_org_target').on(table.organizationId, table.targetDate),
+}));
+
+export const opsPlanPhases = pgTable('ops_plan_phases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: orgIdCol(),
+  planId: uuid('plan_id').notNull().references(() => opsPlans.id, { onDelete: 'cascade' }),
+  station: text('station').notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  status: opsPlanPhaseStatusEnum('status').notNull().default('open'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  planOrderIdx: index('idx_ops_plan_phases_plan_order').on(table.planId, table.sortOrder),
+  orgStationIdx: index('idx_ops_plan_phases_org_station').on(table.organizationId, table.station),
+}));
+
+export const opsPlanTasks = pgTable('ops_plan_tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: orgIdCol(),
+  phaseId: uuid('phase_id').notNull().references(() => opsPlanPhases.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  assigneeStaffId: integer('assignee_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  status: opsPlanTaskStatusEnum('status').notNull().default('open'),
+  dueAt: timestamp('due_at', { withTimezone: true }),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  completedByStaffId: integer('completed_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  clientEventId: text('client_event_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  assigneeOpenIdx: index('idx_ops_plan_tasks_assignee_open').on(table.organizationId, table.assigneeStaffId, table.status),
+  orgClientEventIdx: uniqueIndex('ux_ops_plan_tasks_org_client_event').on(table.organizationId, table.clientEventId),
+}));
+
+export const opsPlanTaskLinks = pgTable('ops_plan_task_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: orgIdCol(),
+  taskId: uuid('task_id').notNull().references(() => opsPlanTasks.id, { onDelete: 'cascade' }),
+  linkType: text('link_type').notNull(),
+  linkEntityType: text('link_entity_type'),
+  linkEntityId: text('link_entity_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  entityIdx: index('idx_ops_plan_task_links_entity').on(table.organizationId, table.linkEntityType, table.linkEntityId),
+}));
+
+export type OpsPlan = typeof opsPlans.$inferSelect;
+export type NewOpsPlan = typeof opsPlans.$inferInsert;
+export type OpsPlanPhase = typeof opsPlanPhases.$inferSelect;
+export type OpsPlanTask = typeof opsPlanTasks.$inferSelect;
+export type OpsPlanTaskLink = typeof opsPlanTaskLinks.$inferSelect;

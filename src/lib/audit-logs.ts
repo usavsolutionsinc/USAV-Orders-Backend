@@ -144,6 +144,8 @@ export const AUDIT_ENTITY = {
   ORGANIZATION: 'organization',
   // AI search (docs/ai-search-modernization-plan.md) — the Ask-AI invocation
   AI_SEARCH: 'ai_search',
+  OPS_PLAN: 'ops_plan',
+  OPS_PLAN_TASK: 'ops_plan_task',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -239,6 +241,15 @@ export const AUDIT_ACTION = {
   STAFF_TODO_SET_INTERVAL: 'staff_todo.set_interval',
   STAFF_TODO_ARCHIVE:      'staff_todo.archive',
   STAFF_TODO_UNARCHIVE:    'staff_todo.unarchive',
+  // Strategic ops plans (Operations Plan Mode)
+  OPS_PLAN_CREATE:         'ops_plan.create',
+  OPS_PLAN_UPDATE:         'ops_plan.update',
+  OPS_PLAN_ARCHIVE:        'ops_plan.archive',
+  OPS_PLAN_TASK_CREATE:    'ops_plan_task.create',
+  OPS_PLAN_TASK_ASSIGN:    'ops_plan_task.assign',
+  OPS_PLAN_TASK_COMPLETE:  'ops_plan_task.complete',
+  OPS_PLAN_TASK_CANCEL:    'ops_plan_task.cancel',
+  OPS_PLAN_TASK_LINK:      'ops_plan_task.link',
   // Staff-to-staff messages (clipboard "send to staff")
   STAFF_MESSAGE_SEND:      'staff_message.send',
   // Photo library — minted N temporary signed share links for selected photos
@@ -423,6 +434,7 @@ export const AUDIT_REASON_REQUIRED: ReadonlySet<string> = new Set([
   AUDIT_ACTION.ORDER_SUBSTITUTE_UNIT,
   // Voiding a purchased label reverses a paid carrier action — require a reason.
   AUDIT_ACTION.LABEL_VOIDED,
+  AUDIT_ACTION.OPS_PLAN_TASK_CANCEL,
 ]);
 
 // ── Server-trusted wrapper ─────────────────────────────────────────────────

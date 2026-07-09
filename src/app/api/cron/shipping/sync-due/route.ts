@@ -18,9 +18,10 @@
  *   - concurrency — parallel carrier calls (default 5, cap 10)
  *   - carriers    — comma-separated UPS,FEDEX,USPS; defaults to all
  *
- * Run cadence (per vercel.json):
- *   - every 2h: limit=100 concurrency=5 (rolling sweep)
- *   - daily 00:00 Tue–Sat: limit=200 concurrency=8 carriers=UPS,USPS,FEDEX (deep refresh)
+ * Run cadence (per vercel.json — staggered so the two schedules never share a
+ * tick; both hold the same `shipping.sync_due` advisory lock):
+ *   - 7,22,37,52 * * * *: limit=150 concurrency=8 (rolling sweep, all carriers)
+ *   - 30 3 * * 2-6: limit=200 concurrency=8 carriers=UPS,FEDEX (nightly deep refresh)
  *
  * Tenancy (Phase D category B — global carrier-poll sweep): carrier tracking
  * reads (UPS/USPS/FedEx) are global, not per-org-credentialed, and each polled

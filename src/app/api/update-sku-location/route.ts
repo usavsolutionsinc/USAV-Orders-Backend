@@ -33,15 +33,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             const priorLocation: string | null = stock.rows[0]?.prior ?? null;
 
             // No stock row yet — create one so the location lands somewhere.
-            // NOTE: the unique index is sku_stock(sku) (global, not composite with
-            // organization_id), so ON CONFLICT (sku) is the only available target;
-            // org is stamped on insert and the DO UPDATE is org-guarded.
             if (!stockId) {
                 const inserted = await client.query<{ id: number }>(
                     `INSERT INTO sku_stock (sku, location, stock, organization_id)
                      VALUES ($1, $2, 0, $3)
-                     ON CONFLICT (sku) DO UPDATE SET location = EXCLUDED.location
-                     WHERE sku_stock.organization_id = $3
+                     ON CONFLICT (organization_id, sku) DO UPDATE SET location = EXCLUDED.location
                      RETURNING id`,
                     [skuStr, locationStr, orgId],
                 );

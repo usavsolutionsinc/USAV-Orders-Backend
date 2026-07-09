@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseFedExTrackingPayload } from '@/lib/shipping/providers/fedex';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // FedEx signs each push with an HMAC-SHA256 digest (base64) of the raw request
 // body keyed by the security token configured on the webhook project. The
@@ -126,27 +128,31 @@ export async function POST(req: NextRequest) {
   const payloads = splitIntoTrackResultPayloads(payload);
   let processed = 0;
   const trackingNumbers: string[] = [];
+  const orgId = transitionalUsavOrgId();
 
   for (const sub of payloads) {
     const result = parseFedExTrackingPayload(sub);
     if (!result?.trackingNumberNormalized) continue;
 
-    const existing = await getShipmentByTracking(result.trackingNumberNormalized);
+    const existing = await getShipmentByTracking(result.trackingNumberNormalized, orgId);
     const shipment = existing ?? await upsertShipment({
       trackingNumberRaw: result.trackingNumberNormalized,
       trackingNumberNormalized: result.trackingNumberNormalized,
       carrier: 'FEDEX',
       sourceSystem: 'fedex_webhook',
-    });
+    }, orgId);
+
+    const shipmentOrgId = (shipment.organization_id as OrgId | null) ?? orgId;
 
     await upsertTrackingEvents(
       shipment.id,
       'FEDEX',
       result.trackingNumberNormalized,
-      result.events
+      result.events,
+      shipmentOrgId,
     );
-    await updateShipmentSummary(shipment.id, result);
-    await publishShipmentStatusChange(shipment.id, 'fedex-webhook');
+    await updateShipmentSummary(shipment.id, result, shipmentOrgId);
+    await publishShipmentStatusChange(shipment.id, 'fedex-webhook', null, shipmentOrgId);
 
     processed += 1;
     trackingNumbers.push(result.trackingNumberNormalized);

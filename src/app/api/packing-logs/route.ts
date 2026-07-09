@@ -16,6 +16,8 @@ import { ensureReplenishmentForOrder } from '@/lib/replenishment';
 import { withAuth } from '@/lib/auth/withAuth';
 import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
 import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
+import { writeLedgerDelta } from '@/lib/inventory/write-ledger-delta';
+import type { ScanClassification } from '@/utils/packer';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -33,6 +35,14 @@ function resolvePackerStaffId(rawId: string | number | null | undefined): number
 
     const numeric = Number(normalized);
     return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function packTierFromCleanSize(cleanSize?: ScanClassification['cleanSize']): 'SMALL' | 'MEDIUM' | 'LARGE' | null {
+    if (!cleanSize) return null;
+    if (cleanSize === 'BIG') return 'LARGE';
+    if (cleanSize === 'MEDIUM') return 'MEDIUM';
+    if (cleanSize === 'SMALL') return 'SMALL';
+    return null;
 }
 
 /** Compute Sun–Sat PST week range from the current server time (matches client). */
@@ -635,6 +645,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     source: 'packing-logs',
                     tracking_type: classification.trackingType,
                     order_id: order.order_id ?? null,
+                    ...(classification.trackingType === 'CLEAN'
+                        ? {
+                            clean_size: classification.cleanSize ?? null,
+                            pack_tier: packTierFromCleanSize(classification.cleanSize),
+                          }
+                        : {}),
                 },
                 createdAt: foundCreatedAt,
             });
@@ -760,7 +776,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             );
             resolvedSkuTitle = ecwidLookup.rows[0]?.product_title || null;
 
-            // 2) Fall back to sku_stock for the SKU update + title.
+            // 2) Read sku_stock for title fallback; quantity changes go through ledger.
             const skuRows = await client.query(
                 'SELECT id, stock, sku, product_title FROM sku_stock WHERE organization_id = $1',
                 [ctx.organizationId],
@@ -773,25 +789,17 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 resolvedSkuTitle = target?.product_title || null;
             }
 
-            if (target) {
-                const currentQty = parseInt(target.stock || '0', 10) || 0;
-                const nextQty = Math.max(0, currentQty + addQty);
-                await client.query(
-                    `UPDATE sku_stock
-                     SET stock = $1,
-                         product_title = COALESCE(product_title, $2)
-                     WHERE id = $3
-                       AND organization_id = $4`,
-                    [String(nextQty), resolvedSkuTitle, target.id, ctx.organizationId]
-                );
-            } else {
-                await client.query(
-                    `INSERT INTO sku_stock (stock, sku, product_title, organization_id)
-                     VALUES ($1, $2, $3, $4::uuid)`,
-                    [String(Math.max(0, addQty)), normalizedBase, resolvedSkuTitle, ctx.organizationId]
-                );
+            if (addQty !== 0) {
+                await writeLedgerDelta(client, {
+                    orgId: ctx.organizationId,
+                    sku: normalizedBase,
+                    delta: addQty,
+                    reason: 'PACKER_SCAN',
+                    staffId,
+                    notes: `packing-logs non-order scan ${classification.normalizedInput}`,
+                });
             }
-            skuUpdated = true;
+            skuUpdated = addQty !== 0;
         }
 
         const nonOrderInsert = await client.query(`

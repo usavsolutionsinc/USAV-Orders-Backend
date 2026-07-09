@@ -14,9 +14,9 @@
  * re-mints it from the refresh token.
  */
 
-import pool from '@/lib/db';
 import {
   getIntegrationCredentials,
+  resolveUsavLegacyZohoCredentials,
   type ZohoCredentials,
 } from '@/lib/integrations/credentials';
 import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
@@ -50,45 +50,18 @@ function isComplete(creds: ZohoCredentials | null | undefined): creds is ZohoCre
 }
 
 /**
- * Transitional legacy bridge (USAV only) — mirrors the pre-vault runtime so
- * USAV keeps working off its CURRENT config while the vault is the SoT:
- *   - client id/secret + Zoho org id/data center from the ZOHO_* env vars
- *   - refresh token from ZOHO_REFRESH_TOKEN env, else the legacy
- *     `ebay_accounts.ZOHO_MAIN` row (where prod's token actually lives)
- *
- * This is the reason a plain env fallback was insufficient: the durable refresh
- * token is stored in the DB, not in env. Removed in Phase 5 once the vault row
- * is populated from a real (prod) connect/migration.
+ * Transitional env bridge (USAV only) — client id/secret + Zoho org id/DC from
+ * ZOHO_* env vars; refresh token from ZOHO_REFRESH_TOKEN env or ebay_accounts.ZOHO_MAIN.
  */
 async function loadLegacyZohoCredentials(orgId: OrgId): Promise<ZohoCredentials | null> {
   if (orgId !== USAV_ORG_ID) return null;
-
-  const clientId = (process.env.ZOHO_CLIENT_ID ?? '').trim();
-  const clientSecret = (process.env.ZOHO_CLIENT_SECRET ?? '').trim();
-  const zohoOrgId = (process.env.ZOHO_ORG_ID || process.env.ZOHO_ORGANIZATION_ID || '').trim();
-  const domain = (process.env.ZOHO_DOMAIN ?? '').trim() || 'accounts.zoho.com';
-  if (!clientId || !clientSecret || !zohoOrgId) return null;
-
-  let refreshToken = (process.env.ZOHO_REFRESH_TOKEN ?? '').trim();
-  if (!refreshToken) {
-    try {
-      const { rows } = await pool.query<{ refresh_token: string | null }>(
-        `SELECT refresh_token FROM ebay_accounts WHERE account_name = 'ZOHO_MAIN' LIMIT 1`,
-      );
-      refreshToken = (rows[0]?.refresh_token ?? '').trim();
-    } catch {
-      /* table/row may not exist — fall through to "not connected" */
-    }
-  }
-  if (!refreshToken) return null;
-
-  return { clientId, clientSecret, refreshToken, orgId: zohoOrgId, domain };
+  return resolveUsavLegacyZohoCredentials();
 }
 
 /**
  * Load the tenant's Zoho credentials. Resolution order — USAV can use BOTH:
  *   1. the per-tenant vault (organization_integrations, provider 'zoho') — SoT
- *   2. the legacy env + `ebay_accounts.ZOHO_MAIN` bridge (USAV transitional)
+ *   2. the legacy env bridge (USAV transitional — ZOHO_REFRESH_TOKEN env only)
  * Throws ZohoNotConnectedError when neither yields a usable connection so
  * callers surface a connect prompt instead of a generic 500.
  */

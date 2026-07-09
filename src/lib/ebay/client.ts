@@ -1,7 +1,7 @@
 import { eBayApi } from 'ebay-api';
 import pool from '@/lib/db';
 import { refreshEbayAccessToken, readEbayToken, writeEbayToken } from './token-refresh';
-import { getEbayAppCreds, type EbayAppCreds } from './credentials';
+import { getEbayAppCreds, EBAY_PLATFORM_PREDICATE, type EbayAppCreds } from './credentials';
 import { isEbaySandbox } from './oauth-config';
 import { tenantQuery } from '@/lib/tenancy/db';
 
@@ -61,7 +61,8 @@ export class EbayClient {
     if (this.orgId) return this.orgId;
     // RLS bypass lookup via pool (raw connection without GUC)
     const result = await pool.query(
-      'SELECT organization_id FROM ebay_accounts WHERE account_name = $1',
+      `SELECT organization_id FROM ebay_accounts
+        WHERE account_name = $1 AND ${EBAY_PLATFORM_PREDICATE}`,
       [this.accountName]
     );
     if (!result.rows[0]) {
@@ -173,7 +174,8 @@ export class EbayClient {
     // Query database for current token using tenantQuery for GUC/RLS context
     const result = await tenantQuery(
       orgId,
-      'SELECT access_token, token_expires_at, refresh_token FROM ebay_accounts WHERE account_name = $1 AND organization_id = $2',
+      `SELECT access_token, token_expires_at, refresh_token FROM ebay_accounts
+        WHERE account_name = $1 AND organization_id = $2 AND ${EBAY_PLATFORM_PREDICATE}`,
       [this.accountName, orgId]
     );
 

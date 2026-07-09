@@ -7,8 +7,14 @@ import {
   type ZohoCredentials,
 } from '@/lib/integrations/credentials';
 import { assertIntegrationKmsConfigured } from '@/lib/integrations/crypto';
+import { getInventoryBaseUrl } from '@/lib/zoho/url';
 
 export const dynamic = 'force-dynamic';
+
+/** Env-configured Zoho Inventory org id (USAV dogfood bootstrap). */
+function envZohoOrgId(): string {
+  return (process.env.ZOHO_ORG_ID || process.env.ZOHO_ORGANIZATION_ID || '').trim();
+}
 
 /**
  * GET /api/zoho/oauth/callback
@@ -172,13 +178,16 @@ export async function GET(request: NextRequest) {
   let zohoOrgId = existing?.orgId ?? '';
   let zohoOrgName: string | null = null;
   let organizationsSeen: Array<{ organization_id: string; name: string }> = [];
+  let orgListError: string | null = null;
+  const inventoryBase = getInventoryBaseUrl({ orgId: zohoOrgId || '0', domain: accountsDomainHost });
   try {
-    const orgsRes = await fetch(`${apiDomain}/inventory/v1/organizations`, {
+    const orgsRes = await fetch(`${inventoryBase}/organizations`, {
       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
       cache: 'no-store',
     });
+    const orgsText = await orgsRes.text();
     if (orgsRes.ok) {
-      const orgsJson = (await orgsRes.json()) as {
+      const orgsJson = JSON.parse(orgsText) as {
         organizations?: Array<{ organization_id?: string; name?: string }>;
       };
       organizationsSeen = (orgsJson.organizations ?? [])
@@ -192,9 +201,31 @@ export async function GET(request: NextRequest) {
         zohoOrgId = chosen.organization_id;
         zohoOrgName = chosen.name || null;
       }
+    } else {
+      let detail = orgsText.slice(0, 300);
+      try {
+        const parsed = JSON.parse(orgsText) as { message?: string; code?: number };
+        if (parsed.message) detail = parsed.message;
+      } catch {
+        // keep raw slice
+      }
+      orgListError = `HTTP ${orgsRes.status}: ${detail}`;
+      console.warn('[zoho-oauth] list organizations failed:', orgListError);
     }
-  } catch {
-    // Non-fatal: fall back to any previously stored org id.
+  } catch (err) {
+    orgListError = err instanceof Error ? err.message : String(err);
+    console.warn('[zoho-oauth] list organizations threw:', orgListError);
+  }
+
+  // Fallbacks when GET /organizations is denied or empty (e.g. missing
+  // ZohoInventory.settings.READ on a prior consent, or single-org bootstrap).
+  if (!zohoOrgId) {
+    const requested = searchParams.get('org')?.trim();
+    const envOrg = envZohoOrgId();
+    zohoOrgId = requested || existing?.orgId || envOrg || '';
+    if (zohoOrgId && !zohoOrgName) {
+      zohoOrgName = envOrg && zohoOrgId === envOrg ? 'Configured via ZOHO_ORG_ID' : null;
+    }
   }
 
   if (!zohoOrgId) {
@@ -203,7 +234,9 @@ export async function GET(request: NextRequest) {
         success: false,
         error: 'Could not determine the Zoho Inventory organization_id.',
         description:
-          'The token was issued but listing organizations failed. Ensure the ZohoInventory.* scopes were granted, then retry.',
+          orgListError ??
+          'The token was issued but listing organizations returned no rows. Ensure ZohoInventory.settings.READ was granted, set ZOHO_ORG_ID in env, or pass ?org=<zoho_org_id> on the callback URL.',
+        org_list_error: orgListError,
       },
       { status: 502 },
     );

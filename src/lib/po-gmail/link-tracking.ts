@@ -7,7 +7,7 @@
  * Industry pattern: lazily-derived cross-system link. The Gmail email is a
  * hint, never a source of truth — we only act on it when (a) the email
  * matches a known Zoho PO AND (b) that PO's `receiving` row has no
- * shipment_id yet. Anything else is a no-op; the next /api/qstash/shipping
+ * shipment_id yet. Anything else is a no-op; the next /api/cron/shipping
  * cron pulls carrier status separately.
  *
  * Idempotent: re-running on the same email + PO is safe — the upsert

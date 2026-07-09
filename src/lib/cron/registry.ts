@@ -42,7 +42,7 @@ export const CRON_JOBS: CronJobDef[] = [
   { job: 'zoho.fulfillment_sync', label: 'Zoho fulfillment sync', category: 'Zoho', schedule: 'every 4h + nightly full', expectedEveryMs: 4 * HOUR },
   { job: 'zoho.orders_ingest_drain', label: 'Order ingest queue drain', category: 'Zoho', schedule: 'every minute', expectedEveryMs: 1 * MIN },
   // Shipping
-  { job: 'shipping.sync_due', label: 'Carrier tracking sweep', category: 'Shipping', schedule: 'every 15 min + nightly deep', expectedEveryMs: 15 * MIN },
+  { job: 'shipping.sync_due', label: 'Carrier tracking sweep', category: 'Shipping', schedule: 'every ~15 min (staggered) + nightly deep 03:30', expectedEveryMs: 15 * MIN },
   { job: 'shipping.reconcile_delivered', label: 'Reconcile delivered', category: 'Shipping', schedule: 'hourly', expectedEveryMs: 1 * HOUR },
   { job: 'shipping.metrics', label: 'Shipping metrics', category: 'Shipping', schedule: 'every 30 min', expectedEveryMs: 30 * MIN },
   // Inventory

@@ -168,7 +168,7 @@ export async function POST(
       delta: -transferQty,
       staffId,
       reason: 'SWAP_OUT',
-    }, orgId);
+    }, idempotencyOrgId);
 
     // 2. put qty into the new SKU — same path.
     await adjustBinQty({
@@ -177,7 +177,7 @@ export async function POST(
       delta: transferQty,
       staffId,
       reason: 'SWAP_IN',
-    }, orgId);
+    }, idempotencyOrgId);
 
     // 3. inventory_events row for the lifecycle timeline — non-quantity
     //    event that joins the two ledger rows together by intent.

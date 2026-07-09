@@ -34,11 +34,14 @@ export const GET = withAuth(async (request: NextRequest) => {
 
   const redirectUri = `${appUrl}/api/zoho/oauth/callback`;
 
-  // Scopes required for Zoho Inventory receiving lines integration
-  // Bills scope is required to receive billed POs: createPurchaseReceive must
-  // GET /bills/{id} to map PO line_item_id → bill_item_id for the
-  // purchaseorder_bills shape Zoho requires when a PO already has bills.
+  // Scopes required for Zoho Inventory receiving lines integration.
+  // settings.READ is required for GET /organizations (discover organization_id
+  // during OAuth callback). Bills scope is required to receive billed POs:
+  // createPurchaseReceive must GET /bills/{id} to map PO line_item_id →
+  // bill_item_id for the purchaseorder_bills shape Zoho requires when a PO
+  // already has bills.
   const scope = [
+    'ZohoInventory.settings.READ',
     'ZohoInventory.purchaseorders.READ',
     'ZohoInventory.purchaseorders.CREATE',
     'ZohoInventory.purchaseorders.UPDATE',

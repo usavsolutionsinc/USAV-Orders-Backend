@@ -8,6 +8,7 @@ import {
   getFbaChannelName,
   getInboxChannelName,
   getOrdersChannelName,
+  getOpsPlansChannelName,
   getPackerBridgeChannelName,
   getRepairsChannelName,
   getScanLogChannelName,
@@ -153,6 +154,21 @@ async function publishEvent(channel: string, name: string, data: Record<string, 
 
 export async function publishDashboardUpdate(payload: DashboardUpdatePayload) {
   await publishEvent(getDashboardChannelName(payload.organizationId), payload.type, {
+    ...payload,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+export type OpsPlanUpdatedPayload = {
+  organizationId: string;
+  planId: string;
+  taskId?: string;
+  event: 'plan_updated' | 'task_assigned' | 'task_completed' | 'phase_done';
+  source: string;
+};
+
+export async function publishOpsPlanUpdated(payload: OpsPlanUpdatedPayload) {
+  await publishEvent(getOpsPlansChannelName(payload.organizationId), 'ops_plan.updated', {
     ...payload,
     timestamp: formatPSTTimestamp(),
   });

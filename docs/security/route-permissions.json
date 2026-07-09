@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-07T20:13:47Z",
-  "totalRoutes": 775,
+  "generatedAt": "2026-07-08T20:33:38Z",
+  "totalRoutes": 787,
   "summary": {
-    "permissionGated": 665,
+    "permissionGated": 677,
     "authenticatedNoPermission": 36,
     "anonymousIntentional": 72,
     "serviceToService": 2,
@@ -2957,6 +2957,118 @@
       ],
       "gate": "withAuth",
       "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/[id]/phases/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/from-template/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.plans.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/inbox/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.plans.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/phases/[phaseId]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/phases/[phaseId]/tasks/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.plans.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/tasks/[taskId]/claim/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.claim",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/tasks/[taskId]/complete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/tasks/[taskId]/links/[linkId]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/tasks/[taskId]/links/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ops-plans/tasks/[taskId]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.plans.manage",
       "exemptReason": null
     },
     {

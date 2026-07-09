@@ -6,6 +6,7 @@
  */
 import pool from '@/lib/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 import { syncAccountOrders } from '@/lib/ebay/sync';
 import type { SyncOutcome } from './types';
 
@@ -13,6 +14,7 @@ export async function ebaySync(orgId: OrgId): Promise<SyncOutcome> {
   const { rows } = await pool.query<{ account_name: string }>(
     `SELECT account_name FROM ebay_accounts
       WHERE organization_id = $1 AND is_active = true
+        AND ${EBAY_PLATFORM_PREDICATE}
       ORDER BY account_name`,
     [orgId],
   );

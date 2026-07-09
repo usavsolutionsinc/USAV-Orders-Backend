@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { classifyPackTier } from '@/lib/packing/pack-tier-classifier';
 
 /**
  * Writer for the shipped-table read model (`packer_log_enrichment`).
@@ -44,6 +45,17 @@ const ENRICHMENT_SELECT = /* sql */ `
     sku_lookup.sku_table_id                 AS sku_table_id,
     sku_lookup.sku_table_serial             AS sku_table_serial,
     sku_lookup.sku_table_static_sku         AS sku_table_static_sku,
+    COALESCE(NULLIF(TRIM(sal.metadata->>'sku'), ''), NULLIF(TRIM(o.sku), ''), NULLIF(TRIM(pl.scan_ref), '')) AS resolved_sku,
+    o.sku_catalog_id                        AS sku_catalog_id,
+    -- pack tier/minutes: prefer explicit SKU override (pack_profile_links), else metadata.pack_tier (CLEAN),
+    -- else rule-default MEDIUM (handled in KPI query if null). We store a best-effort value here.
+    COALESCE(p.pack_tier, NULLIF(TRIM(sal.metadata->>'pack_tier'), '')) AS pack_tier,
+    COALESCE(p.estimated_minutes, NULLIF(TRIM(sal.metadata->>'estimated_pack_minutes'), '')::int) AS estimated_pack_minutes,
+    CASE
+      WHEN p.pack_tier IS NOT NULL OR p.estimated_minutes IS NOT NULL THEN 'profile'
+      WHEN NULLIF(TRIM(sal.metadata->>'pack_tier'), '') IS NOT NULL THEN 'clean'
+      ELSE NULL
+    END AS tier_source,
     COALESCE(order_trackings.tracking_numbers, '[]'::json)::jsonb      AS tracking_numbers,
     COALESCE(order_trackings.tracking_number_rows, '[]'::json)::jsonb  AS tracking_number_rows
   FROM station_activity_logs sal
@@ -110,6 +122,15 @@ const ENRICHMENT_SELECT = /* sql */ `
       LIMIT 1
   ) order_match ON TRUE
   LEFT JOIN orders o ON o.id = order_match.id AND o.organization_id = sal.organization_id
+  LEFT JOIN LATERAL (
+      SELECT pp.pack_tier, pp.estimated_minutes
+      FROM pack_profile_links ppl
+      JOIN pack_profiles pp ON pp.id = ppl.pack_profile_id
+      WHERE ppl.organization_id = sal.organization_id
+        AND ppl.owner_type = 'SKU_CATALOG'
+        AND ppl.owner_id = o.sku_catalog_id
+      LIMIT 1
+  ) p ON TRUE
   LEFT JOIN LATERAL (
       SELECT COALESCE(
           NULLIF(BTRIM(sc_e.product_title), ''),
@@ -270,6 +291,45 @@ const ENRICHMENT_SELECT = /* sql */ `
   ) order_trackings ON TRUE
 `;
 
+/** Apply title/SKU rules when profile + CLEAN metadata did not set a tier. */
+async function applyRulesPackTierFallback(executor: Queryable, salIds: number[]): Promise<void> {
+  if (salIds.length === 0) return;
+
+  const needRules = await executor.query<{
+    sal_id: number;
+    product_title: string | null;
+    category: string | null;
+    sku: string | null;
+  }>(
+    `SELECT enr.sal_id,
+            COALESCE(enr.external_product_title, o.product_title) AS product_title,
+            sc.category,
+            COALESCE(enr.resolved_sku, o.sku) AS sku
+       FROM packer_log_enrichment enr
+       LEFT JOIN orders o ON o.id = enr.order_row_id AND o.organization_id = enr.organization_id
+       LEFT JOIN sku_catalog sc ON sc.id = enr.sku_catalog_id
+      WHERE enr.sal_id = ANY($1::int[])
+        AND enr.pack_tier IS NULL`,
+    [salIds],
+  );
+
+  for (const row of needRules.rows) {
+    const cls = classifyPackTier({
+      productTitle: row.product_title,
+      category: row.category,
+      sku: row.sku,
+    });
+    await executor.query(
+      `UPDATE packer_log_enrichment
+          SET pack_tier = $2,
+              estimated_pack_minutes = $3,
+              tier_source = 'rules'
+        WHERE sal_id = $1`,
+      [row.sal_id, cls.packTier, cls.estimatedMinutes],
+    );
+  }
+}
+
 /**
  * Compute + upsert the enrichment for the given PACK `station_activity_logs`
  * ids. No-op on an empty list. Non-PACK ids are ignored (the WHERE gates on
@@ -286,12 +346,16 @@ export async function computePackerLogEnrichment(
     `INSERT INTO packer_log_enrichment (
         sal_id, organization_id, order_row_id, external_product_title,
         sku_table_id, sku_table_serial, sku_table_static_sku,
-        tracking_numbers, tracking_number_rows, computed_at
+        tracking_numbers, tracking_number_rows,
+        pack_tier, estimated_pack_minutes, resolved_sku, sku_catalog_id, tier_source,
+        computed_at
      )
      SELECT
         src.sal_id, src.organization_id, src.order_row_id, src.external_product_title,
         src.sku_table_id, src.sku_table_serial, src.sku_table_static_sku,
-        src.tracking_numbers, src.tracking_number_rows, now()
+        src.tracking_numbers, src.tracking_number_rows,
+        src.pack_tier, src.estimated_pack_minutes, src.resolved_sku, src.sku_catalog_id, src.tier_source,
+        now()
      FROM ( ${ENRICHMENT_SELECT} WHERE sal.id = ANY($1) AND sal.station = 'PACK' ) src
      ON CONFLICT (sal_id) DO UPDATE SET
         organization_id        = EXCLUDED.organization_id,
@@ -302,9 +366,16 @@ export async function computePackerLogEnrichment(
         sku_table_static_sku   = EXCLUDED.sku_table_static_sku,
         tracking_numbers       = EXCLUDED.tracking_numbers,
         tracking_number_rows   = EXCLUDED.tracking_number_rows,
+        pack_tier              = EXCLUDED.pack_tier,
+        estimated_pack_minutes = EXCLUDED.estimated_pack_minutes,
+        resolved_sku           = EXCLUDED.resolved_sku,
+        sku_catalog_id         = EXCLUDED.sku_catalog_id,
+        tier_source            = EXCLUDED.tier_source,
         computed_at            = now()`,
     [ids],
   );
+
+  await applyRulesPackTierFallback(executor, ids);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
-import { deleteEbayAccount } from '@/lib/ebay/credentials';
+import { deleteEbayAccount, EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 
 /**
  * GET /api/ebay/accounts
@@ -23,7 +23,7 @@ export const GET = withAuth(async (req, ctx) => {
         platform,
         account_role
       FROM ebay_accounts
-      WHERE organization_id = $1
+      WHERE organization_id = $1 AND ${EBAY_PLATFORM_PREDICATE}
       ORDER BY account_name`,
       [ctx.organizationId]
     );

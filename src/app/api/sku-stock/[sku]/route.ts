@@ -506,10 +506,8 @@ export async function PATCH(
         );
       }
 
-      // Tenant-owned read + upsert run through the GUC wrapper; the fresh
-      // INSERT auto-stamps organization_id from the GUC default. The
-      // ON CONFLICT (sku) target is global by data-model (UNIQUE(sku)), left
-      // unchanged. Explicit organization_id predicate on the read is a backstop.
+      // Tenant-owned read + upsert run through the GUC wrapper; metadata-only
+      // upsert uses composite ON CONFLICT (organization_id, sku).
       const prior = await withTenantTransaction(idempotencyOrgId, async (client) => {
         // Capture the prior title so the audit row carries the diff.
         const r = await client.query<{ display_name_override: string | null; product_title: string | null }>(
@@ -521,7 +519,7 @@ export async function PATCH(
         await client.query(
           `INSERT INTO sku_stock (sku, display_name_override, stock, organization_id)
            VALUES ($1, $2, 0, $3::uuid)
-           ON CONFLICT (sku)
+           ON CONFLICT (organization_id, sku)
            DO UPDATE SET display_name_override = EXCLUDED.display_name_override,
                          updated_at = NOW()`,
           [skuValue, nextTitle, idempotencyOrgId],

@@ -253,10 +253,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // organization_id auto-stamps from the app.current_org GUC default.
         const ledgerInsert = await client.query<{ id: number }>(
           `INSERT INTO sku_stock_ledger
-             (sku, delta, reason, dimension, staff_id, ref_sal_id, notes)
-           VALUES ($1, $2, 'PICKED', 'WAREHOUSE', $3, $4, $5)
+             (organization_id, sku, delta, reason, dimension, staff_id, ref_sal_id, notes)
+           VALUES ($1, $2, $3, 'PICKED', 'WAREHOUSE', $4, $5, $6)
            RETURNING id`,
-          [canonicalSku, -qtyToDecrement, staffId, salIdNum, `tech.scan-sku ${fullSkuCode}`],
+          [ctx.organizationId, canonicalSku, -qtyToDecrement, staffId, salIdNum, `tech.scan-sku ${fullSkuCode}`],
         );
         ledgerIdForPublish = ledgerInsert.rows[0]?.id ?? null;
         canonicalSkuForPublish = canonicalSku;

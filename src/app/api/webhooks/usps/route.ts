@@ -33,6 +33,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseUSPSTrackingPayload } from '@/lib/shipping/providers/usps';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // USPS may echo the shared secret in a header, or sign the body. Header names
 // aren't pinned down publicly; check known variants + an override.
@@ -114,27 +116,31 @@ export async function POST(req: NextRequest) {
   const notifications = splitIntoNotifications(payload);
   let processed = 0;
   const trackingNumbers: string[] = [];
+  const orgId = transitionalUsavOrgId();
 
   for (const note of notifications) {
     const result = parseUSPSTrackingPayload(note);
     if (!result?.trackingNumberNormalized) continue;
 
-    const existing = await getShipmentByTracking(result.trackingNumberNormalized);
+    const existing = await getShipmentByTracking(result.trackingNumberNormalized, orgId);
     const shipment = existing ?? await upsertShipment({
       trackingNumberRaw: result.trackingNumberNormalized,
       trackingNumberNormalized: result.trackingNumberNormalized,
       carrier: 'USPS',
       sourceSystem: 'usps_webhook',
-    });
+    }, orgId);
+
+    const shipmentOrgId = (shipment.organization_id as OrgId | null) ?? orgId;
 
     await upsertTrackingEvents(
       shipment.id,
       'USPS',
       result.trackingNumberNormalized,
       result.events,
+      shipmentOrgId,
     );
-    await updateShipmentSummary(shipment.id, result);
-    await publishShipmentStatusChange(shipment.id, 'usps-webhook');
+    await updateShipmentSummary(shipment.id, result, shipmentOrgId);
+    await publishShipmentStatusChange(shipment.id, 'usps-webhook', null, shipmentOrgId);
 
     processed += 1;
     trackingNumbers.push(result.trackingNumberNormalized);

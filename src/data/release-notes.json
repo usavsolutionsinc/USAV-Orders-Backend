@@ -1,7 +1,47 @@
 {
-  "generatedAt": "2026-07-06T04:52:26.490Z",
+  "generatedAt": "2026-07-08T19:22:21.035Z",
   "count": 198,
   "commits": [
+    {
+      "sha": "f5eedd6a14deb095f0e8d11e946beab3e6bbb86d",
+      "shortSha": "f5eedd6a",
+      "date": "2026-07-08T08:53:23-07:00",
+      "author": "DENSENSE8",
+      "subject": "receiving mode and unbox mode",
+      "body": "",
+      "type": "other",
+      "title": "receiving mode and unbox mode"
+    },
+    {
+      "sha": "4c55d7dfa94a07ded8854cf59de6a0a4d524f0b4",
+      "shortSha": "4c55d7df",
+      "date": "2026-07-06T16:55:55-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Ship universal Incoming phases 4–6 and scope Zendesk API calls per tenant.",
+      "body": "Adds inbound manual link/merge, eBay incoming tab, studio data sources and publish validation, QA org provisioning, and passes organizationId through all Zendesk claim and support routes so credentials resolve from the org vault instead of env-only.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Ship universal Incoming phases 4–6 and scope Zendesk API calls per tenant."
+    },
+    {
+      "sha": "fcb1738c5e94f78ca8d4aead7f10a2c4241d9071",
+      "shortSha": "fcb1738c",
+      "date": "2026-07-06T08:51:27-07:00",
+      "author": "DENSENSE8",
+      "subject": "Ship receiving unbox tabs, optimistic serials, label manifests, and ops history browse.",
+      "body": "Tab PO Items and carton units in one card with shared header row; optimistic add/remove serial chips with scan refocus. Add label manifest/print-job APIs and migrations, box workbench + prebox wizard, operations history filters and journey links, table density controls, and retire standalone audit-log pages in favor of consolidated ops history.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Ship receiving unbox tabs, optimistic serials, label manifests, and ops history browse."
+    },
+    {
+      "sha": "995d20037e97dbb1209b4ba1e0ef407908f1a16e",
+      "shortSha": "995d2003",
+      "date": "2026-07-05T23:40:51-07:00",
+      "author": "DENSENSE8",
+      "subject": "Ship studio operator surfaces, unified header search, and receiving spine refactor.",
+      "body": "Adds surface resolver/composition for unbox, triage, pack, incoming, pickup, and tech; consolidates global header search with recents and scope tabs; renames receiving spine tables with nav definitions and pack checklist APIs; virtualizes unshipped queue with feed-membership projection; refactors quick-access panel shell, detail stacks, operations history, NAS document mirror cron, and right-rail shipping sidebar.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Ship studio operator surfaces, unified header search, and receiving spine refactor."
+    },
     {
       "sha": "9ff06ae22d4ceb36e0606eca9529e716df56631e",
       "shortSha": "9ff06ae2",
@@ -1941,46 +1981,6 @@
       "body": "UI / sidebar\n- Add FbaCombineWorkspace and refresh FBA sidebar rails, paired review,\n  active shipments, scan field, and board table\n- Smooth sidebar selection/section animations (DashboardSidebar,\n  SidebarRailShell, SidebarSectionList, TechSidebarPanel)\n- Receiving sidebar/rail + station updates (incoming details, recent rails,\n  scan bar, PO lines, pending unboxing, unit slots)\n\nReceiving\n- Add workflow-stages module and wire receive-line + receiving-lines route\n- New e2e-receiving-workflow-views script\n\nAuth / integrations\n- Add StepUpProvider for client-side step-up (403 STEPUP_REQUIRED) handling\n- eBay token refresh/client + integrations crypto hardening\n\nChore\n- Regenerated release notes, architecture diagrams, sw.js, next-env.d.ts\n- Remove stale .claude/scheduled_tasks.lock\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
       "type": "feature",
       "title": "FBA combine workspace, receiving workflow stages, step-up client wiring + sidebar polish"
-    },
-    {
-      "sha": "2214870b78c5c323c294eeef04614e3b95f83a54",
-      "shortSha": "2214870b",
-      "date": "2026-05-29T09:15:03-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix(ebay-e2e-script): type the filter callback so prod build passes",
-      "body": "Implicit any in rows.filter((r) => r.itemNumber) was blocking the\nproduction Next.js build. Annotates with ReturnType<typeof summarizeOrder>\nmatching the forEach above.\n\nUnblocks shipping/sync-due Vercel cron + FedEx normalize fix from\nlanding in prod.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "fix",
-      "title": "type the filter callback so prod build passes"
-    },
-    {
-      "sha": "bdb0d583efd5b05b1edf1d1e0c4333134dc4729f",
-      "shortSha": "bdb0d583",
-      "date": "2026-05-28T16:58:59-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "FBA ai chat and recieving and testing updates to UI and flow - simpler and more robust",
-      "body": "",
-      "type": "other",
-      "title": "FBA ai chat and recieving and testing updates to UI and flow - simpler and more robust"
-    },
-    {
-      "sha": "38623bc3d612a1843cd3b3fe2caf6631369c3daa",
-      "shortSha": "38623bc3",
-      "date": "2026-05-27T16:59:45-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "shipping updates and receiving incoming page",
-      "body": "",
-      "type": "other",
-      "title": "shipping updates and receiving incoming page"
-    },
-    {
-      "sha": "6e75b78bc3a8307866602bb9fd96af9c21e1823b",
-      "shortSha": "6e75b78b",
-      "date": "2026-05-27T10:36:25-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "receiving udpate adn the testing sub page update",
-      "body": "",
-      "type": "other",
-      "title": "receiving udpate adn the testing sub page update"
     }
   ]
 }

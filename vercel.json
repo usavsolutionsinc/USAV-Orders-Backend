@@ -22,11 +22,11 @@
     },
     {
       "path": "/api/cron/shipping/sync-due?limit=150&concurrency=8",
-      "schedule": "*/15 * * * *"
+      "schedule": "7,22,37,52 * * * *"
     },
     {
       "path": "/api/cron/shipping/sync-due?limit=200&concurrency=8&carriers=UPS,FEDEX",
-      "schedule": "0 0 * * 2-6"
+      "schedule": "30 3 * * 2-6"
     },
     {
       "path": "/api/cron/shipping/reconcile-delivered",

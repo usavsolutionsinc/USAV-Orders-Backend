@@ -1,0 +1,33 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- sku_stock: phase 2 (CONTRACT) — drop global UNIQUE(sku), keep composite only
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⚠️ DO NOT APPLY until tenant #2 is onboarded AND all ON CONFLICT (sku) sites
+-- on sku_stock are flipped to ON CONFLICT (organization_id, sku).
+--
+-- Gated filename (.gated) — skipped by scripts/run-pending-migrations.mjs.
+-- Apply manually when ready: rename to .sql or run via psql.
+--
+-- Code sites flipped in the 2026-07-08 hardening PR:
+--   - src/lib/neon/location-queries.ts (adjustBinQty — ledger-only, no conflict)
+--   - src/app/api/update-sku-location/route.ts
+--   - src/app/api/sku-stock/[sku]/route.ts (rename display_name_override)
+
+DO $$
+DECLARE
+  c record;
+BEGIN
+  FOR c IN
+    SELECT con.conname
+    FROM pg_constraint con
+    JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)
+    WHERE con.conrelid = 'sku_stock'::regclass
+      AND con.contype = 'u'
+    GROUP BY con.conname, con.conrelid
+    HAVING array_agg(a.attname::text ORDER BY a.attname::text) = ARRAY['sku']::text[]
+  LOOP
+    EXECUTE format('ALTER TABLE sku_stock DROP CONSTRAINT IF EXISTS %I', c.conname);
+  END LOOP;
+
+  -- sku_stock_sku_key index from 2026-04-15 (if present as standalone index)
+  DROP INDEX IF EXISTS sku_stock_sku_key;
+END $$;

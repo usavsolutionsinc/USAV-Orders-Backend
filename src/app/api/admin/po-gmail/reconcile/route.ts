@@ -11,7 +11,7 @@
  * Zoho PO an hour after emailing us" case).
  *
  * This is the read+reconcile pipeline. No Zoho API calls — webhooks +
- * the QStash safety-net cron keep receiving_lines populated.
+ * the shipping sync cron keep receiving_lines populated.
  *
  * The core pipeline lives in `@/lib/po-gmail/reconcile-run`; this admin
  * route returns the FULL payload (incl. per-message email bodies) for the

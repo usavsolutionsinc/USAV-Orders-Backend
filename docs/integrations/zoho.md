@@ -8,6 +8,7 @@ ingestion, a local PO **mirror**, and a delta/full cron schedule. Fully built an
 ## Auth (OAuth 2.0, server-side)
 
 - `GET /api/zoho/oauth/authorize` (auth-protected) → Zoho consent. Scopes requested:
+  `ZohoInventory.settings.READ` (required for `GET /organizations` during callback),
   `ZohoInventory.purchaseorders.{READ,CREATE,UPDATE}`,
   `ZohoInventory.purchasereceives.{READ,CREATE}`, `ZohoInventory.bills.READ`,
   `ZohoInventory.items.READ`, `ZohoInventory.warehouses.READ`.

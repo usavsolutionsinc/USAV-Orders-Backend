@@ -99,3 +99,25 @@ export function decryptIntegrationPayload<T = unknown>(envelope: string): T {
   const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   return JSON.parse(plain.toString('utf8')) as T;
 }
+
+/**
+ * Store an integration payload. Encrypts when INTEGRATION_KMS_KEY is configured;
+ * otherwise JSON-stringifies for local dev (mirrors writeEbayToken).
+ */
+export function serializeIntegrationPayload(plaintext: unknown): string {
+  if (isIntegrationKmsConfigured()) return encryptIntegrationPayload(plaintext);
+  assertIntegrationKmsConfigured('integration credentials');
+  return JSON.stringify(plaintext);
+}
+
+/**
+ * Read a stored integration payload — encrypted envelope or dev plaintext JSON.
+ */
+export function parseIntegrationPayload<T = unknown>(stored: string): T {
+  const raw = stored.trim();
+  if (!raw) throw new Error('integration payload is empty');
+  if (raw.startsWith('{') || raw.startsWith('[')) {
+    return JSON.parse(raw) as T;
+  }
+  return decryptIntegrationPayload<T>(raw);
+}

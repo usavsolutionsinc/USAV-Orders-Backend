@@ -35,7 +35,9 @@ function fakes(opts: { candidates?: Array<Record<string, unknown>>; losers?: Arr
   const client: TxClient = {
     query: (async (sql: string, params: unknown[] = []) => {
       calls.push({ sql, params });
-      if (/SELECT zoho_reference_number, zoho_notes/.test(sql)) return { rows: [{ zoho_reference_number: null, zoho_notes: null, zoho_purchaseorder_number: 'PO-1' }], rowCount: 1 };
+      if (/shipping_tracking_numbers stn/.test(sql)) {
+        return { rows: [{ tracking_number: null, zoho_reference_number: null, zoho_notes: null, zoho_purchaseorder_number: 'PO-1' }], rowCount: 1 };
+      }
       if (/JOIN inbound_purchase_order_links el/.test(sql)) return { rows: opts.candidates ?? [], rowCount: (opts.candidates ?? []).length };
       if (/SELECT rl\.id, rl\.zoho_purchaseorder_id/.test(sql)) return { rows: opts.losers ?? [], rowCount: (opts.losers ?? []).length };
       return { rows: [], rowCount: 1 };
@@ -61,7 +63,7 @@ test('no candidates → nothing merged', async () => {
 test('one match + one loser → full merge: link + equivalence + delete loser + merge log', async () => {
   const { deps, calls, linkCalls, equivCalls } = fakes({
     candidates: [{ receiving_line_id: 50, source_order_id: '12-34567-89012', sku: 'SKU', tracking: '1Z999AA10123456784' }],
-    losers: [{ id: 77, zoho_purchaseorder_id: 'Z-1', zoho_purchaseorder_number: 'PO-1', zoho_line_item_id: 'L9', zoho_item_id: 'I9', zoho_reference_number: '1Z999AA10123456784' }],
+    losers: [{ id: 77, zoho_purchaseorder_id: 'Z-1', zoho_purchaseorder_number: 'PO-1', zoho_line_item_id: 'L9', zoho_item_id: 'I9' }],
   });
   const r = await mergeEbayLinesIntoZohoPo(ORG, SIGNALS, deps);
 
@@ -87,7 +89,7 @@ test('ambiguous (2 matches, 1 loser) → augment both, never delete', async () =
       { receiving_line_id: 50, source_order_id: '12-34567-89012', sku: 'A', tracking: '1Z999AA10123456784' },
       { receiving_line_id: 51, source_order_id: '99-88888-77777', sku: 'B', tracking: '1Z999AA10123456784' },
     ],
-    losers: [{ id: 77, zoho_purchaseorder_id: 'Z-1', zoho_purchaseorder_number: 'PO-1', zoho_line_item_id: 'L9', zoho_item_id: 'I9', zoho_reference_number: '1Z999AA10123456784' }],
+    losers: [{ id: 77, zoho_purchaseorder_id: 'Z-1', zoho_purchaseorder_number: 'PO-1', zoho_line_item_id: 'L9', zoho_item_id: 'I9' }],
   });
   const r = await mergeEbayLinesIntoZohoPo(ORG, SIGNALS, deps);
   assert.equal(r.matched, 2);

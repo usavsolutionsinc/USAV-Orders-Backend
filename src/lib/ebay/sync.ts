@@ -1,5 +1,6 @@
 import { EbayClient } from './client';
 import pool from '@/lib/db';
+import { EBAY_PLATFORM_PREDICATE } from './credentials';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { formatApiInstant, normalizePSTTimestamp } from '@/utils/date';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
@@ -422,7 +423,9 @@ export async function syncAllAccounts(): Promise<Array<{
   // Enumerate (account_name, organization_id) so each account's sync stamps
   // orders/exceptions with the account's OWNER org — not a hardcoded USAV.
   const accountsResult = await pool.query<{ account_name: string; organization_id: string }>(
-    'SELECT account_name, organization_id FROM ebay_accounts WHERE is_active = true ORDER BY account_name'
+    `SELECT account_name, organization_id FROM ebay_accounts
+     WHERE is_active = true AND ${EBAY_PLATFORM_PREDICATE}
+     ORDER BY account_name`
   );
 
   const accounts = accountsResult.rows;
@@ -458,7 +461,7 @@ export async function getSyncStatus(orgId: string) {
       token_expires_at,
       created_at
     FROM ebay_accounts
-    WHERE organization_id = $1
+    WHERE organization_id = $1 AND ${EBAY_PLATFORM_PREDICATE}
     ORDER BY account_name`,
     [orgId]
   );

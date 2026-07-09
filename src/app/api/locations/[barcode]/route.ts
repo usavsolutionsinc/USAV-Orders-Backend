@@ -248,7 +248,7 @@ export async function PATCH(
         reason: reason || 'TAKEN',
         reasonCodeId: reasonCodeId ?? null,
         notes: notes ?? null,
-      }, orgId);
+      }, idempotencyOrgId);
       await recordAudit(pool, ctx, request, {
         source: 'mobile-scanner',
         action: AUDIT_ACTION.SKU_STOCK_ADJUST,
@@ -283,7 +283,7 @@ export async function PATCH(
         reason: reason || 'RECEIVED',
         reasonCodeId: reasonCodeId ?? null,
         notes: notes ?? null,
-      }, orgId);
+      }, idempotencyOrgId);
       await recordAudit(pool, ctx, request, {
         source: 'mobile-scanner',
         action: AUDIT_ACTION.SKU_STOCK_ADJUST,
@@ -322,7 +322,7 @@ export async function PATCH(
           minQty: minQty ?? null,
           maxQty: maxQty ?? null,
           expectedUpdatedAt: expectedUpdatedAt.trim(),
-        }, orgId);
+        }, idempotencyOrgId);
         if (!versioned.ok) {
           return respond(
             {
@@ -345,7 +345,7 @@ export async function PATCH(
         qty,
         minQty: minQty ?? null,
         maxQty: maxQty ?? null,
-      }, orgId);
+      }, idempotencyOrgId);
       await recordAudit(pool, ctx, request, {
         source: 'mobile-scanner',
         action: AUDIT_ACTION.SKU_STOCK_ADJUST,
