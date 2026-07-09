@@ -1221,9 +1221,12 @@ export async function handleReceivingLinesGet(
                 r.unboxed_by                 AS receiving_unboxed_by,
                 staff_rb.name                AS received_by_name,
                 staff_ub.name                AS unboxed_by_name,
-                ${view === 'unbox_opened'
-                  ? `COALESCE(r.unbox_opened_at, unbox_open.unbox_opened_at, ops_scan.first_scanned_at, scan_first.scanned_at)::text`
-                  : `COALESCE(ops_scan.first_scanned_at, scan_first.scanned_at)::text`}  AS first_scanned_at,
+                -- first_scanned_at is the genuine door/tracking scan ONLY. It feeds
+                -- the "Scanned" display (row.scanned_at → tracking_scanned_at), which
+                -- is triage-owned — never fold unbox_opened_at in here or opening a
+                -- carton in Unbox would visibly bump "Scanned". The unbox-open time is
+                -- returned separately as unbox_opened_at (line ~1090) for the unbox rail.
+                COALESCE(ops_scan.first_scanned_at, scan_first.scanned_at)::text  AS first_scanned_at,
                 scan_first.scanned_by        AS first_scanned_by,
                 staff_sb.name                AS scanned_by_name,
                 r.source                     AS receiving_source,
@@ -2281,7 +2284,10 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     unit_price: null,
     receiving_type: 'PO',
     created_at: pkg.created_at,
-    first_scanned_at: pkg.unbox_opened_at ?? pkg.first_scanned_at,
+    // Genuine door scan only — the "Scanned" display is triage-owned. The
+    // unbox-open time stays in its own first-class field below, never folded into
+    // first_scanned_at (which would make "Scanned" react to opening in Unbox).
+    first_scanned_at: pkg.first_scanned_at,
     unbox_opened_at: pkg.unbox_opened_at ?? null,
     last_scan_at: pkg.last_scan_at,
     image_url: null,

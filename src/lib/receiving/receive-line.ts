@@ -627,7 +627,16 @@ export async function receiveLineUnits(
            WHEN $7::text = 'DONE'
              THEN 'DONE'::inbound_workflow_status_enum
            WHEN $7::text = 'UNBOXED'
-             THEN 'UNBOXED'::inbound_workflow_status_enum
+             THEN CASE
+               -- Advance-only: never walk an already-testing/received line back to
+               -- UNBOXED (mirrors the MATCHED branch guard). A real receive advances
+               -- EXPECTED/ARRIVED/MATCHED straight to UNBOXED — skipping the coarse
+               -- SCANNED state so it never stamps the triage-owned scanned_at.
+               WHEN $8::boolean = true
+                    AND workflow_status IN ('AWAITING_TEST','IN_TEST','PASSED','FAILED','RTV','SCRAP','DONE')
+                 THEN workflow_status
+               ELSE 'UNBOXED'::inbound_workflow_status_enum
+             END
            WHEN $7::text = 'MATCHED'
              THEN CASE
                -- Advance-only: never walk an already-unboxed/received line back to

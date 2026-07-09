@@ -15,11 +15,49 @@
  */
 export type RedisCommand = (string | number)[];
 
-const REST_URL = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, '');
-const REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+// Resolve the Upstash REST credentials from EITHER naming convention:
+//   • UPSTASH_REDIS_REST_URL / _TOKEN — Upstash's own integration
+//   • KV_REST_API_URL / KV_REST_API_TOKEN — Vercel-KV / marketplace naming
+// Both point at the same Upstash REST endpoint and speak the same `/pipeline`
+// protocol, so either lights up the cache + distributed rate limiter + workflow
+// lock. Reading only UPSTASH_* silently disabled ALL of them when the env only
+// had KV_REST_API_* (the 2026-07 shipped-table + rate-limit regression). Always
+// the read/write token — never KV_REST_API_READ_ONLY_TOKEN (it can't SET).
+const REST_URL = (
+  process.env.UPSTASH_REDIS_REST_URL ||
+  process.env.KV_REST_API_URL ||
+  ''
+).replace(/\/+$/, '');
+const REST_TOKEN =
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  process.env.KV_REST_API_TOKEN ||
+  '';
 
 export function isRedisConfigured(): boolean {
   return Boolean(REST_URL && REST_TOKEN);
+}
+
+/**
+ * The resolved REST target ({ url, token }). One source of truth so health
+ * probes and other consumers never re-read `process.env` (and re-introduce a
+ * naming mismatch). `url` has any trailing slash stripped; both are '' when
+ * unconfigured.
+ */
+export function redisRestTarget(): { url: string; token: string } {
+  return { url: REST_URL, token: REST_TOKEN };
+}
+
+// Loud, once-per-process tripwire: an unconfigured Redis means every cache-aside
+// path, the distributed rate limiter, and the workflow lock silently degrade to
+// the DB / in-memory fallback. Surface it at boot instead of failing open in
+// silence — the exact failure mode that hid the regression above. Server-only;
+// skipped in tests.
+if (typeof window === 'undefined' && !isRedisConfigured() && process.env.NODE_ENV !== 'test') {
+  console.warn(
+    '[redis] No Upstash REST creds found (checked UPSTASH_REDIS_REST_URL/TOKEN and ' +
+      'KV_REST_API_URL/TOKEN). Cache, distributed rate limiting, and workflow locks ' +
+      'are DISABLED — all paths run their DB / in-memory fallback.',
+  );
 }
 
 function pipelineUrl(): string {

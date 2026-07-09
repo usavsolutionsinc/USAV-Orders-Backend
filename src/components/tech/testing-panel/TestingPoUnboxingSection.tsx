@@ -37,7 +37,16 @@ export function TestingPoUnboxingSection({
   const router = useRouter();
   const [pairingOpen, setPairingOpen] = useState(true);
 
-  if (row.receiving_id == null) return null;
+  if (row.receiving_id == null) {
+    // No carton yet — render only the PO-items block, which now supports serial
+    // entry for a carton-less real line (attach-by-line-id). Package pairing +
+    // the unfound auto-match strip both need a carton, so they're omitted here.
+    return (
+      <WorkspaceCard overflow="visible">
+        <TestingPoItemsSection row={row} staffId={staffId} c={c} embedded />
+      </WorkspaceCard>
+    );
+  }
 
   const receivingId = row.receiving_id;
   // Same gate unbox uses for its auto-match strip + local-receive path

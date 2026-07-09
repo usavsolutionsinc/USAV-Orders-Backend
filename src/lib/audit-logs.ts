@@ -197,6 +197,7 @@ export const AUDIT_ACTION = {
   SERIAL_SCAN:   'serial.scan',
   SERIAL_CREATE: 'serial.create',
   SERIAL_DELETE: 'serial.delete',
+  SERIAL_MOVE:   'serial.move',
   // Per-unit listing on a sales channel (engine Phase 1.4 'listed' fact)
   SERIAL_LIST:   'serial.list',
   // Handling units (LPN) — license-plated boxes/trays

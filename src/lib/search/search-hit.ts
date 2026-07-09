@@ -83,7 +83,11 @@ export function isUiEntityType(value: string): value is SearchHitEntityType {
 export function searchHitHref(dbType: SearchEntityType, entityId: number): string {
   switch (dbType) {
     case 'ORDER':
-      return `/dashboard?openOrderId=${entityId}`;
+      // Full-page order view (Shopify-style). The dashboard slide-over stays the
+      // in-place experience (row-click + right-rail detail-stack); a search/⌘K
+      // navigation deep-links to the canonical page. Keep this in sync with the
+      // exact-arm href in global-entity-search.ts.
+      return `/o/${entityId}`;
     case 'SERIAL_UNIT':
       return `/inventory/units?unit=${entityId}`;
     case 'RECEIVING':

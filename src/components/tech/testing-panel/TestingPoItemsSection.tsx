@@ -7,6 +7,7 @@ import { type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { TestingController } from './testing-panel-types';
 import { TestingLineSlot, confirmDeleteSerial } from './TestingLineSlot';
+import { TestingSerialLinkControls } from './TestingSerialLinkControls';
 import {
   shouldUseUnmatchedItemsSurface,
 } from '@/lib/receiving/intake-items-routing';
@@ -34,7 +35,36 @@ export function TestingPoItemsSection({
   embedded = false,
   headerRight,
 }: Props) {
-  if (row.receiving_id == null) return null;
+  if (row.receiving_id == null) {
+    // Not linked to a carton yet — no longer a dead end. A REAL line (positive
+    // id) can still take a serial (the scan-serial route attaches by
+    // receiving_line_id), so render a standalone entry; a synthetic stub
+    // (negative id) has no line to attach to, so teach the next step instead.
+    if (row.id > 0) {
+      return (
+        <div className="space-y-2">
+          <InlineNotice tone="info" size="sm" title="Not linked to a carton">
+            You can still scan the returned unit&apos;s serial here — link a PO from
+            the header when ready.
+          </InlineNotice>
+          <TestingLineSlot
+            c={c}
+            lineId={row.id}
+            serials={(row.serials ?? []) as UnitSlotSerial[]}
+            expected={row.quantity_expected ?? null}
+            disabled={c.saving}
+            selectedIndex={c.activeSlot}
+            autoFocus
+          />
+        </div>
+      );
+    }
+    return (
+      <InlineNotice tone="info" size="sm" title="No carton linked">
+        Link a PO from the header to add serials to this line.
+      </InlineNotice>
+    );
+  }
 
   if (shouldUseUnmatchedItemsSurface(row)) {
     // Freshly-scanned unfound carton with no line yet — the synthetic stub row
@@ -80,6 +110,9 @@ export function TestingPoItemsSection({
       headerRight={headerRight}
       placeholderActiveRow={row}
       hideNoTestLines
+      renderTitleActions={(line) => (
+        <TestingSerialLinkControls carton={row} line={line} staffId={staffId} />
+      )}
       activeSerialActions={{
         editingSerialId: c.headerSerialEdit?.id ?? null,
         onEdit: (s) => c.setHeaderSerialEdit(s as UnitSlotSerial),

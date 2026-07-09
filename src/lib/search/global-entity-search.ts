@@ -70,7 +70,9 @@ export async function searchOrders(orgId: OrgId, query: string, limit: number): 
     subtitle: [row.order_id, row.serial_number, row.sku, row.account_source]
       .filter(Boolean)
       .join(' · '),
-    href: `/dashboard?openOrderId=${row.id}`,
+    // Canonical full-page order view — kept in sync with searchHitHref('ORDER')
+    // so exact-arm and doc-arm hits for the same order deep-link identically.
+    href: `/o/${row.id}`,
     matchField: 'order',
   }));
 }

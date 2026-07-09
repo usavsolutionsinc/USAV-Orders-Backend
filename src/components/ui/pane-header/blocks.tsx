@@ -225,6 +225,13 @@ interface PaneHeaderTabsProps<TValue extends string> {
   value: TValue;
   onChange: (next: TValue) => void;
   className?: string;
+  /**
+   * Condensed strip — tighter padding + smaller type for panes where the tab row
+   * competes for vertical space (e.g. the shipped slide-over, which pairs it with
+   * an action bar and now a full-page launcher). Default keeps the roomy sizing
+   * every existing consumer (Lines / Receiving / Audit / Photos) relies on.
+   */
+  dense?: boolean;
 }
 
 export function PaneHeaderTabs<TValue extends string>({
@@ -232,12 +239,14 @@ export function PaneHeaderTabs<TValue extends string>({
   value,
   onChange,
   className,
+  dense = false,
 }: PaneHeaderTabsProps<TValue>) {
   return (
     <div
       role="tablist"
       className={cn(
-        'flex items-center gap-1 bg-surface-card px-2 py-1',
+        'flex items-center bg-surface-card',
+        dense ? 'gap-0.5 px-1 py-0.5' : 'gap-1 px-2 py-1',
         className,
       )}
     >
@@ -252,7 +261,10 @@ export function PaneHeaderTabs<TValue extends string>({
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+              'inline-flex items-center font-semibold transition-colors',
+              dense
+                ? 'gap-1 rounded px-2 py-1 text-[11px]'
+                : 'gap-1.5 rounded-md px-3 py-1.5 text-xs',
               active
                 ? 'bg-surface-inverse text-white'
                 : 'text-text-muted hover:bg-surface-sunken hover:text-text-default',

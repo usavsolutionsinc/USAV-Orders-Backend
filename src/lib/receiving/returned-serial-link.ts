@@ -30,7 +30,8 @@
 import type { PoolClient } from 'pg';
 import { withTenantTransaction, tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
-import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
+import { resolvePriorOutbound, normalizeSerial, upsertSerialUnit } from '@/lib/neon/serial-units-queries';
+import { attachSerialToLine } from '@/lib/receiving/serial-attach';
 import { recordInventoryEvent } from '@/lib/inventory/events';
 import { upsertReceivingLineReturn } from '@/lib/receiving/facts/narrow';
 import { resolveReceivingExceptionsByReceivingId } from '@/lib/tracking-exceptions';
@@ -666,5 +667,341 @@ export async function importSalesOrderByNumber(
         via: 'order_number',
       },
     };
+  });
+}
+
+// ─── Entry 3: read-only shipped-order lookup + serial compare ─────────────────────
+
+/**
+ * The compare outcome of a received serial against the serials we shipped on a
+ * resolved order:
+ *   match             — the received serial is one we shipped on this order.
+ *   mismatch          — we shipped serials, but not this one.
+ *   no_received       — no received serial supplied (order-only preview).
+ *   no_shipped_serial — order resolved, but we have no serial on record for it.
+ */
+export type SerialCompareOutcome = 'match' | 'mismatch' | 'no_received' | 'no_shipped_serial';
+
+export interface ShippedOrderCompare {
+  found: boolean;
+  order: {
+    order_pk: number;
+    order_id: string | null;
+    product_title: string | null;
+    sku: string | null;
+    item_number: string | null;
+    account_source: string | null;
+    tracking_number: string | null;
+    listing_url: string | null;
+  } | null;
+  /** Distinct serials we shipped on this order (v2 allocations ∪ legacy tech serials). */
+  shipped_serials: string[];
+  serial_match: SerialCompareOutcome;
+}
+
+export interface ShippedOrderCompareDeps {
+  query: typeof tenantQuery;
+  listingUrlForItemNumber: (itemNumber: string | null | undefined) => string | null;
+  normalize: (raw: string | null | undefined) => string;
+}
+
+const compareDefaultDeps: ShippedOrderCompareDeps = {
+  query: tenantQuery,
+  listingUrlForItemNumber: getExternalUrlByItemNumber,
+  normalize: normalizeSerial,
+};
+
+interface CompareOrderRow {
+  order_pk: number;
+  order_id: string | null;
+  product_title: string | null;
+  sku: string | null;
+  item_number: string | null;
+  account_source: string | null;
+  shipment_id: number | null;
+  tracking_number: string | null;
+}
+
+/**
+ * READ-ONLY. Resolve a shipped sales order by its ORDER NUMBER and compare the
+ * serial(s) we shipped on it against a received serial (the unit in hand). Powers
+ * the "Order #" search lane on an Unfound carton: the operator types the order
+ * number off the return label to confirm the physical unit matches what we
+ * shipped — before any link/promote (that stays with importSalesOrderByNumber)
+ * or ticket. No mutation, no allocation flip, no audit. Deps-injected so the
+ * compare logic unit-tests DB-free.
+ */
+export async function lookupShippedOrderForCompare(
+  input: { orderNumber: string; receivedSerial?: string | null },
+  orgId: OrgId,
+  deps: ShippedOrderCompareDeps = compareDefaultDeps,
+): Promise<ShippedOrderCompare> {
+  const orderNumber = (input.orderNumber || '').trim();
+  const notFound: ShippedOrderCompare = {
+    found: false,
+    order: null,
+    shipped_serials: [],
+    serial_match: 'no_shipped_serial',
+  };
+  if (!orderNumber) return notFound;
+
+  // 1. Resolve the shipped order by its exact order number (org-scoped). Exact,
+  //    un-case-folded match honors idx_orders_order_id — same as
+  //    importSalesOrderByNumber (a case-fold wrapper defeats the index).
+  const orderRes = await deps.query<CompareOrderRow>(
+    orgId,
+    `SELECT o.id AS order_pk, o.order_id, o.product_title, o.sku, o.item_number,
+            o.account_source, o.shipment_id, stn.tracking_number_raw AS tracking_number
+       FROM orders o
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      WHERE o.order_id = $1 AND o.organization_id = $2
+      ORDER BY o.id ASC
+      LIMIT 1`,
+    [orderNumber, orgId],
+  );
+  const o = orderRes.rows[0];
+  if (!o) return notFound;
+
+  // 2. Serials we shipped on this order: the inventory-v2 allocation link
+  //    (order_unit_allocations → serial_units) UNION the legacy ship path
+  //    (tech_serial_numbers by the order's shipment). Both org-scoped.
+  const serialRes = await deps.query<{ serial_number: string | null }>(
+    orgId,
+    `SELECT su.serial_number AS serial_number
+       FROM order_unit_allocations oua
+       JOIN serial_units su ON su.id = oua.serial_unit_id
+      WHERE oua.order_id = $1 AND oua.organization_id = $2
+        AND su.serial_number IS NOT NULL
+      UNION
+     SELECT t.serial_number AS serial_number
+       FROM tech_serial_numbers t
+      WHERE t.shipment_id = $3 AND t.organization_id = $2
+        AND t.serial_number IS NOT NULL`,
+    [o.order_pk, orgId, o.shipment_id],
+  );
+  const shippedSerials = serialRes.rows
+    .map((r) => (r.serial_number || '').trim())
+    .filter(Boolean);
+
+  // 3. Compare the received serial against the shipped set (normalized).
+  const received = deps.normalize(input.receivedSerial);
+  let serialMatch: SerialCompareOutcome;
+  if (!received) serialMatch = 'no_received';
+  else if (shippedSerials.length === 0) serialMatch = 'no_shipped_serial';
+  else {
+    const shippedNorm = new Set(shippedSerials.map((s) => deps.normalize(s)));
+    serialMatch = shippedNorm.has(received) ? 'match' : 'mismatch';
+  }
+
+  return {
+    found: true,
+    order: {
+      order_pk: o.order_pk,
+      order_id: o.order_id,
+      product_title: o.product_title,
+      sku: o.sku,
+      item_number: o.item_number,
+      account_source: o.account_source,
+      tracking_number: o.tracking_number,
+      listing_url: deps.listingUrlForItemNumber(o.item_number),
+    },
+    shipped_serials: shippedSerials,
+    serial_match: serialMatch,
+  };
+}
+
+// ─── Entry 4: log an unmatched received serial INTO the system ────────────────────
+
+export interface LogUnmatchedSerialInput {
+  serialNumber: string;
+  /** The receiving line to PAIR the serial to (the unfound record). */
+  receivingLineId?: number | null;
+  receivingId?: number | null;
+  /** The order number the operator compared against (for the investigate note). */
+  orderNumber?: string | null;
+  /** The serial we shipped on that order (closest), recorded on the note. */
+  shippedSerial?: string | null;
+  serialMatch?: SerialCompareOutcome | null;
+  conditionGrade?: string | null;
+  staffId?: number | null;
+  clientEventId?: string | null;
+}
+
+export interface LogUnmatchedSerialResult {
+  serialUnitId: number | null;
+  isNew: boolean;
+  /** True when the serial was paired to a receiving line (vs registry-only). */
+  pairedToLine: boolean;
+  /** True when the serial was already on that line (idempotent re-log). */
+  alreadyAttached: boolean;
+}
+
+export interface LogUnmatchedSerialDeps {
+  attachSerialToLine: typeof attachSerialToLine;
+  recordReceivingException: typeof recordReceivingException;
+  runTransaction: <T>(orgId: OrgId, cb: (client: PoolClient) => Promise<T>) => Promise<T>;
+  upsertSerialUnit: typeof upsertSerialUnit;
+  recordInventoryEvent: typeof recordInventoryEvent;
+  emitSignal?: typeof emitEntitySignalSafe;
+}
+
+const logSerialDefaultDeps: LogUnmatchedSerialDeps = {
+  attachSerialToLine,
+  recordReceivingException,
+  runTransaction: withTenantTransaction,
+  upsertSerialUnit,
+  recordInventoryEvent,
+  emitSignal: emitEntitySignalSafe,
+};
+
+/**
+ * Log a received serial that had no platform/order match as an UNFOUND record,
+ * PAIRED to its receiving line. Attaches the serial to the line via the shared
+ * `attachSerialToLine` (upserts the serial_units row, writes the RECEIVING_LINE
+ * provenance edge + tsn lineage — the actual serial↔line pairing), then records
+ * a `RETURN_NO_ORDER` line exception so it surfaces in the Unfound/triage queue.
+ * The carton is NOT promoted (there's no order to bind — it stays unfound).
+ *
+ * When no receiving line is available it degrades to a registry-only upsert +
+ * investigate note so the serial still enters the system. Idempotent (attach is
+ * a friendly no-op on re-log). Deps-injected so it unit-tests DB-free.
+ */
+export async function logUnmatchedReturnSerial(
+  input: LogUnmatchedSerialInput,
+  orgId: OrgId,
+  deps: LogUnmatchedSerialDeps = logSerialDefaultDeps,
+): Promise<LogUnmatchedSerialResult> {
+  const serial = (input.serialNumber || '').trim();
+  if (!serial) {
+    return { serialUnitId: null, isNew: false, pairedToLine: false, alreadyAttached: false };
+  }
+  const reason = input.orderNumber
+    ? `Unmatched return serial ${serial} — no order match (compared to order ${input.orderNumber})`
+    : `Unmatched return serial ${serial} — no order match`;
+
+  // ── Paired path — attach the serial to the receiving line (the unfound record).
+  if (input.receivingLineId != null && input.receivingLineId > 0) {
+    const attached = await deps.attachSerialToLine(
+      {
+        receiving_line_id: input.receivingLineId,
+        serial_number: serial,
+        condition_grade: input.conditionGrade ?? null,
+        staff_id: input.staffId ?? null,
+        station: 'RECEIVING',
+        client_event_id: input.clientEventId,
+      },
+      orgId,
+    );
+    if (!attached) {
+      return { serialUnitId: null, isNew: false, pairedToLine: false, alreadyAttached: false };
+    }
+
+    // Log the unfound/investigate exception on the paired line (surfaces in the
+    // Unfound/triage queue). Best-effort — the pairing already succeeded.
+    try {
+      await deps.recordReceivingException(orgId, {
+        receivingLineId: input.receivingLineId,
+        receivingId: input.receivingId ?? null,
+        exceptionCode: 'RETURN_NO_ORDER',
+        reason,
+        createdBy: input.staffId ?? null,
+      });
+    } catch (err) {
+      console.warn('logUnmatchedReturnSerial: RETURN_NO_ORDER exception failed (non-fatal)', err);
+    }
+
+    // Investigate NOTE capturing the order compared + verdict (order-less rows
+    // carry no NOTE otherwise). Runs outside the attach txn; best-effort.
+    try {
+      await deps.recordInventoryEvent(
+        {
+          event_type: 'NOTE',
+          actor_staff_id: input.staffId ?? null,
+          station: 'RECEIVING',
+          receiving_id: input.receivingId ?? null,
+          receiving_line_id: input.receivingLineId,
+          serial_unit_id: attached.serial_unit.id,
+          sku: attached.serial_unit.sku ?? null,
+          client_event_id: input.clientEventId ? `${input.clientEventId}:log-serial` : null,
+          notes: reason,
+          payload: {
+            unmatched_return_serial: true,
+            order_number: input.orderNumber ?? null,
+            shipped_serial: input.shippedSerial ?? null,
+            serial_match: input.serialMatch ?? null,
+          },
+        },
+        undefined,
+        orgId,
+      );
+    } catch (err) {
+      console.warn('logUnmatchedReturnSerial: NOTE event failed (non-fatal)', err);
+    }
+
+    return {
+      serialUnitId: attached.serial_unit.id,
+      isNew: attached.is_new,
+      pairedToLine: true,
+      alreadyAttached: attached.already_attached,
+    };
+  }
+
+  // ── Registry fallback — no line to pair to; still add the serial to the system.
+  return deps.runTransaction(orgId, async (client) => {
+    const upserted = await deps.upsertSerialUnit(
+      {
+        serial_number: serial,
+        origin_source: 'manual',
+        condition_grade: input.conditionGrade ?? null,
+      },
+      { dbClient: client },
+      orgId,
+    );
+    if (!upserted) {
+      return { serialUnitId: null, isNew: false, pairedToLine: false, alreadyAttached: false };
+    }
+    const serialUnitId = upserted.unit.id;
+
+    try {
+      await deps.recordInventoryEvent(
+        {
+          event_type: 'NOTE',
+          actor_staff_id: input.staffId ?? null,
+          station: 'RECEIVING',
+          receiving_id: input.receivingId ?? null,
+          serial_unit_id: serialUnitId,
+          sku: upserted.unit.sku ?? null,
+          client_event_id: input.clientEventId ? `${input.clientEventId}:log-serial` : null,
+          notes: reason,
+          payload: {
+            unmatched_return_serial: true,
+            order_number: input.orderNumber ?? null,
+            shipped_serial: input.shippedSerial ?? null,
+            serial_match: input.serialMatch ?? null,
+          },
+        },
+        client,
+        orgId,
+      );
+    } catch (err) {
+      console.warn('logUnmatchedReturnSerial: NOTE event failed (non-fatal)', err);
+    }
+
+    await (deps.emitSignal ?? emitEntitySignalSafe)({
+      organizationId: orgId,
+      entityType: 'SERIAL_UNIT',
+      entityId: serialUnitId,
+      signalKind: 'return_reason',
+      notes: reason,
+      actorStaffId: input.staffId ?? null,
+      meta: {
+        receivingId: input.receivingId ?? null,
+        orderNumber: input.orderNumber ?? null,
+        shippedSerial: input.shippedSerial ?? null,
+        serialMatch: input.serialMatch ?? null,
+      },
+    });
+
+    return { serialUnitId, isNew: upserted.is_new, pairedToLine: false, alreadyAttached: false };
   });
 }

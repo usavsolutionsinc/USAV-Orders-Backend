@@ -208,14 +208,18 @@ export function isUnifiedEngineVerdictConfig(): boolean {
  * precomputed `packer_log_enrichment` projection (catalog title / v_sku lookup /
  * order match / tracking json) via a 1:1 join instead of re-running the ~6
  * non-indexable LATERAL subqueries per row. Volatile carrier status stays a live
- * join either way. Default OFF — the off branch is the byte-identical legacy
- * query, so this is a no-op until the table is backfilled and the flag flipped.
- * Set PACKER_LOG_ENRICHMENT_READ=true once
- * scripts/backfill-packer-log-enrichment.ts has run (npx tsx … --apply). See
- * src/lib/neon/packer-log-enrichment.ts.
+ * join either way.
+ *
+ * Default ON (2026-07-09): the `2026-06-29f` migration is applied and the
+ * projection is fully backfilled (100% of PACK scans), so no Vercel env var is
+ * required. The read path in fetchPackerLogRows self-heals missing rows and, if
+ * the table is entirely absent (a fresh / branch DB that hasn't run migrations),
+ * transparently degrades to the byte-identical legacy query — so a default of ON
+ * can never 500 the shipped table. Set PACKER_LOG_ENRICHMENT_READ=false to force
+ * the legacy path. See src/lib/neon/packer-log-enrichment.ts.
  */
 export function isPackerLogEnrichmentRead(): boolean {
-  return readBoolEnv('PACKER_LOG_ENRICHMENT_READ');
+  return readBoolEnv('PACKER_LOG_ENRICHMENT_READ', true);
 }
 
 /**

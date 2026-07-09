@@ -476,8 +476,16 @@ async function upsertMatchedReceiving(
   carrier: string,
   staffId: number | null,
   organizationId: string,
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<{ receivingId: number; preexisting: boolean }> {
   const now = formatPSTTimestamp();
+  // Door-arrival stamp is TRIAGE-owned. An UNBOX-surface scan must leave
+  // received_at NULL so the carton becomes unbox_only_intake (bench-first) and
+  // never leaks the door-scan / triage door_received_at timestamp. Visibility on
+  // the unbox surface comes from unbox_opened_at (recordUnboxScanOpened), not
+  // received_at — so gating this is safe. Mirrors record-scan.ts:114.
+  const doorAt = intakeSurface === 'triage' ? now : null;
+  const doorBy = intakeSurface === 'triage' ? staffId : null;
   const result = await tenantQuery<{ id: number; xmax: string }>(
     organizationId,
     // Target the base table (not the `receiving` compat view): views cannot do
@@ -485,23 +493,24 @@ async function upsertMatchedReceiving(
     `INSERT INTO receiving_carton
        (source, zoho_purchaseorder_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at, organization_id)
-     VALUES ('zoho_po', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz, $5::uuid)
+     VALUES ('zoho_po', $1, $2, $3::timestamp, $6::timestamptz, $7, 'PENDING', true, $3::timestamptz, $5::uuid)
      ON CONFLICT (zoho_purchaseorder_id) WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
      DO UPDATE SET
        updated_at = EXCLUDED.updated_at,
        -- The Incoming Zoho sync pre-creates this PO's zoho_po receiving row with
-       -- received_at NULL (see zoho-receiving-sync.ts). The door scan IS the
-       -- physical-arrival event, so stamp received_at/by on first scan even when
-       -- the row already existed — otherwise the matched carton never satisfies
-       -- the view=scanned predicate (r.received_at IS NOT NULL) and stays
+       -- received_at NULL (see zoho-receiving-sync.ts). The TRIAGE door scan IS the
+       -- physical-arrival event, so stamp received_at/by on first triage scan even
+       -- when the row already existed — otherwise the matched carton never
+       -- satisfies the view=scanned predicate (r.received_at IS NOT NULL) and stays
        -- invisible in the Prioritize / unbox Queue feeds. COALESCE keeps the
-       -- original scan time + scanner on re-scans (idempotent, never resets).
+       -- original scan time + scanner on re-scans (idempotent, never resets). On an
+       -- unbox-surface scan EXCLUDED.received_at is NULL, so this never stamps it.
        received_at = COALESCE(receiving_carton.received_at, EXCLUDED.received_at),
        received_by = COALESCE(receiving_carton.received_by, EXCLUDED.received_by),
        carrier = COALESCE(receiving_carton.carrier, EXCLUDED.carrier),
        organization_id = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id)
      RETURNING id, xmax::text`,
-    [poId, carrier || null, now, staffId, organizationId],
+    [poId, carrier || null, now, staffId, organizationId, doorAt, doorBy],
   );
   const row = result.rows[0];
   return { receivingId: Number(row.id), preexisting: row.xmax !== '0' };
@@ -512,12 +521,19 @@ async function createUnmatchedReceiving(
   carrier: string,
   staffId: number | null,
   organizationId: string,
+  intakeSurface: ReceivingIntakeSurface = 'triage',
 ): Promise<{ receivingId: number; shipmentId: number | null }> {
   const now = formatPSTTimestamp();
   const shipment = await registerShipmentPermissive({
     trackingNumber,
     sourceSystem: 'receiving_lookup_po',
   }, organizationId);
+  // Door-arrival stamp is TRIAGE-owned (mirrors record-scan.ts:114 / the matched
+  // upsert above). An UNBOX-surface scan of an unfound box leaves received_at NULL
+  // so it becomes unbox_only_intake and never leaks door_received_at; visibility
+  // comes from unbox_opened_at.
+  const doorAt = intakeSurface === 'triage' ? now : null;
+  const doorBy = intakeSurface === 'triage' ? staffId : null;
   // Stamp organization_id explicitly rather than leaning on the column default
   // (the GUC default is NULL on this raw-pool path). Receiving is a tenant-owned
   // table; an unmatched door-scan must land under the scanning operator's org.
@@ -526,9 +542,9 @@ async function createUnmatchedReceiving(
     `INSERT INTO receiving
        (source, shipment_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at, organization_id)
-     VALUES ('unmatched', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz, $5::uuid)
+     VALUES ('unmatched', $1, $2, $3::timestamp, $6::timestamptz, $7, 'PENDING', true, $3::timestamptz, $5::uuid)
      RETURNING id`,
-    [shipment?.id ?? null, carrier || null, now, staffId, organizationId],
+    [shipment?.id ?? null, carrier || null, now, staffId, organizationId, doorAt, doorBy],
   );
   const receivingId = Number(result.rows[0].id);
   // Phase 5: tag the OS&D reason. No carrier resolved → CARRIER_MISMATCH;
@@ -935,7 +951,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // unfound carton is created.
       if (poId) {
 
-      const { receivingId } = await upsertMatchedReceiving(poId, carrier, staffId, ctx.organizationId);
+      const { receivingId } = await upsertMatchedReceiving(poId, carrier, staffId, ctx.organizationId, intakeSurface);
       let integrationError: 'zoho_not_connected' | null = null;
       const linked = await linkLocalPoLinesToReceiving(poId, receivingId, ctx.organizationId);
       // Only hit Zoho for line items when there was nothing local to adopt.
@@ -1305,16 +1321,16 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             preexisting = true;
           } else {
             ({ receivingId: primaryReceivingId, preexisting } =
-              await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId));
+              await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId, intakeSurface));
           }
         } catch (err) {
           console.warn('lookup-po: promote preassigned receiving failed — using upsert', err);
           ({ receivingId: primaryReceivingId, preexisting } =
-            await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId));
+            await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId, intakeSurface));
         }
       } else {
         ({ receivingId: primaryReceivingId, preexisting } =
-          await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId));
+          await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId, intakeSurface));
       }
 
       const scanId = preassignedScanId ?? await recordScan(
@@ -1390,6 +1406,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             carrier,
             staffId,
             ctx.organizationId,
+            intakeSurface,
           );
           await recordScan(extraReceivingId, trackingNumber, carrier, staffId, 'zoho_po', intakeSurface);
           const linkedSecondary = await linkLocalPoLinesToReceiving(poId, extraReceivingId, ctx.organizationId);
@@ -1564,7 +1581,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       unmatchedShipmentId = shipRow.rows[0]?.shipment_id ?? null;
     } else {
       ({ receivingId: unmatchedReceivingId, shipmentId: unmatchedShipmentId } =
-        await createUnmatchedReceiving(trackingNumber, carrier, staffId, ctx.organizationId));
+        await createUnmatchedReceiving(trackingNumber, carrier, staffId, ctx.organizationId, intakeSurface));
     }
     const unmatchedScanId = preassignedScanId ?? await recordScan(
       unmatchedReceivingId,

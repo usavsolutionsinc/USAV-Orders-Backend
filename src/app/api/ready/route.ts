@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { redisRestTarget } from '@/lib/redis/client';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,13 +37,15 @@ async function checkDb(): Promise<CheckResult> {
 }
 
 async function checkRedis(): Promise<CheckResult | null> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Centralized cred resolution (accepts UPSTASH_* or KV_REST_API_*). Re-reading
+  // process.env here is what let the probe report Redis absent while the app's
+  // KV_REST_API_* creds were live.
+  const { url, token } = redisRestTarget();
   if (!url || !token) return null; // Optional dependency.
 
   const start = Date.now();
   try {
-    const res = await fetch(`${url.replace(/\/+$/, '')}/ping`, {
+    const res = await fetch(`${url}/ping`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',

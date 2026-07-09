@@ -19,7 +19,7 @@ const hit = (over: Partial<SearchHit> = {}): SearchHit => ({
   entityType: 'order',
   title: 'Bose SoundLink Revolve',
   subtitle: '12-345 · ebay',
-  href: '/dashboard?openOrderId=1',
+  href: '/o/1',
   matchField: 'keyword',
   score: 50,
   chips: [],
@@ -61,7 +61,7 @@ test('builds a formatted block with type, title, facets, and href; org threaded'
   assert.ok(block.includes('[order] Bose SoundLink Revolve'));
   assert.ok(block.includes('status=shipped'));
   assert.ok(block.includes('platform=ebay'));
-  assert.ok(block.includes('/dashboard?openOrderId=1'));
+  assert.ok(block.includes('/o/1'));
   assert.equal(calls[0].orgId, ORG);
 });
 

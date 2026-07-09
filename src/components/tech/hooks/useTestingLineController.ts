@@ -235,9 +235,16 @@ export function useTestingLineController(
 
   const submitSerial = useCallback(
     async (lineId: number, raw: string) => {
-      if (!row.receiving_id) return;
       const serial = (raw ?? '').trim();
       if (!serial || serialSubmittingRef.current) return;
+      // A linked carton is NOT required — the scan-serial route attaches by
+      // receiving_line_id, so a returned unit on a not-yet-cartoned line can still
+      // capture its serial (no hard wall). Only a REAL line is needed; a synthetic
+      // stub carries a negative id and has no line to attach to.
+      if (!Number.isFinite(lineId) || lineId <= 0) {
+        toast.error('Link this line to a PO or carton first to add serials.');
+        return;
+      }
       serialSubmittingRef.current = true;
       setSerialSubmitting(true);
       try {
@@ -245,7 +252,7 @@ export function useTestingLineController(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            receiving_id: row.receiving_id,
+            receiving_id: row.receiving_id ?? undefined,
             receiving_line_id: lineId,
             serial_number: serial,
             staff_id: Number(staffId),

@@ -469,7 +469,12 @@ export const POST = withAuth(async (request, ctx) => {
         disposition_code: dispositionCode,
         condition_grade: conditionGrade,
         notes,
-        set_workflow_status: 'MATCHED',
+        // A real receive advances lines straight to UNBOXED so they never dwell in
+        // the coarse SCANNED state (MATCHED) — that transient dwell is what stamped
+        // receiving_lines.scanned_at on unbox/unfound receives, leaking the door-scan
+        // timestamp that triage owns. scan_only ("Mark as scanned") keeps MATCHED so
+        // its "SCANNED" mark + revert still work (and legitimately owns scanned_at).
+        set_workflow_status: skipZohoReceive ? 'MATCHED' : 'UNBOXED',
         // A real receive must not downgrade a line already unboxed at first scan;
         // scan_only ("Mark as scanned") leaves this false so its revert still works.
         advanceOnly: !skipZohoReceive,

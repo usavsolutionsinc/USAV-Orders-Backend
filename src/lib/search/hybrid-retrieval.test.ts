@@ -35,7 +35,7 @@ const exactHit = (id: number): GlobalSearchResult => ({
   entityType: 'order',
   title: `Order ${id}`,
   subtitle: 'sub',
-  href: `/dashboard?openOrderId=${id}`,
+  href: `/o/${id}`,
   matchField: 'order',
 });
 

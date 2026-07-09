@@ -4398,6 +4398,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/log-serial/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/lookup-po/route.ts",
       "methods": [
         "POST"
@@ -4537,6 +4546,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/shipped-order-lookup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
       "exemptReason": null
     },
     {

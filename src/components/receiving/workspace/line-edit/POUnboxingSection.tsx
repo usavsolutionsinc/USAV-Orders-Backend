@@ -183,7 +183,13 @@ export function POUnboxingSection({
         {showAutoMatch ? (
           <UnfoundMatchStrip
             receivingId={receivingId}
+            lineId={row.id ?? null}
             trackingNumber={row.tracking_number ?? null}
+            receivedSerial={row.serials?.[0]?.serial_number ?? null}
+            providerTicketId={c.providerTicketId}
+            ticketNumber={c.supportTicket?.label ?? null}
+            ticketUrl={c.supportTicket?.openUrl ?? null}
+            onTicketChanged={() => void c.invalidateSupportTicket()}
             showTopRule={showPoItems || tabbedPoItems}
           />
         ) : null}

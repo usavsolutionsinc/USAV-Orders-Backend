@@ -30,8 +30,15 @@ import {
 } from './cache-metrics';
 import { acquireCacheLock, sleep } from '@/lib/redis/cache-lock';
 
-const CACHE_PREFIX = 'cache:v2:';
-const TAG_PREFIX = 'cache_tags:v2:';
+// Environment segment: a single Upstash instance is shared across production,
+// preview, and local dev, so keys AND tag-sets are namespaced per env. This makes
+// it safe to run the cache everywhere at once — dev browsing (or a preview
+// deploy) can never read, overwrite, or tag-invalidate a production entry.
+// VERCEL_ENV is 'production' | 'preview' | 'development' on Vercel; off-platform
+// it falls back to NODE_ENV / 'local'. (New segment ⇒ one cold re-warm on rollout.)
+const CACHE_ENV = (process.env.VERCEL_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+const CACHE_PREFIX = `cache:v2:${CACHE_ENV}:`;
+const TAG_PREFIX = `cache_tags:v2:${CACHE_ENV}:`;
 
 /** Sentinel org for legacy (org-less) callers. Keys already embed org, so a
  *  single shared sentinel preserves v1 read↔invalidation matching. */

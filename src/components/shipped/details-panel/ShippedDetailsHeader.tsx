@@ -1,7 +1,8 @@
 'use client';
 
-import { Package } from '@/components/Icons';
+import { Package, Search } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import {
   PaneHeader,
   PaneHeaderIconBadge,
@@ -27,6 +28,8 @@ export interface ShippedDetailsHeaderProps {
   showDocumentsTab: boolean;
   activeSection: ShippedActiveSection;
   onSectionChange: (section: ShippedActiveSection) => void;
+  /** Opens the full-page order view (/o/[id]). Omitted → the magnifier hides. */
+  onOpenFullPage?: () => void;
 }
 
 /**
@@ -46,6 +49,7 @@ export function ShippedDetailsHeader({
   showDocumentsTab,
   activeSection,
   onSectionChange,
+  onOpenFullPage,
 }: ShippedDetailsHeaderProps) {
   return (
     <PaneHeader
@@ -74,7 +78,21 @@ export function ShippedDetailsHeader({
           />
         </>
       }
-      rightSlot={<PaneHeaderCloseButton onClick={onClose} ariaLabel="Close details" />}
+      rightSlot={
+        <div className="flex items-center gap-1">
+          {onOpenFullPage ? (
+            <HoverTooltip label="Open full order page" asChild>
+              <IconButton
+                icon={<Search className="h-4 w-4" />}
+                onClick={onOpenFullPage}
+                ariaLabel="Open full order page"
+                className="rounded-md p-1.5 hover:bg-surface-sunken"
+              />
+            </HoverTooltip>
+          ) : null}
+          <PaneHeaderCloseButton onClick={onClose} ariaLabel="Close details" />
+        </div>
+      }
       belowSlot={
         <>
           <div className="px-6 py-2">
@@ -89,6 +107,7 @@ export function ShippedDetailsHeader({
             />
           </div>
           <PaneHeaderTabs<ShippedActiveSection>
+            dense
             tabs={[
               { value: 'shipping' as const, label: 'Shipping' },
               { value: 'product' as const, label: 'Product' },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
@@ -35,6 +36,7 @@ export function ShippedDetailsPanel({
   onUpdate,
   context = 'dashboard',
 }: ShippedDetailsPanelProps) {
+  const router = useRouter();
   const isFulfillmentPanel = context === 'queue' || context === 'fulfillment';
   const isLabelsPanel = context === 'labels';
   const isStagedPanel = context === 'staged';
@@ -158,6 +160,7 @@ export function ShippedDetailsPanel({
           showDocumentsTab={showDocumentsTab}
           activeSection={activeSection}
           onSectionChange={setActiveSection}
+          onOpenFullPage={() => router.push(`/o/${shipped.id}`)}
         />
 
         <ShippedDetailsBody

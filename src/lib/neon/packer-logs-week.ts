@@ -1,4 +1,5 @@
 import { after } from 'next/server';
+import type { QueryResult } from 'pg';
 import pool from '@/lib/db';
 import {
   createCacheLookupKey,
@@ -43,6 +44,12 @@ export interface FetchPackerLogRowsResult {
 // v7: enriched read path falls back to live order_match when projection row is missing.
 const CACHE_NAMESPACE = 'api:packing-logs-v7';
 const CACHE_TAGS = ['packing-logs'];
+
+// Set once if `packer_log_enrichment` is absent (a DB that hasn't run the
+// 2026-06-29f migration — e.g. a fresh preview/branch). Lets the default-ON read
+// model degrade to the legacy query for the rest of the process instead of
+// re-attempting (and re-failing) the enriched query on every request.
+let enrichmentTableMissing = false;
 
 /**
  * Shared loader for the /tech packer-logs week query. Lives in its own module so
@@ -751,12 +758,33 @@ export async function fetchPackerLogRows(
     ORDER BY sal.created_at DESC NULLS LAST
   `;
 
-  const query = isPackerLogEnrichmentRead() ? enrichedQuery : legacyQuery;
+  let usedEnriched = isPackerLogEnrichmentRead() && !enrichmentTableMissing;
 
-  const result = await queryWithRetry(
-    () => pool.query(query, params),
-    { retries: 3, delayMs: 1000 },
-  );
+  let result: QueryResult;
+  try {
+    result = await queryWithRetry(
+      () => pool.query(usedEnriched ? enrichedQuery : legacyQuery, params),
+      { retries: 3, delayMs: 1000 },
+    );
+  } catch (error) {
+    // The enriched query is the only path referencing `packer_log_enrichment`.
+    // If that relation is absent (42P01 undefined_table on an un-migrated DB),
+    // degrade to the byte-identical legacy query instead of failing the whole
+    // shipped table — mirrors the row-level order_match_fallback safety net.
+    if (usedEnriched && (error as { code?: string })?.code === '42P01') {
+      enrichmentTableMissing = true;
+      usedEnriched = false;
+      console.warn(
+        '[packer-logs-week] packer_log_enrichment missing — falling back to legacy query for this process',
+      );
+      result = await queryWithRetry(
+        () => pool.query(legacyQuery, params),
+        { retries: 3, delayMs: 1000 },
+      );
+    } else {
+      throw error;
+    }
+  }
 
   const packerLogIds = result.rows
     .map((r: any) => r.packer_log_id)
@@ -805,7 +833,8 @@ export async function fetchPackerLogRows(
 
   // Heal missing projection rows in the background so subsequent reads stay on
   // the fast path (order_match_fallback above is the correctness safety net).
-  if (isPackerLogEnrichmentRead() && rows.length > 0) {
+  // Skipped when we fell back to legacy (table absent) — nothing to heal into.
+  if (usedEnriched && rows.length > 0) {
     const salIds = rows.map((r: { id?: unknown }) => Number(r.id)).filter((id) => Number.isFinite(id));
     after(() => {
       pool.query<{ id: number }>(

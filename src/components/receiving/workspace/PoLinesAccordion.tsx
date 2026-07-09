@@ -173,6 +173,12 @@ interface Props {
   headerRight?: React.ReactNode;
   /** Hide the embedded "PO items · N" eyebrow — the tab slider owns the label. */
   suppressHeader?: boolean;
+  /**
+   * Opt-in: extra controls rendered in each line's title row, immediately after
+   * the item-description button (e.g. the testing page's serial LINK/UNLINK).
+   * Omitted callers (unbox) render nothing here — unchanged.
+   */
+  renderTitleActions?: (line: ReceivingLineRow) => React.ReactNode;
 }
 
 /**
@@ -194,6 +200,7 @@ export function PoLinesAccordion({
   hideNoTestLines = false,
   onItemDescFeedback,
   onItemDescSaved,
+  renderTitleActions,
   placeholderActiveRow,
   embedded = false,
   headerRight,
@@ -586,6 +593,7 @@ export function PoLinesAccordion({
                       />
                     </HoverTooltip>
                   ) : null}
+                  {!readOnly ? renderTitleActions?.(line) : null}
                 </div>
                 {/* Meta row — fixed columns for vertical scan alignment. */}
                 <PoLineMetaGrid
