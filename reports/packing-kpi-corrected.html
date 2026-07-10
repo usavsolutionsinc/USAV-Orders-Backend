@@ -309,7 +309,7 @@
 
     .charts-grid {
       display: grid;
-      grid-template-columns: 1.1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 16px;
       margin-bottom: 20px;
     }
@@ -495,7 +495,7 @@
     <header>
       <p class="eyebrow">Cycle Forge · Packing</p>
       <h1>Packer KPI</h1>
-      <p class="subtitle">Corrected tier counts · weighted minutes · day capacity · Mon, Jun 29 – Thu, Jul 9</p>
+      <p class="subtitle">Corrected tier counts · weighted minutes · day capacity · Mon, Jun 29 – Fri, Jul 10</p>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Report views">
@@ -633,7 +633,7 @@
         <div class="staff-head">
           <div>
             <h2 class="staff-name">Tuan</h2>
-            <p class="staff-meta">6 pack days</p>
+            <p class="staff-meta">7 pack days</p>
           </div>
           <div class="pill-row" data-pills></div>
         </div>
@@ -681,6 +681,55 @@
               <td class="num cell-small">7</td><td class="num cell-medium">4</td><td class="num cell-large">2</td><td class="num cell-unknown">5</td>
               <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
             </tr>
+            <tr data-row data-s="4" data-m="10" data-l="0" data-u="2">
+              <td><span class="day">Fri, Jul 10</span><span class="day-sub">10/7</span></td>
+              <td class="num cell-small">4</td><td class="num cell-medium">10</td><td class="num cell-large">0</td><td class="num cell-unknown">2</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td class="num" data-total-s></td>
+              <td class="num" data-total-m></td>
+              <td class="num" data-total-l></td>
+              <td class="num" data-total-u></td>
+              <td class="num" data-total-boxes></td>
+              <td class="num" data-total-wmin></td>
+              <td class="num" data-total-pct></td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+
+      <!-- Cuong -->
+      <section class="staff" data-staff="Cuong">
+        <div class="staff-head">
+          <div>
+            <h2 class="staff-name">Cuong</h2>
+            <p class="staff-meta">1 pack day</p>
+          </div>
+          <div class="pill-row" data-pills></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th class="num">Small</th>
+              <th class="num">Medium</th>
+              <th class="num">Large</th>
+              <th class="num">Unknown</th>
+              <th class="num">Boxes</th>
+              <th class="num">Weighted time</th>
+              <th class="num">% of day</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-row data-s="8" data-m="2" data-l="0" data-u="2">
+              <td><span class="day">Fri, Jul 10</span><span class="day-sub">10/7</span></td>
+              <td class="num cell-small">8</td><td class="num cell-medium">2</td><td class="num cell-large">0</td><td class="num cell-unknown">2</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
           </tbody>
           <tfoot>
             <tr>
@@ -723,14 +772,17 @@
           <p>Tier mix across his pack days</p>
           <div class="chart-wrap"><canvas id="chart-tuan"></canvas></div>
         </div>
+        <div class="chart-card">
+          <h3>Cuong</h3>
+          <p>Tier mix across his pack days</p>
+          <div class="chart-wrap"><canvas id="chart-cuong"></canvas></div>
+        </div>
       </div>
 
       <div class="compare-grid">
         <div class="compare-card">
           <h3>Shift load vs 7h 30m day</h3>
-          <div class="meter" id="meter-thuy"></div>
-          <div class="meter" id="meter-tuan"></div>
-          <div class="meter" id="meter-team"></div>
+          <div id="meters"></div>
           <p style="margin:8px 0 0;font-size:13px;color:var(--muted);">
             Average % of day = total weighted time ÷ (pack days × 7h 30m).
           </p>
@@ -895,21 +947,19 @@
       `${team.days} packer-days · ${teamCap.toLocaleString()} min`;
     document.getElementById('team-pct').textContent = fmtPct(teamPct);
 
-    document.getElementById('meter-thuy').innerHTML = meterHtml(
-      'Thuy',
-      byStaff.Thuy.avgPct,
-      `${fmtDuration(byStaff.Thuy.wmin)} / ${fmtDuration(byStaff.Thuy.days * SHIFT)}`
-    );
-    document.getElementById('meter-tuan').innerHTML = meterHtml(
-      'Tuan',
-      byStaff.Tuan.avgPct,
-      `${fmtDuration(byStaff.Tuan.wmin)} / ${fmtDuration(byStaff.Tuan.days * SHIFT)}`
-    );
-    document.getElementById('meter-team').innerHTML = meterHtml(
-      'Team (both)',
+    const metersEl = document.getElementById('meters');
+    metersEl.innerHTML = Object.keys(byStaff).map((name) => {
+      const st = byStaff[name];
+      return `<div class="meter">${meterHtml(
+        name,
+        st.avgPct,
+        `${fmtDuration(st.wmin)} / ${fmtDuration(st.days * SHIFT)}`
+      )}</div>`;
+    }).join('') + `<div class="meter">${meterHtml(
+      'Team (all)',
       teamPct,
       `${fmtDuration(team.wmin)} / ${fmtDuration(teamCap)}`
-    );
+    )}</div>`;
 
     // Tabs
     const tabs = document.querySelectorAll('.tab');
@@ -953,6 +1003,7 @@
       new Chart(document.getElementById('chart-team'), pieConfig(labels, [team.s, team.m, team.l, team.u]));
       new Chart(document.getElementById('chart-thuy'), pieConfig(labels, [byStaff.Thuy.s, byStaff.Thuy.m, byStaff.Thuy.l, byStaff.Thuy.u]));
       new Chart(document.getElementById('chart-tuan'), pieConfig(labels, [byStaff.Tuan.s, byStaff.Tuan.m, byStaff.Tuan.l, byStaff.Tuan.u]));
+      new Chart(document.getElementById('chart-cuong'), pieConfig(labels, [byStaff.Cuong.s, byStaff.Cuong.m, byStaff.Cuong.l, byStaff.Cuong.u]));
 
       const minByTier = [
         team.s * MIN.s,
