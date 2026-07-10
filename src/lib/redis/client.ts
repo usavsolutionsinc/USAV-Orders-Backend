@@ -15,23 +15,27 @@
  */
 export type RedisCommand = (string | number)[];
 
-// Resolve the Upstash REST credentials from EITHER naming convention:
-//   • UPSTASH_REDIS_REST_URL / _TOKEN — Upstash's own integration
-//   • KV_REST_API_URL / KV_REST_API_TOKEN — Vercel-KV / marketplace naming
-// Both point at the same Upstash REST endpoint and speak the same `/pipeline`
-// protocol, so either lights up the cache + distributed rate limiter + workflow
-// lock. Reading only UPSTASH_* silently disabled ALL of them when the env only
-// had KV_REST_API_* (the 2026-07 shipped-table + rate-limit regression). Always
-// the read/write token — never KV_REST_API_READ_ONLY_TOKEN (it can't SET).
-const REST_URL = (
-  process.env.UPSTASH_REDIS_REST_URL ||
-  process.env.KV_REST_API_URL ||
-  ''
-).replace(/\/+$/, '');
-const REST_TOKEN =
-  process.env.UPSTASH_REDIS_REST_TOKEN ||
-  process.env.KV_REST_API_TOKEN ||
-  '';
+/**
+ * Resolve Upstash REST credentials from EITHER naming convention. Pure and
+ * env-injectable so the resolution rule is unit-testable (client.test.ts):
+ *   • UPSTASH_REDIS_REST_URL / _TOKEN — Upstash's own integration
+ *   • KV_REST_API_URL / KV_REST_API_TOKEN — Vercel-KV / marketplace naming
+ * Both point at the same Upstash REST endpoint and speak the same `/pipeline`
+ * protocol, so either lights up the cache + distributed rate limiter + workflow
+ * lock. Reading only UPSTASH_* silently disabled ALL of them when the env only
+ * had KV_REST_API_* (the 2026-07 shipped-table + rate-limit regression). Always
+ * the read/write token — never KV_REST_API_READ_ONLY_TOKEN (it can't SET). The
+ * url has any trailing slash stripped; both are '' when unconfigured.
+ */
+export function resolveRedisRestCreds(
+  env: Record<string, string | undefined> = process.env,
+): { url: string; token: string } {
+  const url = (env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL || '').replace(/\/+$/, '');
+  const token = env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN || '';
+  return { url, token };
+}
+
+const { url: REST_URL, token: REST_TOKEN } = resolveRedisRestCreds();
 
 export function isRedisConfigured(): boolean {
   return Boolean(REST_URL && REST_TOKEN);

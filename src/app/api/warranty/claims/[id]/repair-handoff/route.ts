@@ -57,7 +57,7 @@ export const POST = withAuth(async (request, ctx) => {
       return { status: 201, body: { ok: true, claim: result.claim, repairServiceId: result.repairServiceId } };
     },
   });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });
 
 /**
  * DELETE /api/warranty/claims/[id]/repair-handoff — detach the repair ticket
@@ -87,4 +87,4 @@ export const DELETE = withAuth(async (request, ctx) => {
   // No customer notification on detach — it's an internal correction, not a
   // forward transition; re-firing an "approved" notice would mislead.
   return NextResponse.json({ ok: true, claim: result.claim, revertedToApproved: result.revertedToApproved });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

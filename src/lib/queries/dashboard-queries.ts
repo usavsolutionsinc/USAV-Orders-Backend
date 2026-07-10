@@ -65,6 +65,10 @@ export interface ShippedQueryParams {
   shippedFilter?: string;
   /** Row ceiling for this fetch; default {@link SHIPPED_WEEK_PAGE_SIZE}. */
   limit?: number;
+  /** Spine-first: 'spine' fetches immediate-paint columns only (deferred fields
+   *  hydrate separately); 'full' (default) is the complete row. Part of the
+   *  cache key so spine and full never share an entry. */
+  phase?: 'spine' | 'full';
 }
 
 /** Pending queue (label-assigned, not yet packed). Matches `PendingOrdersTable`. */
@@ -129,11 +133,12 @@ export function dashboardShippedQuery({
   staffId,
   shippedFilter,
   limit = SHIPPED_WEEK_PAGE_SIZE,
+  phase = 'full',
 }: ShippedQueryParams = {}) {
   return queryOptions({
-    queryKey: ['dashboard-table', 'shipped', { weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit }],
+    queryKey: ['dashboard-table', 'shipped', { weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit, phase }],
     queryFn: () =>
-      fetchDashboardPackedRecords({ packedBy, testedBy, staffId, weekStart, weekEnd, shippedFilter, limit }),
+      fetchDashboardPackedRecords({ packedBy, testedBy, staffId, weekStart, weekEnd, shippedFilter, limit, phase }),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
@@ -151,6 +156,8 @@ interface ShippedWeekQueryParams {
   /** Row ceiling for this week; default {@link SHIPPED_WEEK_PAGE_SIZE}. Part of
    *  the cache key, so a bumped ceiling is its own immutable past-week entry. */
   limit?: number;
+  /** Spine-first phase (see {@link ShippedQueryParams.phase}). Part of the key. */
+  phase?: 'spine' | 'full';
 }
 
 /**
@@ -168,12 +175,13 @@ export function dashboardShippedWeekQuery({
   staffId,
   shippedFilter,
   limit = SHIPPED_WEEK_PAGE_SIZE,
+  phase = 'full',
 }: ShippedWeekQueryParams) {
   const past = isPastWeekStart(weekStart);
   return queryOptions({
-    queryKey: ['dashboard-table', 'shipped', 'week', weekStart, { packedBy, testedBy, staffId, shippedFilter, limit }],
+    queryKey: ['dashboard-table', 'shipped', 'week', weekStart, { packedBy, testedBy, staffId, shippedFilter, limit, phase }],
     queryFn: () =>
-      fetchDashboardPackedRecords({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit }),
+      fetchDashboardPackedRecords({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit, phase }),
     staleTime: past ? Infinity : 5 * 60 * 1000,
     gcTime: past ? 24 * 60 * 60 * 1000 : 15 * 60 * 1000,
   });

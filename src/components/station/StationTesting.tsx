@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { ShippingRecentRail } from '@/components/sidebar/shipping/ShippingRecentRail';
@@ -15,6 +15,13 @@ import { useIsMobile } from '@/hooks';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAblyClient } from '@/contexts/AblyContext';
+import { safeChannelName, getStaffStationBridgeChannelName } from '@/lib/realtime/channels';
+import { useUnitPhotoRequestPublisher } from '@/components/sidebar/receiving/useUnitPhotoRequestPublisher';
+import { UnitPhotoRequestStatus } from '@/components/station/UnitPhotoRequestStatus';
+import { scannedUnitKey } from '@/lib/barcode-routing';
+import { UNIT_SCAN_PHOTOS } from '@/lib/station/flags';
 
 const STATION_EASE_OUT = motionBezier.easeOut;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
@@ -42,6 +49,53 @@ export default function StationTesting({
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
   const isMobile = useIsMobile();
 
+  // ── Packer testing-label photo scan (flag-gated, ships dark) ──────────────
+  // On a genuine printed unit-label scan, resolve the label key → serial_units.id
+  // and fire a `unit_photo_request` to the paired phone (implicit staffstation
+  // pairing). Uses the signed-in user's own org+staff so the Ably capability
+  // matches. See docs/todo/packer-testing-photo-scan-timeline-plan.md.
+  const { user } = useAuth();
+  const authOrgId = user?.organizationId;
+  const authStaffId = user?.staffId ?? 0;
+  const { getClient: getAblyClient } = useAblyClient();
+  const unitPhotoChannelName = safeChannelName(() =>
+    getStaffStationBridgeChannelName(authOrgId!, authStaffId),
+  );
+  const publishUnitPhotoRequest = useUnitPhotoRequestPublisher({
+    staffIdNum: authStaffId,
+    getAblyClient,
+    stationChannelName: unitPhotoChannelName,
+  });
+  // The unit whose phone photo request most recently fired — drives the ambient
+  // "Photo request sent → phone · N captured" status under the active card.
+  const [lastUnitPhotoRequest, setLastUnitPhotoRequest] = useState<
+    { serialUnitId: number; unitKey: string | null } | null
+  >(null);
+  const handleUnitLabelScanned = useCallback(
+    (rawInput: string) => {
+      if (!UNIT_SCAN_PHOTOS) return;
+      const key = scannedUnitKey(rawInput);
+      if (!key) return;
+      // Resolve the label key → canonical serial_units.id, then request phone
+      // photos. Degrade-not-block: a 404 / missing id (no unit row) fires no
+      // request and leaves the scan loop untouched.
+      void (async () => {
+        try {
+          const res = await fetch(`/api/serial-units/${encodeURIComponent(key)}/photos`);
+          if (!res.ok) return;
+          const data = await res.json().catch(() => null);
+          const serialUnitId = Number(data?.unit_id);
+          if (!Number.isFinite(serialUnitId) || serialUnitId <= 0) return;
+          await publishUnitPhotoRequest({ serialUnitId, unitKey: key });
+          setLastUnitPhotoRequest({ serialUnitId, unitKey: key });
+        } catch (err) {
+          console.warn('station-testing: unit photo request failed', err);
+        }
+      })();
+    },
+    [publishUnitPhotoRequest],
+  );
+
   const {
     inputValue,
     setInputValue,
@@ -68,7 +122,13 @@ export default function StationTesting({
     onFnskuOrderLoaded: useCallback(() => {
       setManualMode((m) => (m === 'fba' ? null : m));
     }, []),
+    onUnitLabelScanned: handleUnitLabelScanned,
   });
+
+  // Clear the ambient unit photo-request status when the active order clears.
+  useEffect(() => {
+    if (!activeOrder) setLastUnitPhotoRequest(null);
+  }, [activeOrder]);
 
   const forcedTypeForManualMode = useCallback((mode: StationInputMode | null) => {
     if (mode === 'tracking') return 'TRACKING' as const;
@@ -349,6 +409,12 @@ export default function StationTesting({
           <div className={`shrink-0 min-w-0 space-y-2 ${SIDEBAR_GUTTER} py-1.5`}>
             {scanBarBlock}
             <ActiveOrderScanFeedback activeOrder={activeOrder} />
+            {UNIT_SCAN_PHOTOS && lastUnitPhotoRequest && (
+              <UnitPhotoRequestStatus
+                serialUnitId={lastUnitPhotoRequest.serialUnitId}
+                unitKey={lastUnitPhotoRequest.unitKey}
+              />
+            )}
           </div>
         )}
 
@@ -375,6 +441,12 @@ export default function StationTesting({
           <div className={`flex-shrink-0 space-y-2 border-t border-border-hairline bg-surface-card ${SIDEBAR_GUTTER} pb-[max(1.125rem,env(safe-area-inset-bottom))] pt-3`}>
             <div className="min-w-0 space-y-2 px-1.5 pb-2 sm:pb-0">
               <ActiveOrderScanFeedback activeOrder={activeOrder} />
+              {UNIT_SCAN_PHOTOS && lastUnitPhotoRequest && (
+                <UnitPhotoRequestStatus
+                  serialUnitId={lastUnitPhotoRequest.serialUnitId}
+                  unitKey={lastUnitPhotoRequest.unitKey}
+                />
+              )}
               {scanBarBlock}
             </div>
           </div>

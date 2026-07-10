@@ -25,14 +25,17 @@ export type EntitlementFeature = keyof Entitlements['features'];
  * implicitly never-gated by the wrapper.
  *
  * `studio` has its own bespoke gate (STUDIO_ENTITLEMENT_ENFORCED). The Growth+
- * plan features (walkIn, sourcing, support, aiChat) share one generic plan-tier
- * gate behind PLAN_FEATURE_ENFORCED — all dormant + fail-open by default, so
- * wiring them changes nothing until enforcement is explicitly turned on.
+ * plan features (fba, repair, walkIn, sourcing, support, aiChat) share one
+ * generic plan-tier gate behind PLAN_FEATURE_ENFORCED — all dormant +
+ * fail-open by default, so wiring them changes nothing until enforcement is
+ * explicitly turned on.
  */
 const FEATURE_GATES: Partial<
   Record<EntitlementFeature, (orgId: OrgId | null | undefined) => Promise<boolean>>
 > = {
   studio: isStudioGated,
+  fba: makePlanFeatureGate('fba'),
+  repair: makePlanFeatureGate('repair'),
   walkIn: makePlanFeatureGate('walkIn'),
   sourcing: makePlanFeatureGate('sourcing'),
   support: makePlanFeatureGate('support'),

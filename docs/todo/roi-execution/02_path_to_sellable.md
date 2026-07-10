@@ -1,5 +1,27 @@
 # Tier 1 — Path to Sellable (the two coupled halves)
 
+> **STATUS (2026-07-09 tenancy wave — #6 substantially closed in code):**
+> - **6a** — repair-service + shipped were already fixed in a prior session (verified); this wave
+>   stripped the remaining `?? USAV_ORG_ID` from **sku-stock ×3, orders/add, orders/assign,
+>   shipped/scan-out** (401 `ORG_CONTEXT_REQUIRED` fail-closed) and killed the 9 USAV-defaulting
+>   domain-fn params (warranty ×3, po-gmail ×6). **Residual:** packerlogs PUT org-scope — its file
+>   is uncommitted in-flight work; fix after that commits (tracked in TODO-BACKLOG-SCOUT-MAP.md).
+> - **Webhooks (audit F02–F05, F09, F10 + UPS which the audit missed):** carrier webhooks now
+>   resolve org by registered tracking (new `src/lib/shipping/webhook-org-resolver.ts` + tests),
+>   Square by merchant mapping, all fail-closed + IP rate-limited; legacy Zoho orders webhook →
+>   410 GONE; `currentZohoOrgId()` unbound → throws; ShipStation env-token path requires
+>   `SHIPSTATION_WEBHOOK_ORG_ID`.
+> - **6b** — migration **authored, NOT applied**: `2026-07-09a_drop_usav_fallback_org_defaults.sql`
+>   (8 tables; deploy-coupled AFTER the webhook resolution code — see its header).
+> - **6c** — reframed: the 9 org-id-less tables are the **identity/auth cluster**; naive
+>   add-column is wrong. Classification doc: `docs/tenancy/needs-col-classification.md`.
+> - **Guard:** `npm run tenancy:usav-guard` (burn-down allowlist, 40→29 offenders this wave).
+>   Gates: `test:tenancy-idor` 5/5 green; `tsc` 0 errors.
+> - **#5** — mechanism predates this doc's "Do" list: withAuth already enforces `opts.feature` →
+>   403 (44 handlers gated). The 2026-07-09 wave extends fba/repair/support coverage + wires
+>   maxStaff/maxWarehouses/maxMonthlyOrders ceilings + connect-path guard (see wave report).
+>   **Owner:** staged `PLAN_FEATURE_ENFORCED` flip.
+
 **#5 (revenue switch) and #6 (leak closure) ship together.** #5 lets you charge
 differentially; #6 makes it safe to put strangers' data in one database. Shipping #5
 without #6 = billing external tenants while cross-tenant reads/writes are possible.

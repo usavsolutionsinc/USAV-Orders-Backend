@@ -61,6 +61,11 @@ export interface StaffPreferences {
    */
   theme?: string | null;
   /**
+   * "Skip for now" on the dashboard Getting-Started checklist. `true` hides the
+   * card; absent/`null` shows it while activation steps remain incomplete.
+   */
+  onboardingDismissed?: boolean | null;
+  /**
    * Unshipped · Shelf-board layout prefs (cross-device). Lanes are PENDING /
    * TESTED / BLOCKED; see {@link BoardPrefs} for the shape. One board surface =
    * one key; the generic {@link SwimlaneBoard} reads/writes `prefs[prefsKey]`.

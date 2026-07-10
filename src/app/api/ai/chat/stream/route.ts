@@ -19,7 +19,7 @@
 import { NextRequest } from 'next/server';
 import { detectIntents } from '@/lib/ai/intent-router';
 import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { persistChatMessage } from '@/lib/ai/chat-persistence';
 import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
 import type { AiStructuredAnswer } from '@/lib/ai/types';
@@ -78,11 +78,12 @@ function createThinkStripper() {
 }
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'ai-chat',
     limit: Number(process.env.AI_CHAT_RATE_LIMIT || 25),
     windowMs: 60 * 1000,
+    organizationId: ctx.organizationId,
   });
   if (!rate.ok) {
     return new Response(JSON.stringify({ error: 'Rate limit exceeded. Try again shortly.' }), {
@@ -246,14 +247,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         }
 
         const finalText = assembled.trim();
-        const finalMode = localResolution?.analysis ? 'hybrid' : 'assistant';
-        if (localResolution?.analysis) send('analysis', localResolution.analysis);
-        send('done', { mode: finalMode });
+        // local_ops answers short-circuit above (early return), so this path
+        // never carries a local analysis — mode is plain 'assistant'.
+        send('done', { mode: 'assistant' });
         void persistChatMessage({
           organizationId, sessionId, role: 'assistant',
           content: finalText || 'No response received.',
-          mode: finalMode,
-          analysis: localResolution?.analysis ?? null,
+          mode: 'assistant',
+          analysis: null,
         });
       } catch (err: unknown) {
         const messageText = err instanceof Error ? err.message : 'Chat request failed';

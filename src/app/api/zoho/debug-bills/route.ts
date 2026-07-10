@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listBillsForPurchaseOrder, getPurchaseOrderById } from '@/lib/zoho';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { zohoGet } from '@/lib/zoho/httpClient';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  *
  * GET /api/zoho/debug-bills?purchaseorder_id=...
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   const purchaseorderId = (request.nextUrl.searchParams.get('purchaseorder_id') || '').trim();
   if (!purchaseorderId) {
     return NextResponse.json({ ok: false, error: 'purchaseorder_id required' }, { status: 400 });
@@ -20,13 +21,16 @@ export const GET = withAuth(async (request: NextRequest) => {
 
   const billIdParam = (request.nextUrl.searchParams.get('bill_id') || '').trim();
 
-  const [billsResult, poResult, billDetailResult] = await Promise.allSettled([
-    listBillsForPurchaseOrder(purchaseorderId),
-    getPurchaseOrderById(purchaseorderId),
-    billIdParam
-      ? zohoGet<{ bill?: Record<string, unknown> }>(`/api/v1/bills/${billIdParam}`)
-      : Promise.resolve(null),
-  ]);
+  // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+  const [billsResult, poResult, billDetailResult] = await withZohoOrg(ctx.organizationId, () =>
+    Promise.allSettled([
+      listBillsForPurchaseOrder(purchaseorderId),
+      getPurchaseOrderById(purchaseorderId),
+      billIdParam
+        ? zohoGet<{ bill?: Record<string, unknown> }>(`/api/v1/bills/${billIdParam}`)
+        : Promise.resolve(null),
+    ]),
+  );
 
   return NextResponse.json({
     ok: true,

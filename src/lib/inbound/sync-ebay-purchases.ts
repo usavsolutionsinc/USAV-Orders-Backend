@@ -132,7 +132,8 @@ export async function syncEbayPurchasesToReceiving(
       }
     }
 
-    // Advance the cursor even on an empty pull so the next run's `since` moves forward.
+    // Advance the cursor only after a successful fetch (including empty pulls).
+    // Failed fetches `continue` above without moving `since`.
     try {
       await deps.setCursor(resource, new Date(deps.now()));
     } catch (e) {

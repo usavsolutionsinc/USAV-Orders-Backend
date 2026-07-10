@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseScannedUrl } from '@/lib/scan-resolver';
+import { guard, transition, SERIAL_STATES, type SerialState } from '@/lib/inventory/state-machine';
 
 /**
  * POST /api/returns/undo — reverse a returns-intake mistake.
@@ -67,7 +68,19 @@ export const POST = withAuth(async (request, ctx) => {
           ORDER BY occurred_at DESC, id DESC LIMIT 1`,
         [unit.id, orgId],
       );
-      const priorStatus = evQ.rows[0]?.prev_status ?? 'SHIPPED';
+      const priorStatusRaw = evQ.rows[0]?.prev_status ?? 'SHIPPED';
+      if (!(SERIAL_STATES as readonly string[]).includes(priorStatusRaw)) {
+        return { ok: false as const, status: 409, error: `recorded pre-return status ${priorStatusRaw} is not a known serial state` };
+      }
+      const priorStatus = priorStatusRaw as SerialState;
+      // Pre-flight the restore edge BEFORE the allocation/ledger writes so a
+      // guard rejection returns a clean 409 with nothing committed (the txn
+      // commits on a normal return). RETURNED → SHIPPED/STOCKED/RMA are the
+      // modeled back-edges; anything else was written raw by a legacy path.
+      const guarded = guard('RETURNED', priorStatus);
+      if (!guarded.ok) {
+        return { ok: false as const, status: 409, error: guarded.reason };
+      }
 
       // Reopen the allocation the intake flipped to RETURNED.
       const reopen = await client.query(
@@ -89,28 +102,29 @@ export const POST = withAuth(async (request, ctx) => {
         ledgerId = lq.rows[0]?.id ?? null;
       }
 
-      // Restore the unit's pre-return status (raw — returns.ts also raw-UPDATEs;
-      // the target is dynamic, recovered from the event).
-      await client.query(
-        `UPDATE serial_units SET current_status = $2::serial_status_enum, updated_at = NOW() WHERE id = $1 AND organization_id = $3`,
-        [unit.id, priorStatus, orgId],
-      );
-
-      const ev = await client.query<{ id: number }>(
-        `INSERT INTO inventory_events (
-           event_type, actor_staff_id, station, serial_unit_id, sku,
-           prev_status, next_status, stock_ledger_id, client_event_id, notes, payload,
-           organization_id
-         )
-         VALUES ('ADJUSTED', $1, 'RECEIVING', $2, $3, 'RETURNED', $4, $5, $6, $7, $8::jsonb, $9)
-         ON CONFLICT (client_event_id) DO NOTHING RETURNING id`,
-        [
-          actorStaffId, unit.id, unit.sku, priorStatus, ledgerId,
-          clientEventId ? `${clientEventId}:return-undo` : null, reason,
-          JSON.stringify({ source: 'returns.undo', restored_to: priorStatus, allocation_reopened: allocationReopened }),
-          orgId,
-        ],
-      );
+      // Restore the unit's pre-return status through the guarded state machine.
+      // transition() writes the status + the ADJUSTED inventory_event atomically
+      // (same shape as the legacy raw pair: prev RETURNED → next priorStatus,
+      // ledger linkage, idempotent client_event_id suffix).
+      const tr = await transition({
+        unitId: unit.id,
+        to: priorStatus,
+        eventType: 'ADJUSTED',
+        actorStaffId,
+        station: 'RECEIVING',
+        clientEventId: clientEventId ? `${clientEventId}:return-undo` : null,
+        expectedFrom: 'RETURNED',
+        stockLedgerId: ledgerId,
+        binId: null, // legacy undo event carried no bin linkage — keep it that way
+        notes: reason,
+        payload: { source: 'returns.undo', restored_to: priorStatus, allocation_reopened: allocationReopened },
+      }, client, orgId);
+      if (!tr.ok) {
+        // Unreachable in practice (guard pre-flighted + FOR UPDATE lock held in
+        // this txn). Throw so the ledger/allocation writes roll back rather than
+        // committing half an undo.
+        throw new Error(`returns undo transition failed: ${tr.error}`);
+      }
 
       return {
         ok: true as const,
@@ -118,7 +132,7 @@ export const POST = withAuth(async (request, ctx) => {
         restoredTo: priorStatus,
         allocationReopened,
         ledgerId,
-        inventoryEventId: ev.rows[0]?.id ?? null,
+        inventoryEventId: tr.eventId,
       };
     });
 

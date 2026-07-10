@@ -52,6 +52,11 @@ export interface OrderPackChecklistResult {
   progress: {
     confirmed: number;
     total: number;
+    /**
+     * Order-level rollup (Phase 3): how many of this order's lines already
+     * have a completed pack scan (a packer_logs row on the line's shipment).
+     */
+    packedLines: number;
     allRequiredIn: boolean;
     blocked: boolean;
   };
@@ -254,6 +259,29 @@ export async function getOrderPackChecklist(
   const allParts = lines.flatMap((l) => l.kitParts.map((p) => ({ id: p.id, critical: p.critical })));
   const readiness = evaluateKitReadiness(allParts, [], enforcement);
 
+  // Phase 3 rollup: a line counts as packed when a completed pack scan
+  // (packer_logs, tracking_type='ORDERS') exists on the line's shipment.
+  let packedLines = 0;
+  try {
+    const packed = await tenantQuery<{ packed: string }>(
+      orgId,
+      `SELECT COUNT(DISTINCT o.id) AS packed
+         FROM orders o
+         JOIN packer_logs pl
+           ON pl.shipment_id = o.shipment_id
+          AND pl.organization_id = o.organization_id
+          AND pl.tracking_type = 'ORDERS'
+        WHERE o.organization_id = $2
+          AND o.shipment_id IS NOT NULL
+          AND ${orderIdKey ? 'o.order_id = $1' : 'o.id = $1'}`,
+      [orderIdKey || anchorRow.id, orgId],
+    );
+    packedLines = Math.min(lines.length, Number(packed.rows[0]?.packed ?? 0));
+  } catch {
+    // Rollup is a sub-resource — degrade to 0, never fail the checklist.
+    packedLines = 0;
+  }
+
   return {
     orderId: orderIdKey || String(anchorRow.id),
     orderRowIds: lineRows.map((l) => l.id),
@@ -261,6 +289,7 @@ export async function getOrderPackChecklist(
     progress: {
       confirmed: 0,
       total: lines.length,
+      packedLines,
       allRequiredIn: readiness.allRequiredIn,
       blocked: readiness.blocked,
     },
@@ -301,6 +330,7 @@ export async function getSkuPackChecklist(
     progress: {
       confirmed: 0,
       total: 1,
+      packedLines: 0,
       allRequiredIn: readiness.allRequiredIn,
       blocked: readiness.blocked,
     },

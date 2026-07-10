@@ -68,20 +68,41 @@ async function fetchRecentEcwidOrders(
   return orders;
 }
 
+/** Per-org Ecwid credentials resolved from the vault (organization_integrations). */
+export interface EcwidTransferCreds {
+  storeId: string;
+  token: string;
+}
+
 /**
  * Fetch recent Ecwid orders and return them as row arrays whose values are
  * placed at the column indices the transfer-orders job expects (matching the
  * Google Sheet layout). Each line item in an Ecwid order becomes its own row.
+ *
+ * `creds` is the tenant's vault credential (connector layer). When absent, the
+ * legacy ECWID_* env vars are used ONLY when the caller explicitly opts in
+ * (`allowEnvFallback` — the dogfood org's pre-vault bootstrap). Every other
+ * tenant fails closed: the env creds belong to the dogfood store and must
+ * never serve another org's sync.
  */
 export async function fetchEcwidTransferRows(
   colIndices: ColIndices,
+  creds?: EcwidTransferCreds | null,
+  opts?: { allowEnvFallback?: boolean },
 ): Promise<any[][]> {
-  const storeId = requiredEnv('ECWID_STORE_ID', [
+  if (!creds?.storeId || !creds?.token) {
+    if (!opts?.allowEnvFallback) {
+      throw new Error(
+        'ECWID_NOT_CONNECTED: no Ecwid vault credentials for this org (env fallback is dogfood-only)',
+      );
+    }
+  }
+  const storeId = creds?.storeId || requiredEnv('ECWID_STORE_ID', [
     'ECWID_STOREID',
     'ECWID_STORE',
     'NEXT_PUBLIC_ECWID_STORE_ID',
   ]);
-  const token = requiredEnv('ECWID_API_TOKEN', [
+  const token = creds?.token || requiredEnv('ECWID_API_TOKEN', [
     'ECWID_TOKEN',
     'ECWID_ACCESS_TOKEN',
     'NEXT_PUBLIC_ECWID_API_TOKEN',

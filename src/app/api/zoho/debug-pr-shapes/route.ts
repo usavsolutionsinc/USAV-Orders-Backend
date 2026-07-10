@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { zohoPost } from '@/lib/zoho/httpClient';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  *   serial_number?: string
  * }
  */
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const body = await request.json();
   const purchaseorder_id = String(body?.purchaseorder_id || '').trim();
   const line_item_id = String(body?.line_item_id || '').trim();
@@ -100,7 +101,10 @@ export const POST = withAuth(async (request: NextRequest) => {
   const results = [];
   for (const v of variants) {
     try {
-      const resp = await zohoPost<Record<string, unknown>>('/api/v1/purchasereceives', v.body, query);
+      // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+      const resp = await withZohoOrg(ctx.organizationId, () =>
+        zohoPost<Record<string, unknown>>('/api/v1/purchasereceives', v.body, query),
+      );
       results.push({
         label: v.label,
         ok: true,

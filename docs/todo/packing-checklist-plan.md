@@ -6,7 +6,22 @@ them confirm everything matches, and (optionally, per-org) blocking completion o
 short-ships until the box is matched — **without bricking tenants who haven't populated
 inventory yet.**
 
-Status: PLAN (not yet built). Date: 2026-06-21.
+Status: Phases 1–3 SHIPPED (2026-07-10) — Phase 1 exceeded:
+order-scoped condition-gated `OrderPackChecklist` across desktop + mobile pack surfaces,
+`GET /api/orders/[id]/pack-checklist`, kit-readiness `block_until_matched` enforcement
+(`src/lib/packing/kit-readiness.ts`), per-org enforcement toggle (`tenancy/settings.ts`),
+`/api/packing/policy`. Phase 2 shipped: tick persistence via
+`POST /api/orders/[id]/packing-checks` → `tech_verifications` (`source_kind='order'`,
+`step_type='PACKING'` for check templates / `'PACKING_PART'` for `sku_kit_parts` rows —
+two step_types so the two id namespaces can't collide in the idempotent upsert key;
+domain helper `src/lib/packing/packing-checks.ts`, permission `packing.complete_order`,
+optimistic ticks with quiet revert wired in `PackChecklist` + `OrderPackChecklist` via
+`usePackingCheckPersist`). Phase 3 shipped: order-level N/M lines-packed rollup
+(`progress.packedLines` from `packer_logs`, surfaced on the StationPacking active-order
+card). Residuals: the §2.1 `checklist_templates` rename migration was NOT needed for
+persistence and stays deferred; enforcement gating of completion beyond
+`block_until_matched` (block_short_ship) still open. Also shipped alongside (Tier-3 A3):
+`PackZendeskSection` — collapsed Zendesk ticket picker + comment box on the packing bench.
 
 ---
 

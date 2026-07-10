@@ -67,7 +67,7 @@ export const POST = withAuth(async (request, ctx) => {
       };
     },
   });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });
 
 /**
  * DELETE /api/warranty/claims/[id]/rma — detach the linked RMA (reverse of POST).
@@ -94,4 +94,4 @@ export const DELETE = withAuth(async (request, ctx) => {
     after: { rmaId: null },
   });
   return NextResponse.json({ ok: true, claim: result.claim });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

@@ -1,5 +1,17 @@
 # Incoming "Tracking To-Do" — plan
 
+> **Status:** SHIPPED through Phase 4 (2026-07-10) — row-anchored attach-tracking,
+> `/api/receiving-lines/incoming/todo` worklist, `invalidateReceivingFeeds`, presetPo popover,
+> EmailTriagePanel (`?incview=email`). Phase 4a SHIPPED: receiving-scoped
+> `POST /api/receiving-lines/incoming/match-email` (new `receiving.match_email` permission +
+> manifest test) links an unmatched email to an EXISTING `zoho_po_mirror` PO (pile→done,
+> audited `receiving.email.matched`; link-only — PO create/publish stays admin-gated).
+> Phase 4b SHIPPED (subscriber side): EmailTriagePanel + `useRealtimeInvalidation` now
+> subscribe the org station channel (`shipment.changed` + `email-signal.changed`) and
+> invalidate `['receiving-lines-incoming-todo']`; the poll remains as fallback.
+> **Deferred:** the server-side `email-signal.changed` publisher (publish.ts was in-flight) —
+> add `publishEmailSignalChanged()` from reconcile/rescan/match once publish.ts settles.
+
 Turn the **Incoming** receiving mode into a top-down **to-do list** that drives the
 inbound-ASN gap closed: surface the POs that have **no tracking yet**, let an operator
 attach tracking **from the row**, and pin **unmatched shipping emails** above them as the

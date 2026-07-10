@@ -19,7 +19,6 @@
  */
 
 import pool from '@/lib/db';
-import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { listMessageIds, fetchMessagesByIds } from '@/lib/po-gmail/messages';
 import { extractOrderNumbers, extractTrackingNumbers, isOrderDeliveredSubject } from '@/lib/po-gmail/extract';
 import {
@@ -88,10 +87,10 @@ export interface ReconcileRunOpts {
   persist?: boolean;
   /**
    * Calling tenant. The PO mailbox is USAV's singleton; non-USAV callers are
-   * rejected by the token guard before any Gmail read. Defaults to USAV so
-   * cron/server callers keep working without threading an org.
+   * rejected by the token guard before any Gmail read. Both routes thread
+   * `ctx.organizationId` — there is no session-less caller.
    */
-  orgId?: string;
+  orgId: string;
 }
 
 function clampLimit(raw: number | undefined): number {
@@ -103,11 +102,11 @@ function clampLimit(raw: number | undefined): number {
  * Run the reconcile pipeline. Pure of HTTP concerns — callers wrap with
  * `withAuth` and shape the response (full vs counts-only) themselves.
  */
-export async function runPoMailboxReconcile(opts: ReconcileRunOpts = {}): Promise<ReconcileRunResult> {
+export async function runPoMailboxReconcile(opts: ReconcileRunOpts): Promise<ReconcileRunResult> {
   const limit = clampLimit(opts.limit);
   const query = opts.query ?? 'is:unread';
   const persist = opts.persist !== false; // default true
-  const orgId = opts.orgId ?? USAV_ORG_ID;
+  const orgId = opts.orgId;
 
   const startedAt = Date.now();
   const { ids } = await listMessageIds(query, limit, undefined, orgId);

@@ -12,6 +12,7 @@ import {
   TrackingChip,
   SerialChip,
   getLast4,
+  getLast8,
 } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
@@ -146,6 +147,7 @@ export function ReceivingIdentityChips({
   const trackCol = dense ? 'w-[52px]' : CHIP_COL.tracking;
   const serialCol = dense ? 'w-[52px]' : CHIP_COL.serial;
 
+  const trackingDisplay = trackingValue.length >= 8 ? getLast8(trackingValue) : getLast4(trackingValue);
   if (asColumns) {
     const columns: ChipColumn[] = [];
     if (includePo) {
@@ -160,7 +162,7 @@ export function ReceivingIdentityChips({
         width: trackCol,
         node:
           trackingNode ??
-          (isPickup ? null : <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />),
+          (isPickup ? null : <TrackingChip value={trackingValue} display={trackingDisplay} dense={dense} />),
       });
     }
     if (includeSerial) {
@@ -175,7 +177,7 @@ export function ReceivingIdentityChips({
       {includeSku && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} dense={dense} />}
       {includeTracking &&
         (trackingNode ??
-          (!isPickup ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} /> : null))}
+          (!isPickup ? <TrackingChip value={trackingValue} display={trackingDisplay} dense={dense} /> : null))}
       {includeSerial && <SerialChip value={serialsValue} dense={dense} />}
     </div>
   );

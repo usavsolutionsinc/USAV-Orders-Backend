@@ -1,6 +1,6 @@
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { getOrders } from '@/lib/work-orders/queries';
-import { isOpsPlansUnifiedInboxEnabled } from '@/lib/ops-plans/flags';
+import { isOpsPlansUnifiedInbox } from '@/lib/ops-plans/flags';
 import {
   getReceivingWorkOrders,
   getRepairWorkOrders,
@@ -24,7 +24,7 @@ async function safeFetch<T>(label: string, fn: () => Promise<T[]>): Promise<T[]>
  */
 export async function fetchAllWorkOrderQueues(orgId: string): Promise<WorkOrderRow[]> {
   const orders = await safeFetch('getOrders', () => getOrders(orgId));
-  if (!isOpsPlansUnifiedInboxEnabled()) {
+  if (!(await isOpsPlansUnifiedInbox(orgId))) {
     return orders;
   }
   const [receiving, repairs, fba, stock] = await Promise.all([

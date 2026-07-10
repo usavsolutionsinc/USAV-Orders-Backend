@@ -269,12 +269,22 @@ function RecentBinsActivity() {
 
 // ── Map sidebar — view-mode toggle + legend ───────────────────────────────
 
+/** Table color modes + the React Flow floor-plan renderer (Phase 1: fill colors). */
+type MapSidebarView = MapViewMode | 'floorplan';
+
+const MAP_VIEW_LABELS: Record<MapSidebarView, string> = {
+  fill: 'Fill',
+  age: 'Age',
+  issues: 'Issues',
+  floorplan: 'Floor plan',
+};
+
 function MapSidebarBody() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const view = parseView(searchParams.get('view'));
 
-  const setView = (next: MapViewMode) => {
+  const setView = (next: MapSidebarView) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', 'map');
     params.set('view', next);
@@ -287,8 +297,8 @@ function MapSidebarBody() {
         <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
           View by
         </h3>
-        <div className="grid grid-cols-3 gap-1">
-          {(['fill', 'age', 'issues'] as MapViewMode[]).map((m) => {
+        <div className="grid grid-cols-2 gap-1">
+          {(['fill', 'age', 'issues', 'floorplan'] as MapSidebarView[]).map((m) => {
             const active = view === m;
             return (
               <button
@@ -301,7 +311,7 @@ function MapSidebarBody() {
                     : 'text-text-muted hover:bg-surface-sunken'
                 }`}
               >
-                {m === 'fill' ? 'Fill' : m === 'age' ? 'Age' : 'Issues'}
+                {MAP_VIEW_LABELS[m]}
               </button>
             );
           })}
@@ -312,13 +322,13 @@ function MapSidebarBody() {
         <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-text-soft">
           Legend
         </h3>
-        <MapLegend mode={view} />
+        <MapLegend mode={view === 'floorplan' ? 'fill' : view} />
       </div>
     </div>
   );
 }
 
-function parseView(raw: string | null): MapViewMode {
-  if (raw === 'age' || raw === 'issues') return raw;
+function parseView(raw: string | null): MapSidebarView {
+  if (raw === 'age' || raw === 'issues' || raw === 'floorplan') return raw;
   return 'fill';
 }

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
-import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { withAuth } from '@/lib/auth/withAuth';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
-import { createAuditLog, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { normalizePSTTimestamp } from '@/utils/date';
 import { normalizeTrackingNumber } from '@/lib/tracking-format';
@@ -106,7 +105,7 @@ async function resolveShipmentViaOrderOrException(
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx) => {
-    const orgId = ctx.organizationId ?? USAV_ORG_ID;
+    const orgId = ctx.organizationId;
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const raw = String(
       (body?.trackingNumber ?? body?.tracking ?? body?.scan ?? '') as string,
@@ -208,18 +207,17 @@ export const POST = withAuth(
     });
 
     // Audit: the package physically left the warehouse (mirrors packing-logs PACK_COMPLETED).
-    await createAuditLog(pool, {
-      actorStaffId: ctx.staffId,
+    await recordAudit(pool, ctx, req, {
       source: 'api.shipped.scan-out',
       action: AUDIT_ACTION.SHIP_CONFIRM_SCAN,
       entityType: AUDIT_ENTITY.SHIPMENT,
       entityId: String(shipmentId),
       stationActivityLogId: activityId,
-      metadata: {
+      extra: {
         tracking: ctxRow?.tracking ?? raw,
         order_id: ctxRow?.order_id ?? null,
       },
-    }).catch(() => {});
+    });
 
     // Bust the shipped/packer-logs cache so the two tables reflect the move.
     await invalidateCacheTags(['packing-logs', 'shipped']).catch(() => {});
@@ -248,7 +246,7 @@ export const POST = withAuth(
  */
 export const DELETE = withAuth(
   async (req: NextRequest, ctx) => {
-    const orgId = ctx.organizationId ?? USAV_ORG_ID;
+    const orgId = ctx.organizationId;
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const shipmentId = Number(body?.shipmentId);
     if (!Number.isFinite(shipmentId) || shipmentId <= 0) {

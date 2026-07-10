@@ -17,6 +17,14 @@ export type PhotoEntityType = (typeof PHOTO_ENTITY_TYPES)[number];
 export const PHOTO_LINK_ROLES = ['primary', 'claim_evidence', 'insurance_share'] as const;
 export type PhotoLinkRole = (typeof PHOTO_LINK_ROLES)[number];
 
+/**
+ * `photo_type` for a testing-label scan photo (packer scans a printed unit label
+ * at the station → phone captures photos linked to the SERIAL_UNIT). Distinct
+ * from receiving (`receiving_item`/`receiving_package`) and packer
+ * (`packer_photo`) so unit-scan photos never collide in queries or the timeline.
+ */
+export const UNIT_TESTING_PHOTO_TYPE = 'testing_photo';
+
 export const PHOTO_STORAGE_PROVIDERS = [
   'gcs',
   'vercel_blob',

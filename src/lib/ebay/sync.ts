@@ -1,3 +1,7 @@
+// TODO(plan-ceilings): high-volume ingestion path — deliberately NOT gated on
+// `maxMonthlyOrders` (never block a sync mid-stream). If metered enforcement is
+// ever wanted here, check wouldExceedPlanCeiling(orgId, 'maxMonthlyOrders')
+// (src/lib/billing/plan-ceilings.ts) BEFORE starting a batch, not per-order.
 import { EbayClient } from './client';
 import pool from '@/lib/db';
 import { EBAY_PLATFORM_PREDICATE } from './credentials';

@@ -157,4 +157,4 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
       { status: 500 }
     );
   }
-}, { permission: 'fba.view' });
+}, { permission: 'fba.view', feature: 'fba' });

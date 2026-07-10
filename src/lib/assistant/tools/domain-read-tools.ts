@@ -74,22 +74,18 @@ async function loadDefaultJourneyDeps(): Promise<OperationsJourneyDeps> {
   };
 }
 
-export const getOperationsJourney: AssistantToolDef<
-  z.ZodObject<{
-    dim: z.ZodEnum<['order', 'serial', 'tracking']>;
-    value: z.ZodString;
-    limit: z.ZodDefault<z.ZodNumber>;
-  }>
-> = {
+const operationsJourneyInput = z.object({
+  dim: z.enum(['order', 'serial', 'tracking']),
+  value: z.string().min(1).max(200),
+  limit: rowLimit(80, 40),
+});
+
+export const getOperationsJourney: AssistantToolDef<typeof operationsJourneyInput> = {
   name: 'get_operations_journey',
   description:
     'THE cross-station timeline for one order/serial/tracking — receiving → test → pack → ship → return → warranty. Use when the user asks "what happened to", "full history", "trace", or after hybrid_entity_search finds an id. Returns anchors + trimmed events with sources.',
   permission: 'operations.view',
-  inputSchema: z.object({
-    dim: z.enum(['order', 'serial', 'tracking']),
-    value: z.string().min(1).max(200),
-    limit: rowLimit(80, 40),
-  }),
+  inputSchema: operationsJourneyInput,
   run: async (input, ctx, _deps) => {
     const journeyDeps =
       (_deps as AssistantToolDeps & { journey?: OperationsJourneyDeps }).journey ??

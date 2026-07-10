@@ -177,6 +177,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'fba.stage_shipments',
+  feature: 'fba',
   audit: {
     source: 'fba.labels.bind',
     action: 'fba.label.bind',

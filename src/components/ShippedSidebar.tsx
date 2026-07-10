@@ -31,6 +31,7 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { ShippedActionsButton } from '@/components/shipped/ShippedActionsButton';
 import { OutboundStatusLegend } from '@/components/shipped/OutboundStatusLegend';
 import { FirstScanOnboardingCard } from '@/components/dashboard/FirstScanOnboardingCard';
+import { GettingStartedChecklist } from '@/components/dashboard/GettingStartedChecklist';
 import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
 import { useAiQuickJump } from '@/hooks/useAiQuickJump';
 import { AiQuickJumpResults } from '@/components/search/AiQuickJumpResults';
@@ -361,6 +362,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                         <ShippedActionsButton />
                         <div className="space-y-3 border-t border-border-hairline pt-3">
                             <FirstScanOnboardingCard variant="sidebar" />
+                            <GettingStartedChecklist variant="sidebar" />
                             <ThroughputRoiCard variant="sidebar" />
                         </div>
 

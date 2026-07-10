@@ -74,4 +74,4 @@ export const POST = withAuth(async (request, ctx) => {
       return { status: 201, body: { ok: true, attemptId: result.attemptId, claim: result.claim } };
     },
   });
-}, { permission: 'warranty.repair' });
+}, { permission: 'warranty.repair', feature: 'repair' });

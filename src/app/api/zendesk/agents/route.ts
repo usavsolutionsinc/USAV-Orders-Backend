@@ -35,5 +35,5 @@ export const GET = withAuth(
       return errorResponse(err, context);
     }
   },
-  { permission: 'integrations.zendesk' },
+  { permission: 'integrations.zendesk', feature: 'support' },
 );

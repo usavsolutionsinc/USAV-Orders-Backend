@@ -7,6 +7,7 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { createCacheLookupKey, getCachedJson, setCachedJson, invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
@@ -238,8 +239,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                         [newReceivingId, lineIds]
                     );
                 } else {
-                    // 1b. Search Zoho Purchase Receives by tracking
-                    const zohoReceives = await searchPurchaseReceivesByTracking(trackingNumber).catch(() => []);
+                    // 1b. Search Zoho Purchase Receives by tracking (bound to
+                    // the authenticated tenant's Zoho credentials).
+                    const zohoReceives = await withZohoOrg(ctx.organizationId, () =>
+                        searchPurchaseReceivesByTracking(trackingNumber),
+                    ).catch(() => []);
                     let matchedPoIds: string[] = [];
 
                     if (zohoReceives.length > 0) {
@@ -289,7 +293,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
                     // 1c. If no receives matched, search Zoho POs directly
                     if (zohoReceives.length === 0) {
-                        const zohoPOs = await searchPurchaseOrdersByTracking(trackingNumber).catch(() => []);
+                        const zohoPOs = await withZohoOrg(ctx.organizationId, () =>
+                            searchPurchaseOrdersByTracking(trackingNumber),
+                        ).catch(() => []);
                         for (const po of zohoPOs.slice(0, 3)) {
                             const poId = po.purchaseorder_id;
                             if (!poId || matchedPoIds.includes(poId)) continue;

@@ -84,12 +84,14 @@ export async function createFailureMode(params: {
   capsGradeAt?: string | null;
   sortOrder?: number;
 }, orgId?: OrgId): Promise<FailureModeRow> {
-  // failure_modes has NO organization_id column (NEEDS-COL): nothing to stamp.
-  // When orgId is present we still route the write through the tenant pool so
-  // the GUC is set (RLS-ready) and the write is transactional.
+  // failure_modes DOES have organization_id (usav-fallback default until the
+  // 2026-07-09a DEFAULT-drop migration flips it to loud-fail): stamp it
+  // explicitly so the write never leans on the column default. When orgId is
+  // present we also route through the tenant pool so the GUC is set
+  // (RLS-ready) and the write is transactional.
   const sql = `INSERT INTO failure_modes
-       (code, label, category, severity, is_repairable, typical_cost_cents, caps_grade_at, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::condition_grade_enum, $8)
+       (code, label, category, severity, is_repairable, typical_cost_cents, caps_grade_at, sort_order, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::condition_grade_enum, $8, $9)
      RETURNING *`;
   const values = [
     params.code.trim().toUpperCase(),
@@ -100,6 +102,7 @@ export async function createFailureMode(params: {
     params.typicalCostCents ?? null,
     params.capsGradeAt ?? null,
     params.sortOrder ?? 0,
+    orgId ?? null,
   ];
   if (orgId) {
     return withTenantTransaction(orgId, async (client) => {
@@ -278,6 +281,52 @@ export async function tagUnitFailure(params: {
     [params.serialUnitId, params.failureModeId],
   );
   return existing.rows[0];
+}
+
+/**
+ * Auto-resolve on QC re-pass (reversibility 5.9): flip the OPEN tag for
+ * (unit, mode) to 'resolved'. Mirrors tagUnitFailure's org scoping — the
+ * table has no organization_id column, so the UPDATE is gated by an EXISTS
+ * on the org-bearing parent serial_units. Returns the resolved row, or null
+ * when there was no open tag for that mode (idempotent no-op; a cross-tenant
+ * unit also matches zero rows).
+ */
+export async function resolveOpenUnitFailureTagByMode(params: {
+  serialUnitId: number;
+  failureModeId: number;
+  notes?: string | null;
+}, orgId?: OrgId): Promise<UnitFailureTagRow | null> {
+  const noteVal = params.notes?.trim() || null;
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const r = await client.query<UnitFailureTagRow>(
+        `UPDATE unit_failure_tags t
+            SET resolution_status = 'resolved',
+                notes = COALESCE($3, t.notes)
+          WHERE t.serial_unit_id = $1
+            AND t.failure_mode_id = $2
+            AND t.resolution_status = 'open'
+            AND EXISTS (
+              SELECT 1 FROM serial_units su
+               WHERE su.id = t.serial_unit_id AND su.organization_id = $4
+            )
+          RETURNING t.*`,
+        [params.serialUnitId, params.failureModeId, noteVal, orgId],
+      );
+      return r.rows[0] ?? null;
+    });
+  }
+  const r = await pool.query<UnitFailureTagRow>(
+    `UPDATE unit_failure_tags
+        SET resolution_status = 'resolved',
+            notes = COALESCE($3, notes)
+      WHERE serial_unit_id = $1
+        AND failure_mode_id = $2
+        AND resolution_status = 'open'
+      RETURNING *`,
+    [params.serialUnitId, params.failureModeId, noteVal],
+  );
+  return r.rows[0] ?? null;
 }
 
 export async function resolveUnitFailureTag(

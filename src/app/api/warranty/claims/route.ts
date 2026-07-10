@@ -50,7 +50,7 @@ export const GET = withAuth(async (request, ctx) => {
     console.error('[GET /api/warranty/claims] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'warranty.view' });
+}, { permission: 'warranty.view', feature: 'repair' });
 
 /**
  * POST /api/warranty/claims
@@ -112,4 +112,4 @@ export const POST = withAuth(async (request, ctx) => {
       return { status: 201, body: { ok: true, claim: result.claim } };
     },
   });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

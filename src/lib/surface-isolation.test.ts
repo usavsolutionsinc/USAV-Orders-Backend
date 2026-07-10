@@ -12,6 +12,8 @@ test('resolveLiveReceivingMode is path-first for graduated routes', () => {
   assert.equal(resolveLiveReceivingMode('/receiving/history', sp), 'history');
   assert.equal(resolveLiveReceivingMode('/unbox', sp), 'receive');
   assert.equal(resolveLiveReceivingMode('/triage', sp), 'triage');
+  assert.equal(resolveLiveReceivingMode('/incoming', sp), 'incoming');
+  assert.equal(resolveLiveReceivingMode('/pickup', sp), 'pickup');
 });
 
 test('resolveLiveReceivingMode falls back to ?mode= on legacy /receiving', () => {

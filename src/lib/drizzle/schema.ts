@@ -3220,6 +3220,17 @@ export const organizationIntegrations = pgTable('organization_integrations', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   /** Added 2026-06-20_zoho_webhook_org_resolution.sql — resolves inbound webhooks to an org. */
   webhookToken: text('webhook_token'),
+  // ── Operational columns (2026-07-09d_org_integrations_operational_cols.sql) ──
+  /** When the connector orchestrator last ran this connection's sync(). */
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  /** Outcome of the last sync run — CHECK ('ok' | 'error' | 'never'); NULL on pre-migration rows. */
+  lastSyncStatus: text('last_sync_status').default('never'),
+  /** Opaque incremental watermark persisted for the next sync run. */
+  syncCursor: text('sync_cursor'),
+  /** Per-connection kill switch. */
+  enabled: boolean('enabled').default(true),
+  /** Access-token expiry — drives the token refresh sweep (connectors/refresh-sweep.ts). */
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
 }, (table) => ({
   providerScopeUx: uniqueIndex('uq_org_integrations_provider_scope').on(table.organizationId, table.provider, sql`COALESCE(${table.scope}, '')`),
   webhookTokenUx: uniqueIndex('ux_org_integrations_webhook_token').on(table.webhookToken).where(sql`webhook_token IS NOT NULL`),
@@ -3659,6 +3670,35 @@ export const workflowRuns = pgTable('workflow_runs', {
 }, (table) => ({
   unitIdx: index('idx_workflow_runs_serial_unit_id').on(table.serialUnitId),
   orgCreatedIdx: index('idx_workflow_runs_org_created').on(table.organizationId, table.createdAt),
+}));
+
+// workflow_tap_outbox — intended-tap outbox (2026-07-09b migration). One row
+// per tapWorkflow attempt when WORKFLOW_TAP_OUTBOX is on: PENDING before
+// advance(), LANDED on a durable outcome (moved/done/blocked), FAILED on a
+// permanent non-apply. Re-driven by /api/cron/workflow/tap-reconcile.
+// `status` has a named CHECK in the migration: PENDING | LANDED | FAILED.
+export const workflowTapOutbox = pgTable('workflow_tap_outbox', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  serialUnitId: bigint('serial_unit_id', { mode: 'number' })
+    .notNull()
+    .references(() => serialUnits.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(), // WorkflowTapEvent (code-owned vocabulary)
+  // Re-drive payload: { input, staffId, source, expectNodeType } as passed to tapWorkflow.
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  status: text('status').notNull().default('PENDING'), // PENDING | LANDED | FAILED (CHECK in migration)
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgUnitIdx: index('idx_workflow_tap_outbox_org_unit').on(
+    table.organizationId,
+    table.serialUnitId,
+    table.createdAt,
+  ),
+  // Partial pending index (WHERE status='PENDING') lives in the migration —
+  // Drizzle models the full-column shape only.
 }));
 
 // workflow_node_stats — daily per-node queue-depth snapshots for the Studio
@@ -4196,3 +4236,32 @@ export type NewOpsPlan = typeof opsPlans.$inferInsert;
 export type OpsPlanPhase = typeof opsPlanPhases.$inferSelect;
 export type OpsPlanTask = typeof opsPlanTasks.$inferSelect;
 export type OpsPlanTaskLink = typeof opsPlanTaskLinks.$inferSelect;
+
+// ─── Beta intake funnel (pre-tenant, PLATFORM-GLOBAL) ────────────────────────
+// 2026-07-09e_beta_applications.sql — the $50 refundable beta application
+// pipeline (docs/todo/beta-intake-funnel-plan.md §5). INTENTIONALLY ORG-LESS:
+// rows are created from the public marketing site BEFORE any organization
+// exists (same ratified posture as beta_waitlist — see the migration header +
+// docs/tenancy/needs-col-classification.md). Do NOT add orgIdCol() here.
+// CHECK-constrained text discriminators (modeled per polymorphic-tables.md #8):
+//   tier   IN ('waitlist', 'application')                      — beta_applications_tier_chk
+//   status IN ('RECEIVED','UNDER_REVIEW','ACCEPTED','REFUNDED','REJECTED') — beta_applications_status_chk
+export const betaApplications = pgTable('beta_applications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  companyName: text('company_name'),
+  tier: text('tier').notNull().default('application'),
+  /** Keyed by the ontology question ids (plan §4); validated by src/lib/beta/apply-schema.ts. */
+  answers: jsonb('answers').notNull().default(sql`'{}'::jsonb`),
+  status: text('status').notNull().default('RECEIVED'),
+  /** Stripe Payment Link client_reference_id / checkout session id (manual v1 reconcile). */
+  stripeRef: text('stripe_ref'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  lowerEmailUniq: uniqueIndex('ux_beta_applications_lower_email').on(sql`lower(${table.email})`),
+  statusIdx: index('idx_beta_applications_status').on(table.status),
+}));
+
+export type BetaApplication = typeof betaApplications.$inferSelect;
+export type NewBetaApplication = typeof betaApplications.$inferInsert;

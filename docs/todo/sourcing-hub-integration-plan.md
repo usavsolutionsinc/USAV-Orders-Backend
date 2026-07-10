@@ -1,6 +1,19 @@
 # Sourcing Hub — Universal Demand → Scour → Acquire Plan
 
-**Status:** Proposed · **Created:** 2026-06-13 · **Supersedes scope of:**
+**Status:** ~80% SHIPPED (updated 2026-07-10) — 6-mode hub UI
+(`SourcingWorkspace`: scout/queue/searches/suppliers/watchlist/**analytics**), `SourceAdapter` layer
+(`src/lib/sourcing/adapters/`), saved standing searches (table + API + run route) + scour cron.
+**Demand collectors SHIPPED** (`src/lib/jobs/sourcing-demand-collectors.ts`, wired into
+`/api/cron/sourcing/scan` behind a per-org cap with dropped-count logging): missing-parts (pickup
+items), repair (`Awaiting Parts`), warranty (`APPROVED`/`IN_REPAIR`), pending-SKU (as
+`demand_no_stock` + `demand_source='pending_sku'` — the applied `alert_type` CHECK has no
+`pending_sku` value yet), replenishment shortfall (`fba_replenish`); all open through the single
+`createDemandAlert` writer (now arbitrates BOTH live unique indexes). **Analytics mode SHIPPED**
+(`?mode=analytics`, `GET /api/sourcing/analytics` over `part_acquisitions` + catalog cost fields —
+spend/wk, fill-rate, time-to-source, cost vs target; Operations chart primitives reused).
+Residual: order-exception (`backorder`) collector, alert_type CHECK widening migration
+(`pending_sku`/`reorder`/`backorder`), sell-side items; external approvals stay owner-gated.
+· **Created:** 2026-06-13 · **Supersedes scope of:**
 `docs/bose-parts-sourcing-engine-plan.md` (kept as the origin/backend runbook).
 
 This plan turns the existing **Bose-parts** sourcing engine into a **universal sourcing &

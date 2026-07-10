@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, AlertCircle, Info, Loader2 } from '@/components/Icons';
 import { evaluateKitReadiness, type PackingEnforcement } from '@/lib/packing/kit-readiness';
 import type { PackChecklistLineDto } from '@/lib/packing/order-pack-checklist';
+import { usePackingCheckPersist } from '@/hooks/usePackingCheckPersist';
 import { PackChecklistLineRow } from './PackChecklistLineRow';
 
 interface OrderPackChecklistProps {
@@ -40,6 +41,19 @@ export function OrderPackChecklist({
   const [tickedKitParts, setTickedKitParts] = useState<Set<number>>(new Set());
   const [tickedChecks, setTickedChecks] = useState<Set<number>>(new Set());
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const { persistTick } = usePackingCheckPersist();
+
+  const setInSet = (
+    setter: React.Dispatch<React.SetStateAction<Set<number>>>,
+    id: number,
+    on: boolean,
+  ) =>
+    setter((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   useEffect(() => {
     setTickedLines(new Set());
@@ -122,23 +136,22 @@ export function OrderPackChecklist({
               onToggleCheck={() => toggleLine(key)}
               onToggleExpand={() => setExpandedKey((prev) => (prev === key ? null : key))}
               tickedKitParts={tickedKitParts}
-              onToggleKitPart={(partId) =>
-                setTickedKitParts((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(partId)) next.delete(partId);
-                  else next.add(partId);
-                  return next;
-                })
-              }
+              onToggleKitPart={(partId) => {
+                // Optimistic apply → quiet revert on persist failure (Phase 2).
+                const nowChecked = !tickedKitParts.has(partId);
+                setInSet(setTickedKitParts, partId, nowChecked);
+                void persistTick(line.orderRowId, 'KIT_PART', partId, nowChecked).then((ok) => {
+                  if (!ok) setInSet(setTickedKitParts, partId, !nowChecked);
+                });
+              }}
               tickedChecks={tickedChecks}
-              onToggleCheckItem={(checkId) =>
-                setTickedChecks((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(checkId)) next.delete(checkId);
-                  else next.add(checkId);
-                  return next;
-                })
-              }
+              onToggleCheckItem={(checkId) => {
+                const nowChecked = !tickedChecks.has(checkId);
+                setInSet(setTickedChecks, checkId, nowChecked);
+                void persistTick(line.orderRowId, 'PACKING_CHECK', checkId, nowChecked).then((ok) => {
+                  if (!ok) setInSet(setTickedChecks, checkId, !nowChecked);
+                });
+              }}
               variant={variant}
             />
           );

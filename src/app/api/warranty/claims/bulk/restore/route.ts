@@ -79,4 +79,4 @@ export const POST = withAuth(async (request, ctx) => {
       };
     },
   });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

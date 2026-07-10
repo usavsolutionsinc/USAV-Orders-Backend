@@ -1,6 +1,7 @@
 import {
   packerKpiSummaryToCsvRows,
   totalBoxesPacked,
+  type PackerDailyCsvRow,
   type PackingKpiPeriodSummary,
   type PackingKpiSummary,
 } from '@/lib/packing/packer-kpi-queries';
@@ -50,7 +51,7 @@ function padCell(value: string, width: number): string {
 function buildAsciiTable(summary: PackingKpiSummary, options?: { showPercentOfDay?: boolean }): string[] {
   const showPercentOfDay = options?.showPercentOfDay ?? true;
   const rows = packerKpiSummaryToCsvRows(summary);
-  const cols = [
+  const cols: Array<{ key: keyof PackerDailyCsvRow; label: string; width: number }> = [
     { key: 'packer', label: 'Packer', width: 14 },
     { key: 'boxes', label: 'Boxes', width: 7 },
     { key: 'small', label: 'Small', width: 7 },

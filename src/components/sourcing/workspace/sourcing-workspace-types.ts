@@ -107,6 +107,35 @@ export interface SavedSearch {
   product_title: string | null;
 }
 
+/** GET /api/sourcing/analytics response (`analytics`). */
+export interface SourcingAnalyticsData {
+  range: '30d' | '90d' | '1y';
+  spendByWeek: { bucket: string; acquisitions: number; spend_cents: number }[];
+  acquisitions: {
+    ordered: number;
+    received: number;
+    spend_cents: number;
+    avg_days_order_to_receive: number | null;
+  };
+  demand: {
+    opened: number;
+    resolved: number;
+    dismissed: number;
+    avg_days_demand_to_order: number | null;
+    sourced_from_alerts: number;
+  };
+  skuCosts: {
+    sku_id: number;
+    sku: string | null;
+    product_title: string | null;
+    acquisitions: number;
+    avg_cost_cents: number | null;
+    last_known_cost_cents: number | null;
+    replenish_target_cents: number | null;
+    spend_cents: number;
+  }[];
+}
+
 export interface SupplierStats {
   id: number;
   name: string;

@@ -1,4 +1,5 @@
-export type { TimelineItem, TimelineItemBadge, TimelineTone, TimelineRef, TimelineRefKind } from './types';
+export type { TimelineItem, TimelineItemBadge, TimelineTone, TimelineRef, TimelineRefKind, TimelineMedia } from './types';
+export { unitPhotosToTimeline, type UnitTimelinePhotoRow } from './unit-photos-events';
 export { carrierEventsToTimeline, type CarrierEvent } from './carrier-events';
 export { orderAuditToTimeline, type OrderAuditRow } from './order-events';
 export { inventoryEventsToTimeline, type InventoryTimelineRow } from './inventory-events';

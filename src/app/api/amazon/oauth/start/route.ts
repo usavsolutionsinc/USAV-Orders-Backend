@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
+import { assertCanConnectProvider } from '@/lib/integrations/connectors/connections';
 import { encryptIntegrationPayload } from '@/lib/integrations/crypto';
 import { amazonAppConfig } from '@/lib/amazon/client';
 import { SELLERCENTRAL_HOSTS, isAmazonRegion, type AmazonRegion } from '@/lib/amazon/constants';
@@ -16,6 +17,10 @@ export const dynamic = 'force-dynamic';
  * URI with `spapi_oauth_code` + `selling_partner_id`.
  */
 export const GET = withAuth(async (req, ctx) => {
+  // Plan ceiling: connecting a NEW provider must fit the org's maxIntegrations.
+  const refusal = await assertCanConnectProvider(ctx.organizationId, 'amazon');
+  if (refusal) return NextResponse.json(refusal, { status: 403 });
+
   const app = amazonAppConfig();
   if (!app.appId || !app.clientId || !app.clientSecret || !app.redirectUri) {
     return NextResponse.json(

@@ -40,4 +40,4 @@ export const POST = withAuth(async (request, ctx) => {
     after: { claimNumber: restored[0].claimNumber },
   });
   return NextResponse.json({ ok: true, restored: restored[0] });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

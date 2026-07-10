@@ -212,4 +212,4 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     console.error('GET /api/repair-service/next error:', error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}, { permission: 'repair.view' });
+}, { permission: 'repair.view', feature: 'repair' });

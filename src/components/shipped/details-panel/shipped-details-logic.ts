@@ -3,7 +3,22 @@ import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { DeleteOrderRowPayload } from '@/hooks/useDeleteOrderRow';
 import { getStaffName } from '@/utils/staff';
 import { toPSTDateKey } from '@/utils/date';
-import { resolveFulfillmentLane } from '@/lib/order-lifecycle';
+import { resolveFulfillmentLane, hasLeftWarehouse } from '@/lib/order-lifecycle';
+
+/**
+ * Has this order shipped (left the warehouse)? The canonical "post-dock" test —
+ * scanned out at the dock, or the carrier already has custody
+ * (accepted/in-transit/out-for-delivery/delivered/returned), or a derived
+ * shipped/delivered flag. Gates edits that must freeze once an order is gone
+ * (e.g. the condition grade — you can't re-grade what already shipped).
+ */
+export function isOrderShipped(shipped: ShippedOrder): boolean {
+  if (shipped.is_shipped === true || shipped.is_delivered === true) return true;
+  return hasLeftWarehouse({
+    shipConfirmedAt: shipped.ship_confirmed_at ?? null,
+    latestStatusCategory: shipped.latest_status_category ?? null,
+  });
+}
 
 /** Build the work-order assignment row model for a shipped order. */
 export function buildAssignmentRow(shipped: ShippedOrder): WorkOrderRow {

@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/withAuth';
+import { assertCanConnectProvider } from '@/lib/integrations/connectors/connections';
 import { isNangoConfigured, createNangoConnectSession, nangoProviderConfigKey } from '@/lib/integrations/nango';
 import { isNangoBackedProvider } from '@/lib/integrations/nango-providers';
 
@@ -41,6 +42,11 @@ export const POST = withAuth(async (req, ctx) => {
   if (!providerConfigKey) {
     return NextResponse.json({ error: 'PROVIDER_NOT_NANGO_BACKED', provider: parsed.provider }, { status: 400 });
   }
+
+  // Plan ceiling: connecting a NEW provider must fit the org's maxIntegrations.
+  // (parsed.provider is narrowed to IntegrationProvider by isNangoBackedProvider.)
+  const refusal = await assertCanConnectProvider(ctx.organizationId, parsed.provider);
+  if (refusal) return NextResponse.json(refusal, { status: 403 });
 
   const session = await createNangoConnectSession({
     orgId: ctx.organizationId,

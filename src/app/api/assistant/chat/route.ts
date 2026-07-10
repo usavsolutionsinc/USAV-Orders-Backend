@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/withAuth';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { runAssistantTurn, type AssistantEmit } from '@/lib/assistant/agent-loop';
 import {
   enrichAssistantTurn,
@@ -136,11 +136,12 @@ async function streamHermesCompletion(args: {
 }
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'assistant-chat',
     limit: Number(process.env.ASSISTANT_CHAT_RATE_LIMIT || 25),
     windowMs: 60 * 1000,
+    organizationId: ctx.organizationId,
   });
   if (!rate.ok) {
     return NextResponse.json({ error: 'Rate limit exceeded. Try again shortly.' }, { status: 429 });

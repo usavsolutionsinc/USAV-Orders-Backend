@@ -53,8 +53,8 @@ export async function POST(
         : null;
 
     const staffId =
-      ctx.staffId != null && Number.isFinite(ctx.staffId) && ctx.staffId > 0
-        ? Math.floor(ctx.staffId)
+      gate.ctx.staffId != null && Number.isFinite(gate.ctx.staffId) && gate.ctx.staffId > 0
+        ? Math.floor(gate.ctx.staffId)
         : null;
 
     const notes = String(body?.notes || '').trim() || null;

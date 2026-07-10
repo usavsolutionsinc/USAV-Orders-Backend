@@ -1,6 +1,11 @@
 # Phase 1 — Tenant Isolation via RLS (gated rollout)
 
-**Status:** Plan + infrastructure migration drafted (2026-06-13). Not yet enforced on any table.
+**Status:** ~90% SHIPPED (re-verified 2026-07-09; this header was stale). `enforce_tenant_isolation()`
+infra live; **72** migration files call it; 192/206 org-id tables FORCEd; `app_tenant` two-pool split;
+CI cross-org canary + guard gates hard-block (`.github/workflows/ci.yml:144-150`). Residual: tail
+cohort FORCE + `transitionalUsavOrgId` caller reduction (being burned down in the 2026-07-09 tenancy
+wave — see `docs/todo/TODO-BACKLOG-SCOUT-MAP.md`).
+_Original header (2026-06-13): "Plan + infrastructure migration drafted. Not yet enforced on any table."_
 **Goal:** A second tenant's data is isolated at the database, even if a handler forgets to filter — closing the cross-tenant leak before onboarding real external customers.
 
 ---

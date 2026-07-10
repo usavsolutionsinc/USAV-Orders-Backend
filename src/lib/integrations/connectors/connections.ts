@@ -10,6 +10,7 @@ import pool from '@/lib/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntegrationProvider } from '@/lib/integrations/credentials';
 import { entitlementsForPlan } from '@/lib/billing/plans';
+import { isPlanFeatureExemptOrg, planFeatureEnforced } from '@/lib/billing/plan-feature-gate';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getConnector } from './registry';
 import type { ConnectionState, ConnectionStatus } from './types';
@@ -115,4 +116,48 @@ export async function wouldExceedIntegrationLimit(
   if (existing?.connected) return false;
   const { atLimit } = await integrationLimitStatus(orgId);
   return atLimit;
+}
+
+/** The typed 403 body every connect/start route returns when the plan's
+ *  `maxIntegrations` ceiling would be exceeded. Shape is a contract with the
+ *  settings UI (upgrade CTA keys off `error: 'PLAN_LIMIT'` + `upgrade: true`). */
+export interface PlanLimitRefusal {
+  ok: false;
+  error: 'PLAN_LIMIT';
+  limit: 'maxIntegrations';
+  upgrade: true;
+}
+
+/**
+ * Entitlement guard for EVERY integration connect/start path (eBay, Amazon,
+ * Google Drive, Nango session, …). Returns the typed refusal when connecting
+ * `provider` as a NEW provider would exceed the org's plan ceiling, or `null`
+ * when the connect may proceed (reconnecting an already-connected provider is
+ * always allowed). Route wiring:
+ *
+ *   const refusal = await assertCanConnectProvider(ctx.organizationId, 'ebay');
+ *   if (refusal) return NextResponse.json(refusal, { status: 403 });
+ *
+ * PERMISSIVE BY DEFAULT (mirrors plan-feature-gate.ts): a NO-OP with no DB
+ * read until `PLAN_FEATURE_ENFORCED` is on; the dogfood/internal org is always
+ * exempt; any infra error fails open — a flaky read must never block a
+ * tenant from connecting an integration.
+ */
+export async function assertCanConnectProvider(
+  orgId: OrgId,
+  provider: IntegrationProvider,
+): Promise<PlanLimitRefusal | null> {
+  if (!planFeatureEnforced()) return null;
+  if (isPlanFeatureExemptOrg(orgId)) return null;
+  try {
+    const exceeds = await wouldExceedIntegrationLimit(orgId, provider);
+    if (!exceeds) return null;
+    return { ok: false, error: 'PLAN_LIMIT', limit: 'maxIntegrations', upgrade: true };
+  } catch (err) {
+    console.warn(
+      '[connections] assertCanConnectProvider failed open:',
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
 }

@@ -68,6 +68,7 @@ export const PERMISSIONS = [
   { id: 'receiving.mark_received',  category: 'receiving', label: 'Mark received' },
   { id: 'receiving.upload_photo',   category: 'receiving', label: 'Upload receiving photo' },
   { id: 'receiving.bin_assign',     category: 'receiving', label: 'Assign bin from receiving' },
+  { id: 'receiving.match_email',    category: 'receiving', label: 'Match shipping email to PO' },
   { id: 'handling_unit.view',       category: 'receiving', label: 'View handling units (boxes / LPN)' },
   { id: 'handling_unit.manage',     category: 'receiving', label: 'Manage handling units (mint, assign, move)' },
 
@@ -87,6 +88,7 @@ export const PERMISSIONS = [
   { id: 'tech.qc_fail',             category: 'tech', label: 'QC fail' },
   { id: 'tech.data_wipe',           category: 'tech', label: 'Data wipe (secure erase)' },
   { id: 'tech.assign_bin',          category: 'tech', label: 'Assign bin from tech' },
+  { id: 'tech.substitute_unit',     category: 'tech', label: 'Substitute fulfilled unit (tech bench)' },
   { id: 'serial_units.grade',       category: 'tech', label: 'Grade serial unit (condition)' },
   { id: 'repair.view',              category: 'tech', label: 'View repair queue' },
   { id: 'repair.intake',            category: 'tech', label: 'Intake repair' },
@@ -194,6 +196,10 @@ export const PERMISSIONS = [
   { id: 'admin.manage_features',    category: 'admin', label: 'Manage features' },
   { id: 'admin.view_logs',          category: 'admin', label: 'View admin logs' },
   { id: 'admin.view_sessions',      category: 'admin', label: 'View active sessions' },
+  // Platform-operator only: the pre-tenant beta application funnel
+  // (beta_applications is org-less; reviewing it is a platform job, not a
+  // tenant-admin job — grant on the platform org's owner roles only).
+  { id: 'beta.review',              category: 'admin', label: 'Review beta applications (platform funnel)' },
 ] as const satisfies ReadonlyArray<PermissionDef>;
 
 // ─── Derived shapes ─────────────────────────────────────────────────────────

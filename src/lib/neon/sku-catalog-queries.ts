@@ -959,9 +959,11 @@ export async function ensureSkuCatalogEntry(
   // 2. Zoho fallback — dynamic import keeps Zoho out of non-receiving code paths
   try {
     const { zohoClient } = await import('@/lib/zoho/ZohoInventoryClient');
+    // Bind the caller's tenant so the Zoho client resolves THIS org's creds.
+    const { withZohoOrg } = await import('@/lib/zoho/tenant-context');
 
     if (hint?.zoho_item_id) {
-      const item = await zohoClient.getItem(hint.zoho_item_id);
+      const item = await withZohoOrg(orgId, () => zohoClient.getItem(hint.zoho_item_id!));
       if (item?.sku) {
         const catalog = await upsertSkuCatalog({
           sku: item.sku,
@@ -983,7 +985,7 @@ export async function ensureSkuCatalogEntry(
     }
 
     if (trimmed) {
-      const listRes = await zohoClient.listItems({ sku: trimmed });
+      const listRes = await withZohoOrg(orgId, () => zohoClient.listItems({ sku: trimmed }));
       const match =
         listRes.items?.find((i) => i.sku === trimmed) || listRes.items?.[0];
       if (match?.sku) {

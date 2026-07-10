@@ -16,6 +16,7 @@ import { QueuePane } from './workspace/QueuePane';
 import { SearchesPane } from './workspace/SearchesPane';
 import { SuppliersPane } from './workspace/SuppliersPane';
 import { WatchlistPane } from './workspace/WatchlistPane';
+import { AnalyticsPane } from './workspace/AnalyticsPane';
 
 export function SourcingWorkspace() {
   const searchParams = useSearchParams();
@@ -31,6 +32,8 @@ export function SourcingWorkspace() {
         <SearchesPane />
       ) : mode === 'suppliers' ? (
         <SuppliersPane />
+      ) : mode === 'analytics' ? (
+        <AnalyticsPane />
       ) : (
         <WatchlistPane />
       )}

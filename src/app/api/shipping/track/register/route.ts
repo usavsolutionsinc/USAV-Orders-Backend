@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { registerAndSyncShipment } from '@/lib/shipping/sync-shipment';
 import type { CarrierCode } from '@/lib/shipping/types';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'shipping-register',
     limit: 60,
     windowMs: 60_000,
+    organizationId: ctx.organizationId,
   });
   if (!rate.ok) {
     return NextResponse.json(

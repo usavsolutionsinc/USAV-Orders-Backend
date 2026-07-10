@@ -1,6 +1,9 @@
 # Beta Intake Funnel — $50 Refundable Floor-Map Application
 
-**Status:** plan only (2026-06-11). Nothing built yet.
+**Status:** ~30% SHIPPED (re-verified 2026-07-09; "nothing built yet" was stale) — the lighter
+`beta_waitlist` tier is live (2026-06-28 migration, public `/api/beta/{spots,waitlist}` routes,
+proxy allowlist, confirmation email). Residual: the $50 refundable `beta_applications` pipeline
+(migration + public apply route + review queue + Stripe payment link) is genuinely unbuilt.
 **Owner surface:** the CycleForge marketing site (separate repo,
 `/Users/icecube/repos/CycleForge`, landing page at `/`) for all visitor-facing UI;
 this repo for the apply API + `beta_applications` storage.

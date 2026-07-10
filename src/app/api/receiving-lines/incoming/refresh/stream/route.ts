@@ -16,7 +16,7 @@
 import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { syncShipmentsByIdsStreaming } from '@/lib/shipping/scheduler';
 import { NOT_ZOHO_RECEIVED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 import { getCachedJson, setCachedJson, invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -32,11 +32,12 @@ const BATCH_CAP = 250;        // hard ceiling on shipments polled per refresh
 const COOLDOWN_SECONDS = 25;  // collapse rapid re-clicks across operators
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'incoming-tracking-refresh',
     limit: 6,
     windowMs: 60_000,
+    organizationId: ctx.organizationId,
   });
   if (!rate.ok) {
     return new Response(JSON.stringify({ ok: false, error: 'Rate limit exceeded' }), {

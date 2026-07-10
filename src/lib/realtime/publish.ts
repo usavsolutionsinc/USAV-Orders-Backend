@@ -106,6 +106,15 @@ type PackerPhotoChangedPayload = {
   source: string;
 };
 
+type UnitPhotoChangedPayload = {
+  organizationId: string;
+  action: 'insert' | 'delete';
+  serialUnitId: number;
+  photoId?: number | null;
+  totalPhotoCount?: number | null;
+  source: string;
+};
+
 type DashboardUpdatePayload = {
   organizationId: string;
   type: 'kpi_update' | 'activity_event' | 'distribution_update' | 'staff_progress_update';
@@ -783,6 +792,33 @@ export async function publishPackerPhotoChanged(payload: PackerPhotoChangedPaylo
     action: payload.action,
     packer_log_id: packerLogId,
     order_id: payload.orderId ?? null,
+    photo_id: photoId != null && Number.isFinite(photoId) ? photoId : null,
+    total_photo_count:
+      totalPhotoCount != null && Number.isFinite(totalPhotoCount) ? totalPhotoCount : null,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+/**
+ * Serial-unit photo insert/delete — the testing-scan mirror of
+ * {@link publishReceivingPhotoChanged}. Published on the shared station channel
+ * so the desktop station active card + the unit detail timeline live-refresh the
+ * moment a packer's phone commits a testing-photo GCS upload. Keyed by
+ * `serial_unit_id`. See docs/todo/packer-testing-photo-scan-timeline-plan.md.
+ */
+export async function publishUnitPhotoChanged(payload: UnitPhotoChangedPayload) {
+  const serialUnitId = Number(payload.serialUnitId);
+  if (!Number.isFinite(serialUnitId) || serialUnitId <= 0) return;
+
+  const photoId = payload.photoId == null ? null : Number(payload.photoId);
+  const totalPhotoCount =
+    payload.totalPhotoCount == null ? null : Number(payload.totalPhotoCount);
+
+  await publishEvent(getStationChannelName(payload.organizationId), 'unit-photo.changed', {
+    type: 'unit-photo.changed',
+    action: payload.action,
+    serial_unit_id: serialUnitId,
     photo_id: photoId != null && Number.isFinite(photoId) ? photoId : null,
     total_photo_count:
       totalPhotoCount != null && Number.isFinite(totalPhotoCount) ? totalPhotoCount : null,

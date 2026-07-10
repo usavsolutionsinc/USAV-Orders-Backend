@@ -48,7 +48,7 @@ export const POST = withAuth(async (_req: NextRequest, ctx) => {
     if (!ebayEnabled) notes.push('eBay inbound source is disabled for this org.');
     if (amazonEnabled) notes.push('Amazon inbound sync is not available yet.');
     if (ebayEnabled && ebay.linesFetched === 0 && ebay.ingested === 0 && ebay.errors.length === 0) {
-      notes.push('eBay Buy Order API is not live yet — no new purchases pulled. Use Import eBay order to bridge manually.');
+      notes.push('No new eBay purchases found for connected buyer accounts.');
     }
 
     if (ebay.created > 0 || ebay.ingested > 0) {

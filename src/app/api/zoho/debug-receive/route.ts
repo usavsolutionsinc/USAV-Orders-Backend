@@ -5,6 +5,7 @@ import {
   mergeCatalogItemIdsFromPurchaseOrder,
   type ZohoPurchaseReceiveLine,
 } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,9 @@ export const dynamic = 'force-dynamic';
  *   (createPurchaseReceive maps counts to Zoho's `quantity` field on the wire.)
  * }
  */
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
+  // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+  return withZohoOrg(ctx.organizationId, async () => {
   try {
     const body = await request.json();
     const purchaseOrderId = String(body?.purchaseorder_id || '').trim();
@@ -110,4 +113,5 @@ export const POST = withAuth(async (request: NextRequest) => {
       { status: 500 },
     );
   }
+  });
 }, { permission: 'integrations.zoho' });

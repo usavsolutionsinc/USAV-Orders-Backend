@@ -20,6 +20,10 @@ import {
   deliveredUnscannedToRow,
   type DeliveredUnscannedResponse,
 } from '@/components/station/receiving-delivered-unscanned';
+import {
+  deliveredNotUnboxedToRow,
+  type DeliveredNotUnboxedResponse,
+} from '@/components/station/receiving-delivered-not-unboxed';
 import { mergeReceivingPackageMetaIntoRow } from './receiving-lines-table-helpers';
 import type { ReceivingLineRow } from './receiving-line-row';
 
@@ -28,6 +32,7 @@ interface UseReceivingLinesDataArgs {
   modeContext: ReceivingModeContext;
   isIncomingMode: boolean;
   isDeliveredUnscannedFacet: boolean;
+  isDeliveredNotUnboxedFacet: boolean;
   incomingPage: number;
   /** A scan-match prepend resets the week window so the new rows are visible. */
   setWeekOffset: React.Dispatch<React.SetStateAction<number>>;
@@ -48,6 +53,7 @@ export function useReceivingLinesData({
   modeContext,
   isIncomingMode,
   isDeliveredUnscannedFacet,
+  isDeliveredNotUnboxedFacet,
   incomingPage,
   setWeekOffset,
   scrollRef,
@@ -70,6 +76,7 @@ export function useReceivingLinesData({
     },
     staleTime: 20_000,
     refetchOnWindowFocus: true,
+    enabled: !isDeliveredUnscannedFacet && !isDeliveredNotUnboxedFacet,
   });
 
   // "Delivered · not scanned" facet: these boxes are shipment-anchored with no
@@ -98,13 +105,38 @@ export function useReceivingLinesData({
     [isDeliveredUnscannedFacet, deliveredData],
   );
 
+  const { data: notUnboxedData } = useQuery<DeliveredNotUnboxedResponse>({
+    queryKey: ['incoming-delivered-not-unboxed'],
+    queryFn: async () => {
+      const res = await fetch('/api/receiving-lines/incoming/delivered-not-unboxed', {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('delivered-not-unboxed fetch failed');
+      return res.json();
+    },
+    enabled: isDeliveredNotUnboxedFacet,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+  const notUnboxedRows = useMemo<ReceivingLineRow[]>(
+    () =>
+      isDeliveredNotUnboxedFacet
+        ? (notUnboxedData?.items ?? []).map(deliveredNotUnboxedToRow)
+        : [],
+    [isDeliveredNotUnboxedFacet, notUnboxedData],
+  );
+
   useEffect(() => {
     if (isDeliveredUnscannedFacet) {
       setLocalRows(deliveredRows);
       return;
     }
+    if (isDeliveredNotUnboxedFacet) {
+      setLocalRows(notUnboxedRows);
+      return;
+    }
     if (data?.receiving_lines) setLocalRows(data.receiving_lines);
-  }, [data, isDeliveredUnscannedFacet, deliveredRows]);
+  }, [data, isDeliveredUnscannedFacet, deliveredRows, isDeliveredNotUnboxedFacet, notUnboxedRows]);
 
   // Incoming: if `?page` is past the end of the filtered result set, drop the
   // bad page param so the table re-fetches page 1 instead of stranding empty.

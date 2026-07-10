@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { type PackerRecord } from '@/hooks/usePackerLogs';
+import { useStaffFilter } from '@/hooks/useStaffFilter';
 import { usePackerTableController } from '@/hooks/station/usePackerTableController';
 import { useStationDetailsSelection } from '@/hooks/station/useStationDetailsSelection';
 import { StationWeekTable } from '@/components/station/StationWeekTable';
@@ -50,6 +51,10 @@ function byNewestCreated(a: PackerRecord, b: PackerRecord): number {
 }
 
 export function PackerTable({ packedBy }: PackerTableProps) {
+  // Shared `?staff=` header filter (P1-WORK-02) — the StationPacking header's
+  // StaffFilterButton writes it; when set it swaps whose pack history renders.
+  // Absent (the default) = the signed-in packer's own logs, unchanged.
+  const { staffId: staffFilterId } = useStaffFilter();
   const {
     weekOffset,
     setWeekOffset,
@@ -59,7 +64,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     loading,
     isRefreshing,
     scrollRef,
-  } = usePackerTableController({ staffId: packedBy });
+  } = usePackerTableController({ staffId: staffFilterId ?? packedBy });
 
   // Day bands (newest day first, each day newest-first) for rendering. The
   // controller's `orderedRecords` drives keyboard navigation.

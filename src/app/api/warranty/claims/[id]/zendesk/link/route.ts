@@ -72,7 +72,7 @@ export const GET = withAuth(async (request, ctx) => {
     const status = err instanceof ZendeskApiError ? 502 : 500;
     return NextResponse.json({ ok: false, error: message }, { status });
   }
-}, { permission: 'warranty.view' });
+}, { permission: 'warranty.view', feature: 'repair' });
 
 export const POST = withAuth(async (request, ctx) => {
   if (!warrantyFlagEnabled()) return warrantyFlagOff();
@@ -173,7 +173,7 @@ export const POST = withAuth(async (request, ctx) => {
       };
     },
   });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });
 
 export const DELETE = withAuth(async (request, ctx) => {
   if (!warrantyFlagEnabled()) return warrantyFlagOff();
@@ -214,4 +214,4 @@ export const DELETE = withAuth(async (request, ctx) => {
     const status = err instanceof ZendeskApiError ? 502 : 500;
     return NextResponse.json({ ok: false, error: message }, { status });
   }
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { syncShipmentsByIds } from '@/lib/shipping/scheduler';
 import { selectIncomingShipmentIds } from '@/lib/receiving/incoming-shipments';
 import { getCachedJson, setCachedJson, invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -43,11 +43,12 @@ interface RefreshSummary {
 }
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'incoming-tracking-refresh',
     limit: 6,
     windowMs: 60_000,
+    organizationId: ctx.organizationId,
   });
   if (!rate.ok) {
     return NextResponse.json(

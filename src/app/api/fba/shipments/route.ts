@@ -170,7 +170,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       { status: 500 }
     );
   }
-}, { permission: 'fba.view' });
+}, { permission: 'fba.view', feature: 'fba' });
 
 // ── POST /api/fba/shipments ───────────────────────────────────────────────────
 // Creates a shipment header + optional initial items in a single transaction.
@@ -315,6 +315,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'fba.stage_shipments',
+  feature: 'fba',
   audit: {
     source: 'fba.shipments.create',
     action: 'fba.shipment.create',

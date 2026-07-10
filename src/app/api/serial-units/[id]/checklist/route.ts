@@ -3,7 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { upsertVerification, deriveStepPassed } from '@/lib/neon/sku-catalog-queries';
-import { tagUnitFailure } from '@/lib/neon/failure-modes-queries';
+import { tagUnitFailure, resolveOpenUnitFailureTagByMode } from '@/lib/neon/failure-modes-queries';
 import { recomputeUnitQualitySafe } from '@/lib/neon/quality-queries';
 import { parseBody } from '@/lib/schemas/parse';
 import { QcResultBody } from '@/lib/schemas/qc-checks';
@@ -195,6 +195,11 @@ export const POST = withAuth(async (request, ctx) => {
     // Auto-tag-on-fail: a failed step that names a failure mode opens a tag on
     // the unit (idempotent per open mode). Best-effort — never fails the record.
     let autoTag: Awaited<ReturnType<typeof tagUnitFailure>> | null = null;
+    // Auto-resolve-on-pass (reversibility 5.9): the reverse of the trigger
+    // above — a later PASS on the same step resolves the open tag its earlier
+    // fail opened, so a false-fail corrected by re-test clears. Same org
+    // scoping (via serial_units), same best-effort contract.
+    let autoResolvedTag: Awaited<ReturnType<typeof resolveOpenUnitFailureTagByMode>> = null;
     if (passed === false && failureModeId != null) {
       try {
         autoTag = await tagUnitFailure({
@@ -208,6 +213,17 @@ export const POST = withAuth(async (request, ctx) => {
         console.warn('[checklist] auto-tag-on-fail failed (non-fatal)', tagErr);
       }
       if (autoTag) await recomputeUnitQualitySafe(serialUnitId, orgId);
+    } else if (passed === true && failureModeId != null) {
+      try {
+        autoResolvedTag = await resolveOpenUnitFailureTagByMode({
+          serialUnitId,
+          failureModeId,
+          notes: `auto-resolved by passed QC step #${parsed.stepId}`,
+        }, orgId);
+      } catch (resolveErr) {
+        console.warn('[checklist] auto-resolve-on-pass failed (non-fatal)', resolveErr);
+      }
+      if (autoResolvedTag) await recomputeUnitQualitySafe(serialUnitId, orgId);
     }
 
     await recordAudit(pool, ctx, request, {
@@ -222,10 +238,16 @@ export const POST = withAuth(async (request, ctx) => {
         value_num: parsed.valueNum ?? null,
         value_text: parsed.valueText ?? null,
         auto_failure_tag_id: autoTag?.id ?? null,
+        auto_resolved_failure_tag_id: autoResolvedTag?.id ?? null,
       },
     });
 
-    return NextResponse.json({ ok: true, verification, failure_tag: autoTag });
+    return NextResponse.json({
+      ok: true,
+      verification,
+      failure_tag: autoTag,
+      resolved_failure_tag: autoResolvedTag,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to record step';
     console.error('[POST /api/serial-units/[id]/checklist] error:', err);

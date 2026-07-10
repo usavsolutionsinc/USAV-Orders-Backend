@@ -16,6 +16,7 @@ import {
   serialUnitHandle,
   handlingUnitHandle,
   repairHandle,
+  scannedUnitKey,
 } from './barcode-routing';
 
 test('every generated handle round-trips to its entity type (not bin/sku fallback)', () => {
@@ -63,4 +64,33 @@ test('zone-letter location codes are NOT swallowed by the broadened U- handle pa
 test('bare minted unit-id (no prefix) still routes to the unit page', () => {
   const r = routeScan('00098-2621-000142');
   strictEqual(r!.type, 'serial-unit');
+});
+
+// ── scannedUnitKey — the packer testing-photo scan gate ──────────────────────
+// Fire the phone camera ONLY on a genuine printed unit label; extract the
+// resolvable key (bare serial / minted unit_uid) for /api/serial-units/[id].
+
+test('scannedUnitKey extracts the bare serial from a U- handle', () => {
+  strictEqual(scannedUnitKey('U-SN12345'), 'SN12345');
+  // The prefix-stripped handle a printed unit label carries.
+  strictEqual(scannedUnitKey(serialUnitHandle('SN999')), 'SN999');
+});
+
+test('scannedUnitKey extracts the minted unit_uid from a bare minted-id label', () => {
+  strictEqual(scannedUnitKey('00098-2621-000142'), '00098-2621-000142');
+});
+
+test('scannedUnitKey extracts the serial from a GS1 (01)(21) unit frame', () => {
+  strictEqual(scannedUnitKey('(01)00860008260013(21)SN12345'), 'SN12345');
+});
+
+test('scannedUnitKey returns null for a non-unit-label scan (the gate)', () => {
+  // A bare/partial serial the tech types at the bench must NOT trip the camera.
+  strictEqual(scannedUnitKey('12345'), null);
+  // A zone-letter location code is a bin, not a unit.
+  strictEqual(scannedUnitKey('U-01-02-3'), null);
+  // A SKU-with-colon is a SKU, not a unit.
+  strictEqual(scannedUnitKey('1809:A03'), null);
+  // Empty input.
+  strictEqual(scannedUnitKey(''), null);
 });

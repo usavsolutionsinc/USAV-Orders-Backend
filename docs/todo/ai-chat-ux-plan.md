@@ -4,7 +4,17 @@ _Goal: make the in-app AI chat feel as fluid and friendly as Claude.ai / a self-
 Odysseus workspace — streaming, legible, low-friction — while staying inside this repo's
 existing design-token system and the Hermes (ChatGPT-OAuth) backend._
 
-Status: proposal. Author pass: 2026-06-02.
+Status: P0 + P1 SHIPPED (~85%) — P0 live: SSE streaming route (`/api/ai/chat/stream`) with this
+plan's exact event protocol, unified `useAiChat` (AbortController/Stop), CodeBlock/MarkdownRenderer.
+2026-07-09: fixed a latent crash where both chat routes referenced a block-scoped `localResolution`
+outside its block — the assistant-mode completion path threw at runtime; now simplified (local_ops
+short-circuits early, outer path is plain `assistant`). 2026-07-10 P1 shipped: copy-answer on both
+plain messages and `AiAnswerCard` (via the `CopyIconButton` primitive check-flash); Retry on error
+rows + the last answer through `useAiChat.retry()` (aborts any in-flight run first, re-sends the
+last user turn); new `AgentStepTimeline.tsx` renders the SSE `step` labels (accumulated per-message
+in `useAiChat`) with a live elapsed timer + Tier-A heuristic fallback labels, collapsing to a
+"Worked Ns · M steps" disclosure when done. Residual: P2 session history sidebar + resume, empty
+state, mobile; P3 Tier-B real tool spans. Author pass: 2026-06-02.
 
 ---
 

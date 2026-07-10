@@ -130,6 +130,17 @@ export function SourcingSidebarPanel() {
     );
   }
 
+  // ── Analytics: read-only rollup; range filter lives in the pane (?range=) ──
+  if (mode === 'analytics') {
+    return (
+      <SidebarShell headerRows={[modeRail]}>
+        <p className="px-3 py-4 text-caption text-text-soft">
+          Acquisition spend, cost vs target, demand fill-rate, and time-to-source. Pick a range in the pane — the view is read-only.
+        </p>
+      </SidebarShell>
+    );
+  }
+
   // ── Suppliers: name search + type filter ──────────────────────────────────
   if (mode === 'suppliers') {
     const type = searchParams.get('type') || 'all';

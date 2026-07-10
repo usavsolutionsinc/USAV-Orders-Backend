@@ -283,6 +283,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'fba.stage_shipments',
+  feature: 'fba',
   audit: {
     source: 'fba.shipments.today.items',
     action: 'fba.shipment.items.upsert',

@@ -67,7 +67,11 @@ export function ReceivingFeedRail({
   const feed = RECEIVING_RAIL_FEEDS[feedId];
   // Hook must run unconditionally; the value is only USED when the feed opts in.
   const searchParams = useSearchParams();
-  const staffId = feed.usesStaffFilter ? parseStaffParam(searchParams.get('staff')) : null;
+  // `?staff=` is the canonical param (P1-WORK-02); `?staffId=` survives only as
+  // a read-fallback for old receiving deep-links. Writers emit `?staff=` only.
+  const staffId = feed.usesStaffFilter
+    ? parseStaffParam(searchParams.get('staff') ?? searchParams.get('staffId'))
+    : null;
   const q = filterText.trim().toLowerCase();
 
   // Phase 4 read filter: this staffer's dismissed rows for the feed

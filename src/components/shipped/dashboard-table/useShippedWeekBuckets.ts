@@ -19,6 +19,8 @@ interface UseShippedWeekBucketsParams {
   enabled: boolean;
   /** Per-week row ceiling; default {@link SHIPPED_WEEK_PAGE_SIZE}. */
   limit?: number;
+  /** Spine-first phase; 'spine' fetches immediate-paint columns only. */
+  phase?: 'spine' | 'full';
 }
 
 interface ShippedWeekBucketsResult {
@@ -49,6 +51,7 @@ export function useShippedWeekBuckets({
   shippedFilter,
   enabled,
   limit = SHIPPED_WEEK_PAGE_SIZE,
+  phase = 'full',
 }: UseShippedWeekBucketsParams): ShippedWeekBucketsResult {
   const buckets = enabled ? getWeekBucketsForRange(rangeStart, rangeEnd) : [];
 
@@ -56,7 +59,7 @@ export function useShippedWeekBuckets({
     queries: buckets.map(({ weekStart, weekEnd }) => ({
       // Key + fetch + TTLs come from the shared factory (SoT) so the warm-up
       // prefetch and this live query can never drift apart.
-      ...dashboardShippedWeekQuery({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit }),
+      ...dashboardShippedWeekQuery({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit, phase }),
       placeholderData: (prev: PackerRecord[] | undefined) => prev,
       enabled,
     })),

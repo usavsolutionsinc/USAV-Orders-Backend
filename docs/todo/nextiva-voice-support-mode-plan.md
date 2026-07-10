@@ -1,6 +1,11 @@
 # Nextiva voice integration — Support page "Calls & Voicemail" modes
 
-**Status:** Proposed · **Owner:** TBD · **Created:** 2026-06-25 · **Last grounded:** 2026-06-25
+**Status:** ~65% SHIPPED (re-verified 2026-07-09; "Proposed" was stale) — Phases 1–4 built: 3
+migrations (2026-06-25d/e/f: call_events, voicemails, followups), signature-verified webhook +
+health/call/voicemail/followup routes, voice UI (VoicemailQueue/CallLogView/VoicemailDetail),
+`/support` 3-mode switcher (commit d4ed2f0b), match-customer + `callEventsToTimeline`.
+Residual: Phase-5 hardening (recording archival, transcription, analytics) — buildable;
+**Nextiva credentials + live spike are external/owner-gated.** · **Created:** 2026-06-25
 
 Integrate Nextiva (REST APIs + webhooks for calls, call logs, voicemails) into the `/support` page as
 **new sidebar modes** for (a) working a **voicemail / call-back follow-up to-do list**, (b) observing a

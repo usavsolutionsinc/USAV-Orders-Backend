@@ -29,6 +29,7 @@ function ctx(overrides: Partial<ReceivingModeContext> = {}): ReceivingModeContex
     incomingPoTo: '',
     incomingPage: 1,
     isDeliveredUnscannedFacet: false,
+    isDeliveredNotUnboxedFacet: false,
     ...overrides,
   };
 }

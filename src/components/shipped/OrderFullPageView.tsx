@@ -22,6 +22,7 @@ import { fetchDashboardOrderRowById } from '@/lib/dashboard-table-data';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { isFbaOrder } from '@/utils/order-platform';
 import { ShippedDetailsPanelContent } from '@/components/shipped/ShippedDetailsPanelContent';
+import { SectionCard } from '@/components/shipped/SectionCard';
 import { OrderDocumentsSection } from '@/components/shipped/OrderDocumentsSection';
 import { OrderTimelineSection } from '@/components/shipped/OrderTimelineSection';
 import { CustomerDetailsTab } from '@/components/shipped/CustomerDetailsTab';
@@ -101,6 +102,16 @@ async function resolveOrder(orderId: string): Promise<Resolved> {
   } catch {
     return { status: 'notfound' };
   }
+}
+
+/** Status-pill tone by carrier/lifecycle state — the house chip pattern (bg-x-50 / text-x-700 / ring-x-200). */
+function statusChipClass(shipped: ShippedOrder): string {
+  const cat = String(shipped.latest_status_category ?? '').toUpperCase();
+  if (shipped.is_delivered || cat === 'DELIVERED') return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  if (shipped.has_exception || cat === 'EXCEPTION' || cat === 'RETURNED') return 'bg-rose-50 text-rose-700 ring-rose-200';
+  if (shipped.is_shipped || cat === 'IN_TRANSIT' || cat === 'OUT_FOR_DELIVERY' || cat === 'ACCEPTED')
+    return 'bg-blue-50 text-blue-700 ring-blue-200';
+  return 'bg-surface-canvas text-text-muted ring-border-soft';
 }
 
 function SectionHeader({ icon: Icon, title }: { icon: typeof Clock; title: string }) {
@@ -274,7 +285,9 @@ function OrderFullPageLoaded({ order, onReload }: { order: ShippedOrder; onReloa
 
         <div className="ml-auto flex items-center gap-2">
           {statusLabel ? (
-            <span className="rounded-full border border-border-soft bg-surface-canvas px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest text-text-muted">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${statusChipClass(st.shipped)}`}
+            >
               {statusLabel}
             </span>
           ) : null}
@@ -292,11 +305,12 @@ function OrderFullPageLoaded({ order, onReload }: { order: ShippedOrder; onReloa
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1160px] py-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-            {/* MAIN — reuses the dormant single-scroll mode (Photos + editable Shipping + Product) */}
-            <main className="min-w-0 space-y-6">
+        <div className="mx-auto w-full max-w-[1160px] px-4 py-8 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+            {/* MAIN — reuses the dormant single-scroll mode, rendered as lifted bubbles */}
+            <main className="min-w-0 space-y-5">
               <ShippedDetailsPanelContent
+                variant="card"
                 shipped={{
                   ...st.shipped,
                   order_id: st.orderNumber,
@@ -310,37 +324,35 @@ function OrderFullPageLoaded({ order, onReload }: { order: ShippedOrder; onReloa
                 editableShippingFields={editableShippingFields}
               />
 
-              <div className="space-y-6 px-8">
-                {st.shipped.id ? (
-                  <section>
-                    <SectionHeader icon={FileText} title="Documents" />
-                    <OrderDocumentsSection
-                      orderId={Number(st.shipped.id)}
-                      orderRef={st.shipped.order_id || `order-${st.shipped.id}`}
-                      readOnly
-                    />
-                  </section>
-                ) : null}
+              {st.shipped.id ? (
+                <SectionCard>
+                  <SectionHeader icon={FileText} title="Documents" />
+                  <OrderDocumentsSection
+                    orderId={Number(st.shipped.id)}
+                    orderRef={st.shipped.order_id || `order-${st.shipped.id}`}
+                    readOnly
+                  />
+                </SectionCard>
+              ) : null}
 
-                {st.shipped.id ? (
-                  <section>
-                    <SectionHeader icon={Clock} title="Timeline" />
-                    <OrderTimelineSection orderId={Number(st.shipped.id)} />
-                    {serials.map((sn) => (
-                      <SerialJourneySection
-                        key={sn}
-                        serialNumber={sn}
-                        title={serials.length > 1 ? `Serial journey · ${sn}` : 'Serial journey'}
-                      />
-                    ))}
-                  </section>
-                ) : null}
-              </div>
+              {st.shipped.id ? (
+                <SectionCard>
+                  <SectionHeader icon={Clock} title="Timeline" />
+                  <OrderTimelineSection orderId={Number(st.shipped.id)} />
+                  {serials.map((sn) => (
+                    <SerialJourneySection
+                      key={sn}
+                      serialNumber={sn}
+                      title={serials.length > 1 ? `Serial journey · ${sn}` : 'Serial journey'}
+                    />
+                  ))}
+                </SectionCard>
+              ) : null}
             </main>
 
             {/* RIGHT RAIL — summary + customer + editable notes */}
-            <aside className="space-y-4 px-6 lg:px-0 lg:pr-6">
-              <section className="rounded-xl border border-border-soft bg-surface-card p-4">
+            <aside className="space-y-5 lg:sticky lg:top-4 lg:self-start">
+              <SectionCard>
                 <SectionHeader icon={Boxes} title="Order summary" />
                 <div className="divide-y divide-border-soft">
                   {st.shipped.account_source ? <SummaryRow label="Channel" value={st.shipped.account_source} /> : null}
@@ -350,14 +362,14 @@ function OrderFullPageLoaded({ order, onReload }: { order: ShippedOrder; onReloa
                   {st.shipped.sku ? <SummaryRow label="SKU" value={<span className="font-mono">{st.shipped.sku}</span>} /> : null}
                   {sale ? <SummaryRow label="Sale" value={sale} /> : null}
                 </div>
-              </section>
+              </SectionCard>
 
-              <section className="rounded-xl border border-border-soft bg-surface-card p-4">
+              <SectionCard>
                 <SectionHeader icon={User} title="Customer" />
                 <CustomerDetailsTab customerId={st.shipped.customer_id ?? null} />
-              </section>
+              </SectionCard>
 
-              <section className="rounded-xl border border-border-soft bg-surface-card p-4">
+              <SectionCard>
                 <SectionHeader icon={Info} title="Notes" />
                 <textarea
                   value={st.notes}
@@ -372,7 +384,7 @@ function OrderFullPageLoaded({ order, onReload }: { order: ShippedOrder; onReloa
                     <Loader2 className="h-3 w-3 animate-spin" /> Saving…
                   </p>
                 ) : null}
-              </section>
+              </SectionCard>
             </aside>
           </div>
         </div>

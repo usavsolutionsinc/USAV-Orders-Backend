@@ -99,7 +99,7 @@ export const GET = withAuth(
       return mapZendeskError(err, context);
     }
   },
-  { permission: 'integrations.zendesk' },
+  { permission: 'integrations.zendesk', feature: 'support' },
 );
 
 const CreateBody = z.object({
@@ -174,6 +174,7 @@ export const POST = withAuth(
   },
   {
     permission: 'integrations.zendesk',
+    feature: 'support',
     audit: {
       source: 'api',
       action: 'zendesk.ticket.create',

@@ -15,7 +15,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { OPS_EVENT_ENTITY_TYPES } from './ops-events';
+import {
+  OPS_EVENT_ENTITY_TYPES,
+  recordOpsEvent,
+  type OpsEventWriterDeps,
+  type RecordOpsEventInput,
+} from './ops-events';
 import { SURFACE_ENTITY_TYPES } from './surfaces/registry';
 
 const MIGRATION = join(
@@ -86,4 +91,50 @@ test('partial node index is present and scoped to non-null node ids', () => {
   const ddl = migrationDdl();
   assert.match(ddl, /idx_ops_events_org_node_time/);
   assert.match(ddl, /WHERE workflow_node_id IS NOT NULL/);
+});
+
+// ── Phase 2: workflowNodeId threading (writer pass-through, DB-free) ─────────
+// The writer is Deps-injectable (backend-patterns.md); a fake query captures
+// the INSERT text + params so no DB is touched.
+
+function fakeWriter() {
+  const calls: Array<{ text: string; params: unknown[] }> = [];
+  const deps: OpsEventWriterDeps = {
+    query: async (text, params) => {
+      calls.push({ text, params });
+      return { rows: [] };
+    },
+  };
+  return { deps, calls };
+}
+
+function baseInput(overrides: Partial<RecordOpsEventInput> = {}): RecordOpsEventInput {
+  return {
+    organizationId: '00000000-0000-0000-0000-000000000001',
+    entityType: 'receiving',
+    entityId: 7,
+    eventType: 'TRACKING_SCANNED',
+    ...overrides,
+  };
+}
+
+test('recordOpsEvent threads workflowNodeId through to the INSERT ($8, before payload)', async () => {
+  const { deps, calls } = fakeWriter();
+  await recordOpsEvent(baseInput({ workflowNodeId: 'node-abc123' }), deps);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].text, /workflow_node_id/);
+  // Param order is fixed by the INSERT column list: workflow_node_id is $8.
+  assert.equal(calls[0].params[7], 'node-abc123');
+});
+
+test('recordOpsEvent with NO workflowNodeId writes NULL (column is nullable by design)', async () => {
+  const { deps, calls } = fakeWriter();
+  await recordOpsEvent(baseInput(), deps);
+  assert.equal(calls[0].params[7], null);
+});
+
+test('recordOpsEvent normalizes an explicit null workflowNodeId to NULL', async () => {
+  const { deps, calls } = fakeWriter();
+  await recordOpsEvent(baseInput({ workflowNodeId: null }), deps);
+  assert.equal(calls[0].params[7], null);
 });

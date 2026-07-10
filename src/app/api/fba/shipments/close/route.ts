@@ -161,6 +161,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'shipping.void_order',
+  feature: 'fba',
   audit: {
     source: 'fba.shipments.close',
     action: 'fba.shipment.close',

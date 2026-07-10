@@ -85,6 +85,16 @@ test('regression: label.manifest.manage gates the label-manifest mutation routes
   assert.ok(printPaths.includes('/api/label-manifests/[id]/route.ts'), 'GET detail gated by print.label');
 });
 
+test('regression: bin.adjust gates the full replenishment-task lifecycle incl. release (reversibility 5.7)', () => {
+  // Release is the undo of claim (IN_PROGRESS → REQUESTED) and must sit behind
+  // the same permission the claim route uses.
+  const paths = routesGatedBy('bin.adjust').map((r) => r.path);
+  assert.ok(paths.includes('/api/replenishment/tasks/[id]/claim/route.ts'), 'claim gated by bin.adjust');
+  assert.ok(paths.includes('/api/replenishment/tasks/[id]/release/route.ts'), 'release gated by bin.adjust');
+  assert.ok(paths.includes('/api/replenishment/tasks/[id]/complete/route.ts'), 'complete gated by bin.adjust');
+  assert.ok(paths.includes('/api/replenishment/tasks/[id]/cancel/route.ts'), 'cancel gated by bin.adjust');
+});
+
 test('regression: sourcing.view gates the Bose model + compatibility read routes', () => {
   const paths = routesGatedBy('sourcing.view').map((r) => r.path);
   // Bose Sourcing Engine Phase 1 — the manifest records the first-declared
@@ -352,4 +362,57 @@ test('regression: operations.plans.* gates ops-plans routes', () => {
   assert.ok(viewPaths.includes('/api/ops-plans/inbox/route.ts'));
   assert.ok(managePaths.includes('/api/ops-plans/from-template/route.ts'));
   assert.ok(claimPaths.includes('/api/ops-plans/tasks/[taskId]/claim/route.ts'));
+});
+
+test('regression: beta.review gates the beta-applications review queue; the public apply route stays exempt', () => {
+  // Beta intake P-1a (docs/todo/beta-intake-funnel-plan.md §6): the review
+  // queue over pre-tenant beta_applications is withAuth(beta.review) even
+  // though /api/beta/* is proxy-public at the edge.
+  const paths = routesGatedBy('beta.review').map((r) => r.path);
+  assert.ok(paths.includes('/api/beta/applications/route.ts'), 'beta.review should gate the review queue');
+  const apply = routeByPath('/api/beta/apply/route.ts');
+  assert.ok(apply, 'the public apply route should be in the manifest');
+  assert.equal(apply.permission, null);
+  assert.ok(apply.exemptReason, 'the apply route is intentionally anonymous (public marketing capture)');
+});
+
+test('regression: tech.view gates the fulfillment substitution-policy read; the substitute POST enforces its OR in-handler', () => {
+  // Tech-substitution wiring Phase 0 (docs/todo/tech-substitution-wiring-plan.md
+  // §3.3 Option B): the client policy read is tech.view; the substitute POST
+  // accepts packing.substitute_unit OR tech.substitute_unit. withAuth's single
+  // `permission` option can't express an OR, so the POST enforces the pair
+  // in-handler (403 + auth_audit on denial) and the manifest records the file
+  // as authed-no-permission — NOT ungated. This test pins both facts so a
+  // refactor that drops the in-handler gate shows up as a manifest drift here.
+  const policy = routeByPath('/api/fulfillment/substitution-policy/route.ts');
+  assert.ok(policy, 'the substitution-policy route should be in the manifest');
+  assert.equal(policy.gate, 'withAuth');
+  assert.equal(policy.permission, 'tech.view');
+
+  const substitute = routeByPath('/api/orders/[id]/substitute/route.ts');
+  assert.ok(substitute, 'the substitute route should be in the manifest');
+  assert.equal(substitute.gate, 'withAuth (no permission)');
+  assert.ok(substitute.methods.includes('POST'));
+});
+
+test('regression: shipping.buy_label / shipping.void_label gate the operator label-engine routes', () => {
+  // Tier-3 C1 + studio-integrations exit criteria: the generic ShipStation
+  // operator routes (rate-shop from an explicit spec, buy a quoted rate, void
+  // by label id) reuse the existing outbound label permissions.
+  const buyPaths = routesGatedBy('shipping.buy_label').map((r) => r.path);
+  assert.ok(buyPaths.includes('/api/shipping/rates/route.ts'), 'buy_label should gate /api/shipping/rates');
+  assert.ok(buyPaths.includes('/api/shipping/labels/route.ts'), 'buy_label should gate /api/shipping/labels');
+  const voidPaths = routesGatedBy('shipping.void_label').map((r) => r.path);
+  assert.ok(voidPaths.includes('/api/shipping/labels/void/route.ts'), 'void_label should gate /api/shipping/labels/void');
+});
+
+test('regression: receiving.match_email gates the incoming match-email route (incoming-todo Phase 4a)', () => {
+  // Floor-staff "Match" for a Tier-0 unmatched shipping email — links to an
+  // EXISTING Zoho PO only (never creates one), so it sits behind the narrower
+  // receiving.match_email rather than admin.view (plan §6, Phase 4 opt-in).
+  const paths = routesGatedBy('receiving.match_email').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/receiving-lines/incoming/match-email/route.ts'),
+    'receiving.match_email should gate /api/receiving-lines/incoming/match-email',
+  );
 });

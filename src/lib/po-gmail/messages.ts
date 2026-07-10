@@ -15,7 +15,6 @@
  */
 
 import { poGmailFetch } from './client';
-import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 type Sanitizer = {
   sanitize: (html: string, config?: unknown) => string;
@@ -206,8 +205,8 @@ async function extractBody(
 export async function listMessageIds(
   query: string,
   maxResults = 25,
-  pageToken?: string,
-  orgId: string = USAV_ORG_ID,
+  pageToken: string | undefined,
+  orgId: string,
 ): Promise<{ ids: string[]; nextPageToken?: string }> {
   const url = new URL(`${GMAIL_API}/messages`);
   url.searchParams.set('q', query);
@@ -227,7 +226,7 @@ export async function listMessageIds(
 
 export async function fetchMessage(
   id: string,
-  orgId: string = USAV_ORG_ID,
+  orgId: string,
   opts: { includeHtml?: boolean } = {},
 ): Promise<GmailMessageEnvelope> {
   const url = new URL(`${GMAIL_API}/messages/${encodeURIComponent(id)}`);
@@ -258,7 +257,7 @@ export async function fetchMessage(
 
 export async function fetchMessagesByIds(
   ids: string[],
-  orgId: string = USAV_ORG_ID,
+  orgId: string,
   opts: { includeHtml?: boolean } = {},
 ): Promise<GmailMessageEnvelope[]> {
   // Small concurrent fan-out. Gmail's per-user concurrency limits are
@@ -278,7 +277,7 @@ export async function modifyLabels(
   messageId: string,
   addLabelIds: string[] = [],
   removeLabelIds: string[] = [],
-  orgId: string = USAV_ORG_ID,
+  orgId: string,
 ): Promise<void> {
   if (addLabelIds.length === 0 && removeLabelIds.length === 0) return;
   const res = await poGmailFetch(
@@ -302,7 +301,7 @@ export async function modifyLabels(
  */
 export async function getOrCreateLabel(
   name: string,
-  orgId: string = USAV_ORG_ID,
+  orgId: string,
 ): Promise<string> {
   const listRes = await poGmailFetch(`${GMAIL_API}/labels`, {}, orgId);
   if (!listRes.ok) {

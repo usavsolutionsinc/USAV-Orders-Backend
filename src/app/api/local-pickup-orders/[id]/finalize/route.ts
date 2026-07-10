@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { createPurchaseOrder, searchVendorsByName } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { buildLocalPickupPoNumber } from '@/lib/local-pickup/po-number';
 
 /** Zoho vendor that owns local pickup purchase orders (resolved by name). */
@@ -105,7 +106,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // ── Resolve the vendor ─────────────────────────────────────────────────
-    const vendors = await searchVendorsByName(LOCAL_PICKUP_VENDOR_NAME, 5);
+    // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+    const vendors = await withZohoOrg(orgId, () =>
+      searchVendorsByName(LOCAL_PICKUP_VENDOR_NAME, 5),
+    );
     let vendor = vendors.find(
       (v) => v.contact_name.trim().toUpperCase() === LOCAL_PICKUP_VENDOR_NAME,
     );
@@ -126,7 +130,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // ── Create the Zoho PO (external write, before any local mutation) ──────
     let zohoPo;
     try {
-      zohoPo = await createPurchaseOrder({
+      zohoPo = await withZohoOrg(orgId, () => createPurchaseOrder({
         vendor_id: vendor.contact_id,
         purchaseorder_number: poNumber,
         reference_number: poNumber,
@@ -153,7 +157,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             description: descParts.join(' · ') || undefined,
           };
         }),
-      });
+      }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Zoho PO creation failed';
       console.error('[local-pickup-orders][finalize] Zoho create failed', err);

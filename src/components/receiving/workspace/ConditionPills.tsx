@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Pencil } from '@/components/Icons';
+import { Pencil, Lock } from '@/components/Icons';
 import { CONDITION_GRADES, conditionLabel, conditionDescription } from '@/lib/conditions';
 import { conditionPillClass } from '@/lib/condition-tone';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
@@ -33,6 +33,13 @@ interface Props {
    * pill is the only grade readout (the unmatched / add-item flows).
    */
   collapsedLabel?: boolean;
+  /**
+   * Locked / non-interactive. Renders only the selected grade as a single static
+   * pill with a lock affordance — no other grades, no edit, no `onChange`. Used
+   * once an order has shipped (condition is frozen). Takes precedence over
+   * `collapsible`.
+   */
+  readOnly?: boolean;
 }
 
 // Single flat row of grades, in display order. Used grades (A / B / C) are
@@ -56,6 +63,7 @@ export function ConditionPills({
   expanded: expandedProp,
   onExpandedChange,
   collapsedLabel = true,
+  readOnly = false,
 }: Props) {
   const selected = String(value || '').trim().toUpperCase();
   const selectedGrade = GRADES.find((g) => g.value === selected) ?? null;
@@ -77,6 +85,23 @@ export function ConditionPills({
   // The row scroller remounts across collapse/expand, so `expanded` re-binds
   // the wheel listener to the fresh element.
   useHorizontalWheelScroll(scrollerRef, expanded);
+
+  // Locked: order has shipped, so the grade is frozen. Render just the selected
+  // pill (styled active) with a lock affordance — no other grades, no click.
+  if (readOnly) {
+    return (
+      <div role="group" aria-label="Condition grade (locked after shipping)" className="flex w-fit items-center gap-1.5">
+        <HoverTooltip label="Condition locked after shipping" asChild focusable={false}>
+          <span
+            className={`${conditionPillClass(selectedGrade?.value ?? selected, true)} inline-flex cursor-default items-center gap-1`}
+          >
+            {selectedGrade?.label ?? 'Not graded'}
+            <Lock className="h-3 w-3 opacity-70" />
+          </span>
+        </HoverTooltip>
+      </div>
+    );
+  }
 
   // Collapsed: only the selected pill + an edit pencil (mirrors the copy-chip).
   // When `collapsedLabel` is off, the grade is already shown elsewhere (the meta

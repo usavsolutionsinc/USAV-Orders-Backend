@@ -255,6 +255,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'shipping.mark_shipped',
+  feature: 'fba',
   audit: {
     source: 'fba.shipments.mark-shipped',
     action: 'fba.shipment.mark_shipped',

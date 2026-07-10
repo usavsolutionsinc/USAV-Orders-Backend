@@ -643,14 +643,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 notes: 'Order packed successfully',
                 metadata: {
                     source: 'packing-logs',
+                    // Inside the ORDERS branch (narrowed at the top-level
+                    // classification check), so no CLEAN size/tier applies.
                     tracking_type: classification.trackingType,
                     order_id: order.order_id ?? null,
-                    ...(classification.trackingType === 'CLEAN'
-                        ? {
-                            clean_size: classification.cleanSize ?? null,
-                            pack_tier: packTierFromCleanSize(classification.cleanSize),
-                          }
-                        : {}),
                 },
                 createdAt: foundCreatedAt,
             });
@@ -706,11 +702,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             ]);
 
             // Fire-and-forget: detect replenishment need for shipped order
+            // (org-required: thread the caller's tenant, never unscoped).
             ensureReplenishmentForOrder({
                 orderId: order.id,
                 reason: 'shipped',
                 changedBy: 'packer-station',
-            }).catch(() => {});
+            }, ctx.organizationId).catch(() => {});
 
             return NextResponse.json({
                 success: true,

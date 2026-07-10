@@ -6,12 +6,13 @@
  * RSA-SHA256 over `timestamp + "." + rawBody`, key published via JWKS. Headers:
  * x-shipengine-rsa-sha256-key-id / -signature / x-shipengine-timestamp. Older
  * integrations may run UNSIGNED (URL secrecy only) — we still gate on the
- * unguessable per-tenant token in the path (+ an env-token fallback for USAV).
+ * unguessable per-tenant token in the path (+ an explicitly-configured
+ * env-token bootstrap for single-tenant installs).
  */
 
 import crypto from 'node:crypto';
 import pool from '@/lib/db';
-import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { getShipmentByTracking, updateShipmentSummary, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
@@ -26,9 +27,9 @@ import type {
 
 /**
  * Resolve the tenant that owns a webhook token. Prefers the indexed
- * organization_integrations.webhook_token mirror; falls back to the USAV env
- * token so a single-tenant bootstrap works before the Connect flow populates
- * the column.
+ * organization_integrations.webhook_token mirror; falls back to the env token
+ * so a single-tenant bootstrap works before the Connect flow populates the
+ * column — but only when the target org is explicitly configured.
  */
 export async function resolveOrgByWebhookToken(token: string): Promise<OrgId | null> {
   if (!token) return null;
@@ -43,8 +44,16 @@ export async function resolveOrgByWebhookToken(token: string): Promise<OrgId | n
   } catch {
     // webhook_token column may be absent on very old schemas — fall through.
   }
+  // Fail-closed env bootstrap (F09): the env-token registration path is the
+  // documented single-tenant mechanism (docs/shipstation-outbound.md), so it
+  // stays — but it no longer implies the dogfood org. The token maps to a
+  // tenant only when SHIPSTATION_WEBHOOK_ORG_ID names one explicitly;
+  // otherwise the webhook is rejected rather than silently cross-tenanted.
   const envToken = process.env.SHIPSTATION_WEBHOOK_TOKEN;
-  if (envToken && token === envToken) return USAV_ORG_ID;
+  if (envToken && token === envToken) {
+    const envOrgId = (process.env.SHIPSTATION_WEBHOOK_ORG_ID ?? '').trim();
+    return envOrgId ? (envOrgId as OrgId) : null;
+  }
   return null;
 }
 

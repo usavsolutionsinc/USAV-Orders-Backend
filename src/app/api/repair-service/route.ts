@@ -214,6 +214,6 @@ async function createRepairHandler(req: NextRequest, ctx: AuthContext) {
   return Response.json(responseBody, { status: 201 });
 }
 
-export const GET = withAuth(handler.GET as any, { permission: 'repair.view' });
-export const PATCH = withAuth(patchWithRealtime as any, { permission: 'repair.mark_repaired' });
-export const POST = withAuth(createRepairHandler as any, { permission: 'repair.intake' });
+export const GET = withAuth(handler.GET as any, { permission: 'repair.view', feature: 'repair' });
+export const PATCH = withAuth(patchWithRealtime as any, { permission: 'repair.mark_repaired', feature: 'repair' });
+export const POST = withAuth(createRepairHandler as any, { permission: 'repair.intake', feature: 'repair' });

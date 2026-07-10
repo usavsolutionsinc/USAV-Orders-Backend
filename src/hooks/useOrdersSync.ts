@@ -14,11 +14,12 @@ import type {
 
 /**
  * The "Import Latest Orders" sync orchestration — Google Sheets + Ecwid Direct
- * transfers run in parallel, then the Resolved Exceptions pass, all streamed as
- * NDJSON with live per-tab progress. Extracted from `DashboardManagementPanel`
- * so the merged Unshipped sidebar's combined Sync/Backfill popover and the
- * legacy panel share ONE implementation (and one {@link OrderSyncDialog} state
- * surface) instead of drifting.
+ * imports run in parallel through the connection-driven sync API
+ * (`POST /api/integrations/[provider]/sync`, INT-020 — retiring the legacy
+ * transfer-orders endpoints for this surface), then the Resolved Exceptions
+ * pass streams as NDJSON. Extracted from `DashboardManagementPanel` so the
+ * merged Unshipped sidebar's combined Sync/Backfill popover keeps ONE
+ * implementation (and one {@link OrderSyncDialog} state surface).
  */
 export interface OrdersSyncStatus {
   type: 'success' | 'error';
@@ -54,16 +55,6 @@ function phaseSummary(phase: SyncPhase, count?: number): string {
 
 function emptyTransferDetails(): TransferOrderDetails {
   return { inserted: [], updated: [], deleted: [], unknownTitle: [], unresolvedTracking: [] };
-}
-
-function cloneDetails(d: TransferOrderDetails): TransferOrderDetails {
-  return {
-    inserted: [...d.inserted],
-    updated: [...d.updated],
-    deleted: [...d.deleted],
-    unknownTitle: [...d.unknownTitle],
-    unresolvedTracking: [...(d.unresolvedTracking ?? [])],
-  };
 }
 
 export function useOrdersSync() {
@@ -118,79 +109,61 @@ export function useOrdersSync() {
       dispatchUsavRefreshData();
     };
 
-    const consumeTransferStream = async (
-      url: string,
-      init: RequestInit,
+    // Connection-driven import (INT-020): one POST to the provider's sync API,
+    // JSON outcome { ok, imported, updated, error } — no NDJSON stream. The
+    // per-tab state keeps the same shape so OrderSyncDialog renders unchanged.
+    const runConnectorSync = async (
+      provider: 'google_sheets' | 'ecwid',
+      body: Record<string, unknown> | undefined,
       setter: typeof setSheetsTask,
     ): Promise<{ payload: Record<string, unknown> | null; error?: string }> => {
-      const acc: TransferOrderDetails = emptyTransferDetails();
-      let payload: Record<string, unknown> | null = null;
-      let lastError: string | undefined;
-      let hasWrites = false;
+      setter({
+        status: 'running',
+        summary: 'Syncing…',
+        phase: 'starting',
+        details: emptyTransferDetails(),
+      } as TransferTabState);
 
+      let data: Record<string, unknown> = {};
+      let lastError: string | undefined;
       try {
-        await streamNdjson(url, init, (event) => {
-          if (event.type === 'phase') {
-            if (event.phase === 'publishing' && hasWrites) void refreshDashboard();
-            setter((prev) => ({
-              ...prev,
-              status: 'running',
-              summary: phaseSummary(event.phase, event.count),
-              phase: event.phase,
-              details: cloneDetails(acc),
-            } as TransferTabState));
-          } else if (event.type === 'detail') {
-            acc[event.kind].push(event.row);
-            if (event.kind === 'inserted' || event.kind === 'updated' || event.kind === 'deleted') {
-              hasWrites = true;
-            }
-            setter((prev) => ({
-              ...prev,
-              details: cloneDetails(acc),
-              inserted: acc.inserted.length,
-              updated: acc.updated.length,
-              deleted: acc.deleted.length,
-              unresolvedTracking: acc.unresolvedTracking.length,
-            } as TransferTabState));
-          } else if (event.type === 'result') {
-            payload = event.result;
-            if (hasWrites) void refreshDashboard();
-          } else if (event.type === 'error') {
-            lastError = event.error;
-          }
+        const res = await fetch(`/api/integrations/${provider}/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body ?? {}),
+          signal: controller.signal,
         });
+        data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok || data.ok === false) {
+          lastError = String(data.error || `HTTP ${res.status}`);
+        }
       } catch (err: any) {
         lastError = err?.name === 'AbortError' ? 'Cancelled' : (err?.message || 'Network error');
       }
 
-      const data = payload ?? {};
-      const success = !lastError && (data as any).success !== false;
-      const ins = Number((data as any).insertedOrders ?? acc.inserted.length);
-      const upd = Number((data as any).updatedOrdersFields ?? acc.updated.length);
-      const trk = Number((data as any).updatedOrdersTracking ?? 0);
-      const unresolved = Number((data as any).unresolvedTrackingCount ?? acc.unresolvedTracking.length);
-      const parts = [
-        ins && `${ins} inserted`,
-        upd && `${upd} updated${trk ? ` (${trk} tracking)` : ''}`,
-        unresolved && `⚠ ${unresolved} tracking not recognized`,
-      ].filter(Boolean);
+      const success = !lastError;
+      const ins = Number(data.imported ?? 0);
+      const upd = Number(data.updated ?? 0);
+      if (success && (ins > 0 || upd > 0)) void refreshDashboard();
+      const parts = [ins && `${ins} inserted`, upd && `${upd} updated`].filter(Boolean);
       setter({
         status: success ? 'done' : 'error',
         summary: success
           ? (parts.length > 0 ? (parts.join(', ') as string) : 'Up to date')
-          : (lastError || (data as any).error || 'Failed'),
-        error: success ? undefined : (lastError || (data as any).error || 'Failed'),
-        details: cloneDetails(acc),
+          : lastError || 'Failed',
+        error: success ? undefined : lastError || 'Failed',
+        details: emptyTransferDetails(),
         inserted: ins,
         updated: upd,
-        trackingAttached: trk,
-        unresolvedTracking: unresolved,
-        deleted: Number((data as any).deletedDuplicateOrders ?? acc.deleted.length),
-        processedRows: Number((data as any).processedRows || 0),
-        tabName: (data as any).tabName,
         phase: 'done',
       } as TransferTabState);
-      return { payload: data, error: lastError };
+      // Legacy payload keys so the roll-up summary math below stays unchanged.
+      return {
+        payload: success
+          ? { success: true, insertedOrders: ins, updatedOrdersFields: upd }
+          : { success: false, error: lastError },
+        error: lastError,
+      };
     };
 
     const consumeExceptionsStream = async (
@@ -257,21 +230,12 @@ export function useOrdersSync() {
 
     try {
       const [sheetsR, ecwidR] = await Promise.all([
-        consumeTransferStream(
-          '/api/google-sheets/transfer-orders',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ manualSheetName: manualSheetName.trim() || undefined }),
-            signal: controller.signal,
-          },
+        runConnectorSync(
+          'google_sheets',
+          { manualSheetName: manualSheetName.trim() || undefined },
           setSheetsTask,
         ),
-        consumeTransferStream(
-          '/api/ecwid/transfer-orders',
-          { method: 'POST', signal: controller.signal },
-          setEcwidTask,
-        ),
+        runConnectorSync('ecwid', undefined, setEcwidTask),
       ]);
       sheetsResultPayload = sheetsR.payload;
       ecwidResultPayload = ecwidR.payload;

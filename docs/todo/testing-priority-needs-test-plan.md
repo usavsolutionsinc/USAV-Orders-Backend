@@ -1,5 +1,12 @@
 # Testing Priority + Per-Line Needs-Test + Tech-Station Inbox — Plan
 
+> **Status:** ~93% SHIPPED and evolved past this plan (verified 2026-07-06, re-verified 2026-07-09).
+> The boolean `is_priority` design was generalized to `priority_tier` 0–3
+> (`2026-06-09_receiving_priority_tier.sql`) with a rules-as-data precedence SoT in
+> `src/lib/receiving/display/precedence.ts`; the plan's `scan-priority.ts` mechanism was superseded
+> (that file no longer exists). Residual: minor UI nit + **owner-gated** prod migration-state check
+> for the two 2026-06-09 migrations.
+
 ## Goal
 
 1. **Shared priority** between unbox and test — if an order is urgent to unbox, it's urgent to test (same signal, no duplication).

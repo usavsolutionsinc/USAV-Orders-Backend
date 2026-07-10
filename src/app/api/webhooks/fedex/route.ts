@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseFedExTrackingPayload } from '@/lib/shipping/providers/fedex';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { resolveWebhookOrgByTracking } from '@/lib/shipping/webhook-org-resolver';
+import { checkRateLimitAsync } from '@/lib/api-guard';
 import type { OrgId } from '@/lib/tenancy/constants';
 
 // FedEx signs each push with an HMAC-SHA256 digest (base64) of the raw request
@@ -110,6 +111,21 @@ function splitIntoTrackResultPayloads(payload: any): any[] {
 }
 
 export async function POST(req: NextRequest) {
+  // IP rate limit before any body/crypto work — carrier pushes are bursty but
+  // 300/min absorbs a legitimate batch while capping abuse of a public route.
+  const rl = await checkRateLimitAsync({
+    headers: req.headers,
+    routeKey: 'webhooks-fedex',
+    limit: 300,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'RATE_LIMITED', retryAfterSec: rl.retryAfterSec },
+      { status: 429 },
+    );
+  }
+
   // Read the raw body once — HMAC verification must hash the exact bytes FedEx
   // signed, so we can't let req.json() re-serialize first.
   const rawBody = await req.text();
@@ -128,11 +144,23 @@ export async function POST(req: NextRequest) {
   const payloads = splitIntoTrackResultPayloads(payload);
   let processed = 0;
   const trackingNumbers: string[] = [];
-  const orgId = transitionalUsavOrgId();
 
   for (const sub of payloads) {
     const result = parseFedExTrackingPayload(sub);
     if (!result?.trackingNumberNormalized) continue;
+
+    // Session-less callback: derive the owning org from the tracking number.
+    // FAIL-CLOSED — an unresolved number skips just this event (never write
+    // under a guessed org) while the response stays 2xx so FedEx doesn't
+    // hammer retries for the whole batch.
+    const orgId = await resolveWebhookOrgByTracking(result.trackingNumberNormalized);
+    if (!orgId) {
+      console.warn('[webhook-org] unresolved tracking — skipping event', {
+        carrier: 'FEDEX',
+        tracking: result.trackingNumberNormalized,
+      });
+      continue;
+    }
 
     const existing = await getShipmentByTracking(result.trackingNumberNormalized, orgId);
     const shipment = existing ?? await upsertShipment({

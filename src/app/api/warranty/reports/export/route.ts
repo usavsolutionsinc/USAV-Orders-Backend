@@ -63,4 +63,4 @@ export const GET = withAuth(async (request, ctx) => {
     console.error('[GET /api/warranty/reports/export] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'warranty.view' });
+}, { permission: 'warranty.view', feature: 'repair' });

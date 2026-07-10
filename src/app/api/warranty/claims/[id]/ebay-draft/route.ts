@@ -36,4 +36,4 @@ export const POST = withAuth(async (request, ctx) => {
     console.error('[POST /api/warranty/claims/[id]/ebay-draft] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

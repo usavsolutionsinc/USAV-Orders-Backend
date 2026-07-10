@@ -1,6 +1,15 @@
 # SaaS Commercialization Plan — Getting to Industry Standard
 
-**Status:** Plan of record · authored 2026-06-13
+**Status:** Plan of record · authored 2026-06-13 · **~75% (updated 2026-07-10):** billing loop
+code-complete, RLS isolation live, identity beyond plan (magic-link/passkeys/OIDC/invitations).
+**2026-07-09/10 wave closed the buildable residuals:** plan ceilings wired
+(`src/lib/billing/plan-ceilings.ts` — maxStaff on staff-create/invite ×3 routes,
+soft maxMonthlyOrders on manual create + button sync, maxWarehouses helper ready [no create route
+exists]; dormant behind `PLAN_FEATURE_ENFORCED`, dogfood-exempt, fail-open, 10 tests); feature
+gates extended (fba 26 / repair 38 / support 14 handlers); connect-path guard
+(`assertCanConnectProvider`); dunning hook (`src/lib/billing/delinquency.ts`); activation
+instrumentation (`src/lib/billing/activation-events.ts`); trial gate test-pinned. **Remaining =
+external/owner:** Stripe live catalog + counsel review + staged enforcement flips.
 **Owner:** infodensense@gmail.com
 **Scope:** What it takes to turn this platform from "internal ops tool with a multi-tenant skeleton" into a sellable, self-serve B2B SaaS at industry standard.
 

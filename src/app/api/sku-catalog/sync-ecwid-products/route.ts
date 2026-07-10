@@ -3,6 +3,13 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { CACHE_TAGS } from '@/lib/cache/tags';
+import { deleteSkuPlatformId } from '@/lib/neon/sku-catalog-queries';
+import {
+  parseEcwidProductItems,
+  isEcwidFetchComplete,
+  selectStaleEcwidRowIds,
+  type EcwidMirrorProduct,
+} from '@/lib/ecwid/sync-ecwid-products';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 
@@ -21,6 +28,12 @@ function requiredEnvAny(primaryName: string, aliases: string[] = []): string {
  * sku_platform_ids entries (sku_catalog_id = NULL, platform = 'ecwid').
  * Stores Ecwid product name in display_name and thumbnail in image_url.
  * Does NOT auto-pair to Zoho — all pairing is manual via SKU Pairing tab.
+ *
+ * Reconcile-missing (reversibility 5.4): after upserting, ecwid rows whose
+ * product is absent from the latest fetch are soft-deactivated
+ * (is_active = false via deleteSkuPlatformId) — but ONLY when the fetch was
+ * complete (terminated on a short page, not the page cap). A product that
+ * reappears in a later fetch is reactivated by the upsert.
  */
 export const POST = withAuth(async (_req: NextRequest, ctx) => {
   try {
@@ -28,14 +41,13 @@ export const POST = withAuth(async (_req: NextRequest, ctx) => {
     const token = requiredEnvAny('ECWID_API_TOKEN', ['ECWID_TOKEN', 'ECWID_ACCESS_TOKEN', 'NEXT_PUBLIC_ECWID_API_TOKEN']);
 
     // Fetch all Ecwid products (paginated)
-    const allProducts: Array<{
-      ecwidProductId: string;
-      sku: string | null;
-      name: string;
-      thumbnailUrl: string | null;
-    }> = [];
+    const allProducts: EcwidMirrorProduct[] = [];
     let offset = 0;
     const limit = 100;
+    // True only when pagination terminated on a short page — i.e. we saw the
+    // whole catalog. Exhausting the page cap leaves this false, which blocks
+    // the deactivate pass (never mass-deactivate on a truncated fetch).
+    let fetchComplete = false;
 
     for (let page = 0; page < 50; page++) {
       const url = new URL(`${ECWID_BASE_URL}/${storeId}/products`);
@@ -55,27 +67,20 @@ export const POST = withAuth(async (_req: NextRequest, ctx) => {
 
       const data = await res.json();
       const items = Array.isArray(data.items) ? data.items : [];
+      allProducts.push(...parseEcwidProductItems(items));
 
-      for (const item of items) {
-        const ecwidProductId = String(item.id || '').trim();
-        const sku = String(item.sku || '').trim() || null;
-        const name = String(item.name || '').trim();
-        if (ecwidProductId && name) {
-          allProducts.push({
-            ecwidProductId,
-            sku,
-            name,
-            thumbnailUrl: typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : null,
-          });
-        }
+      if (isEcwidFetchComplete(items.length, limit)) {
+        fetchComplete = true;
+        break;
       }
-
-      if (items.length < limit) break;
       offset += limit;
     }
 
     if (allProducts.length === 0) {
-      return NextResponse.json({ success: true, fetched: 0, inserted: 0, updated: 0 });
+      // Deliberately skip the deactivate pass on an empty fetch — an empty
+      // catalog is indistinguishable from a store misconfig; never nuke the
+      // whole mirror on it.
+      return NextResponse.json({ success: true, fetched: 0, inserted: 0, updated: 0, deactivated: 0 });
     }
 
     let inserted = 0;
@@ -95,17 +100,39 @@ export const POST = withAuth(async (_req: NextRequest, ctx) => {
       if (insertResult.rowCount && insertResult.rowCount > 0) {
         inserted++;
       } else {
-        // Already exists — update display_name and image_url (this org's row only)
+        // Already exists — update display_name and image_url (this org's row
+        // only). Also reactivates a previously-deactivated mirror row whose
+        // product reappeared in the fetch (reverse of the deactivate pass).
         const updateResult = await tenantQuery(
           ctx.organizationId,
           `UPDATE sku_platform_ids
            SET display_name = $1, image_url = COALESCE($2::text, image_url), is_active = true
            WHERE platform = 'ecwid' AND platform_item_id = $3
              AND organization_id = $4
-             AND (display_name IS DISTINCT FROM $1 OR image_url IS NULL)`,
+             AND (display_name IS DISTINCT FROM $1 OR image_url IS NULL OR is_active = false)`,
           [product.name, product.thumbnailUrl, product.ecwidProductId, ctx.organizationId],
         );
         if (updateResult.rowCount && updateResult.rowCount > 0) updated++;
+      }
+    }
+
+    // Reconcile-missing: soft-deactivate active ecwid mirror rows whose
+    // product was absent from the fetch — ONLY when the fetch was complete.
+    let deactivated = 0;
+    if (fetchComplete) {
+      const existing = await tenantQuery<{ id: number; platform_item_id: string | null }>(
+        ctx.organizationId,
+        `SELECT id, platform_item_id
+           FROM sku_platform_ids
+          WHERE platform = 'ecwid' AND is_active = true AND organization_id = $1`,
+        [ctx.organizationId],
+      );
+      const staleIds = selectStaleEcwidRowIds(
+        existing.rows,
+        allProducts.map((p) => p.ecwidProductId),
+      );
+      for (const staleId of staleIds) {
+        if (await deleteSkuPlatformId(staleId, ctx.organizationId)) deactivated++;
       }
     }
 
@@ -117,7 +144,9 @@ export const POST = withAuth(async (_req: NextRequest, ctx) => {
       fetched: allProducts.length,
       inserted,
       updated,
-      message: `Synced ${inserted} new, updated ${updated} existing Ecwid products`,
+      deactivated,
+      fetchComplete,
+      message: `Synced ${inserted} new, updated ${updated} existing, deactivated ${deactivated} missing Ecwid products`,
     });
   } catch (error: any) {
     console.error('Error in POST /api/sku-catalog/sync-ecwid-products:', error);

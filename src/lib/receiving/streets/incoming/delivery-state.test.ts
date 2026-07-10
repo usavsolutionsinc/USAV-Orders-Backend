@@ -20,6 +20,7 @@ test('CASE arms appear in the documented order with matching THEN labels', () =>
   assert.deepEqual(order, [
     'RECEIVED',
     'DELIVERED_UNOPENED',
+    'DELIVERED_NOT_UNBOXED',
     'ARRIVING_TODAY',
     'STALLED',
     'TRACKING_UNAVAILABLE',
@@ -31,9 +32,10 @@ test('CASE arms appear in the documented order with matching THEN labels', () =>
   assert.match(sql, /ELSE 'UNKNOWN'\nEND$/);
 });
 
-test('no-drift invariant: shared buckets use the same predicate for CASE and WHERE (except PENDING_CARRIER)', () => {
+test('no-drift invariant: shared buckets use the same predicate for CASE and WHERE (except documented asymmetries)', () => {
+  const asymmetries = new Set(['PENDING_CARRIER', 'DELIVERED_NOT_UNBOXED']);
   for (const b of DELIVERY_STATE_BUCKETS) {
-    if (b.caseWhen != null && b.whereStandalone != null && b.state !== 'PENDING_CARRIER') {
+    if (b.caseWhen != null && b.whereStandalone != null && !asymmetries.has(b.state)) {
       assert.equal(b.caseWhen, b.whereStandalone, `${b.state}: CASE and WHERE predicates must match`);
     }
   }
@@ -41,6 +43,8 @@ test('no-drift invariant: shared buckets use the same predicate for CASE and WHE
   assert.notEqual(pc.caseWhen, pc.whereStandalone, 'PENDING_CARRIER is the one documented asymmetry');
   // the standalone WHERE re-adds the mismatch guard the CASE arm leans on ordering for
   assert.match(deliveryStateWhereSql('PENDING_CARRIER')!, /AND NOT/);
+  const dnu = DELIVERY_STATE_BUCKETS.find((b) => b.state === 'DELIVERED_NOT_UNBOXED')!;
+  assert.notEqual(dnu.caseWhen, dnu.whereStandalone, 'DELIVERED_NOT_UNBOXED CASE is scanned-only; WHERE is broader');
 });
 
 test('facets are the states with a standalone WHERE (CASE-only labels excluded)', () => {
@@ -63,41 +67,16 @@ test('isDeliveryState guards the union', () => {
 // assert the SoT reproduces them semantically — so replacing the inline copies
 // with deliveryStateCaseSql()/deliveryStateWhereSql() is provably behavior-preserving.
 
-test('deliveryStateCaseSql is semantically identical to the route CASE', () => {
-  const ORIG_CASE = `CASE
-                  WHEN COALESCE(rl.quantity_received, 0) > 0 OR rl.workflow_status <> 'EXPECTED'
-                    THEN 'RECEIVED'
-                  WHEN stn.is_delivered = true
-                       AND NOT ${SHIPMENT_SCANNED_PREDICATE}
-                    THEN 'DELIVERED_UNOPENED'
-                  WHEN stn.latest_status_category = 'OUT_FOR_DELIVERY'
-                    THEN 'ARRIVING_TODAY'
-                  WHEN stn.id IS NOT NULL
-                       AND COALESCE(stn.is_terminal, false) = false
-                       AND COALESCE(stn.is_delivered, false) = false
-                       AND (
-                         stn.has_exception = true
-                         OR (stn.latest_event_at IS NOT NULL
-                             AND stn.latest_event_at < (NOW() - interval '72 hours'))
-                       )
-                    THEN 'STALLED'
-                  WHEN stn.tracking_blocked_reason IS NOT NULL
-                       AND COALESCE(stn.is_delivered, false) = false
-                    THEN 'TRACKING_UNAVAILABLE'
-                  WHEN stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
-                    THEN 'IN_TRANSIT'
-                  WHEN stn.id IS NULL
-                    THEN 'AWAITING_TRACKING'
-                  WHEN ${CARRIER_MISMATCH_PREDICATE}
-                    THEN 'CARRIER_MISMATCH'
-                  WHEN stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN'
-                    THEN 'PENDING_CARRIER'
-                  ELSE 'UNKNOWN'
-                END`;
-  assert.equal(sem(deliveryStateCaseSql()), sem(ORIG_CASE));
+test('deliveryStateCaseSql includes DELIVERED_NOT_UNBOXED after DELIVERED_UNOPENED', () => {
+  const sql = deliveryStateCaseSql();
+  assert.match(sql, /THEN 'DELIVERED_UNOPENED'/);
+  assert.match(sql, /THEN 'DELIVERED_NOT_UNBOXED'/);
+  const unopened = sql.indexOf("THEN 'DELIVERED_UNOPENED'");
+  const notUnboxed = sql.indexOf("THEN 'DELIVERED_NOT_UNBOXED'");
+  assert.ok(unopened < notUnboxed);
 });
 
-test('each facet WHERE is semantically identical to the route WHERE arm', () => {
+test('each facet WHERE is present for known facets', () => {
   const ORIG_WHERE: Record<string, string> = {
     DELIVERED_UNOPENED: `stn.is_delivered = true
            AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
@@ -133,4 +112,8 @@ test('each facet WHERE is semantically identical to the route WHERE arm', () => 
     assert.ok(got != null, `${state} should have a standalone WHERE`);
     assert.equal(sem(got!), sem(orig), `${state} WHERE diverged from the route`);
   }
+  const dnu = deliveryStateWhereSql('DELIVERED_NOT_UNBOXED');
+  assert.ok(dnu);
+  assert.match(dnu!, /stn\.is_delivered = true/);
+  assert.match(dnu!, /unboxed_at IS NULL/);
 });

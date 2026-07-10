@@ -19,6 +19,7 @@ import { LabelPrintWorkspace } from './LabelPrintWorkspace';
 import { RackLabelWorkspace } from './RackLabelWorkspace';
 import { RackDetailView } from './RackDetailView';
 import { WarehouseMap, type MapViewMode } from './WarehouseMap';
+import { WarehouseFloorPlan } from './WarehouseFloorPlan';
 
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'racks' | 'map';
 
@@ -109,9 +110,9 @@ function MapTabBody() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const mode = parseMapMode(searchParams.get('view'));
+  const view = parseMapView(searchParams.get('view'));
   const showEmpty = searchParams.get('showEmpty') === '1';
-  const { rows, loading, refetch } = useBinsOverview({ pollMs: 60_000 });
+  const { rows, loading, error, refetch } = useBinsOverview({ pollMs: 60_000 });
   const [flyoutRow, setFlyoutRow] = useState<BinsOverviewRow | null>(null);
 
   const toggleEmpty = () => {
@@ -139,13 +140,24 @@ function MapTabBody() {
             {showEmpty ? 'Hide' : 'Show'} empty bins
           </button>
         </div>
-        <WarehouseMap
-          rows={rows}
-          loading={loading}
-          mode={mode}
-          onCellClick={(row) => setFlyoutRow(row)}
-          showEmpty={showEmpty}
-        />
+        {view === 'floorplan' ? (
+          <WarehouseFloorPlan
+            rows={rows}
+            loading={loading}
+            error={error}
+            mode="fill"
+            onCellClick={(row) => setFlyoutRow(row)}
+            showEmpty={showEmpty}
+          />
+        ) : (
+          <WarehouseMap
+            rows={rows}
+            loading={loading}
+            mode={view}
+            onCellClick={(row) => setFlyoutRow(row)}
+            showEmpty={showEmpty}
+          />
+        )}
       </div>
 
       <BinDetailFlyout
@@ -157,7 +169,14 @@ function MapTabBody() {
   );
 }
 
-function parseMapMode(raw: string | null): MapViewMode {
-  if (raw === 'age' || raw === 'issues') return raw;
+/**
+ * `?view=` carries both the table's color mode (fill/age/issues) and the
+ * `floorplan` renderer switch (React Flow map, Phase 1 fixed to fill colors —
+ * see docs/todo/warehouse-map-react-flow-plan.md §6.3).
+ */
+type MapView = MapViewMode | 'floorplan';
+
+function parseMapView(raw: string | null): MapView {
+  if (raw === 'age' || raw === 'issues' || raw === 'floorplan') return raw;
   return 'fill';
 }

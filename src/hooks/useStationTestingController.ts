@@ -66,6 +66,7 @@ export function useStationTestingController({
   onTrackingOrderLoaded,
   onActiveOrderCardAutoHidden,
   onFnskuOrderLoaded,
+  onUnitLabelScanned,
 }: {
   userId: string;
   userName: string;
@@ -75,14 +76,19 @@ export function useStationTestingController({
   onTrackingOrderLoaded?: () => void;
   onActiveOrderCardAutoHidden?: () => void;
   onFnskuOrderLoaded?: () => void;
+  /** Fired with the RAW scanned value after a serial scan resolves — the host
+   *  gates it to genuine unit labels and fires the packer photo request. */
+  onUnitLabelScanned?: (rawInput: string) => void;
 }) {
   const queryClient = useQueryClient();
 
   // Keep callback refs so handlers always call the latest prop without re-creating ctx.
   const onAutoHiddenRef = useRef(onActiveOrderCardAutoHidden);
   const onFnskuOrderLoadedRef = useRef(onFnskuOrderLoaded);
+  const onUnitLabelScannedRef = useRef(onUnitLabelScanned);
   useEffect(() => { onAutoHiddenRef.current = onActiveOrderCardAutoHidden; }, [onActiveOrderCardAutoHidden]);
   useEffect(() => { onFnskuOrderLoadedRef.current = onFnskuOrderLoaded; }, [onFnskuOrderLoaded]);
+  useEffect(() => { onUnitLabelScannedRef.current = onUnitLabelScanned; }, [onUnitLabelScanned]);
 
   // ── core state ────────────────────────────────────────────────────────────────
   const [inputValue, setInputValue] = useState('');
@@ -319,6 +325,7 @@ export function useStationTestingController({
     resolveManual,
     clearManuals,
     newIdempotencyKey: newStationIdempotencyKey,
+    onUnitLabelScanned: (raw: string) => onUnitLabelScannedRef.current?.(raw),
   });
 
   // ── main submit router ────────────────────────────────────────────────────────

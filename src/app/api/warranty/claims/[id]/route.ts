@@ -37,7 +37,7 @@ export const GET = withAuth(async (request, ctx) => {
     console.error('[GET /api/warranty/claims/[id]] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'warranty.view' });
+}, { permission: 'warranty.view', feature: 'repair' });
 
 /**
  * PATCH /api/warranty/claims/[id]
@@ -82,7 +82,7 @@ export const PATCH = withAuth(async (request, ctx) => {
       return { status: 200, body: { ok: true, claim: result.claim } };
     },
   });
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });
 
 /**
  * DELETE /api/warranty/claims/[id]
@@ -119,4 +119,4 @@ export const DELETE = withAuth(async (request, ctx) => {
     console.error('[DELETE /api/warranty/claims/[id]] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

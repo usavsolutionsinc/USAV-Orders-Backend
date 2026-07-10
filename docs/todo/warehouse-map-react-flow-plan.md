@@ -1,9 +1,14 @@
 # Warehouse Map → React Flow Floor Plan — Implementation Plan
 
-**Status:** proposed · **Owner:** TBD · **Created:** 2026-06-04
-**Prototype:** `/design-demo` → "Warehouse floor plan" section
-(`src/app/design-demo/_gallery/warehouse-flow-section.tsx`, data in
-`warehouse-map-data.ts`).
+**Status:** Phase 1 SHIPPED (2026-07-09) — read-only React Flow floor plan live at
+`/warehouse?tab=map&view=floorplan` (auto grid from room/row/col via
+`src/components/warehouse/floor-layout.ts`, shared tones extracted to
+`src/components/warehouse/map-tones.ts`, `WarehouseFloorPlan.tsx` renderer, sidebar "Floor plan"
+view option, click → existing `BinDetailFlyout`, pan/zoom/MiniMap). **Phases 2–3 pending** (SKU
+trace; editable layout + persistence). The deleted Phase-0 prototype that seeded this remains at
+`git show 34c52758:src/app/design-demo/_gallery/warehouse-flow-section.tsx` (+
+`warehouse-map-data.ts`). · **Created:** 2026-06-04
+**Prototype (historical):** `/design-demo` → "Warehouse floor plan" section — no longer in tree.
 
 Goal: replace / augment the flat HTML-table warehouse map with an interactive
 **React Flow (`@xyflow/react`) floor-plan map** in the existing `/warehouse`
@@ -235,8 +240,8 @@ Promote the prototype. Props mirror `WarehouseMap`:
 
 | Phase | Deliverable | Touches |
 | --- | --- | --- |
-| **0 ✅** | Prototype on mock data in `/design-demo` | done |
-| **1** | Read-only floor plan in real map mode (auto grid from room/row/col, fill/age/issues colors, click→flyout, pan/zoom/MiniMap). **No persistence, no editing.** | extract `map-tones.ts`; `WarehouseFloorPlan.tsx`; `MapTabBody` + sidebar `floorplan` option; extend `getBinsOverview` (no schema change yet — auto-layout only) |
+| **0 ✅** | Prototype on mock data in `/design-demo` | done (later deleted; recoverable at 34c52758) |
+| **1 ✅** | Read-only floor plan in real map mode (auto grid from room/row/col, fill/age/issues colors, click→flyout, pan/zoom/MiniMap). **No persistence, no editing.** | extract `map-tones.ts`; `WarehouseFloorPlan.tsx`; `MapTabBody` + sidebar `floorplan` option; extend `getBinsOverview` (no schema change yet — auto-layout only) |
 | **2** | Trace by SKU (click bin / search SKU → highlight + edges) | `GET /api/inventory/sku-bins`; `useFloorTrace`; reuse `useWarehouseSkuSearch` |
 | **3** | Editable layout + persistence | migration (`layout_*`), schema, `PATCH /api/inventory/bins-layout`, `bin.layout` permission, Edit/Save UI |
 | **4** | Polish | deep-link `?bin=` to focus+`fitView`; zone frames; density; empty-bin fade; legend parity; a11y/keyboard |

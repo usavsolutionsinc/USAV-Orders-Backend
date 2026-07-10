@@ -102,6 +102,11 @@ export const GET = withAuth(
 
       return NextResponse.json({
         success: true,
+        // Numeric serial_units.id, so a caller that scanned a label handle
+        // (U-{serial} / GS1 / unit_uid) can resolve the canonical id in one
+        // read — the packer testing-photo scan uses this to key the phone
+        // upload's entityId + the desktop realtime refresh.
+        unit_id: unit.id,
         photos: rows.map((row) => ({
           id: row.id,
           url: row.url?.startsWith('/api/photos/') ? row.url : photoContentUrl(row.id),

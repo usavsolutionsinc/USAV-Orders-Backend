@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantTransaction } from '@/lib/tenancy/db';
-import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { normalizeTrackingCanonical, normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException, type ExceptionSourceStation } from '@/lib/orders-exceptions';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { withAuth } from '@/lib/auth/withAuth';
 
 type ScanTrackingRequest = {
@@ -15,11 +14,12 @@ type ScanTrackingRequest = {
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
-    const rate = checkRateLimit({
+    const rate = await checkRateLimitForOrg({
       headers: req.headers,
       routeKey: 'scan-tracking',
       limit: 120,
       windowMs: 60_000,
+      organizationId: ctx.organizationId,
     });
     if (!rate.ok) {
       return NextResponse.json(
@@ -64,7 +64,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ success: false, found: false, error: 'Invalid tracking number key' }, { status: 400 });
     }
 
-    const orgId = ctx.organizationId ?? USAV_ORG_ID;
+    // withAuth guarantees an authenticated tenant here (AuthContext.organizationId
+    // is non-nullable) — no fallback.
+    const orgId = ctx.organizationId;
 
     return await withTenantTransaction(orgId, async (client) => {
       const key18MatchResult = await client.query(

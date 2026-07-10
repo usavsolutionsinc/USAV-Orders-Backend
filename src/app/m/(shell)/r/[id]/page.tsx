@@ -11,6 +11,7 @@ import {
   getStatusDotBg,
 } from '@/components/station/receiving-constants';
 import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
+import { sourcePlatformMeta, UNKNOWN_PLATFORM } from '@/lib/source-platform';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
@@ -132,19 +133,21 @@ function formatAgo(iso: string | null | undefined): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  ebay: 'eBay',
-  amazon: 'Amazon',
-  aliexpress: 'AliExpress',
-  walmart: 'Walmart',
-  goodwill: 'Goodwill',
-  other: 'Other',
+/** Page-only labels for values the source-platform SoT doesn't carry. */
+const EXTRA_SOURCE_LABEL: Record<string, string> = {
   zoho: 'Zoho',
 };
 
 function platformLabel(c: Carton): string {
   const sp = (c.source_platform || '').toLowerCase();
-  if (sp) return SOURCE_LABEL[sp] || sp;
+  if (sp) {
+    // Canonical label from the SoT (src/lib/source-platform.ts) — this page
+    // previously inlined its own map, which drifted (fba/ecwid/square rendered
+    // as raw slugs). Unknown values keep the raw-slug fallback, never 'Unknown'.
+    const meta = sourcePlatformMeta(sp);
+    if (meta !== UNKNOWN_PLATFORM) return meta.label;
+    return EXTRA_SOURCE_LABEL[sp] || sp;
+  }
   if (c.is_return) {
     return c.return_platform
       ? `Return · ${c.return_platform.replace(/_/g, ' ')}`

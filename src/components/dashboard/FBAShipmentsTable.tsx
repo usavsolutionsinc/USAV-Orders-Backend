@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fbaPaths } from '@/lib/fba/api-paths';
-import { Loader2, Minus } from '@/components/Icons';
+import { Loader2, Minus, Package, Truck } from '@/components/Icons';
+import { EmptyState } from '@/design-system/primitives';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { formatDateTimePST } from '@/utils/date';
 import { FbaStatusBadge } from '@/components/fba/shared/FbaStatusBadge';
@@ -149,8 +151,24 @@ export default function FBAShipmentsTable() {
 
       <div className="flex-1 overflow-auto">
         {rows.length === 0 ? (
+          /* Typed first-use empty (onboarding O0): this table has no search/filter,
+             so zero rows always means "no shipments yet" — teach the next action
+             instead of reading as broken. */
           <div className="flex h-full items-center justify-center">
-            <p className="text-caption font-black uppercase tracking-widest text-text-soft">No FBA shipments</p>
+            <EmptyState
+              icon={<Truck className="h-6 w-6 text-text-faint" />}
+              title="No FBA shipments yet"
+              description="Plan your first FBA shipment to track prep, labeling, and hand-off here."
+              action={
+                <Link
+                  href="/fba"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-accent-bg px-4 text-[13px] font-semibold text-text-inverse shadow-sm transition-colors hover:bg-accent-bg/90 active:bg-accent-bg/90"
+                >
+                  <Package className="h-4 w-4" />
+                  Plan an FBA shipment
+                </Link>
+              }
+            />
           </div>
         ) : isLegacy ? (
           /* ── Legacy table (pre-migration) ── */

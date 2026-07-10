@@ -528,6 +528,62 @@ const testingTechQueue: DataSourceDefinition = {
   realtime: { ablyChannel: 'tech' },
 };
 
+/**
+ * Open (unshipped) eBay orders — the ship bench's work queue. Wraps the
+ * existing eBay orders reader GET /api/ebay/search (orders with a non-null
+ * account_source, newest first). `account`/`status` are server-side params;
+ * "unshipped only" filters client-side on the route's `is_shipped` flag (no
+ * server param exists for it). Bind `shipstation.rate_shop` /
+ * `shipstation.buy_label` to work a row, `ebay.sync_now` to re-pull the feed.
+ */
+const ebayOpenOrders: DataSourceDefinition = {
+  id: 'ebay.open_orders',
+  label: 'Open eBay orders',
+  integration: 'ebay',
+  endpoint: '/api/ebay/search',
+  buildUrl: (filters) => {
+    const limit = typeof filters.limit === 'string' && /^\d+$/.test(filters.limit) ? filters.limit : '50';
+    const q = new URLSearchParams({ limit });
+    if (typeof filters.account === 'string' && filters.account.trim()) q.set('account', filters.account.trim());
+    return `/api/ebay/search?${q.toString()}`;
+  },
+  parse: (json, filters) => {
+    const orders = (json as { orders?: Array<Record<string, unknown>> })?.orders ?? [];
+    const openOnly = !(filters.open_only === false || filters.open_only === 'false');
+    const rows: SourceRow[] = [];
+    for (const o of orders) {
+      if (openOnly && o.is_shipped === true) continue;
+      rows.push({
+        id: String(o.id),
+        title: (o.product_title as string | null) ?? `Order ${o.order_id ?? o.id}`,
+        order_number: (o.order_id as string | null) ?? null,
+        sku: (o.sku as string | null) ?? null,
+        account: (o.account_source as string | null) ?? null,
+        tracking_number: (o.tracking_number as string | null) ?? null,
+        ship_by_date: (o.ship_by_date as string | null) ?? null,
+        order_date: (o.order_date as string | null) ?? null,
+      });
+    }
+    return rows;
+  },
+  shape: [
+    { key: 'title', label: 'Item', kind: 'text' },
+    { key: 'order_number', label: 'Order #', kind: 'order_ref' },
+    { key: 'sku', label: 'SKU', kind: 'sku_ref' },
+    // `account` is a per-org eBay account name (e.g. 'usav_main'), not a
+    // source-platform slug — render as plain text, not the platform chip.
+    { key: 'account', label: 'Account', kind: 'text' },
+    { key: 'tracking_number', label: 'Tracking', kind: 'tracking_ref' },
+    { key: 'order_date', label: 'Ordered', kind: 'timestamp' },
+  ],
+  filters: [
+    { key: 'open_only', label: 'Unshipped only', kind: 'boolean', default: true },
+    { key: 'account', label: 'eBay account', kind: 'text' },
+    LIMIT_FILTER,
+  ],
+  permission: 'orders.view',
+};
+
 let builtinsRegistered = false;
 export function registerBuiltinDataSources(): void {
   if (builtinsRegistered) return;
@@ -541,4 +597,5 @@ export function registerBuiltinDataSources(): void {
   registerDataSource(sourcingOpenDemand);
   registerDataSource(receivingUnboxQueue);
   registerDataSource(testingTechQueue);
+  registerDataSource(ebayOpenOrders);
 }

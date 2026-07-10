@@ -24,6 +24,7 @@ export function useIncomingSummary(): IncomingSummary | null {
     ? {
         issued: summaryData.issued,
         delivered_unopened: summaryData.delivered_unopened,
+        delivered_not_unboxed: summaryData.delivered_not_unboxed ?? 0,
         delivered_email: summaryData.delivered_email ?? 0,
         arriving_today: summaryData.arriving_today,
         stalled: summaryData.stalled ?? 0,
@@ -33,6 +34,7 @@ export function useIncomingSummary(): IncomingSummary | null {
         tracking_unavailable: summaryData.tracking_unavailable ?? 0,
         awaiting_tracking: summaryData.awaiting_tracking,
         expected_today: summaryData.expected_today,
+        wrong_destination: summaryData.wrong_destination ?? 0,
         by_carrier: summaryData.by_carrier,
       }
     : null;

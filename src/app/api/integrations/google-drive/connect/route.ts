@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
+import { assertCanConnectProvider } from '@/lib/integrations/connectors/connections';
 import { encryptIntegrationPayload } from '@/lib/integrations/crypto';
 import { driveAppConfig, isDriveBackupConfigured, DRIVE_SCOPES } from '@/lib/photos/drive/client';
 
@@ -27,6 +28,10 @@ export const GET = withAuth(async (_req, ctx) => {
       { status: 500 },
     );
   }
+
+  // Plan ceiling: connecting a NEW provider must fit the org's maxIntegrations.
+  const refusal = await assertCanConnectProvider(ctx.organizationId, 'google_drive');
+  if (refusal) return NextResponse.json(refusal, { status: 403 });
 
   const { clientId, redirectUri } = driveAppConfig();
 

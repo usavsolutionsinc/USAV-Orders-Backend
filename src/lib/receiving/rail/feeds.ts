@@ -363,8 +363,11 @@ const FEEDS = {
     getActivityAt: (r) =>
       r.unboxed_at ?? r.unbox_opened_at ?? r.scanned_at ?? r.received_at ?? r.created_at ?? null,
     pinSelectedLead: false,
-    // All staff — not the triage ?staff= filter. Window capped at UNBOX_SIDEBAR_LIMIT.
-    usesStaffFilter: false,
+    // Honors the shared `?staff=` header filter (P1-WORK-02): the server's
+    // view=unbox_opened staff clause matches on the unbox actor (unbox_opened_by
+    // / UNBOX_SCAN_OPENED). Absent param = ALL staff (unchanged default).
+    // Window capped at UNBOX_SIDEBAR_LIMIT.
+    usesStaffFilter: true,
     autoSelectFirstWhenEmpty: true,
     limit: UNBOX_SIDEBAR_LIMIT,
     refreshEvents: UNBOX_REFRESH,

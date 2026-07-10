@@ -18,6 +18,12 @@ export function getLast4(value: string | null | undefined): string {
   return raw.length > 4 ? raw.slice(-4) : raw || '---';
 }
 
+/** Last 8 chars — preferred for carrier tracking (dock match + fewer collisions). */
+export function getLast8(value: string | null | undefined): string {
+  const raw = normalizeCopyText(value);
+  return raw.length > 8 ? raw.slice(-8) : raw || '---';
+}
+
 /**
  * serial_number may be a CSV string aggregated via STRING_AGG (e.g. "SN1, SN2").
  * Parses it, takes the last individual serial, then returns its last 4 chars.

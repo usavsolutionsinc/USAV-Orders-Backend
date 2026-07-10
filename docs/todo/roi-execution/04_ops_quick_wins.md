@@ -1,5 +1,19 @@
 # Tier 3 — Ops Throughput Quick Wins & Dormant-Feature Rollouts
 
+> **STATUS (2026-07-10 wave — A-items shipped, B-items = owner flips, C1 code shipped):**
+> - **A1 staff picker** — SHIPPED on Receiving (triage), Unboxed, Packing via the new shared
+>   `StaffFilterButton` (canonical `useStaffFilter`, `?staff=` SoT; receiving's `?staffId=` kept as
+>   read-fallback). Testing surface skipped (in-flight collision).
+> - **A2 SKU header + edit** — SHIPPED: `LineSkuHeaderChip` (copyable SkuScanRefChip + pencil →
+>   inline override, Enter/Esc, optimistic) on `LineEditPanel`.
+> - **A3 Zendesk-in-packing** — SHIPPED: `PackZendeskSection` (collapsed-by-default picker +
+>   internal-note comment box on the active-order card; scan focus preserved).
+> - **B1–B4** — code verified ready-to-flip (see S4 matrix in `../TODO-BACKLOG-SCOUT-MAP.md`);
+>   every flip is an **owner env action**, most gated on a migration apply. B2's result-surfacing
+>   UI remains unbuilt (photos files in-flight).
+> - **C1 ShipStation** — code SHIPPED 2026-07-10: `POST /api/shipping/{rates,labels,labels/void}`
+>   + station actions; live use needs per-org vault keys (owner).
+
 Small, high-daily-value items and finished-but-dormant features. All grounded in
 `docs/partial/HUMAN-TODO.md` §I (code-verified) + `src/lib/feature-flags.ts`.
 

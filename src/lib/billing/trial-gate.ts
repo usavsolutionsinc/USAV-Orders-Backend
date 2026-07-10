@@ -46,14 +46,32 @@ export function isTrialExpired(org: { plan: string; trialEndsAt: Date | null }):
 }
 
 /**
+ * Injectable collaborators so the decision logic unit-tests DB-free
+ * (house `Deps` pattern — mirrors studio-gate.ts).
+ */
+export interface TrialGateDeps {
+  enforced: () => boolean;
+  getOrg: (orgId: OrgId) => Promise<{ plan: string; trialEndsAt: Date | null } | null>;
+}
+
+const defaultDeps: TrialGateDeps = {
+  enforced: trialEnforcementOn,
+  getOrg: getOrganization,
+};
+
+/**
  * True if this org should be blocked from `pathname`. No DB read when
  * enforcement is off or the path is exempt — the flag check short-circuits
  * first.
  */
-export async function isTrialBlocked(orgId: OrgId, pathname: string): Promise<boolean> {
-  if (!trialEnforcementOn()) return false;
+export async function isTrialBlocked(
+  orgId: OrgId,
+  pathname: string,
+  deps: TrialGateDeps = defaultDeps,
+): Promise<boolean> {
+  if (!deps.enforced()) return false;
   if (isTrialPathExempt(pathname)) return false;
-  const org = await getOrganization(orgId);
+  const org = await deps.getOrg(orgId);
   if (!org) return false;
   return isTrialExpired(org);
 }

@@ -493,7 +493,7 @@ async function upsertMatchedReceiving(
     `INSERT INTO receiving_carton
        (source, zoho_purchaseorder_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at, organization_id)
-     VALUES ('zoho_po', $1, $2, $3::timestamp, $6::timestamptz, $7, 'PENDING', true, $3::timestamptz, $5::uuid)
+     VALUES ('zoho_po', $1, $2, $3::timestamp, $5::timestamptz, $6, 'PENDING', true, $3::timestamptz, $4::uuid)
      ON CONFLICT (zoho_purchaseorder_id) WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
      DO UPDATE SET
        updated_at = EXCLUDED.updated_at,
@@ -510,7 +510,7 @@ async function upsertMatchedReceiving(
        carrier = COALESCE(receiving_carton.carrier, EXCLUDED.carrier),
        organization_id = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id)
      RETURNING id, xmax::text`,
-    [poId, carrier || null, now, staffId, organizationId, doorAt, doorBy],
+    [poId, carrier || null, now, organizationId, doorAt, doorBy],
   );
   const row = result.rows[0];
   return { receivingId: Number(row.id), preexisting: row.xmax !== '0' };
@@ -542,9 +542,9 @@ async function createUnmatchedReceiving(
     `INSERT INTO receiving
        (source, shipment_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at, organization_id)
-     VALUES ('unmatched', $1, $2, $3::timestamp, $6::timestamptz, $7, 'PENDING', true, $3::timestamptz, $5::uuid)
+     VALUES ('unmatched', $1, $2, $3::timestamp, $5::timestamptz, $6, 'PENDING', true, $3::timestamptz, $4::uuid)
      RETURNING id`,
-    [shipment?.id ?? null, carrier || null, now, staffId, organizationId, doorAt, doorBy],
+    [shipment?.id ?? null, carrier || null, now, organizationId, doorAt, doorBy],
   );
   const receivingId = Number(result.rows[0].id);
   // Phase 5: tag the OS&D reason. No carrier resolved → CARRIER_MISMATCH;

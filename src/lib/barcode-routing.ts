@@ -250,6 +250,31 @@ export function detectScanType(raw: string): ScanType {
   return routeScan(raw)?.type ?? 'sku';
 }
 
+/**
+ * For a scan of a **printed unit label**, return the resolvable unit key — the
+ * bare serial (`U-{serial}` handle / GS1 `(01)(21)` serial) or the minted
+ * `unit_uid` — that `/api/serial-units/[id]` resolves (numeric id → serial →
+ * unit_uid). Returns `null` when the raw scan is NOT a genuine unit label, so
+ * a bare/partial serial typed at the bench never trips a unit-scoped action.
+ *
+ * This is the gate + extraction the packer testing-photo scan uses: it fires the
+ * phone camera ONLY when this returns a non-null key
+ * (docs/todo/packer-testing-photo-scan-timeline-plan.md). Shape-only matches
+ * (a manufacturer serial that happens to look like a minted uid / `U-` / GS1
+ * frame) still return a key here, but resolve to no unit downstream and are
+ * dropped there — so this never opens the camera spuriously.
+ */
+export function scannedUnitKey(raw: string): string | null {
+  const route = routeScan(raw);
+  if (!route || route.type !== 'serial-unit') return null;
+  const redirect = route.redirect || '';
+  const mu = /^\/m\/u\/(.+)$/.exec(redirect);
+  if (mu) return decodeURIComponent(mu[1]).trim() || null;
+  const gs1 = /^\/01\/\d+\/21\/(.+)$/.exec(redirect);
+  if (gs1) return decodeURIComponent(gs1[1]).trim() || null;
+  return null;
+}
+
 // ─── Print-side helpers ─────────────────────────────────────────────────────
 
 /**

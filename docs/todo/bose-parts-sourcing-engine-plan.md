@@ -1,6 +1,10 @@
 # Bose Parts Compatibility + Alternative Sourcing Engine — Implementation Plan
 
-**Status:** Proposed · **Owner:** TBD · **Created:** 2026-06-06
+**Status:** ~88% SHIPPED (re-verified 2026-07-09; the "Proposed" header was stale) — all 8 tables,
+§5 routes + extras (incl. `candidates/[id]/import` → `part_acquisitions`), eBay Browse client,
+nightly scan/scour crons, `/sourcing` 5-mode workspace (scout/queue/searches/suppliers/watchlist),
+three admin editors. Residual: §8.2 compatibility CSV bulk-import; Phase-5 polish (margin view,
+re-price job, demand-no-stock heuristics). · **Created:** 2026-06-06
 
 ## 1. Problem & Goal
 

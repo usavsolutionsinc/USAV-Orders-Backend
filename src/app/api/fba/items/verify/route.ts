@@ -124,6 +124,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'fba.stage_shipments',
+  feature: 'fba',
   audit: {
     source: 'fba.items.verify',
     action: 'fba.fnsku.verify',

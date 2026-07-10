@@ -19,7 +19,7 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import type { AnonymousAuthContext } from '@/lib/auth/withAuth';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
-import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /**
  * Build a lightweight AuthContext from the session cookie without going
@@ -67,9 +67,12 @@ export async function GET(
 
   try {
     // location_transfers is RLS-bound — resolve the tenant for the GUC wrapper.
-    // Legacy QR scans can predate sign-in (null org), so fall back to USAV.
+    // No session org (e.g. a pre-sign-in QR scan) → fail closed, never cross-tenant.
     const ctx = await resolveCtx(_req);
-    const orgId: OrgId = ctx.organizationId ?? USAV_ORG_ID;
+    if (!ctx.organizationId) {
+      return NextResponse.json({ error: 'ORG_CONTEXT_REQUIRED' }, { status: 401 });
+    }
+    const orgId: OrgId = ctx.organizationId;
 
     // Run all queries in parallel. Tenant-owned tables go through the GUC
     // wrapper (tenantQuery) so RLS can isolate them; explicit
@@ -272,10 +275,13 @@ export async function PATCH(
     const parsed = parseBody(SkuStockPatchBody, body);
     if (parsed instanceof NextResponse) return parsed;
 
-    // Resolve the actor context up front — the idempotency cache is org-scoped,
-    // and legacy QR scans can predate sign-in (null org) so fall back to USAV.
+    // Resolve the actor context up front — the idempotency cache is org-scoped.
+    // No session org (e.g. a pre-sign-in QR scan) → fail closed before any write.
     const ctx = await resolveCtx(request);
-    const idempotencyOrgId: OrgId = ctx.organizationId ?? USAV_ORG_ID;
+    if (!ctx.organizationId) {
+      return NextResponse.json({ error: 'ORG_CONTEXT_REQUIRED' }, { status: 401 });
+    }
+    const idempotencyOrgId: OrgId = ctx.organizationId;
 
     // ─── Idempotency: replay cached response for the same key ────────────────
     const idempotencyKey = readIdempotencyKey(
@@ -458,8 +464,7 @@ export async function PATCH(
       });
 
       // Log the transfer. location_transfers is RLS-bound — pass the tenant so
-      // the write runs through the GUC wrapper. Legacy QR scans can predate
-      // sign-in (null org), so fall back to USAV.
+      // the write runs through the GUC wrapper.
       if (entityId) {
         await logLocationTransfer({
           entityType: 'SKU_STOCK',
@@ -468,7 +473,7 @@ export async function PATCH(
           fromLocation,
           toLocation,
           staffId: staffId || null,
-        }, ctx.organizationId ?? USAV_ORG_ID).catch(() => {});
+        }, idempotencyOrgId).catch(() => {});
       }
 
       await recordAudit(pool, ctx, request, {

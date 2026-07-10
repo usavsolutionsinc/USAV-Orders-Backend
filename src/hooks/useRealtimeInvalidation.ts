@@ -200,6 +200,27 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
       queryClient.invalidateQueries({ queryKey: ['incoming-details'] });
+      // Incoming to-do (email worklist): a newly-registered shipment usually
+      // means an email's tracking got linked, so the row is about to resolve —
+      // refresh instead of waiting out the poll (incoming-todo Phase 4b).
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-todo'] });
+    },
+    !!stationChannel && receiving,
+  );
+
+  // Email-signal events (incoming-todo Phase 4b): a rescan/reconcile upserted
+  // or auto-resolved an email_missing_purchase_orders row, or a match action
+  // moved one to done. Refreshes the Email Triage worklist + the Incoming
+  // summary tiles instantly instead of on the poll. NOTE: the server-side
+  // publisher for this event is deferred (src/lib/realtime/publish.ts is
+  // in-flight); this subscriber is wired and becomes live the moment a
+  // publishEmailSignalChanged() lands there.
+  useAblyChannel(
+    stationChannel,
+    'email-signal.changed',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-todo'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
     },
     !!stationChannel && receiving,
   );
@@ -251,6 +272,7 @@ export function useRealtimeInvalidation({
             queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
             queryClient.invalidateQueries({ queryKey: ['receiving-lines-with-serials'] });
             queryClient.invalidateQueries({ queryKey: ['receiving-line-serials'] });
+            queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-todo'] });
             queryClient.invalidateQueries({ queryKey: qk.walkInSales.all });
             queryClient.invalidateQueries({ queryKey: ['dashboard-operations'] });
           }

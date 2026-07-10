@@ -32,6 +32,8 @@ SHIPSTATION_API_KEY=              # v2 API key — REQUIRED (rates/labels/void)
 SHIPSTATION_V1_API_KEY=           # v1 key    — optional (order pull + stored weight)
 SHIPSTATION_V1_API_SECRET=        # v1 secret — optional
 SHIPSTATION_WEBHOOK_TOKEN=        # unguessable path segment for the webhook URL
+SHIPSTATION_WEBHOOK_ORG_ID=       # org UUID the env token resolves to — REQUIRED with
+                                  # the env token (fail-closed: unset ⇒ webhook rejected)
 SHIPSTATION_WEBHOOK_SECRET=       # this org's shared secret (optional extra check)
 
 # ── Warehouse origin (ship_from) — used on every rate/label ──

@@ -1,6 +1,28 @@
 # ops_events / station_activity_logs / workflow_nodes — Unification Plan
 
-> **Status:** PLAN (2026-07-01). No implementation started.
+> **Status:** Phases 0–2 CODE-COMPLETE (Phase 2 shipped 2026-07-10). Phases 0–1 (re-verified
+> 2026-07-09): 9-value `entity_type` CHECK + FK-free `workflow_node_id` + partial index
+> (`src/lib/migrations/2026-07-06_ops_events_entity_type_chk_and_workflow_node.sql`), Drizzle model
+> (`opsEvents` in `schema.ts`), writer lib (`src/lib/ops-events.ts`), CHECK↔code drift test
+> (`ops-events.test.ts`).
+> **Phase 2 (writer adoption) shipped:** `recordOpsEvent` is now Deps-injectable
+> (`OpsEventWriterDeps`) and pass-through-tested (`ops-events.test.ts`); a surface→node resolver
+> (`src/lib/stations/surface-workflow-node.ts`, `resolveSurfaceWorkflowNodeId` — cached, fail-open,
+> reads the active `station_definitions.workflow_node_id` via `resolveSurface`) threads
+> `workflowNodeId` at every writer with a Studio node genuinely in scope:
+> `src/lib/receiving/record-scan.ts` (TRACKING_SCANNED, triage/unbox surface),
+> `src/lib/receiving/unbox-scan-opened.ts` (UNBOX_SCAN_OPENED, unbox),
+> `src/app/api/receiving/mark-received-po/route.ts` (both UNBOX_CONFIRMED emits, unbox), and
+> `src/lib/workflow/tap.ts` (`workflow_tap_dropped` now stamps the unit's parked
+> `item_workflow_state.current_node_id`). `recordEntitySignal` already threaded `nodeId`.
+> Verified NO node in scope (left unthreaded, by design): `src/lib/assistant/mutations/`
+> `apply-agent-mutation.ts` (entity `other`, no station), `src/lib/billing/activation-events.ts`
+> (billing lifecycle). **SAL move 1 (freeze) shipped:** `createStationActivityLog`
+> (`src/lib/station-activity.ts`) carries a `@deprecated` new-writer freeze pointing new sites at
+> `recordOpsEvent`; existing ~40 call sites untouched. **Move 3** (the `workflow_node_id` column)
+> was Phase 1 — this plan names NO SAL INSERT sweep list (§3.5/§7: SAL migration is an explicit
+> non-goal), so zero SAL sites were rewritten. Residual: **owner-gated DB apply** of the 2026-07-06
+> migration; Phase 3 (unified read view) unscheduled.
 >
 > **Scope:** the two competing "what happened, where, to what" event spines (`ops_events`, `station_activity_logs`)
 > and the missing link between either one and the tenant-owned Studio graph (`workflow_nodes`). This is a **narrow

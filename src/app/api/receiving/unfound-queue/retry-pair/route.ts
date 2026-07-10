@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { reconcileUnmatchedReceiving } from '@/lib/receiving/reconcile-unmatched';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 
 /**
  * POST /api/receiving/unfound-queue/retry-pair — on-demand pairing retry
@@ -39,7 +40,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     return NextResponse.json({ success: false, error: 'carton not found' }, { status: 404 });
   }
 
-  const result = await reconcileUnmatchedReceiving(receivingId);
+  // Bind the authenticated tenant so the Zoho tracking search inside the
+  // reconcile runs against THIS org's credentials.
+  const result = await withZohoOrg(ctx.organizationId, () =>
+    reconcileUnmatchedReceiving(receivingId),
+  );
 
   return NextResponse.json({
     success: true,

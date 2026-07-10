@@ -16,6 +16,8 @@ import { OrderPackChecklist } from '@/components/packing/OrderPackChecklist';
 import { usePackingPolicy } from '@/hooks/usePackingPolicy';
 import { useOrderPackChecklist } from '@/hooks/useOrderPackChecklist';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { StaffFilterButton } from '@/components/ui/StaffFilterButton';
+import { PackZendeskSection } from './PackZendeskSection';
 import { useAssistantContext } from '@/hooks/useAssistantContext';
 import { STATION_SKILL } from '@/lib/assistant/page-skills';
 import { dispatchPackActiveOrder } from '@/components/packer/usePackerOrderPane';
@@ -256,8 +258,13 @@ export default function StationPacking({
               <div className="space-y-0.5">
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-xl font-black text-text-default tracking-tighter">Welcome, {userName}</h2>
-                  <div className={`p-3 ${themeColors.bg} text-white rounded-2xl shadow-lg ${themeColors.shadow}`}>
-                    <Package className="w-4 h-4" />
+                  <div className="flex items-center gap-2">
+                    {/* Shared `?staff=` history filter (P1-WORK-02) — swaps whose
+                        pack history the table shows; absent = the signed-in packer. */}
+                    <StaffFilterButton allLabel="My packs" align="end" />
+                    <div className={`p-3 ${themeColors.bg} text-white rounded-2xl shadow-lg ${themeColors.shadow}`}>
+                      <Package className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -269,6 +276,15 @@ export default function StationPacking({
                 theme={themeColor}
               />
             </>
+          )}
+
+          {/* Embedded sidebar header band — the one filter control the minimal
+              chrome keeps: the shared `?staff=` picker (P1-WORK-02). It narrows
+              the history table in the right pane; absent = the signed-in packer. */}
+          {embedded && (
+            <div className="flex items-center justify-end">
+              <StaffFilterButton allLabel="My packs" align="end" />
+            </div>
           )}
 
           {/* Mode reminder banner (Fragile / Multi-Item) — standalone station page
@@ -417,6 +433,25 @@ export default function StationPacking({
                   </div>
                 </div>
 
+                {/* Phase 3 order rollup — N/M lines of this order already packed
+                    (multi-line short-ship visibility at pack completion). */}
+                {packChecklist && packChecklist.orderRowIds.length > 0 && packChecklist.progress.total > 1 ? (
+                  <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-border-hairline bg-surface-canvas px-3 py-2">
+                    <p className="text-eyebrow font-black uppercase tracking-widest text-text-faint">
+                      Order rollup
+                    </p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset tabular-nums ${
+                        packChecklist.progress.packedLines >= packChecklist.progress.total
+                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                          : 'bg-amber-50 text-amber-700 ring-amber-200'
+                      }`}
+                    >
+                      {packChecklist.progress.packedLines}/{packChecklist.progress.total} lines packed
+                    </span>
+                  </div>
+                ) : null}
+
                 {embedded ? (
                   <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-caption font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
                     Checklist open in the history pane — verify each line item before sealing.
@@ -442,6 +477,9 @@ export default function StationPacking({
                         dense
                       />
                     </div>
+                    {/* A3 — Zendesk reach-in, collapsed by default so it never
+                        competes with the scan loop. */}
+                    <PackZendeskSection orderId={activeOrder.orderId} className="mt-3" />
                   </>
                 )}
               </motion.div>

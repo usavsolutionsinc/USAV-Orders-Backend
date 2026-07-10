@@ -91,6 +91,10 @@ export interface ZohoCredentials {
   webhookSecret?: string;
 }
 
+/** Ecwid storefront — store id + secret API token (vault-first; env fallback
+ *  for the dogfood org lives in fetchEcwidTransferRows, not here). */
+export interface EcwidCredentials { storeId: string; apiToken: string }
+
 export interface UpsCredentials { clientId: string; clientSecret: string; webhookSecret?: string }
 export interface FedexCredentials { clientId: string; clientSecret: string; env: 'production' | 'sandbox' }
 export interface UspsCredentials { consumerKey: string; consumerSecret: string }

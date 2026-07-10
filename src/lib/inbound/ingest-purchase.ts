@@ -29,6 +29,9 @@ import type { OrgId } from '@/lib/tenancy/constants';
 import { assertRegisteredInboundSource, INBOUND_SOURCE_FACT_KIND, type InboundSourceType } from './source-registry';
 import { upsertPurchaseLink, type TxClient } from './purchase-links';
 import { upsertInboundMirror } from './mirror';
+import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { linkShipment } from '@/lib/shipping/shipment-links';
+import { ensureReceivingForEbayOrder, ensureReceivingForPo } from '@/lib/receiving/attach-box';
 
 /** condition_grade_enum values (mirror of the DB enum). */
 const CONDITION_GRADES = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
@@ -238,6 +241,89 @@ export async function ingestPurchase(
       },
       { withTx: (_o, fn) => fn(client) },
     );
+
+    // When tracking is present on an eBay purchase: register STN → ensure eBay
+    // (or merged Zoho) carton → link STN → stamp receiving_lines.receiving_id
+    // if still null. Mirrors zoho-receiving-sync's registerShipmentPermissive +
+    // carton upsert.
+    const tracking = input.trackingNumber?.trim() || null;
+    if (tracking && sourceType === 'ebay') {
+      const shipment = await registerShipmentPermissive(
+        { trackingNumber: tracking, sourceSystem: 'ebay_purchase' },
+        orgId,
+      );
+      if (shipment?.id) {
+        const shipmentId = Number(shipment.id);
+        const lineMeta = await client.query<{
+          receiving_id: number | null;
+          zoho_purchaseorder_id: string | null;
+          zoho_purchaseorder_number: string | null;
+        }>(
+          `SELECT receiving_id, zoho_purchaseorder_id, zoho_purchaseorder_number
+             FROM receiving_lines
+            WHERE id = $1 AND organization_id = $2::uuid
+            LIMIT 1`,
+          [receivingLineId, orgId],
+        );
+        const meta = lineMeta.rows[0];
+
+        let cartonId: number;
+        if (meta?.receiving_id != null) {
+          cartonId = Number(meta.receiving_id);
+          await client.query(
+            `UPDATE receiving_carton
+                SET shipment_id = COALESCE(shipment_id, $2),
+                    updated_at  = NOW()
+              WHERE id = $1 AND organization_id = $3::uuid`,
+            [cartonId, shipmentId, orgId],
+          );
+        } else if (meta?.zoho_purchaseorder_id) {
+          // Merged eBay→Zoho line: anchor on the Zoho PO carton, not a sibling ebay carton.
+          cartonId = await ensureReceivingForPo({
+            poId: meta.zoho_purchaseorder_id,
+            poNumber: meta.zoho_purchaseorder_number,
+            organizationId: orgId,
+          });
+          await client.query(
+            `UPDATE receiving_carton
+                SET shipment_id = COALESCE(shipment_id, $2),
+                    updated_at  = NOW()
+              WHERE id = $1 AND organization_id = $3::uuid`,
+            [cartonId, shipmentId, orgId],
+          );
+        } else {
+          cartonId = await ensureReceivingForEbayOrder({
+            sourceOrderId,
+            shipmentId,
+            organizationId: orgId,
+          });
+        }
+
+        await linkShipment(
+          orgId,
+          {
+            ownerType: 'RECEIVING',
+            ownerId: cartonId,
+            shipmentId,
+            direction: 'INBOUND',
+            isPrimary: true,
+            role: 'PO_ANCHOR',
+            source: 'ebay_purchase',
+          },
+          client,
+        );
+
+        await client.query(
+          `UPDATE receiving_lines
+              SET receiving_id = $2,
+                  updated_at   = NOW()
+            WHERE id = $1
+              AND organization_id = $3::uuid
+              AND receiving_id IS NULL`,
+          [receivingLineId, cartonId, orgId],
+        );
+      }
+    }
 
     return { receivingLineId, created, platformAccountId, sourceType, sourceOrderId };
   });

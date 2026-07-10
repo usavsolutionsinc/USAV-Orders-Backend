@@ -116,6 +116,11 @@ export interface ReceivingModeContext {
    * feed. It bypasses the normal list query, so it owns its own empty copy.
    */
   isDeliveredUnscannedFacet: boolean;
+  /**
+   * Incoming sub-facet: carrier-delivered cartons not yet unboxed (includes
+   * dock-scanned). Uses a dedicated feed because view=incoming drops scanned rows.
+   */
+  isDeliveredNotUnboxedFacet: boolean;
 }
 
 export interface ReceivingModeDescriptor {
@@ -284,9 +289,13 @@ const incomingMode: ReceivingModeDescriptor = {
     return true;
   },
   emptyMessage(ctx) {
-    return ctx.isDeliveredUnscannedFacet
-      ? 'Nothing delivered-and-unscanned right now.'
-      : 'No incoming POs — Zoho says everything issued is already received.';
+    if (ctx.isDeliveredUnscannedFacet) {
+      return 'Nothing delivered-and-unscanned right now.';
+    }
+    if (ctx.isDeliveredNotUnboxedFacet) {
+      return 'Nothing delivered-and-not-unboxed right now.';
+    }
+    return 'No incoming POs — Zoho says everything issued is already received.';
   },
 };
 

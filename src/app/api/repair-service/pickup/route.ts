@@ -379,4 +379,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'repair.pickup_sign' });
+}, { permission: 'repair.pickup_sign', feature: 'repair' });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/withAuth';
+import { assertCanConnectProvider } from '@/lib/integrations/connectors/connections';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { upsertIntegrationCredentials, type AmazonCredentials } from '@/lib/integrations/credentials';
 import { amazonAppConfig, getMarketplaceParticipations, type AmazonAccount } from '@/lib/amazon/client';
@@ -41,6 +42,10 @@ export const POST = withAuth(async (req, ctx) => {
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: 'INVALID_INPUT', detail: err?.message }, { status: 400 });
   }
+
+  // Plan ceiling: connecting a NEW provider must fit the org's maxIntegrations.
+  const refusal = await assertCanConnectProvider(ctx.organizationId, 'amazon');
+  if (refusal) return NextResponse.json(refusal, { status: 403 });
 
   const app = amazonAppConfig();
   const lwaClientId = body.lwaClientId || app.clientId;

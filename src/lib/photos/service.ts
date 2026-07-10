@@ -173,6 +173,10 @@ async function uploadPhotoToAdapter(input: UploadPhotoInput): Promise<UploadPhot
       entityType: input.entityType,
       photoId,
       poRef,
+      // SERIAL_UNIT photos file under `serial-units/{unit_uid}/…`; the uploader
+      // passes the unit_uid as poRef, so hand it to the path builder's unitUid
+      // slot (ignored for every other entity type).
+      unitUid: input.entityType === 'SERIAL_UNIT' ? poRef : null,
       prefix,
     });
 

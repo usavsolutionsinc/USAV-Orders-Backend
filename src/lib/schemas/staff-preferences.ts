@@ -73,6 +73,12 @@ export const StaffPreferencesPutBody = z
       .nullable()
       .optional(),
     theme: z.enum(STAFF_THEMES as [ThemeName, ...ThemeName[]]).nullable().optional(),
+    /**
+     * "Skip for now" on the dashboard Getting-Started checklist. `true` hides
+     * the card; `null` clears the dismissal (re-opens it). The underlying
+     * read-time step truth is never deleted (onboarding-foundational-plan §4).
+     */
+    onboardingDismissed: z.boolean().nullable().optional(),
     /** Per-board swimlane prefs. One generic shape ({@link BOARD_PREFS}) per
      *  surface; add a key here when a new board surface ships. */
     unshippedBoard: BOARD_PREFS.nullable().optional(),

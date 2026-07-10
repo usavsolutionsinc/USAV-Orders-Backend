@@ -33,6 +33,16 @@ export interface FetchPackerLogRowsOptions {
   weekStart?: string;
   weekEnd?: string;
   trackingTypeFilter?: PackerLogsTrackingFilter;
+  /**
+   * Spine-first render (immediate paint). When true, the two per-row
+   * `work_assignments` laterals (ship-by deadline + assigned tester) are dropped
+   * and the photos round-trip is skipped, so the page returns from cheap joins
+   * only; those display-only fields are filled in by a second `/api/packerlogs/
+   * hydrate` request. Column shape is identical (deferred cols come back NULL /
+   * []), so the table renders unchanged and just fills in on hydrate. Only
+   * applies on the enriched read path; ignored for the legacy query.
+   */
+  spineOnly?: boolean;
 }
 
 export interface FetchPackerLogRowsResult {
@@ -70,6 +80,9 @@ export async function fetchPackerLogRows(
   const weekStart = opts.weekStart ?? '';
   const weekEnd = opts.weekEnd ?? '';
   const trackingTypeFilter: PackerLogsTrackingFilter = opts.trackingTypeFilter ?? 'all';
+  // Spine-first only makes sense on the enriched read path (it trims enriched
+  // laterals); the legacy query is left whole.
+  const spineOnly = Boolean(opts.spineOnly) && isPackerLogEnrichmentRead();
 
   const orgId = opts.organizationId;
 
@@ -88,6 +101,9 @@ export async function fetchPackerLogRows(
     weekStart,
     weekEnd,
     trackingTypeFilter,
+    // Spine and full responses have different column payloads — keep them in
+    // separate cache entries so one can never be served for the other.
+    phase: spineOnly ? 'spine' : 'full',
   });
 
   const today = getCurrentPSTDateKey();
@@ -592,6 +608,51 @@ export async function fetchPackerLogRows(
   // legacy query (same aliases), so the route + client are unaffected. When the
   // projection row is missing (e.g. packs after the backfill cutoff), fall back
   // to the legacy order_match lateral so titles still resolve.
+  //
+  // Spine-first fragments (opts.spineOnly): defer the two per-row work_assignments
+  // laterals — ship-by deadline + assigned tester — so the page paints from cheap
+  // joins; those display-only fields arrive via /api/packerlogs/hydrate. Full mode
+  // substitutes the EXACT original SQL, so the full-mode query stays byte-identical.
+  const deadlineCols = spineOnly
+    ? `NULL::text AS ship_by_date,
+        NULL::text AS deadline_at,`
+    : `to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
+        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,`;
+  const testerIdCol = spineOnly ? `NULL::int AS tester_id,` : `wa_t.assigned_tech_id AS tester_id,`;
+  const testerNameCol = spineOnly ? `NULL::text AS tester_name,` : `tester_staff.name AS tester_name,`;
+  const deadlineJoin = spineOnly
+    ? ''
+    : `LEFT JOIN LATERAL (
+        SELECT wa.deadline_at
+        FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id = o.id
+          AND wa.work_type = 'TEST'
+        ORDER BY
+          CASE wa.status
+            WHEN 'IN_PROGRESS' THEN 1
+            WHEN 'ASSIGNED' THEN 2
+            WHEN 'OPEN' THEN 3
+            WHEN 'DONE' THEN 4
+            ELSE 5
+          END,
+          wa.updated_at DESC,
+          wa.id DESC
+        LIMIT 1
+    ) wa_deadline ON TRUE`;
+  const waTJoin = spineOnly
+    ? ''
+    : `LEFT JOIN LATERAL (
+        SELECT wa.assigned_tech_id
+        FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id = o.id
+          AND wa.work_type = 'TEST'
+          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
+        ORDER BY wa.created_at DESC, wa.id DESC
+        LIMIT 1
+    ) wa_t ON TRUE`;
+  const testerStaffJoin = spineOnly ? '' : `LEFT JOIN staff tester_staff ON tester_staff.id = wa_t.assigned_tech_id`;
   const enrichedQuery = `
     ${pageCte}
     SELECT
@@ -626,8 +687,7 @@ export async function fetchPackerLogRows(
             NULLIF(BTRIM(o.item_number), ''),
             NULLIF(BTRIM(o.sku), '')
         ) AS product_title,
-        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
-        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,
+        ${deadlineCols}
         o.item_number,
         NULLIF(TRIM(COALESCE(o.condition, '')), '') AS condition,
         COALESCE(o.quantity, sal.metadata->>'quantity') AS quantity,
@@ -647,11 +707,11 @@ export async function fetchPackerLogRows(
             NULLIF(TRIM(COALESCE(enr.sku_table_serial, '')), '')
         ) AS serial_number,
         enr.sku_table_id AS sku_table_id,
-        wa_t.assigned_tech_id AS tester_id,
+        ${testerIdCol}
         test_data.tested_by,
         test_data.test_date_time,
         tested_staff.name AS tested_by_name,
-        tester_staff.name AS tester_name,
+        ${testerNameCol}
         sal.fnsku,
         (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint AS fnsku_log_id,
         stn.carrier                            AS carrier,
@@ -716,34 +776,8 @@ export async function fetchPackerLogRows(
     LEFT JOIN orders o ON o.id = COALESCE(enr.order_row_id, order_match_fallback.id)
       AND o.organization_id = sal.organization_id
     LEFT JOIN orders_exceptions oe ON oe.id = sal.orders_exception_id
-    LEFT JOIN LATERAL (
-        SELECT wa.deadline_at
-        FROM work_assignments wa
-        WHERE wa.entity_type = 'ORDER'
-          AND wa.entity_id = o.id
-          AND wa.work_type = 'TEST'
-        ORDER BY
-          CASE wa.status
-            WHEN 'IN_PROGRESS' THEN 1
-            WHEN 'ASSIGNED' THEN 2
-            WHEN 'OPEN' THEN 3
-            WHEN 'DONE' THEN 4
-            ELSE 5
-          END,
-          wa.updated_at DESC,
-          wa.id DESC
-        LIMIT 1
-    ) wa_deadline ON TRUE
-    LEFT JOIN LATERAL (
-        SELECT wa.assigned_tech_id
-        FROM work_assignments wa
-        WHERE wa.entity_type = 'ORDER'
-          AND wa.entity_id = o.id
-          AND wa.work_type = 'TEST'
-          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
-        ORDER BY wa.created_at DESC, wa.id DESC
-        LIMIT 1
-    ) wa_t ON TRUE
+    ${deadlineJoin}
+    ${waTJoin}
     LEFT JOIN LATERAL (
         SELECT
             COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
@@ -754,7 +788,7 @@ export async function fetchPackerLogRows(
           AND tsn.shipment_id = o.shipment_id
     ) test_data ON TRUE
     LEFT JOIN staff tested_staff ON tested_staff.id = test_data.tested_by
-    LEFT JOIN staff tester_staff ON tester_staff.id = wa_t.assigned_tech_id
+    ${testerStaffJoin}
     ORDER BY sal.created_at DESC NULLS LAST
   `;
 
@@ -790,8 +824,9 @@ export async function fetchPackerLogRows(
     .map((r: any) => r.packer_log_id)
     .filter((id: any) => id != null);
 
+  // Spine-first skips the photos round-trip; photos arrive via the hydrate call.
   const photosMap: Record<number, any[]> = {};
-  if (packerLogIds.length > 0) {
+  if (!spineOnly && packerLogIds.length > 0) {
     try {
       const photosResult = await pool.query(
         `SELECT l.entity_id,

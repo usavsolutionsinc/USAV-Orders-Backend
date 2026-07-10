@@ -1,5 +1,25 @@
 # Tier 0 — Flip-the-Switch Wins (this week)
 
+> **STATUS (re-verified + closed out 2026-07-09):** Tier 0 is **agent-complete**; every remaining
+> step is an owner env flip.
+> - **#1 trial expiry — CODE DONE (predates this doc's "Do" list):** `withAuth.ts` returns 402
+>   `TRIAL_EXPIRED` and `page-guard.ts` redirects to `/settings/billing?status=trial_expired`;
+>   exempt-path allowlist verified. 2026-07-09: gate refactored to injectable `TrialGateDeps` +
+>   DB-free suite `src/lib/billing/trial-gate.test.ts` (9 cases: flag short-circuit with no DB read,
+>   exempt paths, expiry predicate, paid-plan immunity, fail-open). **Owner:** flip
+>   `TRIAL_ENFORCEMENT=1` (dogfood first), verify an expired-trial org is gated.
+> - **#2 packer-log enrichment — LIVE:** flag **defaults ON** since 2026-07-09
+>   (`feature-flags.ts` — env var is now a kill-switch only); backfill complete per the flag's
+>   doc-comment. The runbook below is retained for rollback reference only.
+> - **#3 poller intervals — DONE** (see below, unchanged).
+> - **#4 rate limiting — CODE DONE 2026-07-09:** all 11 legacy sync `checkRateLimit()` call sites
+>   migrated to org-scoped distributed `checkRateLimitForOrg` (ai-chat ×2, ai-search,
+>   assistant-chat, incoming-refresh ×2, scan-tracking, shipping register/sync-one,
+>   support-suggest, tech-scan). **Owner:** provision Upstash + set
+>   `UPSTASH_REDIS_REST_URL/_TOKEN` in prod (until then the boot warning stays and limits are
+>   per-instance). Note: `redis-caching-plan.md` Phases 0–4 were already DONE (2026-07-04) —
+>   this doc's "Redis" item was only ever the rate-limit provisioning half.
+
 Four small, high-impact items. Most are finishing/enabling code that already exists.
 
 ---

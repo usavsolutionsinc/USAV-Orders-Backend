@@ -11,7 +11,7 @@ import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntegrationProvider } from '@/lib/integrations/credentials';
 import { EBAY_PLATFORM_PREDICATE } from '@/lib/ebay/credentials';
 import { connectorsWithCapability, getConnector, listConnectors } from './registry';
-import type { ReconcileOutcome, SyncOutcome } from './types';
+import type { ReconcileOutcome, SyncOpts, SyncOutcome } from './types';
 import { tapBuyerNoteDerivation } from '@/lib/surfaces/buyer-note-derivation';
 
 /** Post-sync mirror-derivation taps (plan §2.3 fresh path) — tapWorkflow
@@ -25,12 +25,44 @@ async function tapPostSyncDerivations(provider: IntegrationProvider, orgId: OrgI
   await tapBuyerNoteDerivation(orgId);
 }
 
+/**
+ * Best-effort operational writeback after a provider sync. Stamps
+ * last_synced_at / last_sync_status on the org's vault row(s) for the provider.
+ *
+ * Guarded: the columns ship in migration
+ * `2026-07-09d_org_integrations_operational_cols.sql`, which is OWNER-APPLIED
+ * later — until then Postgres raises undefined_column (42703). We catch and
+ * continue so syncs keep working before the migration lands. Also inherently
+ * best-effort for eBay/Amazon, whose connections live in dedicated account
+ * tables (the UPDATE simply matches zero vault rows).
+ */
+async function recordSyncOutcome(orgId: OrgId, provider: IntegrationProvider, ok: boolean): Promise<void> {
+  try {
+    await pool.query(
+      `UPDATE organization_integrations
+          SET last_synced_at = now(), last_sync_status = $3, updated_at = now()
+        WHERE organization_id = $1 AND provider = $2`,
+      [orgId, provider, ok ? 'ok' : 'error'],
+    );
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    if (code !== '42703') {
+      console.warn(`[connectors] sync-outcome writeback failed for ${provider}/${orgId}:`, e instanceof Error ? e.message : e);
+    }
+  }
+}
+
 /** Run one org's sync for one provider (the "Sync now" action). */
-export async function syncConnection(orgId: OrgId, provider: IntegrationProvider): Promise<SyncOutcome> {
+export async function syncConnection(
+  orgId: OrgId,
+  provider: IntegrationProvider,
+  opts?: SyncOpts,
+): Promise<SyncOutcome> {
   const connector = getConnector(provider);
   if (!connector) return { ok: false, error: `Unknown provider: ${provider}` };
   if (!connector.sync) return { ok: false, error: `${provider} has no sync capability yet` };
-  const outcome = await connector.sync(orgId);
+  const outcome = await connector.sync(orgId, opts);
+  await recordSyncOutcome(orgId, provider, outcome.ok);
   await tapPostSyncDerivations(provider, orgId);
   return outcome;
 }
@@ -74,7 +106,9 @@ export async function runOrdersSyncAllOrgs(only?: IntegrationProvider[]): Promis
     const orgs = await connectedOrgsForProvider(connector.provider);
     for (const orgId of orgs) {
       try {
-        out.push({ provider: connector.provider, orgId, outcome: await connector.sync(orgId) });
+        const outcome = await connector.sync(orgId);
+        out.push({ provider: connector.provider, orgId, outcome });
+        await recordSyncOutcome(orgId, connector.provider, outcome.ok);
         await tapPostSyncDerivations(connector.provider, orgId);
       } catch (e) {
         out.push({
@@ -82,6 +116,7 @@ export async function runOrdersSyncAllOrgs(only?: IntegrationProvider[]): Promis
           orgId,
           outcome: { ok: false, error: e instanceof Error ? e.message : String(e) },
         });
+        await recordSyncOutcome(orgId, connector.provider, false);
       }
     }
   }

@@ -36,6 +36,7 @@ import {
   CARRIER_MISMATCH_PREDICATE,
   SHIPMENT_SCANNED_PREDICATE,
 } from '@/lib/receiving/delivered-unscanned';
+import { getDeliveredNotUnboxedCount } from '@/lib/receiving/delivered-not-unboxed';
 import { isIncomingUniversal } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
@@ -150,6 +151,7 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
     // (receiving/receiving_scans) inside the shared predicates so the tile no
     // longer counts other tenants' delivered-unscanned boxes.
     row.delivered_unopened = await getDeliveredUnscannedCount(pool, undefined, orgId);
+    const delivered_not_unboxed = await getDeliveredNotUnboxedCount(orgId);
 
     // Email-driven delivered-unscanned: orders an "ORDER DELIVERED" email
     // flagged that map to a still-incoming, unscanned receiving line. Shown
@@ -293,7 +295,14 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
       ebay_pending = er.rows[0]?.ebay_pending ?? 0;
     }
 
-    return NextResponse.json({ success: true, ...row, delivered_email: deliveredEmail, ebay_pending, by_carrier });
+    return NextResponse.json({
+      success: true,
+      ...row,
+      delivered_not_unboxed,
+      delivered_email: deliveredEmail,
+      ebay_pending,
+      by_carrier,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to compute summary';
     console.error('receiving-lines/incoming/summary failed:', error);

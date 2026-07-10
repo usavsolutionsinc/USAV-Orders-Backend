@@ -387,6 +387,140 @@ test('a fully-wired decision with valid ports lints clean (no decision errors)',
   assert.equal(diags.filter((d) => d.rule === 'dead-end-port' && d.nodeId === 'd').length, 0);
 });
 
+// ── Integration rules (v2 — only when a connections summary is supplied) ──
+
+/** A node bound to an integration provider via config.requiredIntegration. */
+const integrationNode = (
+  id: string,
+  provider: string,
+  extra: Record<string, unknown> = {},
+) => ({
+  id,
+  type: 'list_ebay',
+  config: { station: 'ADMIN', requiredIntegration: provider, ...extra },
+});
+
+const HOUR = 3_600_000;
+const NOW = new Date('2026-07-10T12:00:00Z');
+
+test('integration-disconnected: a required provider with no connected row errors with a fix hint', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay')],
+      edges: [],
+      connections: [{ provider: 'ebay', connected: false }],
+    }),
+  );
+  const err = diags.find((d) => d.rule === 'integration-disconnected');
+  assert.ok(err, 'expected an integration-disconnected diagnostic');
+  assert.equal(err?.severity, 'error');
+  assert.equal(err?.nodeId, 'list');
+  assert.match(err!.message, /ebay/);
+  assert.match(err!.fix ?? '', /settings\/integrations\?focus=ebay/);
+});
+
+test('integration-disconnected: a provider absent from the summary also errors', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay')],
+      edges: [],
+      connections: [{ provider: 'amazon', connected: true }],
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule === 'integration-disconnected').length, 1);
+});
+
+test('integration-disconnected: a connected provider lints clean', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay')],
+      edges: [],
+      connections: [{ provider: 'ebay', connected: true }],
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule === 'integration-disconnected').length, 0);
+});
+
+test('integration-sync-stale: connected but synced past the default 24h SLA warns', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay')],
+      edges: [],
+      connections: [
+        { provider: 'ebay', connected: true, lastSyncedAt: new Date(NOW.getTime() - 48 * HOUR) },
+      ],
+      now: NOW,
+    }),
+  );
+  const warn = diags.find((d) => d.rule === 'integration-sync-stale');
+  assert.ok(warn, 'expected an integration-sync-stale diagnostic');
+  assert.equal(warn?.severity, 'warning');
+  assert.equal(warn?.nodeId, 'list');
+  assert.match(warn!.message, /ebay/);
+});
+
+test('integration-sync-stale: a fresh sync within the SLA stays quiet', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay')],
+      edges: [],
+      connections: [
+        { provider: 'ebay', connected: true, lastSyncedAt: new Date(NOW.getTime() - 2 * HOUR) },
+      ],
+      now: NOW,
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule === 'integration-sync-stale').length, 0);
+});
+
+test('integration-sync-stale: config.syncSlaHours overrides the default threshold', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay', { syncSlaHours: 1 })],
+      edges: [],
+      connections: [
+        { provider: 'ebay', connected: true, lastSyncedAt: new Date(NOW.getTime() - 2 * HOUR) },
+      ],
+      now: NOW,
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule === 'integration-sync-stale').length, 1);
+});
+
+test('integration-sync-stale tolerates a missing lastSyncedAt field (column not landed yet)', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay')],
+      edges: [],
+      connections: [{ provider: 'ebay', connected: true }],
+      now: NOW,
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule === 'integration-sync-stale').length, 0);
+});
+
+test('integration rules stay quiet when no connections summary is supplied (client re-lint / degraded fetch)', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [integrationNode('list', 'ebay', { syncSlaHours: 1 })],
+      edges: [],
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule.startsWith('integration-')).length, 0);
+});
+
+test('nodes without a requiredIntegration binding never fire integration rules', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [node('a', 'receiving', 'RECEIVING')],
+      edges: [],
+      connections: [{ provider: 'ebay', connected: false }],
+      now: NOW,
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule.startsWith('integration-')).length, 0);
+});
+
 test('decision dead-end-port uses config.outputs: an unwired declared port errors', () => {
   const diags = runDiagnostics(
     input({

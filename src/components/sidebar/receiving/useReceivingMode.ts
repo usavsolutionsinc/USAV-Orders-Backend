@@ -70,7 +70,7 @@ export interface ReceivingModeState {
   isScanSurface: boolean;
   /** Swap the `?mode=` param (clears History params when leaving History). */
   updateMode: (next: ReceivingMode) => void;
-  /** Set the `?staffId=` param. */
+  /** Set the canonical `?staff=` filter param (P1-WORK-02). */
   updateStaff: (id: number) => void;
   /** Swap the Unbox `?unboxview=` sub-view. Clears the current line by default. */
   updateUnboxView: (next: UnboxView, opts?: { clearLine?: boolean }) => void;
@@ -198,7 +198,11 @@ export function useReceivingMode(): ReceivingModeState {
 
   const updateStaff = (id: number) => {
     const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.set('staffId', String(id));
+    // Canonical staff-filter param is `staff` (useStaffFilter's
+    // STAFF_FILTER_PARAM). `staffId` was receiving's legacy divergence — readers
+    // keep it as a read-fallback for old links, but writes emit `staff` only.
+    nextParams.delete('staffId');
+    nextParams.set('staff', String(id));
     router.replace(`${currentBasePath}?${nextParams.toString()}`);
   };
 

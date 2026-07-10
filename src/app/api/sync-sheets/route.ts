@@ -22,7 +22,9 @@ import { getOrderPlatformLabel } from '@/utils/order-platform';
 
 export const maxDuration = 60;
 
-const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
+// No hardcoded default — the dogfood sheet id lives in the SPREADSHEET_ID env
+// (audit F29: never a tenant's live document id in source). Missing env +
+// missing body id → 503.
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
 type SyncResult = {
@@ -48,7 +50,13 @@ async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
             return NextResponse.json({ error: 'Invalid action. Only sync_all is supported.' }, { status: 400 });
         }
 
-        const targetSpreadsheetId = spreadsheetId || process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+        const targetSpreadsheetId = spreadsheetId || (process.env.SPREADSHEET_ID ?? '').trim();
+        if (!targetSpreadsheetId) {
+            return NextResponse.json(
+                { error: 'SPREADSHEET_ID is not configured for this deployment.' },
+                { status: 503 },
+            );
+        }
         const auth = getGoogleAuth();
         const sheets = googleSheets({ version: 'v4', auth });
 

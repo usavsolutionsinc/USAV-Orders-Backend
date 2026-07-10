@@ -69,4 +69,11 @@ export interface ScanHandlerContext {
   /** Clears resolved manuals from both React state and localStorage. */
   clearManuals: () => void;
   newIdempotencyKey: () => string;
+  /**
+   * Fired with the RAW scanned value after a serial/unit-label scan resolves, so
+   * the host can gate on a genuine printed unit label (`scannedUnitKey`) and fire
+   * the packer testing-photo request to the paired phone. Fire-and-forget; never
+   * blocks the scan loop. Undefined when the feature is off.
+   */
+  onUnitLabelScanned?: (rawInput: string) => void;
 }

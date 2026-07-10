@@ -7,6 +7,8 @@
 
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { getAccessToken, getInventoryBaseUrl } from '@/lib/zoho/core';
+import { withZohoOrg, hasZohoOrgBinding } from '@/lib/zoho/tenant-context';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 import {
   paginateZohoList,
   zohoGet,
@@ -19,6 +21,19 @@ import {
 
 export { getAccessToken, getInventoryBaseUrl, paginateZohoList, ZohoApiError };
 export type { ZohoCircuitOpenError, ZohoRateLimitError };
+
+// ZOHO_ORG_TRANSITIONAL: /api/receiving/lookup-po (uncommitted in-flight work
+// in another session — frozen this pass) still calls the tracking/PO-number
+// search fns below without a withZohoOrg binding. currentZohoOrgId() now
+// throws when unbound, so these fns — and ONLY these — bridge an unbound call
+// to the USAV org explicitly instead of the old silent module-level default.
+// Callers that DO bind (receiving-entry, tracking-exceptions refresh, find-po)
+// keep their own org: the shim is a no-op when a binding is present. Delete
+// once lookup-po binds ctx.organizationId itself.
+function withTransitionalZohoOrgIfUnbound<T>(fn: () => Promise<T>): Promise<T> {
+  if (hasZohoOrgBinding()) return fn();
+  return withZohoOrg(transitionalUsavOrgId(), fn);
+}
 
 export async function searchItemBySku(sku: string) {
   const normalizedSku = sku.replace(/^0+/, '') || '0';
@@ -240,12 +255,14 @@ export async function searchPurchaseReceivesByTracking(
   const trimmed = trackingNumber.trim();
   if (!trimmed) return [];
 
-  const data = await zohoGet<
-    ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceives?: ZohoPurchaseReceive[] }
-  >('/api/v1/purchasereceives', {
-    search_text: trimmed,
-    per_page: 5,
-  });
+  const data = await withTransitionalZohoOrgIfUnbound(() =>
+    zohoGet<
+      ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceives?: ZohoPurchaseReceive[] }
+    >('/api/v1/purchasereceives', {
+      search_text: trimmed,
+      per_page: 5,
+    }),
+  );
 
   return data.purchasereceives || [];
 }
@@ -299,16 +316,18 @@ export async function searchPurchaseOrdersByTracking(
   const trimmed = trackingNumber.trim();
   if (!trimmed) return [];
 
-  const [byRef, bySearch] = await Promise.allSettled([
-    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
-      '/api/v1/purchaseorders',
-      { reference_number: trimmed, per_page: 10 }
-    ),
-    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
-      '/api/v1/purchaseorders',
-      { search_text: trimmed, per_page: 10 }
-    ),
-  ]);
+  const [byRef, bySearch] = await withTransitionalZohoOrgIfUnbound(() =>
+    Promise.allSettled([
+      zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+        '/api/v1/purchaseorders',
+        { reference_number: trimmed, per_page: 10 }
+      ),
+      zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+        '/api/v1/purchaseorders',
+        { search_text: trimmed, per_page: 10 }
+      ),
+    ]),
+  );
 
   const seen = new Set<string>();
   const results: ZohoPurchaseOrder[] = [];
@@ -347,20 +366,22 @@ export async function findPurchaseOrderByNumber(
   const key = norm(trimmed);
   if (!key) return null;
 
-  const [byNumber, byRef, bySearch] = await Promise.allSettled([
-    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
-      '/api/v1/purchaseorders',
-      { purchaseorder_number: trimmed, per_page: 25 }
-    ),
-    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
-      '/api/v1/purchaseorders',
-      { reference_number: trimmed, per_page: 25 }
-    ),
-    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
-      '/api/v1/purchaseorders',
-      { search_text: trimmed, per_page: 25 }
-    ),
-  ]);
+  const [byNumber, byRef, bySearch] = await withTransitionalZohoOrgIfUnbound(() =>
+    Promise.allSettled([
+      zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+        '/api/v1/purchaseorders',
+        { purchaseorder_number: trimmed, per_page: 25 }
+      ),
+      zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+        '/api/v1/purchaseorders',
+        { reference_number: trimmed, per_page: 25 }
+      ),
+      zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+        '/api/v1/purchaseorders',
+        { search_text: trimmed, per_page: 25 }
+      ),
+    ]),
+  );
 
   const seen = new Set<string>();
   const candidates: ZohoPurchaseOrder[] = [];

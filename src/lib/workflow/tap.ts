@@ -35,9 +35,13 @@ import {
   workflowEdges,
   workflowNodes,
 } from '@/lib/drizzle/schema';
+import { recordOpsEvent, type RecordOpsEventInput } from '@/lib/ops-events';
+import { isWorkflowTapOutboxEnabled } from '@/lib/feature-flags';
 import type { NodeContext } from './contract';
+import type { AdvanceArgs, AdvanceOutcome } from './advance';
 import { advance } from './index';
 import { enrollItem } from './store';
+import { defaultTapOutbox, type TapOutboxDeps } from './tap-outbox';
 
 /** Domain events the built-in station nodes are gated on. */
 export type WorkflowTapEvent =
@@ -91,26 +95,102 @@ export interface WorkflowTapArgs {
   expectNodeType?: string;
 }
 
-export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
+/**
+ * Why a tap did not land as an engine step. Emitted (best-effort) to
+ * ops_events as `workflow_tap_dropped` so silent divergence between the
+ * domain spine and the workflow graph is observable instead of a console.warn
+ * lost in serverless logs.
+ */
+export type WorkflowTapDropReason =
+  /** Unit has no workflow row and this event can't enroll it (non-receiving event, or receiving with no org). */
+  | 'unenrolled'
+  /** unit_received with an org, but the org has no active workflow / entry node. */
+  | 'no_active_workflow'
+  /** Run already completed and the event isn't a return — stays finished by design. */
+  | 'already_done'
+  /** return_received on a done unit, but the org's graph has no returns node. */
+  | 'no_returns_node'
+  /** Defensive: no org resolvable after enrollment branches (should not happen). */
+  | 'missing_org'
+  /** Opt-in position guard: unit is parked at a different node type. */
+  | 'node_type_mismatch'
+  /** advance() returned a noop (locked / not_enrolled / already_terminal / broken_graph). */
+  | 'advance_noop'
+  /** advance() parked the unit in `error` (node error output). */
+  | 'advance_error'
+  /** tapWorkflow itself threw (DB down, engine bug) — the catch-all path. */
+  | 'tap_exception';
+
+/**
+ * Injectable collaborators (house `Deps` pattern, backend-patterns.md) so the
+ * drop/outbox behavior is unit-testable with zero DB — see tap.test.ts.
+ * Production callers never pass this; defaults are the real impls.
+ */
+export interface TapDeps {
+  loadTapState: typeof loadTapState;
+  findEntryNode: typeof findEntryNode;
+  findNodeOfType: typeof findNodeOfType;
+  enroll: typeof enrollItem;
+  advance: (orgId: string, args: Omit<AdvanceArgs, 'orgId'>) => Promise<AdvanceOutcome>;
+  /** Best-effort ops_events emit for drop/divergence observability. */
+  emitOps: (input: RecordOpsEventInput) => Promise<void>;
+  /** Intended-tap outbox gate — real impl reads WORKFLOW_TAP_OUTBOX (default OFF). */
+  outboxEnabled: () => boolean;
+  outbox: TapOutboxDeps;
+}
+
+export const defaultTapDeps: TapDeps = {
+  loadTapState,
+  findEntryNode,
+  findNodeOfType,
+  enroll: enrollItem,
+  advance,
+  emitOps: recordOpsEvent,
+  outboxEnabled: isWorkflowTapOutboxEnabled,
+  outbox: defaultTapOutbox,
+};
+
+export async function tapWorkflow(
+  args: WorkflowTapArgs,
+  deps: TapDeps = defaultTapDeps,
+): Promise<void> {
+  // Best org we know for drop-event emission; refined once state loads. When
+  // it stays null (unenrolled unit, caller passed no org) the drop event is
+  // skipped — ops_events is org-scoped and there is nothing to scope to.
+  let dropOrgId: string | null = args.orgId ?? null;
+  // The unit's parked node, for the drop event's workflow_node_id "where"
+  // axis (ops-events unification Phase 2). Null until state loads / when the
+  // unit is unenrolled — the column is nullable by design.
+  let dropNodeId: string | null = null;
   try {
     // Deliberate pre-read even though advance() loads state again: this row
     // is the orgId source for lib-level taps that have no auth ctx (e.g.
     // updateRepair), and advance() must keep doing its own read so the state
     // is fresh once a real per-unit lock lands (acquire → read → write).
     // One indexed point-select per human-paced scan is the accepted cost.
-    const state = await loadTapState(args.serialUnitId, args.orgId ?? null);
+    const state = await loadState(args, deps);
 
     let orgId = state?.organizationId ?? null;
+    dropOrgId = orgId ?? dropOrgId;
+    dropNodeId = state?.currentNodeId ?? null;
 
     if (!state) {
       // Only the receiving event starts a run; later-stage events on an
       // unenrolled unit (legacy stock, pre-rollout units) are dropped.
-      if (args.event !== 'unit_received' || !args.orgId) return;
+      if (args.event !== 'unit_received' || !args.orgId) {
+        await emitDrop(deps, args, dropOrgId, 'unenrolled', { hasOrg: Boolean(args.orgId) }, dropNodeId);
+        return;
+      }
       orgId = args.orgId;
+      dropOrgId = orgId;
 
-      const start = await findEntryNode(orgId);
-      if (!start) return; // no active workflow for this org — nothing to do
-      await enrollItem({
+      const start = await deps.findEntryNode(orgId);
+      if (!start) {
+        // no active workflow for this org — nothing to do
+        await emitDrop(deps, args, orgId, 'no_active_workflow', undefined, dropNodeId);
+        return;
+      }
+      await deps.enroll({
         orgId,
         serialUnitId: args.serialUnitId,
         workflowDefinitionId: start.workflowDefinitionId,
@@ -123,10 +203,19 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
       // (not the graph's normal entry) instead of dropping the tap. Re-
       // running enrollItem's upsert (unique on serialUnitId) IS "re-enroll"
       // — no new persistence mechanism needed, see store.ts.
-      if (args.event !== 'return_received') return;
-      const returnsNode = await findNodeOfType(state.organizationId, 'returns');
-      if (!returnsNode) return; // no returns node in this org's graph
-      await enrollItem({
+      if (args.event !== 'return_received') {
+        await emitDrop(deps, args, orgId, 'already_done', {
+          currentNodeType: state.currentNodeType,
+        }, dropNodeId);
+        return;
+      }
+      const returnsNode = await deps.findNodeOfType(state.organizationId, 'returns');
+      if (!returnsNode) {
+        // no returns node in this org's graph
+        await emitDrop(deps, args, orgId, 'no_returns_node', undefined, dropNodeId);
+        return;
+      }
+      await deps.enroll({
         orgId: state.organizationId,
         serialUnitId: args.serialUnitId,
         workflowDefinitionId: returnsNode.workflowDefinitionId,
@@ -136,25 +225,141 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
       // once parked (mirrors the fresh-enrollment branch above).
     }
 
-    if (!orgId) return;
+    if (!orgId) {
+      await emitDrop(deps, args, dropOrgId, 'missing_org', undefined, dropNodeId);
+      return;
+    }
 
     // Position guard: only advance when the unit is parked at the node this
     // event is meant for. Off that node, no-op (don't run the wrong node and
     // park it `blocked`). Only enrolled units reach here, so `state` is set.
     if (args.expectNodeType && state && state.currentNodeType !== args.expectNodeType) {
+      await emitDrop(deps, args, orgId, 'node_type_mismatch', {
+        expectedNodeType: args.expectNodeType,
+        currentNodeType: state.currentNodeType,
+      }, dropNodeId);
       return;
     }
 
-    await advance(orgId, {
+    // Intended-tap outbox: record the intent BEFORE attempting advance so a
+    // crash mid-advance leaves a PENDING row the reconciler cron can re-drive
+    // (re-driving is safe — the tap is idempotent by design). Best-effort and
+    // flag-gated (default OFF): fully inert until the 2026-07-09b migration
+    // is applied and WORKFLOW_TAP_OUTBOX is enabled.
+    let intentId: number | null = null;
+    if (deps.outboxEnabled()) {
+      try {
+        intentId = await deps.outbox.recordIntent({
+          organizationId: orgId,
+          serialUnitId: args.serialUnitId,
+          eventType: args.event,
+          payload: {
+            input: args.input ?? {},
+            staffId: args.staffId ?? null,
+            source: args.source ?? 'scan',
+            expectNodeType: args.expectNodeType ?? null,
+          },
+        });
+      } catch (err) {
+        console.warn('[workflow-tap] outbox intent write failed (non-fatal):', err);
+      }
+    }
+
+    const outcome = await deps.advance(orgId, {
       serialUnitId: args.serialUnitId,
       actor: { staffId: args.staffId ?? null, source: args.source ?? 'scan' },
       input: { event: args.event, ...(args.input ?? {}) },
     });
+
+    if (outcome.status === 'noop' || outcome.status === 'error') {
+      // The engine did not durably apply this event — surface the divergence.
+      await emitDrop(
+        deps,
+        args,
+        orgId,
+        outcome.status === 'noop' ? 'advance_noop' : 'advance_error',
+        { outcome },
+        dropNodeId,
+      );
+      if (intentId != null) {
+        // `locked` is transient contention — leave the intent PENDING so the
+        // reconciler re-drives it. Everything else is a durable non-apply.
+        if (outcome.status === 'noop' && outcome.reason === 'locked') return;
+        await safeOutbox(() =>
+          deps.outbox.markFailed(
+            intentId as number,
+            outcome.status === 'noop' ? `noop:${outcome.reason}` : `error:${outcome.error}`,
+          ),
+        );
+      }
+      return;
+    }
+
+    // moved | done | blocked all mean the engine durably recorded the event
+    // (blocked is a normal await-park, not a loss) — the intent landed.
+    if (intentId != null) {
+      await safeOutbox(() => deps.outbox.markLanded(intentId as number));
+    }
   } catch (err) {
     console.warn(
       `[workflow-tap] ${args.event} for unit ${args.serialUnitId} failed (non-fatal):`,
       err,
     );
+    // A thrown error after an intent was recorded deliberately leaves the row
+    // PENDING — that is exactly the "lost tap" the reconciler exists for.
+    await emitDrop(deps, args, dropOrgId, 'tap_exception', {
+      error: err instanceof Error ? err.message : String(err),
+    }, dropNodeId);
+  }
+}
+
+/** Injected-state read, kept out of the main flow for readability. */
+async function loadState(args: WorkflowTapArgs, deps: TapDeps) {
+  return deps.loadTapState(args.serialUnitId, args.orgId ?? null);
+}
+
+/**
+ * Best-effort `workflow_tap_dropped` ops_events emit. Never throws (a failed
+ * observability write must not fail a production scan, same contract as the
+ * tap itself). Skipped when no org is resolvable — ops_events is org-scoped.
+ */
+async function emitDrop(
+  deps: TapDeps,
+  args: WorkflowTapArgs,
+  orgId: string | null,
+  reason: WorkflowTapDropReason,
+  extra?: Record<string, unknown>,
+  nodeId: string | null = null,
+): Promise<void> {
+  if (!orgId) return;
+  try {
+    await deps.emitOps({
+      organizationId: orgId,
+      entityType: 'serial_unit',
+      entityId: args.serialUnitId,
+      eventType: 'workflow_tap_dropped',
+      // The unit's parked node when the drop happened — the tenant's Studio
+      // "where" axis (ops-events unification Phase 2). Null when unenrolled.
+      workflowNodeId: nodeId,
+      payload: {
+        event: args.event,
+        reason,
+        expectNodeType: args.expectNodeType ?? null,
+        source: args.source ?? 'scan',
+        ...(extra ?? {}),
+      },
+    });
+  } catch (err) {
+    console.warn('[workflow-tap] drop-event emit failed (non-fatal):', err);
+  }
+}
+
+/** Outbox status flips are best-effort — the reconciler tolerates stale rows. */
+async function safeOutbox(fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.warn('[workflow-tap] outbox status update failed (non-fatal):', err);
   }
 }
 
@@ -163,6 +368,13 @@ interface TapStateRow {
   status: string;
   /** Current parked node's registry type — for the opt-in position guard. */
   currentNodeType: string | null;
+  /**
+   * Current parked node's id (workflow_nodes.id) — threaded onto the drop
+   * event's `ops_events.workflow_node_id` "where" axis (Phase 2 of the
+   * ops-events unification plan). Optional so DB-free test fakes that predate
+   * it stay valid; the real reads always select it.
+   */
+  currentNodeId?: string | null;
 }
 
 /**
@@ -195,6 +407,7 @@ async function loadTapState(
           organizationId: itemWorkflowState.organizationId,
           status: itemWorkflowState.status,
           currentNodeType: workflowNodes.type,
+          currentNodeId: itemWorkflowState.currentNodeId,
         })
         .from(itemWorkflowState)
         .leftJoin(
@@ -220,6 +433,7 @@ async function loadTapState(
       organizationId: itemWorkflowState.organizationId,
       status: itemWorkflowState.status,
       currentNodeType: workflowNodes.type,
+      currentNodeId: itemWorkflowState.currentNodeId,
     })
     .from(itemWorkflowState)
     .leftJoin(

@@ -550,6 +550,28 @@ export function EventTimeline({
                     ))}
                   </div>
                 ) : null}
+
+                {item.media?.length ? (
+                  <div className="mt-1.5 flex gap-1.5 overflow-x-auto pb-0.5">
+                    {item.media.map((m) => (
+                      <a
+                        key={m.photoId}
+                        href={m.fullUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block shrink-0 overflow-hidden rounded-md ring-1 ring-inset ring-border-hairline transition-opacity hover:opacity-90"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={m.thumbUrl}
+                          alt={m.caption ?? 'photo'}
+                          loading="lazy"
+                          className="h-12 w-12 object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           </motion.li>

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseScannedUrl } from '@/lib/scan-resolver';
-import { transition } from '@/lib/inventory/state-machine';
+import { transition, type SerialState } from '@/lib/inventory/state-machine';
 
 /**
  * POST /api/pick/scan
@@ -181,50 +181,82 @@ export const POST = withAuth(async (request, ctx) => {
           );
         }
       } else {
-        // Override force-pick: the unit may be in any state (mismatch), so
-        // bypass the guard with a raw status write + raw event, as before.
-        await client.query(
-          `UPDATE serial_units
-              SET current_status = 'PICKED'::serial_status_enum,
-                  current_location = COALESCE($2::text, current_location),
-                  updated_at = NOW()
-            WHERE id = $1
-              AND organization_id = $3`,
-          [unit.id, binIdInput != null ? String(binIdInput) : null, orgId],
-        );
-        const ev = await client.query<{ id: number }>(
-          `INSERT INTO inventory_events (
-            organization_id,
-            event_type, actor_staff_id, station,
-            serial_unit_id, sku,
-            bin_id, prev_status, next_status,
-            scan_token, client_event_id, payload
-          )
-          VALUES ($9, 'PICKED', $1, 'PACK',
-                  $2, $3,
-                  $4, $5, 'PICKED',
-                  $6, $7, $8::jsonb)
-          ON CONFLICT (client_event_id) DO NOTHING
-          RETURNING id`,
-          [
+        // Override force-pick: an operator-confirmed pick with no matching open
+        // ALLOCATED row (or an already-advanced allocation). Routed through the
+        // guarded state machine as a dedicated FORCE_PICK event so the override
+        // is auditable and only the modeled force edges (STOCKED / TESTED /
+        // GRADED → PICKED, plus the pre-existing pick-flow edges) can fire — a
+        // state with no edge (e.g. SHIPPED) now 409s instead of being clobbered.
+        const forcePayload = {
+          source: 'pick.scan',
+          order_id: allocation?.order_id ?? orderIdInput ?? null,
+          allocation_id: allocation?.id ?? null,
+          mismatch,
+          override: overrideMismatch && mismatch,
+          reason: 'force_pick_override',
+        };
+        if (unit.current_status === 'PICKED') {
+          // Idempotent re-scan of an already-picked unit: the guard rejects the
+          // identity transition, so skip the status write and only record the
+          // FORCE_PICK event (the legacy raw UPDATE was a status no-op here too).
+          const ev = await client.query<{ id: number }>(
+            `INSERT INTO inventory_events (
+              organization_id,
+              event_type, actor_staff_id, station,
+              serial_unit_id, sku,
+              bin_id, prev_status, next_status,
+              scan_token, client_event_id, payload
+            )
+            VALUES ($8, 'FORCE_PICK', $1, 'PACK',
+                    $2, $3,
+                    $4, 'PICKED', 'PICKED',
+                    $5, $6, $7::jsonb)
+            ON CONFLICT (client_event_id) DO NOTHING
+            RETURNING id`,
+            [
+              actorStaffId,
+              unit.id,
+              unit.sku,
+              binIdInput,
+              resolvedSerial,
+              clientEventId,
+              JSON.stringify(forcePayload),
+              orgId,
+            ],
+          );
+          eventId = ev.rows[0]?.id ?? null;
+        } else {
+          const tr = await transition({
+            unitId: unit.id,
+            to: 'PICKED',
+            eventType: 'FORCE_PICK',
             actorStaffId,
-            unit.id,
-            unit.sku,
-            binIdInput,
-            unit.current_status,
-            resolvedSerial,
+            station: 'PACK',
             clientEventId,
-            JSON.stringify({
-              source: 'pick.scan',
-              order_id: allocation?.order_id ?? orderIdInput ?? null,
-              allocation_id: allocation?.id ?? null,
-              mismatch,
-              override: overrideMismatch && mismatch,
-            }),
-            orgId,
-          ],
-        );
-        eventId = ev.rows[0]?.id ?? null;
+            expectedFrom: unit.current_status as SerialState,
+            scanToken: resolvedSerial,
+            binId: binIdInput,
+            payload: forcePayload,
+          }, client, orgId);
+          if (!tr.ok) {
+            return {
+              ok: false as const,
+              status: tr.status,
+              error: tr.error,
+              mismatch: true,
+              unitId: unit.id,
+              unitStatus: unit.current_status,
+            };
+          }
+          prevStatus = tr.from;
+          eventId = tr.eventId;
+        }
+        if (binIdInput != null) {
+          await client.query(
+            `UPDATE serial_units SET current_location = $1, updated_at = NOW() WHERE id = $2 AND organization_id = $3`,
+            [String(binIdInput), unit.id, orgId],
+          );
+        }
       }
 
       // 4. Advance the allocation only AFTER the unit pick succeeded.

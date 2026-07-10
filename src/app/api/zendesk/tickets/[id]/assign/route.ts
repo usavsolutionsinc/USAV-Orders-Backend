@@ -45,7 +45,7 @@ export const GET = withAuth(
       return errorResponse(err, context);
     }
   },
-  { permission: 'integrations.zendesk' },
+  { permission: 'integrations.zendesk', feature: 'support' },
 );
 
 const AssignBody = z.object({
@@ -111,6 +111,7 @@ export const POST = withAuth(
   },
   {
     permission: 'integrations.zendesk',
+    feature: 'support',
     audit: {
       source: 'api',
       action: 'zendesk.ticket.assign',

@@ -34,4 +34,4 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     console.error('[GET /api/fba/fnskus/search]', error);
     return NextResponse.json({ success: false, error: error?.message }, { status: 500 });
   }
-}, { permission: 'fba.view' });
+}, { permission: 'fba.view', feature: 'fba' });

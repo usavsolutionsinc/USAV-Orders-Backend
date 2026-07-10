@@ -47,4 +47,4 @@ export const PATCH = withAuth(async (request, ctx) => {
     console.error('[PATCH /api/warranty/quotes/[id]] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'warranty.manage' });
+}, { permission: 'warranty.manage', feature: 'repair' });

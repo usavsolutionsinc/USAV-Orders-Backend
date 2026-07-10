@@ -20,8 +20,10 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     authKind: 'oauth',
     capabilities: ['orders', 'inventory'],
     authorizeStartPath: '/api/ebay/connect',
-    // Lazy import so the connection reader never pulls in the eBay client.
+    healthPath: '/api/ebay/health',
+    // Lazy imports so the connection reader never pulls in the eBay client.
     sync: (orgId) => import('./ebay').then((m) => m.ebaySync(orgId)),
+    validate: (orgId) => import('./ebay').then((m) => m.ebayValidate(orgId)),
   },
   amazon: {
     provider: 'amazon',
@@ -30,6 +32,7 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     authorizeStartPath: '/api/amazon/oauth/start',
     healthPath: '/api/amazon/health',
     sync: (orgId) => import('./amazon').then((m) => m.amazonSync(orgId)),
+    validate: (orgId) => import('./amazon').then((m) => m.amazonValidate(orgId)),
   },
   // Operations
   zoho: {
@@ -38,11 +41,14 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     capabilities: ['inventory'],
     authorizeStartPath: '/api/zoho/oauth/authorize',
     healthPath: '/api/zoho/health',
+    validate: (orgId) => import('./zoho').then((m) => m.zohoValidate(orgId)),
   },
   google_sheets: {
     provider: 'google_sheets',
     authKind: 'vault',
     capabilities: ['orders'],
+    // Lazy import so the connection reader never pulls in the Sheets job.
+    sync: (orgId, opts) => import('./orders-transfer').then((m) => m.googleSheetsSync(orgId, opts)),
   },
   // Storage backup — tenant connects their own Google Drive (Sign in with
   // Google, scope drive.file) so photo originals back up to / offload onto
@@ -69,6 +75,8 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     provider: 'ecwid',
     authKind: 'vault',
     capabilities: ['orders'],
+    // Lazy import so the connection reader never pulls in the Ecwid job.
+    sync: (orgId) => import('./orders-transfer').then((m) => m.ecwidSync(orgId)),
   },
   // Payments
   stripe: {

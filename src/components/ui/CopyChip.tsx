@@ -34,6 +34,7 @@ import {
 
 export {
   getLast4,
+  getLast8,
   getLast4Serial,
   isEmptyChipDisplay,
   isSkuFormattedScanRef,

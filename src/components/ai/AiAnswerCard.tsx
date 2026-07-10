@@ -1,14 +1,38 @@
 'use client';
 
+import { useState } from 'react';
 import type { AiStructuredAnswer } from '@/lib/ai/types';
 import { sectionLabel, tableHeader, tableCell, dataValue } from '@/design-system/tokens/typography/presets';
 import MarkdownRenderer from '@/components/ai/MarkdownRenderer';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { CopyIconButton } from '@/design-system/primitives';
 
 function confidenceClasses(confidence: AiStructuredAnswer['confidence']) {
   if (confidence === 'high') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   if (confidence === 'medium') return 'border-amber-200 bg-amber-50 text-amber-700';
   return 'border-red-200 bg-red-50 text-red-700';
+}
+
+/** Clipboard copy of the answer's raw text, with the copy-chip check-flash. */
+function CopyAnswerButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!text.trim()) return null;
+  return (
+    <HoverTooltip label={copied ? 'Copied' : 'Copy answer'} asChild>
+      <span className="inline-flex">
+        <CopyIconButton
+          copied={copied}
+          ariaLabel="Copy answer"
+          onClick={() => {
+            navigator.clipboard.writeText(text.trim()).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }).catch(() => { /* ignore */ });
+          }}
+        />
+      </span>
+    </HoverTooltip>
+  );
 }
 
 export default function AiAnswerCard({
@@ -32,7 +56,10 @@ export default function AiAnswerCard({
           <span className={sectionLabel}>
             {modeLabel || 'Assistant'}
           </span>
-          <span className="text-micro text-text-soft">{timestampLabel}</span>
+          <div className="flex items-center gap-2">
+            <CopyAnswerButton text={content} />
+            <span className="text-micro text-text-soft">{timestampLabel}</span>
+          </div>
         </div>
       </div>
     );
@@ -54,6 +81,13 @@ export default function AiAnswerCard({
           <span className={`border px-2 py-1 ${sectionLabel} ${confidenceClasses(analysis.confidence)}`}>
             {analysis.confidence} confidence
           </span>
+          <CopyAnswerButton
+            text={[analysis.title, analysis.summary, content]
+              .map((s) => (s ?? '').trim())
+              .filter(Boolean)
+              .filter((s, i, arr) => arr.indexOf(s) === i)
+              .join('\n\n')}
+          />
           <span className="text-micro text-text-soft">{timestampLabel}</span>
         </div>
       </div>

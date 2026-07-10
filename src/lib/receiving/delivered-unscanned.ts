@@ -30,6 +30,7 @@ export const DELIVERED_UNSCANNED_CAP = 100;
  */
 export const INBOUND_SOURCE_SYSTEMS = [
   'zoho_po',
+  'ebay_purchase',
   'receiving_lines_patch',
   'receiving.link-po',
   'receiving_entry',

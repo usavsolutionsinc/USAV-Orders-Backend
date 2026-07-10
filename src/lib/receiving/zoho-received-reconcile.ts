@@ -22,7 +22,7 @@
 import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
-import { createAuditLog, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /** Zoho statuses that mean "the vendor side considers this PO received". */
@@ -109,31 +109,32 @@ export async function reconcileZohoReceivedLines(
   if (rows.length === 0) return { updated: 0 };
 
   // Audit each reconciled line (system actor — no operator drove this).
-  // Best-effort and concurrent: a failed audit insert must not fail the sync.
+  // Cron/domain caller with no request: ctx/req are null and the tenant is
+  // stamped via organizationIdOverride. recordAudit never throws, so a failed
+  // audit insert can't fail the sync.
   await Promise.all(
     rows.map((row) =>
-      createAuditLog(pool, {
-        actorStaffId: null,
+      recordAudit(pool, null, null, {
         source: 'zoho-po-sync',
         action: AUDIT_ACTION.PO_RECEIVE,
         entityType: AUDIT_ENTITY.RECEIVING_LINE,
         entityId: row.id,
-        beforeData: {
+        method: 'system',
+        organizationIdOverride: orgId,
+        before: {
           quantity_received: row.before_qty,
           workflow_status: row.before_workflow,
         },
-        afterData: {
+        after: {
           quantity_received: row.after_qty,
           quantity_expected: row.quantity_expected,
           workflow_status: 'DONE',
         },
-        metadata: {
+        extra: {
           reconciled_from_zoho: true,
           zoho_status: row.zoho_status,
           zoho_purchaseorder_id: row.zoho_purchaseorder_id,
         },
-      }).catch((err) => {
-        console.warn('zoho-received-reconcile: audit insert failed', { line_id: row.id, err });
       }),
     ),
   );

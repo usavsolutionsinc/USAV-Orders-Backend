@@ -4,6 +4,7 @@ import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseScannedUrl } from '@/lib/scan-resolver';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { audit } from '@/lib/auth/audit';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getSubstitutionEnforcement, getSubstitutionAllowedNodes } from '@/lib/tenancy/settings';
 import { isFulfillmentSubstitution } from '@/lib/feature-flags';
@@ -36,9 +37,34 @@ import type { OrgId } from '@/lib/tenancy/constants';
  * Enforcement (per-org settings.fulfillment): 'advisory' → APPLIED + shippable;
  * 'block_until_approved' → PENDING (the order can't pack/ship until approved).
  *
- * Permission: packing.substitute_unit.
+ * Permission: packing.substitute_unit OR tech.substitute_unit (a substitution
+ * can be raised from the pack bench or the tech/testing bench —
+ * docs/todo/tech-substitution-wiring-plan.md §3.3 Option B). withAuth's single
+ * `permission` option can't express an OR, so the pair is enforced in-handler
+ * (the sanctioned pattern — cf. /api/settings PUT, the photo-label writes);
+ * the manifest records this file as authed-no-permission with the real gate
+ * asserted in route-permission-manifest.test.ts.
  */
+const SUBSTITUTE_PERMISSIONS = ['packing.substitute_unit', 'tech.substitute_unit'] as const;
+
 export const POST = withAuth(async (request, ctx) => {
+  if (!SUBSTITUTE_PERMISSIONS.some((p) => ctx.permissions.has(p))) {
+    // Mirror withAuth's own permission-denied path (403 + auth_audit row).
+    await audit({
+      staffId: ctx.staffId,
+      event: 'permission.denied',
+      result: 'denied',
+      sid: ctx.session?.sid ?? null,
+      ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+      userAgent: request.headers.get('user-agent'),
+      detail: { permission: SUBSTITUTE_PERMISSIONS.join('|'), api: true, path: request.nextUrl.pathname },
+    });
+    return NextResponse.json(
+      { error: 'FORBIDDEN', permission: SUBSTITUTE_PERMISSIONS.join('|'), role: ctx.role },
+      { status: 403 },
+    );
+  }
+
   if (!isFulfillmentSubstitution()) {
     return NextResponse.json({ ok: false, error: 'substitution is not enabled' }, { status: 403 });
   }
@@ -151,4 +177,4 @@ export const POST = withAuth(async (request, ctx) => {
   // later phase. The amendment row + audit are the durable record they read from.
 
   return NextResponse.json(result);
-}, { permission: 'packing.substitute_unit' });
+});

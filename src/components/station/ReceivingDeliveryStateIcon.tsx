@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Hash, Clock, Inbox, Truck, MapPin, Unlink, Lock } from '@/components/Icons';
+import { AlertTriangle, Hash, Clock, Inbox, Truck, MapPin, Unlink, Lock, PackageOpen } from '@/components/Icons';
 import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
 
 /**
@@ -16,6 +16,7 @@ const DELIVERY_STATE_ICON = {
   AWAITING_TRACKING: { Icon: Hash, tone: 'text-text-faint', label: 'No tracking number on file' },
   PENDING_CARRIER: { Icon: Clock, tone: 'text-sky-500', label: 'Pending carrier pickup' },
   DELIVERED_UNOPENED: { Icon: Inbox, tone: 'text-rose-600', label: 'Delivered but not scanned in yet' },
+  DELIVERED_NOT_UNBOXED: { Icon: PackageOpen, tone: 'text-rose-600', label: 'Delivered but not unboxed yet' },
   ARRIVING_TODAY: { Icon: Truck, tone: 'text-amber-600', label: 'Arriving today' },
   IN_TRANSIT: { Icon: MapPin, tone: 'text-blue-600', label: 'In transit' },
   TRACKING_UNAVAILABLE: {
@@ -27,6 +28,11 @@ const DELIVERY_STATE_ICON = {
     Icon: Unlink,
     tone: 'text-red-600',
     label: 'Carrier mismatch — the carrier/number don’t match (no known carrier, or no record at the carrier)',
+  },
+  WRONG_DESTINATION: {
+    Icon: MapPin,
+    tone: 'text-red-600',
+    label: 'Delivered to a different postal code than the warehouse — possible mis-ship',
   },
 } as const;
 

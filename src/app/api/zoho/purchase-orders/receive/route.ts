@@ -12,6 +12,7 @@ import {
   type ZohoPurchaseReceiveLine,
 } from '@/lib/zoho';
 import { formatPSTTimestamp, getCurrentPSTDateKey, normalizePSTTimestamp } from '@/utils/date';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   getApiIdempotencyResponse,
@@ -284,7 +285,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
   // ── 3. Zoho work in background ─────────────────────────────────────────
   const receivingIdForBg = receivingId;
-  after(async () => {
+  // Re-bind the tenant inside after(): the callback runs outside the request's
+  // async context, so the Zoho client would otherwise see no org binding.
+  after(async () => withZohoOrg(ctx.organizationId, async () => {
     try {
       const poForReceive = await getPurchaseOrderById(purchaseOrderId);
       try {
@@ -399,7 +402,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         });
       } catch { /* silent */ }
     }
-  });
+  }));
 
   return NextResponse.json(responseBody);
 }, { permission: 'receiving.mark_received' });

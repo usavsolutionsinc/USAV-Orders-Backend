@@ -1,5 +1,16 @@
 # Reversibility fixes — implementation plan
 
+> **Status:** ~78% (updated 2026-07-10). Phases 1–4 shipped (label scan-back, warranty
+> reversibility, soft-delete restores, state-machine back-edges + tests). **Phase 5 safe subset
+> shipped 2026-07-10:** 5.4 (Ecwid mirror deactivate pass w/ complete-fetch guard, 9/9 tests),
+> 5.7 (`POST /api/replenishment/tasks/[id]/release` — IN_PROGRESS→REQUESTED, 409 on wrong state,
+> audited), 5.9 (QC re-pass auto-resolves the matching open failure tag; advisories: resolve note
+> overwrites the original, and it can close a human-opened tag of the same mode). **Remaining
+> Phase 5 (owner-decision-gated external side-effects):** 5.1 Zoho void/cancel, 5.3 Square catalog
+> delete/archive, 5.6 Zoho purchase-receive delete, 5.8 manual-server file move-back; 5.2 eBay
+> revoke + 5.5 Nango revoke are code-shaped but credential/design-gated. Also shipped adjacent:
+> F11 returns/undo now rides `transition()` with a `RETURNED→SHIPPED` back-edge.
+
 Closes the forward/reverse asymmetries found by the deep sweep (2026-06-13), **after** adversarial verification removed 5 false positives. 34 confirmed gaps, grouped into 5 phases by cohesion + risk. Builds on the three shipped reversibility fixes (R-label round-trip, Zendesk link/unlink, Ecwid per-line link/unlink).
 
 ## Principles (carry over from the shipped work)

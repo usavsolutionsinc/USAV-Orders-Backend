@@ -204,6 +204,20 @@ export function isUnifiedEngineVerdictConfig(): boolean {
 }
 
 /**
+ * Workflow-tap intended-write outbox (roi-execution/03 #10). When ON,
+ * tapWorkflow records the INTENT of every tap (INSERT workflow_tap_outbox
+ * status='PENDING') before attempting advance() and marks it LANDED once the
+ * engine reaches a durable outcome, so the /api/cron/workflow/tap-reconcile
+ * cron can re-drive taps that were silently lost (crash mid-tap, transient
+ * lock). Default OFF — the write path is fully inert until the backing table
+ * migration (2026-07-09b_workflow_tap_outbox.sql) is applied. Set
+ * WORKFLOW_TAP_OUTBOX=true to enable.
+ */
+export function isWorkflowTapOutboxEnabled(): boolean {
+  return readBoolEnv('WORKFLOW_TAP_OUTBOX');
+}
+
+/**
  * Shipped-table read model. When ON, the /api/packerlogs week query reads the
  * precomputed `packer_log_enrichment` projection (catalog title / v_sku lookup /
  * order match / tracking json) via a 1:1 join instead of re-running the ~6
@@ -411,5 +425,17 @@ export async function isAiSearchCommandbar(orgId: OrgId): Promise<boolean> {
  */
 export async function isSurfaceComposedRender(orgId: OrgId): Promise<boolean> {
   return resolveForOrg(orgId, 'surface_composed_render', 'SURFACE_COMPOSED_RENDER');
+}
+
+/**
+ * Unified ops-plan inbox (plan tasks + all work-order queues) — per-org
+ * staged rollout (audit F34: was env-only). DB row overrides env
+ * OPS_PLANS_UNIFIED_INBOX; default OFF — when off, /api/ops-plans/inbox
+ * serves plan tasks only, byte-identical to the pre-unified path. Enable per
+ * org (organization_feature_flags(flag='ops_plans_unified_inbox')) or
+ * globally via OPS_PLANS_UNIFIED_INBOX=true.
+ */
+export async function isOpsPlansUnifiedInbox(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'ops_plans_unified_inbox', 'OPS_PLANS_UNIFIED_INBOX');
 }
 

@@ -175,11 +175,15 @@ export interface CreateDemandAlertInput {
 }
 
 /**
- * Open a demand alert in the unified sourcing queue. Idempotent for SKU-backed
- * rows via the partial unique index uniq_sourcing_alert_live (sku_id, alert_type
- * WHERE status IN ('open','sourcing')): a repeat "Source this" on the same SKU
- * returns the existing live row instead of duplicating. Free-text (SKU-less)
- * rows have no natural key, so they always insert. Returns { row, created }.
+ * Open a demand alert in the unified sourcing queue — THE single demand writer
+ * (manual "Source this" + every nightly demand collector). Idempotent via the
+ * two live partial unique indexes: uniq_sourcing_alert_live (sku_id, alert_type)
+ * for SKU-backed rows, and uniq_sourcing_alert_live_demand (demand_ref_type,
+ * demand_ref_id, alert_type) for ref-backed rows (2026-06-13d). The bare
+ * ON CONFLICT DO NOTHING arbitrates BOTH indexes, so a repeat open returns the
+ * existing live row instead of duplicating or throwing. Free-text rows with
+ * neither a SKU nor a demand ref have no natural key, so they always insert.
+ * Returns { row, created }.
  */
 export async function createDemandAlert(
   input: CreateDemandAlertInput,
@@ -188,6 +192,8 @@ export async function createDemandAlert(
   const alertType = (input.alertType || 'manual').trim();
   const demandSource = (input.demandSource || 'manual').trim();
   const skuId = input.skuId ?? null;
+  const demandRefType = input.demandRefType ?? null;
+  const demandRefId = input.demandRefId ?? null;
 
   return withTenantTransaction(orgId, async (client) => {
     const ins = await client.query<SourcingAlertRow>(
@@ -195,8 +201,7 @@ export async function createDemandAlert(
          (sku_id, bose_model_id, alert_type, severity, status, reason,
           demand_source, demand_ref_type, demand_ref_id, target_qty, search_query)
        VALUES ($1,$2,$3,$4,'open',$5,$6,$7,$8,$9,$10)
-       ON CONFLICT (sku_id, alert_type) WHERE status IN ('open','sourcing')
-       DO NOTHING
+       ON CONFLICT DO NOTHING
        RETURNING *`,
       [
         skuId,
@@ -205,22 +210,32 @@ export async function createDemandAlert(
         (input.severity || 'warn').trim(),
         input.reason?.trim() || null,
         demandSource,
-        input.demandRefType ?? null,
-        input.demandRefId ?? null,
+        demandRefType,
+        demandRefId,
         input.targetQty ?? null,
         input.searchQuery?.trim() || null,
       ],
     );
     if (ins.rows[0]) return { row: ins.rows[0], created: true };
 
-    // Conflict on the live (sku_id, alert_type) index — return the existing row.
-    const existing = await client.query<SourcingAlertRow>(
+    // Conflict on one of the live indexes — return the existing live row.
+    if (skuId != null) {
+      const bySku = await client.query<SourcingAlertRow>(
+        `SELECT * FROM sourcing_alerts
+          WHERE sku_id = $1 AND alert_type = $2 AND status IN ('open','sourcing')
+          ORDER BY opened_at DESC LIMIT 1`,
+        [skuId, alertType],
+      );
+      if (bySku.rows[0]) return { row: bySku.rows[0], created: false };
+    }
+    const byRef = await client.query<SourcingAlertRow>(
       `SELECT * FROM sourcing_alerts
-        WHERE sku_id = $1 AND alert_type = $2 AND status IN ('open','sourcing')
+        WHERE demand_ref_type = $1 AND demand_ref_id = $2 AND alert_type = $3
+          AND status IN ('open','sourcing')
         ORDER BY opened_at DESC LIMIT 1`,
-      [skuId, alertType],
+      [demandRefType, demandRefId, alertType],
     );
-    return { row: existing.rows[0], created: false };
+    return { row: byRef.rows[0], created: false };
   });
 }
 
@@ -596,4 +611,192 @@ export async function importCandidate(params: {
       candidate: cand.rows[0],
     };
   });
+}
+
+// ─── Analytics (read-only rollup for the hub's ?mode=analytics Monitor) ─────
+
+export type SourcingAnalyticsRange = '30d' | '90d' | '1y';
+
+const ANALYTICS_RANGE_INTERVAL: Record<SourcingAnalyticsRange, string> = {
+  '30d': '30 days',
+  '90d': '90 days',
+  '1y': '365 days',
+};
+
+export interface SourcingSpendBucket {
+  bucket: string;            // ISO week start
+  acquisitions: number;
+  spend_cents: number;
+}
+
+export interface SourcingSkuCostRow {
+  sku_id: number;
+  sku: string | null;
+  product_title: string | null;
+  acquisitions: number;
+  avg_cost_cents: number | null;
+  last_known_cost_cents: number | null;
+  replenish_target_cents: number | null;
+  spend_cents: number;
+}
+
+export interface SourcingAnalytics {
+  range: SourcingAnalyticsRange;
+  spendByWeek: SourcingSpendBucket[];
+  acquisitions: {
+    ordered: number;
+    received: number;
+    spend_cents: number;
+    avg_days_order_to_receive: number | null;
+  };
+  demand: {
+    opened: number;
+    resolved: number;
+    dismissed: number;
+    avg_days_demand_to_order: number | null;
+    sourced_from_alerts: number;
+  };
+  skuCosts: SourcingSkuCostRow[];
+}
+
+/**
+ * Org-scoped sourcing analytics over part_acquisitions + sourcing_alerts +
+ * sku_catalog.last_known_cost_cents / replenish_target_cents:
+ *   - spend + acquisition volume per week,
+ *   - fill-rate inputs (ordered vs received; demand opened vs resolved),
+ *   - time-to-source (alert opened → ordered, ordered → received),
+ *   - per-SKU acquisition cost vs the catalog target/baseline (margin proxy).
+ * Pure read — four aggregate round-trips, no N+1.
+ */
+export async function getSourcingAnalytics(
+  range: SourcingAnalyticsRange,
+  orgId: OrgId,
+): Promise<SourcingAnalytics> {
+  const interval = ANALYTICS_RANGE_INTERVAL[range];
+
+  const spend = await tenantQuery<{ bucket: string; acquisitions: number; spend_cents: string }>(
+    orgId,
+    `SELECT date_trunc('week', pa.ordered_at)::date::text AS bucket,
+            COUNT(*)::int AS acquisitions,
+            COALESCE(SUM(COALESCE(pa.acquisition_cost_cents, 0) + COALESCE(pa.shipping_cost_cents, 0)), 0)::bigint AS spend_cents
+       FROM part_acquisitions pa
+       JOIN sku_catalog sc ON sc.id = pa.sku_id AND sc.organization_id = $1
+      WHERE pa.ordered_at >= NOW() - $2::interval
+      GROUP BY 1
+      ORDER BY 1`,
+    [orgId, interval],
+  );
+
+  const acq = await tenantQuery<{
+    ordered: number;
+    received: number;
+    spend_cents: string;
+    avg_days_order_to_receive: string | null;
+  }>(
+    orgId,
+    `SELECT COUNT(*)::int AS ordered,
+            COUNT(*) FILTER (WHERE pa.received_at IS NOT NULL)::int AS received,
+            COALESCE(SUM(COALESCE(pa.acquisition_cost_cents, 0) + COALESCE(pa.shipping_cost_cents, 0)), 0)::bigint AS spend_cents,
+            AVG(EXTRACT(EPOCH FROM (pa.received_at - pa.ordered_at)) / 86400.0)
+              FILTER (WHERE pa.received_at IS NOT NULL) AS avg_days_order_to_receive
+       FROM part_acquisitions pa
+       JOIN sku_catalog sc ON sc.id = pa.sku_id AND sc.organization_id = $1
+      WHERE pa.ordered_at >= NOW() - $2::interval`,
+    [orgId, interval],
+  );
+
+  const demand = await tenantQuery<{
+    opened: number;
+    resolved: number;
+    dismissed: number;
+  }>(
+    orgId,
+    `SELECT COUNT(*)::int AS opened,
+            COUNT(*) FILTER (WHERE sa.status = 'resolved')::int AS resolved,
+            COUNT(*) FILTER (WHERE sa.status = 'dismissed')::int AS dismissed
+       FROM sourcing_alerts sa
+       LEFT JOIN sku_catalog sc ON sc.id = sa.sku_id
+      WHERE sa.opened_at >= NOW() - $2::interval
+        AND (sa.sku_id IS NULL OR sc.organization_id = $1)`,
+    [orgId, interval],
+  );
+
+  const timeToSource = await tenantQuery<{
+    sourced_from_alerts: number;
+    avg_days_demand_to_order: string | null;
+  }>(
+    orgId,
+    `SELECT COUNT(*)::int AS sourced_from_alerts,
+            AVG(EXTRACT(EPOCH FROM (pa.ordered_at - sa.opened_at)) / 86400.0) AS avg_days_demand_to_order
+       FROM part_acquisitions pa
+       JOIN sourcing_candidates cnd ON cnd.id = pa.sourcing_candidate_id
+       JOIN sourcing_alerts sa ON sa.id = cnd.sourcing_alert_id
+       JOIN sku_catalog sc ON sc.id = pa.sku_id AND sc.organization_id = $1
+      WHERE pa.ordered_at >= NOW() - $2::interval`,
+    [orgId, interval],
+  );
+
+  const skuCosts = await tenantQuery<{
+    sku_id: number;
+    sku: string | null;
+    product_title: string | null;
+    acquisitions: number;
+    avg_cost_cents: string | null;
+    last_known_cost_cents: number | null;
+    replenish_target_cents: number | null;
+    spend_cents: string;
+  }>(
+    orgId,
+    `SELECT sc.id AS sku_id, sc.sku, sc.product_title,
+            COUNT(*)::int AS acquisitions,
+            AVG(pa.acquisition_cost_cents)::int AS avg_cost_cents,
+            sc.last_known_cost_cents, sc.replenish_target_cents,
+            COALESCE(SUM(COALESCE(pa.acquisition_cost_cents, 0) + COALESCE(pa.shipping_cost_cents, 0)), 0)::bigint AS spend_cents
+       FROM part_acquisitions pa
+       JOIN sku_catalog sc ON sc.id = pa.sku_id AND sc.organization_id = $1
+      WHERE pa.ordered_at >= NOW() - $2::interval
+      GROUP BY sc.id, sc.sku, sc.product_title, sc.last_known_cost_cents, sc.replenish_target_cents
+      ORDER BY spend_cents DESC
+      LIMIT 12`,
+    [orgId, interval],
+  );
+
+  const toNum = (v: string | number | null | undefined): number | null =>
+    v == null ? null : Number(v);
+
+  const acqRow = acq.rows[0];
+  const demandRow = demand.rows[0];
+  const ttsRow = timeToSource.rows[0];
+
+  return {
+    range,
+    spendByWeek: spend.rows.map((r) => ({
+      bucket: r.bucket,
+      acquisitions: r.acquisitions,
+      spend_cents: Number(r.spend_cents),
+    })),
+    acquisitions: {
+      ordered: acqRow?.ordered ?? 0,
+      received: acqRow?.received ?? 0,
+      spend_cents: Number(acqRow?.spend_cents ?? 0),
+      avg_days_order_to_receive: toNum(acqRow?.avg_days_order_to_receive ?? null),
+    },
+    demand: {
+      opened: demandRow?.opened ?? 0,
+      resolved: demandRow?.resolved ?? 0,
+      dismissed: demandRow?.dismissed ?? 0,
+      avg_days_demand_to_order: toNum(ttsRow?.avg_days_demand_to_order ?? null),
+      sourced_from_alerts: ttsRow?.sourced_from_alerts ?? 0,
+    },
+    skuCosts: skuCosts.rows.map((r) => ({
+      sku_id: r.sku_id,
+      sku: r.sku,
+      product_title: r.product_title,
+      acquisitions: r.acquisitions,
+      avg_cost_cents: toNum(r.avg_cost_cents),
+      last_known_cost_cents: r.last_known_cost_cents,
+      replenish_target_cents: r.replenish_target_cents,
+      spend_cents: Number(r.spend_cents),
+    })),
+  };
 }

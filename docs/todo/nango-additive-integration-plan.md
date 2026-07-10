@@ -1,6 +1,9 @@
 # Nango — Additive Integration Plan
 
-**Status:** Plan only. No code changes yet.
+**Status:** ~85% SHIPPED (re-verified 2026-07-09; "no code changes yet" was stale) — seam
+(`src/lib/integrations/nango.ts`), `NANGO_BACKED_PROVIDERS` registry
+(`src/lib/integrations/nango-providers.ts`), both additive routes (shipped 2026-06-05).
+Residual: **live enablement is external/owner-gated** (Nango sidecar deploy + provider config).
 **Date:** 2026-06-05
 **Premise:** Do **not** replace any hand-built integration. Add Nango (nango.dev) as an
 optional layer that (a) stands up *new* OAuth providers fast and (b) finishes a few
@@ -273,5 +276,34 @@ host / container platform).
 - Node SDK: https://nango.dev/docs/reference/sdks/node
 - Frontend SDK: https://nango.dev/docs/reference/sdks/frontend
 - Local seam this plugs into: `src/lib/integrations/credentials.ts`, `src/components/admin/IntegrationsTab.tsx`
-</content>
-</invoke>
+
+---
+
+## 11. Enablement runbook (owner-executed; code side is DONE)
+
+Everything below is **owner/ops work** — no repo code changes are required to go live. The seam
+(`src/lib/integrations/nango.ts`), the `NANGO_BACKED_PROVIDERS` registry
+(`src/lib/integrations/nango-providers.ts`), and both additive routes shipped 2026-06-05 and are
+inert until the env vars exist (fail-open: unset = every provider stays on its hand-built path).
+
+1. **Deploy the sidecar** (self-host, ELv2): `docker compose up` from the upstream
+   `docker-compose.yaml` (see §10) on a host reachable from Vercel — Fly/Railway/small VPS all fine.
+   Postgres for Nango state comes with the compose file. Pin an upstream release tag, not `master`.
+2. **Create the Nango account + environment** on the sidecar UI; note the **secret key** (server)
+   and **public key** (frontend).
+3. **Configure the pilot provider (Square per §9.3)** in the Nango UI: provider template `square`,
+   OAuth client id/secret from the Square developer console, callback
+   `https://<nango-host>/oauth/callback`. Register that callback in Square's app settings too.
+4. **Set the env vars** (Vercel → Production; names per `src/lib/integrations/nango.ts`):
+   `NANGO_HOST` (sidecar base URL), `NANGO_SECRET_KEY`; plus the public key if the frontend connect
+   flow is enabled. Redeploy.
+5. **Verify additively**: on `/settings/integrations`, the Nango-backed provider's connect flow now
+   routes via the sidecar; every existing provider (eBay, Zoho, Amazon, ShipStation…) is untouched
+   (their code paths never consult Nango).
+6. **Reversibility**: unset the env vars → the seam disables itself; nothing else to roll back.
+   Note reversibility-fixes-plan §5.5: disconnect currently deletes only the local marker — wiring
+   `forgetNangoConnection` + Nango's connection-delete API into the integration-delete path is the
+   one residual **code** item (tracked there, not here).
+
+**Do not** migrate existing providers onto Nango (§0 premise: additive only) and **do not** vendor
+Nango source into this repo (ELv2 — runnable service + reference manual only).

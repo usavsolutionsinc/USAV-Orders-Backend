@@ -54,17 +54,33 @@ export interface RecordOpsEventInput {
 }
 
 /**
+ * Injectable collaborators (house `Deps` pattern, backend-patterns.md) so the
+ * workflowNodeId threading is unit-testable with zero DB — see ops-events.test.ts.
+ * Production callers never pass this; the default is the real pool.
+ */
+export interface OpsEventWriterDeps {
+  query: (text: string, params: unknown[]) => Promise<unknown>;
+}
+
+const defaultDeps: OpsEventWriterDeps = {
+  query: (text, params) => pool.query(text, params),
+};
+
+/**
  * Append-only polymorphic ops event log write. Idempotent on client_event_id.
  * This is the "SAL-style" event spine for stable ordering (first scan, unboxed, etc.).
  */
-export async function recordOpsEvent(input: RecordOpsEventInput): Promise<void> {
+export async function recordOpsEvent(
+  input: RecordOpsEventInput,
+  deps: OpsEventWriterDeps = defaultDeps,
+): Promise<void> {
   const occurredAt = input.occurredAt ?? null;
   const actorStaffId = input.actorStaffId ?? null;
   const clientEventId = input.clientEventId ?? null;
   const workflowNodeId = input.workflowNodeId ?? null;
   const payload = input.payload ?? {};
 
-  await pool.query(
+  await deps.query(
     `INSERT INTO ops_events (
        organization_id, occurred_at, event_type,
        entity_type, entity_id,

@@ -80,4 +80,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'repair.mark_repaired' });
+}, { permission: 'repair.mark_repaired', feature: 'repair' });

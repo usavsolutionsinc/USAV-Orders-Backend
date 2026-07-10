@@ -13,6 +13,7 @@ import {
   syncItemDescriptionToZohoPo,
   type SyncItemDescriptionResult,
 } from '@/lib/receiving/zoho-item-description-sync';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 
 type LineRow = {
   id: number;
@@ -84,13 +85,16 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: `receiving_line ${lineId} not found` }, { status: 404 });
     }
 
-    const zoho = await syncItemDescriptionToZohoPo({
-      zohoPoId: line.zoho_purchaseorder_id,
-      zohoLineItemId: line.zoho_line_item_id,
-      sku: line.sku,
-      itemName: line.item_name,
-      description: next,
-    });
+    // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+    const zoho = await withZohoOrg(orgId, () =>
+      syncItemDescriptionToZohoPo({
+        zohoPoId: line.zoho_purchaseorder_id,
+        zohoLineItemId: line.zoho_line_item_id,
+        sku: line.sku,
+        itemName: line.item_name,
+        description: next,
+      }),
+    );
 
     if (zoho.resolved_line_item_id && zoho.resolved_line_item_id !== line.zoho_line_item_id) {
       await tenantQuery(

@@ -15,7 +15,7 @@
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
-import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { findByNormalizedSerial } from '@/lib/neon/serial-units-queries';
 import { computeWarranty } from './clock';
 import { resolveWarrantyDays } from './term';
@@ -375,7 +375,7 @@ export interface SoftDeleteClaimsResult {
 export async function softDeleteClaims(
   ids: number[],
   actorStaffId: number | null,
-  orgId: OrgId = USAV_ORG_ID,
+  orgId: OrgId,
 ): Promise<SoftDeleteClaimsResult> {
   const unique = [...new Set(ids)].filter((n) => Number.isFinite(n) && n > 0);
   if (unique.length === 0) return { deleted: [], notFound: [] };
@@ -423,7 +423,7 @@ export interface RestoreClaimsResult {
 export async function restoreClaims(
   ids: number[],
   actorStaffId: number | null,
-  orgId: OrgId = USAV_ORG_ID,
+  orgId: OrgId,
 ): Promise<RestoreClaimsResult> {
   const unique = [...new Set(ids)].filter((n) => Number.isFinite(n) && n > 0);
   if (unique.length === 0) return { restored: [], notFound: [] };
@@ -683,7 +683,7 @@ export async function logRepairAttempt(
   claimId: number,
   input: RepairAttemptInput,
   actorStaffId: number | null,
-  orgId: OrgId = USAV_ORG_ID,
+  orgId: OrgId,
 ): Promise<LogRepairResult> {
   try {
     const txResult = await withTenantTransaction(orgId, async (client): Promise<

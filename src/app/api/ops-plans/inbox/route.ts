@@ -8,7 +8,7 @@ import {
   paginateInboxItems,
 } from '@/lib/ops-plans/inbox';
 import { fetchAllWorkOrderQueues } from '@/lib/work-orders/fetch-all-queues';
-import { isOpsPlansUnifiedInboxEnabled } from '@/lib/ops-plans/flags';
+import { isOpsPlansUnifiedInbox } from '@/lib/ops-plans/flags';
 
 export const runtime = 'nodejs';
 
@@ -34,7 +34,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     status: q.status === 'all' ? 'all' : 'open',
   });
 
-  const includeWorkOrders = isOpsPlansUnifiedInboxEnabled() && (q.source ?? 'all') !== 'plan';
+  const includeWorkOrders =
+    (await isOpsPlansUnifiedInbox(ctx.organizationId)) && (q.source ?? 'all') !== 'plan';
   const workOrders = includeWorkOrders
     ? (await fetchAllWorkOrderQueues(ctx.organizationId)).filter(
         (row) => row.status !== 'DONE' && row.status !== 'CANCELED',

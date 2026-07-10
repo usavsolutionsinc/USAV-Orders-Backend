@@ -5,7 +5,7 @@ import { customers as customersTable, orders as ordersTable } from '@/lib/drizzl
 import { transitionalUsavOrgId, tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
-import { getIntegrationCredentials, type GoogleSheetsCredentials } from '@/lib/integrations/credentials';
+import { getIntegrationCredentials, type EcwidCredentials, type GoogleSheetsCredentials } from '@/lib/integrations/credentials';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { invalidateAllOrdersApiCaches } from '@/lib/orders/invalidation';
 import { publishOrderChanged } from '@/lib/realtime/publish';
@@ -13,6 +13,7 @@ import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { linkShipment } from '@/lib/shipping/shipment-links';
 import { fetchEcwidTransferRows } from '@/lib/ecwid/fetch-transfer-rows';
+import { isPlanFeatureExemptOrg } from '@/lib/billing/plan-feature-gate';
 import {
   batchPlatformItemIdsByCatalogIds,
   batchResolveSkuCatalogByTitles,
@@ -439,7 +440,18 @@ export async function runGoogleSheetsTransferOrders(
     if (source !== 'sheets') {
       progress({ type: 'phase', phase: 'fetching_ecwid' });
       try {
-        const ecwidRows = await fetchEcwidTransferRows(colIndices);
+        // Vault-first credential read (connector layer): the org's Ecwid vault
+        // row wins. The legacy ECWID_* env fallback is DOGFOOD-ONLY (the env
+        // creds are the dogfood store's) — any other org without a vault row
+        // fails closed here and the catch below degrades the Ecwid phase.
+        const ecwidVault = await getIntegrationCredentials<EcwidCredentials>(effectiveOrgId, 'ecwid');
+        const ecwidRows = await fetchEcwidTransferRows(
+          colIndices,
+          ecwidVault?.storeId && ecwidVault?.apiToken
+            ? { storeId: ecwidVault.storeId, token: ecwidVault.apiToken }
+            : undefined,
+          { allowEnvFallback: isPlanFeatureExemptOrg(effectiveOrgId) },
+        );
         ecwidApiRows = ecwidRows.length;
         if (ecwidRows.length > 0) {
           eligibleSourceRows = [...eligibleSourceRows, ...ecwidRows];

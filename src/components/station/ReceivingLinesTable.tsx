@@ -118,6 +118,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     historyAxis,
     incomingPage,
     isDeliveredUnscannedFacet,
+    isDeliveredNotUnboxedFacet,
     skipWeekFilter,
     modeContext,
   } = useReceivingModeContext();
@@ -127,6 +128,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     modeContext,
     isIncomingMode,
     isDeliveredUnscannedFacet,
+    isDeliveredNotUnboxedFacet,
     incomingPage,
     setWeekOffset,
     scrollRef,
@@ -240,7 +242,11 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
           // chips + PO date range + Sort. `total` comes straight from the API
           // response so the "N of M" label stays in sync with the active filter.
           <IncomingPaneHeader
-            total={isDeliveredUnscannedFacet ? deliveredRows.length : Number(data?.total ?? 0)}
+            total={
+              isDeliveredUnscannedFacet || isDeliveredNotUnboxedFacet
+                ? localRows.length
+                : Number(data?.total ?? 0)
+            }
             page={incomingPage}
           />
         ) : (

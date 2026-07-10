@@ -182,6 +182,82 @@ test('IDOR: warranty mutations reject cross-org (run on owner pool — predicate
   }
 });
 
+test('IDOR: repair-service queries reject cross-org read/update/link', { skip: !HAS_DB }, async () => {
+  const { default: pool } = await import('@/lib/db');
+  const { createRepair, getRepairById, updateRepairNotes, linkRepairService } =
+    await import('@/lib/neon/repair-service-queries');
+  await ensureOrgs(pool);
+  await pool.query(`DELETE FROM repair_service WHERE ticket_number = 'RS-IDOR-TEST'`);
+
+  const repair = await createRepair(
+    {
+      ticketNumber: 'RS-IDOR-TEST',
+      contactInfo: 'idor',
+      productTitle: 'idor repair',
+      price: '0',
+      issue: 'idor',
+      serialNumber: 'IDOR-RS-1',
+    },
+    ORG_B,
+  );
+  try {
+    // Wave-2a pin: cross-org read → null (the route maps that to 404).
+    strictEqual(await getRepairById(repair.id, ORG_A), null, 'cross-org read must return null');
+    // Cross-org notes write → no-op (org predicate matches 0 rows, no error).
+    await updateRepairNotes(repair.id, 'hacked', ORG_A);
+    strictEqual((await getRepairById(repair.id, ORG_B))?.notes ?? null, null, 'cross-org updateRepairNotes must NOT change the row');
+    // Cross-org link → 404, linkage untouched.
+    const linkA = await linkRepairService(repair.id, { source_order_id: 'IDOR-X' }, ORG_A);
+    strictEqual(linkA.ok, false, 'cross-org linkRepairService must 404');
+    strictEqual((await getRepairById(repair.id, ORG_B))?.source_order_id ?? null, null, 'cross-org link must NOT set the field');
+    // Org B can.
+    await updateRepairNotes(repair.id, 'legit', ORG_B);
+    strictEqual((await getRepairById(repair.id, ORG_B))?.notes, 'legit', 'same-org update works');
+  } finally {
+    await pool.query(`DELETE FROM repair_service WHERE ticket_number = 'RS-IDOR-TEST'`);
+  }
+});
+
+test('IDOR: shipped-order lookups reject cross-org (id + tracking)', { skip: !HAS_DB }, async () => {
+  const { default: pool } = await import('@/lib/db');
+  const { getShippedOrderById, getShippedOrderByTracking } = await import('@/lib/neon/orders-queries');
+  await ensureOrgs(pool);
+  // Synthetic tracking; digits-only last-8 so the case-folded match is exact.
+  const TRACKING = 'IDORTEST0084093157';
+  const cleanup = async () => {
+    await pool.query(`DELETE FROM orders WHERE order_id = 'IDOR-SHIP-B'`);
+    await pool.query(`DELETE FROM shipping_tracking_numbers WHERE tracking_number_normalized = $1`, [TRACKING]);
+  };
+  await cleanup();
+
+  // Seed a carrier-accepted shipment + order owned by org B (the CTE's
+  // "shipped" gate requires a truthy carrier flag on the STN row).
+  const stn = await pool.query(
+    `INSERT INTO shipping_tracking_numbers
+       (tracking_number_raw, tracking_number_normalized, carrier, is_carrier_accepted, organization_id)
+     VALUES ($1, $1, 'ups', true, $2) RETURNING id`,
+    [TRACKING, ORG_B],
+  );
+  const shipmentId = Number((stn.rows[0] as { id: string | number }).id);
+  const ord = await pool.query(
+    `INSERT INTO orders (organization_id, order_id, product_title, shipment_id)
+     VALUES ($1, 'IDOR-SHIP-B', 'idor shipped order', $2) RETURNING id`,
+    [ORG_B, shipmentId],
+  );
+  const orderId = (ord.rows[0] as { id: number }).id;
+
+  try {
+    // Wave-2a pin: cross-org lookups resolve to null (routes turn that into 404).
+    strictEqual(await getShippedOrderById(orderId, ORG_A), null, 'cross-org getShippedOrderById must return null');
+    strictEqual(await getShippedOrderByTracking(TRACKING, ORG_A), null, 'cross-org getShippedOrderByTracking must return null');
+    // Org B sees its own row through both lookups.
+    strictEqual((await getShippedOrderById(orderId, ORG_B))?.order_id, 'IDOR-SHIP-B', 'same-org id lookup works');
+    strictEqual((await getShippedOrderByTracking(TRACKING, ORG_B))?.order_id, 'IDOR-SHIP-B', 'same-org tracking lookup works');
+  } finally {
+    await cleanup();
+  }
+});
+
 test('IDOR: suppliers queries reject cross-org read/update/delete', { skip: !HAS_DB }, async () => {
   const { default: pool } = await import('@/lib/db');
   const { createSupplier, getSupplierById, updateSupplier, softDeleteSupplier } =
@@ -201,3 +277,45 @@ test('IDOR: suppliers queries reject cross-org read/update/delete', { skip: !HAS
     await pool.query(`DELETE FROM suppliers WHERE name = 'idor-test-supplier'`);
   }
 });
+
+/**
+ * Compile-level pins — NEVER executed. Each `@ts-expect-error` asserts that a
+ * call WITHOUT the org argument no longer typechecks (the Wave-2a fixes made
+ * orgId a REQUIRED parameter on these fns). If anyone relaxes a signature back
+ * to optional-org, the directive turns "unused" and `npx tsc --noEmit` fails —
+ * that is the regression trip-wire. Runtime cross-org coverage for warranty
+ * lives in the test above; the po-gmail fns hit the live Gmail API, so the
+ * type-level pin is the whole guard here.
+ */
+async function orgIdRequiredCompilePins(): Promise<void> {
+  const warranty = await import('@/lib/warranty/mutations');
+  // @ts-expect-error — updateClaimMeta requires orgId
+  await warranty.updateClaimMeta(1, { productTitle: 'x' }, null);
+  // @ts-expect-error — submitClaim requires orgId
+  await warranty.submitClaim(1, null);
+  // @ts-expect-error — approveClaim requires orgId
+  await warranty.approveClaim(1, null);
+  // @ts-expect-error — revertClaimStatus requires orgId
+  await warranty.revertClaimStatus(1, null);
+  // @ts-expect-error — softDeleteClaims requires orgId
+  await warranty.softDeleteClaims([1], null);
+  // @ts-expect-error — restoreClaims requires orgId
+  await warranty.restoreClaims([1], null);
+
+  const gmail = await import('@/lib/po-gmail/messages');
+  // @ts-expect-error — listMessageIds requires orgId
+  await gmail.listMessageIds('is:unread', 25, undefined);
+  // @ts-expect-error — fetchMessage requires orgId
+  await gmail.fetchMessage('msg-id');
+  // @ts-expect-error — fetchMessagesByIds requires orgId
+  await gmail.fetchMessagesByIds(['msg-id']);
+  // @ts-expect-error — modifyLabels requires orgId
+  await gmail.modifyLabels('msg-id', ['add'], ['remove']);
+  // @ts-expect-error — getOrCreateLabel requires orgId
+  await gmail.getOrCreateLabel('PO/Reconciled');
+
+  const reconcile = await import('@/lib/po-gmail/reconcile-run');
+  // @ts-expect-error — runPoMailboxReconcile requires opts.orgId
+  await reconcile.runPoMailboxReconcile({ limit: 1 });
+}
+void orgIdRequiredCompilePins; // referenced (never called) so it counts as used

@@ -1,12 +1,27 @@
 import pool from '@/lib/db';
 import { NOT_ZOHO_RECEIVED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { notInboundMirrorTerminalPredicate } from '@/lib/inbound/mirror';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { isIncomingUniversal } from '@/lib/feature-flags';
 
 export interface IncomingShipmentRef {
   id: number;
   carrier: string;
 }
+
+/** Soft-join LATERAL body shared by org-scoped + global paths. */
+const RECEIVING_SOFT_JOIN = `
+             SELECT r.* FROM receiving r
+              WHERE (r.id = rl.receiving_id
+                 OR (rl.receiving_id IS NULL
+                     AND r.source = 'zoho_po'
+                     AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                 OR (rl.receiving_id IS NULL
+                     AND r.source = 'ebay'
+                     AND r.source_order_id = rl.source_order_id
+                     AND r.organization_id = rl.organization_id))
+`;
 
 /**
  * The shipments backing the Incoming receiving table — the tracking#s an
@@ -21,6 +36,9 @@ export interface IncomingShipmentRef {
  *
  * Single source of truth shared by the operator "Tracking" button
  * (/api/receiving-lines/incoming/refresh) and the incoming-tracking cron.
+ *
+ * When Universal Incoming is on (or always for eBay-source cartons), eBay-linked
+ * STNs are included alongside Zoho PO lines.
  */
 export async function selectIncomingShipmentIds(
   cap: number,
@@ -36,6 +54,24 @@ export async function selectIncomingShipmentIds(
   // So no mirror/stn org column exists to filter on (both listed in
   // needsColTables); GUC-wrapping + parent predicates is the scoping.
   if (orgId) {
+    const universal = await isIncomingUniversal(orgId);
+    const lineScope = universal
+      ? `(
+            (rl.zoho_purchaseorder_id IS NOT NULL AND ${NOT_ZOHO_RECEIVED_PREDICATE})
+            OR
+            (rl.zoho_purchaseorder_id IS NULL
+             AND rl.inbound_source_type = 'ebay'
+             AND rl.source_order_id IS NOT NULL
+             AND ${notInboundMirrorTerminalPredicate('ebay')})
+          )`
+      : `(
+            (rl.zoho_purchaseorder_id IS NOT NULL AND ${NOT_ZOHO_RECEIVED_PREDICATE})
+            OR
+            (rl.inbound_source_type = 'ebay'
+             AND rl.source_order_id IS NOT NULL
+             AND r.source = 'ebay')
+          )`;
+
     const { rows } = await tenantQuery<IncomingShipmentRef>(
       orgId,
       `WITH incoming_shipments AS (
@@ -46,16 +82,15 @@ export async function selectIncomingShipmentIds(
                 stn.is_out_for_delivery,
                 stn.is_in_transit,
                 stn.is_carrier_accepted,
+                stn.is_delivered,
+                stn.has_exception,
+                stn.latest_event_at,
                 stn.next_check_at
            FROM receiving_lines rl
            LEFT JOIN zoho_po_mirror mirror
              ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
            JOIN LATERAL (
-             SELECT r.* FROM receiving r
-              WHERE (r.id = rl.receiving_id
-                 OR (rl.receiving_id IS NULL
-                     AND r.source = 'zoho_po'
-                     AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id))
+             ${RECEIVING_SOFT_JOIN}
                 AND r.organization_id = $1
               ORDER BY (r.id = rl.receiving_id) DESC,
                        (r.shipment_id IS NOT NULL) DESC,
@@ -65,9 +100,8 @@ export async function selectIncomingShipmentIds(
            JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
           WHERE rl.workflow_status = 'EXPECTED'
             AND COALESCE(rl.quantity_received, 0) = 0
-            AND rl.zoho_purchaseorder_id IS NOT NULL
             AND rl.organization_id = $1
-            AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+            AND ${lineScope}
             AND stn.carrier IN ('UPS','USPS','FEDEX')
             AND COALESCE(stn.is_terminal, false) = false
             AND COALESCE(stn.consecutive_error_count, 0) < 5
@@ -76,10 +110,15 @@ export async function selectIncomingShipmentIds(
        SELECT id, carrier
          FROM incoming_shipments
         ORDER BY CASE WHEN is_out_for_delivery THEN 0
-                      WHEN latest_status_category IS NULL THEN 1
-                      WHEN is_in_transit THEN 2
-                      WHEN is_carrier_accepted THEN 3
-                      ELSE 4 END,
+                      WHEN latest_status_category = 'DELIVERED' OR is_delivered THEN 1
+                      WHEN has_exception OR (
+                        latest_event_at IS NOT NULL
+                        AND latest_event_at < (NOW() - interval '72 hours')
+                      ) THEN 2
+                      WHEN latest_status_category IS NULL THEN 3
+                      WHEN is_in_transit THEN 4
+                      WHEN is_carrier_accepted THEN 5
+                      ELSE 6 END,
                  next_check_at ASC NULLS FIRST
         LIMIT ${cap + 1}`,
       [orgId],
@@ -87,6 +126,7 @@ export async function selectIncomingShipmentIds(
     return rows;
   }
 
+  // Global (cron) path: always include eBay-source cartons alongside Zoho POs.
   const { rows } = await pool.query<IncomingShipmentRef>(
     `WITH incoming_shipments AS (
        SELECT DISTINCT ON (stn.id)
@@ -96,16 +136,15 @@ export async function selectIncomingShipmentIds(
               stn.is_out_for_delivery,
               stn.is_in_transit,
               stn.is_carrier_accepted,
+              stn.is_delivered,
+              stn.has_exception,
+              stn.latest_event_at,
               stn.next_check_at
          FROM receiving_lines rl
          LEFT JOIN zoho_po_mirror mirror
            ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
          JOIN LATERAL (
-           SELECT r.* FROM receiving r
-            WHERE r.id = rl.receiving_id
-               OR (rl.receiving_id IS NULL
-                   AND r.source = 'zoho_po'
-                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+           ${RECEIVING_SOFT_JOIN}
             ORDER BY (r.id = rl.receiving_id) DESC,
                      (r.shipment_id IS NOT NULL) DESC,
                      r.id DESC
@@ -114,8 +153,12 @@ export async function selectIncomingShipmentIds(
          JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
         WHERE rl.workflow_status = 'EXPECTED'
           AND COALESCE(rl.quantity_received, 0) = 0
-          AND rl.zoho_purchaseorder_id IS NOT NULL
-          AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+          AND (
+            (rl.zoho_purchaseorder_id IS NOT NULL AND ${NOT_ZOHO_RECEIVED_PREDICATE})
+            OR
+            (rl.inbound_source_type = 'ebay'
+             AND rl.source_order_id IS NOT NULL)
+          )
           AND stn.carrier IN ('UPS','USPS','FEDEX')
           AND COALESCE(stn.is_terminal, false) = false
           AND COALESCE(stn.consecutive_error_count, 0) < 5
@@ -124,10 +167,15 @@ export async function selectIncomingShipmentIds(
      SELECT id, carrier
        FROM incoming_shipments
       ORDER BY CASE WHEN is_out_for_delivery THEN 0
-                    WHEN latest_status_category IS NULL THEN 1
-                    WHEN is_in_transit THEN 2
-                    WHEN is_carrier_accepted THEN 3
-                    ELSE 4 END,
+                    WHEN latest_status_category = 'DELIVERED' OR is_delivered THEN 1
+                    WHEN has_exception OR (
+                      latest_event_at IS NOT NULL
+                      AND latest_event_at < (NOW() - interval '72 hours')
+                    ) THEN 2
+                    WHEN latest_status_category IS NULL THEN 3
+                    WHEN is_in_transit THEN 4
+                    WHEN is_carrier_accepted THEN 5
+                    ELSE 6 END,
                next_check_at ASC NULLS FIRST
       LIMIT ${cap + 1}`,
   );

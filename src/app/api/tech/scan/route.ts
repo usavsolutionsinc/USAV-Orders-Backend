@@ -4,7 +4,7 @@ import { getApiIdempotencyResponse, readIdempotencyKey, saveApiIdempotencyRespon
 import { createStationScanSession } from '@/lib/station-scan-session';
 import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { CACHE_TAGS } from '@/lib/cache/tags';
 import { formatPSTTimestamp } from '@/utils/date';
@@ -227,7 +227,7 @@ function buildOrderPayload(row: any, overrides: Record<string, unknown> = {}) {
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const rate = checkRateLimit({ headers: req.headers, routeKey: 'tech-scan', limit: 120, windowMs: 60_000 });
+  const rate = await checkRateLimitForOrg({ headers: req.headers, routeKey: 'tech-scan', limit: 120, windowMs: 60_000, organizationId: ctx.organizationId });
   if (!rate.ok) {
     return NextResponse.json({ success: false, found: false, error: 'Rate limit exceeded' }, { status: 429 });
   }

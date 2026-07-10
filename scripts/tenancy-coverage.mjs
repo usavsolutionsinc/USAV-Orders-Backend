@@ -66,6 +66,25 @@ const REFERENCE_CANDIDATES = new Set([
   'available_sku_suffixes', 'return_dispositions',
 ]);
 
+// Platform-level identity/auth cluster — INTENTIONALLY org-less (or org-scoped
+// via an `org_id` FK the organization_id heuristic can't see). An account spans
+// orgs and is read at login BEFORE app.current_org exists; adding
+// organization_id / tenant_isolation here would deadlock login. Ratified in
+// docs/tenancy/needs-col-classification.md (Wave 2a / 6c); origin DDL + RLS
+// posture: 2026-06-20e_identity_layer_phase1.sql, 2026-06-28_beta_waitlist.sql.
+const PLATFORM_IDENTITY = new Map([
+  ['accounts', 'global login identity — one human spans orgs'],
+  ['account_emails', 'cross-org email match key; child of accounts'],
+  ['account_identities', 'federated logins (google/microsoft/saml/oidc/password); child of accounts'],
+  ['account_mfa', 'TOTP + recovery codes; child of accounts'],
+  ['auth_events', 'append-only auth audit — spans login/logout/switch_org across orgs'],
+  ['webauthn_credentials', 'passkeys, per-account (lifted from per-staff)'],
+  ['memberships', 'account×org join — org-scoped via org_id FK; switcher reads span orgs by design'],
+  ['org_invitations', 'org-scoped via org_id FK; pre-account invite on-ramp'],
+  ['beta_waitlist', 'pre-tenant public waitlist — rows exist before any org'],
+  ['beta_applications', 'pre-tenant $50 beta application pipeline — rows exist before any org (2026-07-09e)'],
+]);
+
 function defaultKind(def) {
   if (!def) return 'none';
   if (def.includes(`'${USAV}'`) || def.toLowerCase().includes('coalesce')) return 'usav-fallback';
@@ -122,6 +141,7 @@ const orgTables = new Set(inventory.filter((r) => r.has_org).map((r) => r.table_
 
 function classify(r) {
   if (SYSTEM_GLOBAL.has(r.table_name)) return 'system-global';
+  if (PLATFORM_IDENTITY.has(r.table_name)) return 'platform-identity';
   if (REFERENCE_CANDIDATES.has(r.table_name)) return 'reference-decide';
   if (r.has_org) return 'tenant-owned';
   // No org_id. Child-scoped if every FK parent is a tenant table.
@@ -154,6 +174,7 @@ const sum = {
   rls_forced: rows.filter((r) => r.rls_forced).length,
   has_iso_policy: rows.filter((r) => r.has_iso_policy).length,
   needs_col: rows.filter((r) => r.classification === 'tenant-owned-NEEDS-COL').length,
+  platform_identity: rows.filter((r) => r.classification === 'platform-identity').length,
   child_scoped: rows.filter((r) => r.classification.startsWith('child-scoped')).length,
   reference_decide: rows.filter((r) => r.classification === 'reference-decide').length,
   system_global: rows.filter((r) => r.classification === 'system-global').length,
@@ -187,6 +208,7 @@ lines.push(`| **RLS FORCEd** | **${sum.rls_forced}** |`);
 lines.push(`| has tenant_isolation policy | ${sum.has_iso_policy} |`);
 lines.push(`| still on USAV-fallback default (footgun) | ${sum.usav_fallback_default} |`);
 lines.push(`| tenant-owned, **missing org_id col** | ${sum.needs_col} |`);
+lines.push(`| platform-identity (exempt by design) | ${sum.platform_identity} |`);
 lines.push(`| child-scoped (FK to a tenant parent) | ${sum.child_scoped} |`);
 lines.push(`| reference — needs explicit decision | ${sum.reference_decide} |`);
 lines.push(`| system/global (never enforce) | ${sum.system_global} |`);

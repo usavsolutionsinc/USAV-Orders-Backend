@@ -28,9 +28,8 @@
  * + FULFILLMENT_STATE_META; the bubble appears with no change here.
  */
 
-import { useCallback, useMemo, useState, type RefObject } from 'react';
-import * as Popover from '@radix-ui/react-popover';
-import { AlertTriangle, Check, ChevronDown, Clock, User } from '@/components/Icons';
+import { useCallback, useMemo, type RefObject } from 'react';
+import { AlertTriangle, Check, Clock } from '@/components/Icons';
 import {
   SwimlaneBoard,
   type SwimlaneLaneDef,
@@ -39,11 +38,10 @@ import {
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import { ORDERS_QUEUE_SORTS, ORDERS_QUEUE_SORT_LABEL, type OrdersQueueSort } from '@/components/dashboard/orders-queue/helpers';
 import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
-import { useStaffFilter } from '@/hooks/useStaffFilter';
+import { StaffFilterButton } from '@/components/ui/StaffFilterButton';
 import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
 import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
 import { BoardSelectToggle } from '@/components/board/BoardSelectToggle';
-import { ToolbarButton } from '@/components/ui/ToolbarButton';
 import { TableOptionsMenu } from '@/components/ui/table-options/TableOptionsMenu';
 import {
   deriveFulfillmentState,
@@ -112,60 +110,13 @@ function rowState(row: ShippedOrder): FulfillmentState {
 }
 
 /**
- * Board-level staff filter — a ghost pill that opens a staff dropdown and writes
- * the canonical `?staff=` param (via {@link useStaffFilter}). The unshipped query
- * already narrows its rows to that staff, so picking one filters every lane at
- * once; "All staff" clears it. Active state reads filled-blue.
+ * Board-level staff filter — the shared {@link StaffFilterButton} pill that
+ * writes the canonical `?staff=` param. The unshipped query already narrows its
+ * rows to that staff, so picking one filters every lane at once; "All staff"
+ * clears it. (Was a local popover; promoted to the shared control — P1-WORK-02.)
  */
 function BoardStaffFilter() {
-  const { staffId, options, selectedName, setStaff } = useStaffFilter();
-  const [open, setOpen] = useState(false);
-  const active = staffId != null;
-  const label = active ? selectedName || `#${staffId}` : 'All staff';
-
-  const Row = ({ id, name }: { id: number | null; name: string }) => {
-    const isActive = id === staffId || (id == null && !active);
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setStaff(id);
-          setOpen(false);
-        }}
-        className={`ds-raw-button flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
-          isActive ? 'bg-surface-accent text-text-accent' : 'text-text-muted hover:bg-surface-hover'
-        }`}
-      >
-        <span className="truncate">{name}</span>
-        {isActive ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
-      </button>
-    );
-  };
-
-  return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <ToolbarButton active={active} aria-label={`Filter by staff: ${label}`} className="max-w-[160px]">
-          <User className="h-3.5 w-3.5 shrink-0 opacity-70" />
-          <span className="min-w-0 truncate">{label}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-        </ToolbarButton>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align="start"
-          sideOffset={6}
-          className="z-dropdown max-h-[60vh] w-52 overflow-y-auto rounded-lg border border-border-soft bg-surface-card p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
-        >
-          <Row id={null} name="All staff" />
-          {options.length > 0 ? <div className="my-1 h-px bg-surface-sunken" /> : null}
-          {options.map((o) => (
-            <Row key={o.id} id={o.id} name={o.name} />
-          ))}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
-  );
+  return <StaffFilterButton align="start" />;
 }
 
 export interface UnshippedShelfBoardProps {

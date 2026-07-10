@@ -424,6 +424,7 @@ export async function fetchDashboardPackedRecords({
   shippedFilter,
   limit = 1000,
   offset = 0,
+  phase = 'full',
 }: {
   packedBy?: number;
   testedBy?: number;
@@ -433,6 +434,9 @@ export async function fetchDashboardPackedRecords({
   shippedFilter?: string;
   limit?: number;
   offset?: number;
+  /** Spine-first: 'spine' returns immediate-paint columns only (deferred fields
+   *  arrive via fetchShippedHydration); 'full' is the complete row (default). */
+  phase?: 'spine' | 'full';
 }) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (offset) params.set('offset', String(offset));
@@ -442,6 +446,7 @@ export async function fetchDashboardPackedRecords({
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
   if (staffId !== undefined) params.set('staff', String(staffId));
   if (shippedFilter) params.set('shippedFilter', shippedFilter);
+  if (phase === 'spine') params.set('phase', 'spine');
 
   const res = await fetch(`/api/packerlogs?${params.toString()}`, FRESH_FETCH_OPTIONS);
   if (!res.ok) {
@@ -450,4 +455,35 @@ export async function fetchDashboardPackedRecords({
 
   const data = await res.json();
   return (Array.isArray(data) ? data : []) as PackerRecord[];
+}
+
+/** Spine-first deferred fields, keyed by station_activity_logs id. */
+export interface ShippedHydrationEntry {
+  ship_by_date: string | null;
+  deadline_at: string | null;
+  tester_id: number | null;
+  tester_name: string | null;
+  packer_photos_url: Array<{ id: number; url: string; uploadedAt: string }>;
+}
+
+/**
+ * Fetch the deferred (work_assignments deadline/tester + photos) fields for a
+ * page of shipped rows so the spine-first table can fill them in after paint.
+ * Returns a sal-id → fields map; a failure resolves to {} (degrade-not-fail: the
+ * rows just keep their spine values).
+ */
+export async function fetchShippedHydration(salIds: number[]): Promise<Record<number, ShippedHydrationEntry>> {
+  if (salIds.length === 0) return {};
+  try {
+    const res = await fetch('/api/packerlogs/hydrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ salIds }),
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return (data && typeof data === 'object' ? data : {}) as Record<number, ShippedHydrationEntry>;
+  } catch {
+    return {};
+  }
 }

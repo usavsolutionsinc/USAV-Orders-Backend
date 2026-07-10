@@ -3,6 +3,12 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { Warehouse } from '@/lib/warehouses';
 
+// NOTE(plan-ceilings): there is no warehouse-CREATE route yet (this file is
+// read-only). When one is added it must check
+// wouldExceedPlanCeiling(ctx.organizationId, 'maxWarehouses')
+// (src/lib/billing/plan-ceilings.ts) before inserting and return
+// 403 { ok:false, error:'PLAN_LIMIT', limit:'maxWarehouses', upgrade:true }.
+
 export const GET = withAuth(async (_request, ctx) => {
   try {
     // `warehouses` has no organization_id column (tenant-owned-NEEDS-COL), so

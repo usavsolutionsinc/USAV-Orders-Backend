@@ -14,6 +14,9 @@ import { linkShipment } from '@/lib/shipping/shipment-links';
  *
  * `ensureReceivingForPo` get-or-creates the PO's carton (no Zoho round-trip) so a
  * tracking can be attached before the box physically arrives.
+ *
+ * `ensureReceivingForEbayOrder` is the eBay parallel — keyed by source_order_id
+ * under source='ebay' (ux_receiving_ebay_order).
  */
 
 export interface AttachedBox {
@@ -210,6 +213,43 @@ export async function ensureReceivingForPo(params: {
        organization_id = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id)
      RETURNING id`,
     [params.poId, params.poNumber ?? null, params.organizationId],
+  );
+  return Number(result.rows[0].id);
+}
+
+/**
+ * Get-or-create the receiving carton for an eBay purchase order — local only —
+ * so a tracking can be registered BEFORE the box physically arrives (same role
+ * as ensureReceivingForPo for Zoho). Keyed by (organization_id, source_order_id)
+ * under source='ebay' (ux_receiving_ebay_order). Optionally stamps shipment_id
+ * on first create / when the carton has none yet.
+ *
+ * Deliberately does NOT advance receiving_lines workflow: lines stay EXPECTED
+ * so the order remains in Incoming. Soft-join via source_order_id (or a later
+ * receiving_id stamp from ingestPurchase) surfaces carrier status.
+ */
+export async function ensureReceivingForEbayOrder(params: {
+  sourceOrderId: string;
+  shipmentId?: number | null;
+  organizationId: string;
+}): Promise<number> {
+  const sourceOrderId = String(params.sourceOrderId ?? '').trim();
+  if (!sourceOrderId) throw new Error('ensureReceivingForEbayOrder: sourceOrderId is required');
+
+  const result = await pool.query<{ id: number }>(
+    // Base table (not the `receiving` compat view): ON CONFLICT is unsupported on
+    // auto-updatable views. 2026-07-05d.
+    `INSERT INTO receiving_carton
+       (source, source_order_id, shipment_id, qa_status, needs_test, updated_at, organization_id)
+     VALUES ('ebay', $1, $2, 'PENDING', true, NOW(), $3::uuid)
+     ON CONFLICT (organization_id, source_order_id)
+       WHERE source = 'ebay' AND source_order_id IS NOT NULL
+     DO UPDATE SET
+       updated_at = NOW(),
+       shipment_id = COALESCE(receiving_carton.shipment_id, EXCLUDED.shipment_id),
+       organization_id = COALESCE(receiving_carton.organization_id, EXCLUDED.organization_id)
+     RETURNING id`,
+    [sourceOrderId, params.shipmentId ?? null, params.organizationId],
   );
   return Number(result.rows[0].id);
 }

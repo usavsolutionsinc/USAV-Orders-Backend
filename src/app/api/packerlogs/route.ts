@@ -34,6 +34,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     // Universal staff filter (P1-WORK-02): packed OR tested by this staff.
     const staffParam = searchParams.get('staff');
     const staffNum = staffParam ? parseInt(staffParam) : null;
+    // Spine-first: `phase=spine` returns the immediate-paint columns only; the
+    // deferred fields are filled via POST /api/packerlogs/hydrate.
+    const spineOnly = searchParams.get('phase') === 'spine';
 
     try {
         const { rows, cacheTTL, cacheHit } = await fetchPackerLogRows({
@@ -46,6 +49,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             weekStart,
             weekEnd,
             trackingTypeFilter,
+            spineOnly,
         });
         const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
         return NextResponse.json(rows, {

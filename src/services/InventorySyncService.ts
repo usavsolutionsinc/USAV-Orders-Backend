@@ -1,4 +1,5 @@
 import { zohoClient } from '@/lib/zoho/ZohoInventoryClient';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import type { ZohoItem, ZohoWarehouse } from '@/lib/zoho/types';
 import { itemRepository } from '@/lib/repositories/itemRepository';
 import { syncCursorRepository } from '@/lib/repositories/syncCursorRepository';
@@ -78,6 +79,11 @@ export class InventorySyncService {
   constructor(private readonly organizationId: string) {}
 
   async fullSync(): Promise<SyncResult> {
+    // Bind the service's tenant for every zohoClient call in the sync.
+    return withZohoOrg(this.organizationId, () => this.fullSyncBound());
+  }
+
+  private async fullSyncBound(): Promise<SyncResult> {
     const startTime = Date.now();
     let count = 0;
 
@@ -93,6 +99,10 @@ export class InventorySyncService {
   }
 
   async incrementalSync(): Promise<SyncResult> {
+    return withZohoOrg(this.organizationId, () => this.incrementalSyncBound());
+  }
+
+  private async incrementalSyncBound(): Promise<SyncResult> {
     const cursor = await syncCursorRepository.get(this.organizationId, 'items');
     const since = cursor?.lastSyncedAt ?? new Date(0);
     let count = 0;
@@ -111,7 +121,7 @@ export class InventorySyncService {
   }
 
   async updateZohoBackedItem(itemId: string, payload: Record<string, unknown>) {
-    const updated = await zohoClient.updateItem(itemId, payload);
+    const updated = await withZohoOrg(this.organizationId, () => zohoClient.updateItem(itemId, payload));
     await itemRepository.upsertMany([{ organizationId: this.organizationId, ...mapZohoItemToLocal(updated) }]);
     return updated;
   }

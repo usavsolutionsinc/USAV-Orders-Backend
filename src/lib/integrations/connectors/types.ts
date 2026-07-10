@@ -57,6 +57,14 @@ export interface HealthResult {
   detail?: unknown;
 }
 
+/** Options a manual "Sync now" may thread into a connector's sync(). */
+export interface SyncOpts {
+  full?: boolean;
+  cursor?: unknown;
+  /** Google Sheets only: import a specific sheet tab instead of the latest. */
+  manualSheetName?: string;
+}
+
 export interface SyncOutcome {
   ok: boolean;
   imported?: number;
@@ -106,7 +114,7 @@ export interface IntegrationConnector {
   /** Validate the stored credential (subsumes ad-hoc /health). */
   validate?(orgId: OrgId, scope?: string | null): Promise<HealthResult>;
   /** Connection-driven ingestion (replaces the transfer-orders buttons). */
-  sync?(orgId: OrgId, opts?: { full?: boolean; cursor?: unknown }): Promise<SyncOutcome>;
+  sync?(orgId: OrgId, opts?: SyncOpts): Promise<SyncOutcome>;
   /** Push channel stock/price OUT to the provider (bidirectional sync). Wired
    *  per-provider where the channel API supports it. */
   pushInventory?(orgId: OrgId, updates: InventoryPush[]): Promise<InventoryPushOutcome>;

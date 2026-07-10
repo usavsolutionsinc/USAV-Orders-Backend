@@ -68,23 +68,22 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
     },
   });
 
+  // Connection-driven sync (INT-020): both Run buttons route through
+  // POST /api/integrations/[provider]/sync — the legacy
+  // /api/orders/backfill/* endpoints are no longer called from here.
+  const runConnectorSync = async (provider: 'ebay' | 'ecwid') => {
+    const res = await fetch(`/api/integrations/${provider}/sync`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(data?.error || data?.message || `Sync failed (HTTP ${res.status})`);
+    }
+    return data as { ok: boolean; imported?: number; updated?: number };
+  };
+
   const ebayBackfillMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/orders/backfill/ebay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: 500 }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || data?.message || 'Backfill failed');
-      return data;
-    },
+    mutationFn: () => runConnectorSync('ebay'),
     onSuccess: (data) => {
-      const t = data?.totals || {};
-      addLog(
-        `eBay: ${t.updated ?? 0} updated, ${t.unchanged ?? 0} complete, ${t.deletedDuplicates ?? 0} dupes removed`,
-        'success'
-      );
+      addLog(`eBay: ${data.imported ?? 0} imported, ${data.updated ?? 0} updated`, 'success');
       onRefresh?.();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
@@ -95,19 +94,9 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
   });
 
   const ecwidBackfillMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/orders/backfill/ecwid', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxPages: 10 }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || data?.message || 'Backfill failed');
-      return data;
-    },
+    mutationFn: () => runConnectorSync('ecwid'),
     onSuccess: (data) => {
-      const t = data?.totals || {};
-      addLog(`Ecwid: ${t.updated ?? 0} updated, ${t.matched ?? 0} matched`, 'success');
+      addLog(`Ecwid: ${data.imported ?? 0} imported, ${data.updated ?? 0} updated`, 'success');
       onRefresh?.();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));

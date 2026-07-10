@@ -20,6 +20,7 @@ import { sendEmailBestEffort } from '@/lib/email/send';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { canonicalRole, ALL_ROLES, type StaffRole } from '@/lib/auth/permissions';
 import { invalidateStaffRolesCache } from '@/lib/auth/role-store';
+import { wouldExceedPlanCeiling, planLimitResponseBody } from '@/lib/billing/plan-ceilings';
 
 const Body = z.object({
   name: z.string().trim().min(1).max(120),
@@ -47,6 +48,12 @@ export const POST = withAuth(async (req, ctx) => {
   const canonical = canonicalRole(parsed.role.toLowerCase() as StaffRole);
   if (canonical === 'unknown' || !ALL_ROLES.includes(canonical)) {
     return NextResponse.json({ error: 'INVALID_ROLE', allowed: ALL_ROLES }, { status: 400 });
+  }
+
+  // Plan ceiling: an invite creates an active staff row (a seat). Dormant until
+  // PLAN_FEATURE_ENFORCED; dogfood org exempt; fail-open (see plan-ceilings.ts).
+  if (await wouldExceedPlanCeiling(ctx.organizationId, 'maxStaff')) {
+    return NextResponse.json(planLimitResponseBody('maxStaff'), { status: 403 });
   }
 
   const token = makeToken();

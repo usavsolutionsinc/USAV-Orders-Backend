@@ -1,87 +1,108 @@
 # TODO — plan-doc status index
 
-Re-audited **2026-07-06** against the live codebase (evidence-based: per-doc verification of the named
-tables, routes, components, and flags, by 24 parallel audit agents). The prior 2026-06-28 "not yet started"
-labels were badly stale — 11 major commits landed in between. Statuses below are verified, not aspirational.
-Build-out of the remaining in-repo gaps started 2026-07-06; per-doc status headers inside each plan carry
-the detail.
+Re-audited **2026-07-06** (24 parallel audit agents), then **re-verified and largely executed
+2026-07-09→10** by the backlog run recorded in `TODO-BACKLOG-RUN-REPORT.md` (8 scout agents +
+6 build waves, ~12M agent tokens, every wave adversarially verified). Per-doc status headers inside
+each plan carry the detail and are now the freshest source; this index is the roll-up.
 
-Percentages = rough share of the plan's scope verified implemented. "External" = remaining work needs
-credentials / third-party approval / live-DB apply / counsel — not buildable from this repo alone.
+Percentages = rough share of the plan's scope verified implemented. "External" = remaining work
+needs credentials / third-party approval / live-DB apply / counsel — not buildable from this repo.
+**Migrations authored by the 2026-07-09/10 run are NOT applied** — see the run report's apply list.
 
 ## Shipped / mostly shipped (≥85%)
 
-- `testing-priority-needs-test-plan.md` — **93%** — shipped end-to-end and evolved past the plan
-  (boolean `is_priority` generalized to `priority_tier` 0–3; rules-as-data precedence SoT in
-  `src/lib/receiving/display/precedence.ts`). Residual: minor UI nit + one migration-state check.
-- `phase-1-rls-plan.md` — **90%** — `enforce_tenant_isolation()` infra + ~38 per-table migrations;
-  192/206 org-id tables FORCEd; `app_tenant` two-pool split; CI canary + guard gates. Residual: tail
-  cohort + `transitionalUsavOrgId` caller reduction.
-- `bose-parts-sourcing-engine-plan.md` — **88%** — all 8 tables, §5 routes + extras, eBay Browse client,
-  nightly scan/scour crons, `/sourcing` 5-mode UI. Residual: small UI gaps.
-- `platform-account-type-catalog-plan.md` — **85%** — Phases 1–5 shipped AND live (catalog tables + RLS,
-  resolver layer, `type_id` FKs applied — the "migration UNAPPLIED" note was stale). Residual: Phase 6.
-- `incoming-tracking-todo-plan.md` — **85%** — row-anchored attach-tracking, `/api/receiving-lines/incoming/todo`
-  worklist, EmailTriagePanel (`?incview=email`). Residual: small closures.
-- `nango-additive-integration-plan.md` — **85%** — seam (`src/lib/integrations/nango.ts`), NANGO_BACKED
-  registry, both additive routes shipped 2026-06-05. Residual: live enablement (external).
+- `incoming-tracking-todo-plan.md` — **95%** — Phases 1–4 shipped incl. 4a receiving-scoped
+  match-email + 4b realtime subscription (2026-07-10). Residual: server-side `email-signal.changed`
+  publisher (blocked on in-flight `publish.ts`).
+- `testing-priority-needs-test-plan.md` — **93%** — shipped and evolved past the plan
+  (`priority_tier` 0–3; precedence SoT `src/lib/receiving/display/precedence.ts`). Residual:
+  owner migration-state check.
+- `phase-1-rls-plan.md` — **92%** — `enforce_tenant_isolation()` in **72** migration files;
+  192/206 org-id tables FORCEd; two-pool split; CI canary + guard. 2026-07-09/10: USAV-fallback
+  burn-down 40→29 route files + `tenancy:usav-guard` ratchet; webhooks multi-tenant fail-closed.
+  Residual: tail cohort + remaining 29 ledgered fallback files.
+- `packing-checklist-plan.md` — **90%** — Phases 1–3 shipped (2026-07-10: tick persistence to
+  `tech_verifications`, N/M lines-packed rollup, + Zendesk-in-packing rode along). Residual:
+  `block_short_ship` enforcement, template-rename migration (deferred by design).
+- `bose-parts-sourcing-engine-plan.md` — **88%** — all tables/routes/crons/5-mode UI. Residual:
+  §8.2 compatibility CSV bulk-import (small, buildable — not reached this run), Phase-5 polish.
+- `nango-additive-integration-plan.md` — **85%** — seam + registry + routes; §11 enablement
+  runbook added 2026-07-10. Residual: live enablement (external).
+- `ai-chat-ux-plan.md` — **85%** — P0 + P1 shipped (2026-07-10: copy/retry/AgentStepTimeline;
+  latent `localResolution` crash fixed 2026-07-09). Residual: P2 session sidebar + resume, P3.
+- `platform-account-type-catalog-plan.md` — **85%** — Phases 1–5 live; Phase-3 reader AUDIT
+  complete (`platform-catalog-reader-audit-2026-07-09.md`; one inline dup migrated). Residual:
+  Phase 6 (behavioral literal sweep + drop migration — owner migration-state gate).
+- `incoming-universal-purchase-orders-plan.md` (in `docs/`) — **85%** — Phases 1–6 SHIPPED
+  (4c55d7df). Residual: seed migration apply + per-org flag + eBay approval (all owner/external).
 
-## Majority shipped (65–75%)
+## Majority shipped (65–80%)
 
-- `ai-chat-ux-plan.md` — **75%** — SSE streaming route with the plan's exact event protocol + unified
-  `useAiChat`. Residual: UI polish gaps (buildable).
-- `schema-wide-polymorphic-refactor-plan.md` — **75%** — Phase 0 contract ratified
-  (`.claude/rules/polymorphic-tables.md`) + full serial_units `origin_*` arc (provenance table, backfill,
-  dual-write, readers migrated). Residual: next-tier candidates, mostly decision-gated.
-- `packing-checklist-plan.md` — **70%** — Phase 1 exceeded: order-scoped condition-gated `OrderPackChecklist`
-  across desktop + mobile pack surfaces; per-org enforcement toggle. Residual: later-phase items.
-- `reversibility-fixes-plan.md` — **70%** — Phases 1–4 shipped (label scan-back, warranty reversibility,
-  soft-delete restores, state-machine back-edges + tests). Residual: Phase 5 integration un-sync.
-- `saas-commercialization-plan.md` — **67%** — billing loop code-complete, RLS isolation live, identity
-  built beyond plan (magic-link, passkeys, OIDC SSO, invitations). Residual: plan ceilings, dunning UX,
-  activation instrumentation (buildable); Stripe live config + counsel review (external).
-- `nextiva-voice-support-mode-plan.md` — **65%** — migrations, signature-verified webhook, voicemail CRUD,
-  `/support` 3-mode switcher shipped (commit d4ed2f0b). Residual: polish (buildable); Nextiva creds (external).
+- `sourcing-hub-integration-plan.md` — **80%** — 2026-07-10: demand collectors (5 sources through
+  the one `createDemandAlert` writer) + analytics 6th mode. Residual: backorder collector,
+  `alert_type` CHECK widening migration, sell-side items.
+- `integrations-oauth-connection-plan.md` — **80%** — 2026-07-09/10 closed the 5 code gaps:
+  connect-path entitlement guard, token refresh sweep cron, `validate()` for ebay/zoho/amazon,
+  operational-columns migration (authored) + writeback, Ecwid connector + OrdersSyncPopover
+  retirement. Residual: `reconcile()` first impls, per-provider webhooks.
+- `reversibility-fixes-plan.md` — **78%** — Phases 1–4 + P5 safe subset (5.4/5.7/5.9) + F11
+  transition() back-edge. Residual: P5 external side-effects (5.1/5.3/5.6/5.8 owner-gated;
+  5.2/5.5 credential-gated).
+- `saas-commercialization-plan.md` — **75%** — ceilings/gates/connect-guard/dunning-hook/
+  activation-events shipped 2026-07-09/10 (dormant behind `PLAN_FEATURE_ENFORCED`). Residual:
+  Stripe live catalog + counsel + staged flips (external/owner).
+- `schema-wide-polymorphic-refactor-plan.md` — **75%** — Phase 0 contract + serial_units origin arc.
+  Residual: next-tier candidates (decision-gated).
+- `ops-events-station-workflow-unification-plan.md` — **70%** — Phases 0–2 CODE-COMPLETE
+  (2026-07-10: `workflowNodeId` threaded via `surface-workflow-node.ts` resolver; SAL new-writer
+  freeze). Residual: owner DB-apply of the 2026-07-06 migration; Phase 3 read view (unscheduled).
+- `beta-intake-funnel-plan.md` — **70%** — waitlist tier + the $50 `beta_applications` pipeline
+  (2026-07-10: migration authored, public apply route w/ honeypot+rate-limit+dedupe, review API).
+  Residual: admin review UI; Stripe payment link + migration apply (owner).
+- `nextiva-voice-support-mode-plan.md` — **65%** — Phases 1–4 built. Residual: Phase-5 hardening
+  (buildable); Nextiva creds (external).
 
-## Partial (30–60%)
+## Partial (40–60%)
 
-- `../incoming-universal-purchase-orders-plan.md` — **60%** — entire backend spine live (4 polymorphic
-  tables applied, Zoho backfill, eBay purchase sync). Residual: UI surfaces + Studio integration
-  (buildable); eBay `buy.order.readonly` approval (external).
-- `integrations-oauth-connection-plan.md` — **60%** — connector framework, connection-driven order sync,
-  vault entitlements, Zoho global-KV→per-tenant-vault migration all shipped. Residual: 5 code gaps.
-- `sourcing-hub-integration-plan.md` — **60%** — the "frontend IA unstarted" line was stale: 5-mode hub UI,
-  SourceAdapter `scour()` fan-in, standing searches + cron shipped. Residual: sell-side integration items.
-- `polymorphic-tables-database-refactor-plan.md` — **55%** — line-facts + street tables
-  (`receiving_triage`/`receiving_unbox`) + spine rename (`receiving_carton`/`receiving_line` via
-  security_invoker compat views) shipped. Residual: reader cutovers + typed-fact promotions.
-- `studio-integrations-master-plan.md` — **45%** — P2 Universal Incoming (~80%) + P3 ShipStation (~70%)
-  live; P0 Zoho per-tenant done. Residual: Studio wiring checklist + diagnostics rules.
-- `production-integrations-system-plan.md` — **35%** — P3/P4 concentrated (Universal Incoming code-complete,
-  ShipStation rate/label + webhook). Residual: QoL/diagnostics/webhook phases (buildable); provider
-  approvals (external).
-- `onboarding-foundational-plan.md` — **35%** — typed first-run empty states + self-dismissing activation
-  card shipped. Residual: checklist, guides, instrumentation (buildable); some identity/billing deps (external).
-- `beta-intake-funnel-plan.md` — **30%** — lighter `beta_waitlist` tier live (public routes, proxy allowlist,
-  confirmation email). Residual: the $50 refundable `beta_applications` pipeline.
+- `tech-substitution-wiring-plan.md` — **60%** (was 2%) — Phases 0–2 SHIPPED 2026-07-10 (policy
+  route + hook + eligibility lib 14 tests + mount in `ActiveOrderWorkspace` + post-submit
+  reconciliation + pending banner; `tech.substitute_unit` + backfill migration authored).
+  Residual: Phase 3 (deferred — StationTesting in-flight collision), Phases 4–5; owner applies
+  `2026-06-27e` + `2026-07-09c` and flips `FULFILLMENT_SUBSTITUTION`.
+- `studio-integrations-master-plan.md` — **60%** — 2026-07-10: integration diagnostics rules
+  (disconnected/sync-stale) + connections context in the graph route; station actions/sources
+  (shipstation.rate_shop/buy_label, ebay.sync_now/open_orders). Residual: seed-template
+  `requiredIntegration` pass, BlockRenderer rate-shop sheet, remaining wiring checklist.
+- `production-integrations-system-plan.md` — **55%** — 2026-07-09/10: multi-tenant webhooks +
+  rate limits (F28), admin diagnostics page, operational columns + writeback, refresh sweep.
+  Residual: remaining QoL/webhook phases; provider approvals (external).
+- `polymorphic-tables-database-refactor-plan.md` — **55%** — line-facts + street tables + spine
+  rename shipped. Residual: reader cutovers + typed-fact promotions — **deliberately deferred
+  this run** (same-file churn with the receiving-lines decompose; e2e-gated per memory).
+- `onboarding-foundational-plan.md` — **55%** — 2026-07-10: `/api/onboarding/stats` + plan-filtered
+  step catalog + `GettingStartedChecklist`. Residual: O0 dashboard empty-states (partially blocked
+  by in-flight files), O3–O4 guides/instrumentation; identity/billing deps (external).
+- `warehouse-map-react-flow-plan.md` — **40%** (was 3%, regressed prototype) — Phase 1 SHIPPED
+  2026-07-10 (`/warehouse?tab=map&view=floorplan`, read-only React Flow floor plan, shared
+  `map-tones.ts` SoT). Residual: Phase 2 SKU trace, Phase 3 layout persistence + edit.
 
-## Unbuilt (<20%)
+## Roll-ups & artifacts
 
-- `serial-label-pairing-split-combine-plan.md` — **15%** — ⚠️ **in-flight in a parallel session**: Phase 0
-  (~80%) exists as uncommitted working-tree changes (`/api/serial-units/resolve-batch`, CartonUnitsRollup,
-  SerialPreviewStrip). Do not double-build; see the plan doc + auto-memory for live state.
-- `ops-events-station-workflow-unification-plan.md` — **8%** — unbuilt: `ops_events.entity_type` still
-  unconstrained, no `workflow_node_id`, no Drizzle model.
-- `warehouse-map-react-flow-plan.md` — **3%** — unbuilt and regressed: the Phase-0 design-demo prototype was
-  removed in cleanup; `/warehouse` still renders the flat table.
-- `tech-substitution-wiring-plan.md` — **2%** — unbuilt: the fulfillment substitution stack
-  (`SubstituteUnitCard`/`SubstitutePanel`/route/flag) is intact but mounted nowhere except design-demo.
-
-## Also in this directory (not part of the 2026-06-28 pending index)
-
-- `studio-driven-operator-surfaces-refactor-plan.md` — shipped via commit 995d2003 (surface registry +
-  `SurfaceRenderer` host); see doc header.
-- `universal-feed-polymorphic-plan.md` (+ `universal-feed-ai-first-EXECUTION-PROMPT.md` /
-  `-RUN-REPORT.md`) — Phases 0–3 code-complete; migrations j–q application state tracked in auto-memory.
-- `redis-caching-plan.md` — Phase 0 substrate done (cache:v2 org keys + tags); Phase 1 in progress.
-- `roi-execution/` — execution artifacts.
+- `serial-label-pairing-split-combine-plan.md` — **~60%** — Phase 0 + print-jobs ledger +
+  manifests **committed** (fcb1738c; the "uncommitted in-flight" warning is obsolete). Residual
+  phases build on that substrate — still do-not-double-build without checking live state.
+- `packer-testing-photo-scan-timeline-plan.md` — BUILT + E2E-verified per its header; ships dark
+  behind `NEXT_PUBLIC_UNIT_SCAN_PHOTOS`; **uncommitted working tree** (owner commits).
+- `studio-driven-operator-surfaces-refactor-plan.md` — shipped (995d2003).
+- `universal-feed-polymorphic-plan.md` — Phases 0–3 code-complete; migrations j–q apply =
+  owner-gated.
+- `redis-caching-plan.md` — Phases 0–4 **DONE** per its header (2026-07-04); the old "Phase 1 in
+  progress" note here was stale. 2026-07-09: 11 legacy sync `checkRateLimit` sites →
+  org-scoped distributed limiter.
+- `saas-production-readiness-audit-2026-07-08.md` — F01–F10 closed in code 2026-07-09 (see run
+  report); F11/F13/F15 routed through `transition()`; F17–F22 recordAudit swaps (F17 deferred —
+  in-flight file); F28/F29/F30/F34 fixed.
+- `roi-execution/` — Tier 0/1/2 status blocks updated in-doc; Tier 3 largely shipped via Wave 4.
+- `TODO-BACKLOG-SCOUT-MAP.md` — the 2026-07-09 wave-0 reconnaissance map (collision matrix).
+- `TODO-BACKLOG-RUN-REPORT.md` — the 2026-07-09/10 run: waves, gates (with output), owner
+  runbook, migrations-to-apply, honest deferrals.

@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { syncShipment } from '@/lib/shipping/sync-shipment';
 import type { CarrierCode } from '@/lib/shipping/types';
 import { withAuth } from '@/lib/auth/withAuth';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
-export const POST = withAuth(async (req: NextRequest) => {
-  const rate = checkRateLimit({
+export const POST = withAuth(async (req: NextRequest, ctx) => {
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'shipping-sync-one',
     limit: 30,
     windowMs: 60_000,
+    organizationId: ctx.organizationId,
   });
   if (!rate.ok) {
     return NextResponse.json(
@@ -42,17 +42,11 @@ export const POST = withAuth(async (req: NextRequest) => {
     ? (carrierInput as CarrierCode)
     : undefined;
 
-  // TRANSITIONAL: this manual sync endpoint is also driven by the carrier-tracking
-  // polling cron, which has no session (no ctx.organizationId). Single-tenant
-  // (USAV) today; resolve the service org and pass it into syncShipment so its
-  // shipping-table reads/writes run GUC-scoped (app.current_org). The shipping
-  // tables are NEEDS-COL (no organization_id yet), so this only sets the GUC —
-  // RLS-ready once the columns + FORCE policy land.
-  // TODO(multi-tenant): resolve org from the shipment / linked order (per-connection
-  // mapping) instead of the USAV service org.
-  // (no-restricted-syntax tenancy guard turned off for this file via the
-  // burn-down allowlist in eslint.config.mjs — delete that entry when refactored.)
-  const orgId = transitionalUsavOrgId();
+  // Session-authed route (withAuth + permission) — the only caller is the
+  // ShipmentTab UI, so the tenant comes from ctx. (The tracking-poll cron uses
+  // the syncShipment lib directly, not this endpoint.) syncShipment runs its
+  // shipping-table reads/writes GUC-scoped (app.current_org) under this org.
+  const orgId = ctx.organizationId;
 
   const result = await syncShipment({ shipmentId, trackingNumber, carrier }, orgId);
 

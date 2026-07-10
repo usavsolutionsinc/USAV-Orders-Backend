@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { detectIntents } from '@/lib/ai/intent-router';
 import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { persistChatMessage } from '@/lib/ai/chat-persistence';
 import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
 import type { AiChatRouteResponse, AiStructuredAnswer } from '@/lib/ai/types';
@@ -23,11 +23,12 @@ type AiChatBody = {
 // Local Hermes gateway — OpenAI-compatible API server exposed by
 // NousResearch/hermes-agent (gateway/platforms/api_server.py).
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'ai-chat',
     limit: Number(process.env.AI_CHAT_RATE_LIMIT || 25),
     windowMs: 60 * 1000,
+    organizationId: ctx.organizationId,
   });
 
   if (!rate.ok) {
@@ -190,14 +191,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       chars: reply.length,
     });
 
-    const finalMode = localResolution?.analysis ? 'hybrid' : 'assistant';
+    // local_ops answers short-circuit above, so this path never carries a
+    // local analysis — mode is plain 'assistant'.
     const payload: AiChatRouteResponse = {
       reply: String(reply).trim(),
       sessionId,
-      mode: finalMode,
-      analysis: localResolution?.analysis ?? null,
+      mode: 'assistant',
+      analysis: null,
     };
-    void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'assistant', content: String(reply).trim(), mode: finalMode, analysis: localResolution?.analysis });
+    void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'assistant', content: String(reply).trim(), mode: 'assistant' });
     return NextResponse.json(payload);
   } catch (err: any) {
     console.error('[ai-chat] Error:', err?.message);

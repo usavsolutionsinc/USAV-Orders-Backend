@@ -1,6 +1,7 @@
 import pool from '@/lib/db';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { recordOpsEvent } from '@/lib/ops-events';
+import { resolveSurfaceWorkflowNodeId } from '@/lib/stations/surface-workflow-node';
 
 export type ReceivingScanSource = 'zoho_po' | 'unmatched';
 
@@ -86,6 +87,14 @@ export async function recordReceivingScan(
     );
     const orgId = orgRow.rows[0]?.organization_id ?? null;
     if (orgId) {
+      // Phase 2 (ops-events unification): stamp the tenant's Studio-node
+      // "where" axis. The scan's surface maps 1:1 onto a SURFACE_REGISTRY key
+      // (triage door scan vs unbox bench scan); best-effort → null when the
+      // org has no published station_definitions binding.
+      const workflowNodeId = await resolveSurfaceWorkflowNodeId(
+        intakeSurface === 'unbox' ? 'unbox' : 'triage',
+        orgId,
+      );
       await recordOpsEvent({
         organizationId: orgId,
         entityType: 'receiving',
@@ -93,6 +102,7 @@ export async function recordReceivingScan(
         eventType: 'TRACKING_SCANNED',
         actorStaffId: staffId,
         clientEventId: `receiving-scan:${scanId}`,
+        workflowNodeId,
         payload: {
           trackingNumber,
           carrier: carrier || null,

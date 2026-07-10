@@ -42,6 +42,18 @@
  *                                     can't bind its data.
  *   station-unknown-action  (error) — a block references an action id that's
  *                                     no longer in the registry (dangling).
+ *
+ * Integration rules (v2, studio-integrations-master-plan P1 §3.1 — only when
+ * a connections summary is supplied, server-side via listConnections):
+ *   integration-disconnected (error)   — a node whose config names a
+ *                                        requiredIntegration provider with no
+ *                                        CONNECTED row in the org's vault.
+ *   integration-sync-stale   (warning) — the provider is connected but its
+ *                                        last successful sync is older than the
+ *                                        node's syncSlaHours (default 24). The
+ *                                        rule stays quiet while lastSyncedAt is
+ *                                        absent (the Phase-1 column may not
+ *                                        exist / be populated yet).
  */
 
 import { findPortFanOuts, type WorkflowEdgeLike } from './router';
@@ -62,6 +74,8 @@ export interface Diagnostic {
     | 'port-fan-out'
     | 'decision-no-rules'
     | 'decision-port-undeclared'
+    | 'integration-disconnected'
+    | 'integration-sync-stale'
     | 'invalid-config';
   nodeId?: string;
   edgeId?: string;
@@ -87,6 +101,34 @@ export interface NodeStationSummary {
   /** The station still renders its hand-coded tree — not composed from blocks. */
   legacy: boolean;
   blocks: NodeStationBlockSummary[];
+}
+
+/**
+ * Integration binding a node may declare in its `workflow_nodes.config` JSON
+ * (studio-integrations-master-plan P1 §3.1 — no migration; seed templates set
+ * `requiredIntegration` on list-ebay / ship / receiving nodes in a later pass).
+ * Documented here as the SoT shape the integration rules read; there is no
+ * per-node-type config typing to extend yet.
+ */
+export interface NodeIntegrationConfig {
+  /** IntegrationProvider key the step depends on (e.g. 'ebay'). */
+  requiredIntegration?: string;
+  /** Connector capability the step needs (e.g. 'orders'). Reserved for a later rule. */
+  requiredCapability?: string;
+  /** Max hours since the provider's last successful sync before warning. Default 24. */
+  syncSlaHours?: number;
+}
+
+/**
+ * One org integration connection, as the diagnostics linter sees it — a slim
+ * projection of the connectors layer's ConnectionStatus (listConnections).
+ * `lastSyncedAt` is optional: until the Phase-1 `last_synced_at` column lands
+ * and is populated, it is absent and the stale-sync rule stays quiet.
+ */
+export interface DiagnosticsConnection {
+  provider: string;
+  connected: boolean;
+  lastSyncedAt?: Date | string | null;
 }
 
 export interface DiagnosticsGraphNode {
@@ -117,6 +159,99 @@ export interface DiagnosticsInput {
    * client-side, where only the graph is edited, so composition rules stay quiet.
    */
   stationsByNode?: ReadonlyMap<string, NodeStationSummary>;
+  /**
+   * Org integration connections (server-supplied, best-effort — the graph
+   * route degrades to undefined on a fetch failure). Optional — omitted
+   * client-side, so the integration rules stay quiet there.
+   */
+  connections?: readonly DiagnosticsConnection[];
+  /** Clock for the stale-sync rule; injectable in unit tests. */
+  now?: Date;
+}
+
+const DEFAULT_SYNC_SLA_HOURS = 24;
+
+/** The provider a node's config binds it to, or null when unbound. */
+function requiredIntegrationOf(node: DiagnosticsGraphNode): string | null {
+  const raw = node.config.requiredIntegration;
+  return typeof raw === 'string' && raw ? raw : null;
+}
+
+/**
+ * integration-disconnected (error): a node names a requiredIntegration
+ * provider but the org has no CONNECTED row for it. Quiet when no connections
+ * summary is supplied (client-side, or the server fetch degraded).
+ */
+export function ruleIntegrationDisconnected(input: DiagnosticsInput): Diagnostic[] {
+  const { connections } = input;
+  if (!connections) return [];
+  const labelOf = input.labelOf ?? ((n: DiagnosticsGraphNode) => n.type);
+  const connectedProviders = new Set(
+    connections.filter((c) => c.connected).map((c) => c.provider),
+  );
+  const out: Diagnostic[] = [];
+  for (const n of input.nodes) {
+    const provider = requiredIntegrationOf(n);
+    if (!provider || connectedProviders.has(provider)) continue;
+    out.push({
+      id: `integration-disconnected:${n.id}:${provider}`,
+      severity: 'error',
+      rule: 'integration-disconnected',
+      nodeId: n.id,
+      message: `“${labelOf(n)}” needs the “${provider}” integration, but it isn't connected.`,
+      fix: `Connect “${provider}” in Settings → Integrations (/settings/integrations?focus=${provider}).`,
+    });
+  }
+  return out;
+}
+
+/**
+ * integration-sync-stale (warning): the required provider IS connected, but
+ * its last successful sync is older than the node's syncSlaHours (default 24).
+ * Tolerates the last_synced_at column not existing yet — a connection row
+ * without the field yields no finding.
+ */
+export function ruleIntegrationSyncStale(input: DiagnosticsInput): Diagnostic[] {
+  const { connections } = input;
+  if (!connections) return [];
+  const labelOf = input.labelOf ?? ((n: DiagnosticsGraphNode) => n.type);
+  const now = (input.now ?? new Date()).getTime();
+  // Most-recent known sync per connected provider; providers whose rows never
+  // carry the field simply don't appear (column-absent tolerance).
+  const lastSyncByProvider = new Map<string, number>();
+  for (const c of connections) {
+    if (!c.connected || c.lastSyncedAt == null) continue;
+    const at = new Date(c.lastSyncedAt).getTime();
+    if (!Number.isFinite(at)) continue;
+    const prev = lastSyncByProvider.get(c.provider);
+    if (prev === undefined || at > prev) lastSyncByProvider.set(c.provider, at);
+  }
+  const connectedProviders = new Set(
+    connections.filter((c) => c.connected).map((c) => c.provider),
+  );
+  const out: Diagnostic[] = [];
+  for (const n of input.nodes) {
+    const provider = requiredIntegrationOf(n);
+    if (!provider || !connectedProviders.has(provider)) continue; // disconnected → other rule
+    const lastSynced = lastSyncByProvider.get(provider);
+    if (lastSynced === undefined) continue; // field absent → stay quiet
+    const slaRaw = n.config.syncSlaHours;
+    const slaHours =
+      typeof slaRaw === 'number' && Number.isFinite(slaRaw) && slaRaw > 0
+        ? slaRaw
+        : DEFAULT_SYNC_SLA_HOURS;
+    const ageHours = (now - lastSynced) / 3_600_000;
+    if (ageHours <= slaHours) continue;
+    out.push({
+      id: `integration-sync-stale:${n.id}:${provider}`,
+      severity: 'warning',
+      rule: 'integration-sync-stale',
+      nodeId: n.id,
+      message: `“${labelOf(n)}” depends on “${provider}”, which last synced ${Math.floor(ageHours)}h ago (SLA ${slaHours}h).`,
+      fix: `Run a sync for “${provider}” from Settings → Integrations, or check its connection health.`,
+    });
+  }
+  return out;
 }
 
 /** A decision node's declared output port ids, read from its config.outputs. */
@@ -334,6 +469,9 @@ export function runDiagnostics(input: DiagnosticsInput): Diagnostic[] {
       }
     }
   }
+
+  // ── Integration rules (v2 — only when a connections summary is supplied). ──
+  out.push(...ruleIntegrationDisconnected(input), ...ruleIntegrationSyncStale(input));
 
   const order: Record<DiagnosticSeverity, number> = { error: 0, warning: 1, info: 2 };
   return out.sort((a, b) => order[a.severity] - order[b.severity] || a.id.localeCompare(b.id));

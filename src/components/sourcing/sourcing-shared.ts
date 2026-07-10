@@ -11,16 +11,17 @@
  * Legacy keys (`alerts` → queue, `lookup` → scout) are aliased so old links work.
  */
 
-import { Search, AlertCircle, Star, Clock, Link2 } from '@/components/Icons';
+import { Search, AlertCircle, Star, Clock, Link2, BarChart3 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 
-export type SourcingMode = 'queue' | 'scout' | 'watchlist' | 'searches' | 'suppliers';
+export type SourcingMode = 'queue' | 'scout' | 'watchlist' | 'searches' | 'suppliers' | 'analytics';
 
 export function resolveSourcingMode(raw: string | null): SourcingMode {
   if (raw === 'scout' || raw === 'lookup') return 'scout';
   if (raw === 'watchlist') return 'watchlist';
   if (raw === 'searches') return 'searches';
   if (raw === 'suppliers') return 'suppliers';
+  if (raw === 'analytics') return 'analytics';
   return 'queue'; // default; legacy 'alerts' lands here too
 }
 
@@ -31,7 +32,19 @@ export const SOURCING_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'watchlist', label: 'Watchlist', icon: Star },
   { id: 'searches', label: 'Searches', icon: Clock },
   { id: 'suppliers', label: 'Suppliers', icon: Link2 },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
 ];
+
+/** Analytics mode ranges (?range= — ephemeral URL filter, Monitor archetype). */
+export type SourcingAnalyticsRangeKey = '30d' | '90d' | '1y';
+export const SOURCING_ANALYTICS_RANGES: { id: SourcingAnalyticsRangeKey; label: string }[] = [
+  { id: '30d', label: '30 days' },
+  { id: '90d', label: '90 days' },
+  { id: '1y', label: '1 year' },
+];
+export function parseSourcingAnalyticsRange(raw: string | null): SourcingAnalyticsRangeKey {
+  return raw === '30d' || raw === '1y' ? raw : '90d';
+}
 
 /** Supplier type → short label (matches the suppliers table vocab). */
 export const SUPPLIER_TYPE_LABEL: Record<string, string> = {

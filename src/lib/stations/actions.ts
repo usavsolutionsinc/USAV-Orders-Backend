@@ -169,6 +169,65 @@ const importEbayOrder: ActionDefinition = {
   confirm: 'none',
 };
 
+/**
+ * Rate-shop an order row via the ShipStation v2 engine. Like attach-tracking,
+ * this needs UI (a rate list to pick from), so the descriptor advertises the
+ * intent and a rate-shop sheet owns the flow: it POSTs the order-anchored
+ * /api/outbound/rates ({ orderId }) — or /api/shipping/rates with an explicit
+ * spec when there is no order — renders the RateQuoteResult, and hands the
+ * picked rateId to `shipstation.buy_label`. Body omitted → descriptor-only
+ * (window event `station:rate-shop` with { orderId }).
+ */
+const shipstationRateShop: ActionDefinition = {
+  id: 'shipstation.rate_shop',
+  label: 'Rate shop',
+  icon: 'Truck',
+  endpoint: { method: 'POST', path: '/api/outbound/rates' },
+  // body omitted — the rate-shop sheet builds { orderId } / the explicit spec.
+  permission: 'shipping.buy_label',
+  appliesTo: ['order_ref'],
+  integration: 'shipstation',
+  confirm: 'none',
+};
+
+/**
+ * Buy the picked rate — IRREVERSIBLE (charges the carrier account). The
+ * rate-shop sheet supplies the rateId + a clientEventId idempotency key and
+ * POSTs the order-anchored /api/outbound/labels/purchase ({ orderId, rateId,
+ * clientEventId }) — or the generic /api/shipping/labels when there is no
+ * order. Descriptor-only (same `station:rate-shop` sheet completes the
+ * purchase); `confirm: 'soft'` because money moves.
+ */
+const shipstationBuyLabel: ActionDefinition = {
+  id: 'shipstation.buy_label',
+  label: 'Buy label',
+  icon: 'Tag',
+  endpoint: { method: 'POST', path: '/api/outbound/labels/purchase' },
+  // body omitted — the sheet builds { orderId, rateId, clientEventId }.
+  permission: 'shipping.buy_label',
+  appliesTo: ['order_ref'],
+  integration: 'shipstation',
+  confirm: 'soft',
+};
+
+/**
+ * "Sync now" for the org's eBay connection — wraps the connection-driven
+ * POST /api/integrations/ebay/sync (connector orchestrator). A source-level
+ * refresh (no row target); the bound feed invalidates on success.
+ */
+const ebaySyncNow: ActionDefinition = {
+  id: 'ebay.sync_now',
+  label: 'Sync eBay now',
+  icon: 'RefreshCw',
+  endpoint: { method: 'POST', path: '/api/integrations/ebay/sync' },
+  body: () => ({}),
+  // Must match the wrapped route's gate (managePermission('ebay')).
+  permission: 'integrations.ebay',
+  appliesTo: [],
+  integration: 'ebay',
+  confirm: 'none',
+};
+
 let builtinsRegistered = false;
 export function registerBuiltinActions(): void {
   if (builtinsRegistered) return;
@@ -180,4 +239,7 @@ export function registerBuiltinActions(): void {
   registerAction(linkZohoPo);
   registerAction(refreshInbound);
   registerAction(importEbayOrder);
+  registerAction(shipstationRateShop);
+  registerAction(shipstationBuyLabel);
+  registerAction(ebaySyncNow);
 }

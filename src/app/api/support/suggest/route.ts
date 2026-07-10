@@ -9,19 +9,20 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { suggestSupportReply, SupportSuggestError } from '@/lib/support/suggest-reply';
 
 export const runtime = 'nodejs';
 
 type SuggestBody = { ticketId?: number; subject?: string; question?: string };
 
-export const POST = withAuth(async (req: NextRequest) => {
-  const rate = checkRateLimit({
+export const POST = withAuth(async (req: NextRequest, ctx) => {
+  const rate = await checkRateLimitForOrg({
     headers: req.headers,
     routeKey: 'support-suggest',
     limit: Number(process.env.AI_CHAT_RATE_LIMIT || 25),
     windowMs: 60 * 1000,
+    organizationId: ctx.organizationId,
   });
   if (!rate.ok) {
     return NextResponse.json(
@@ -56,4 +57,4 @@ export const POST = withAuth(async (req: NextRequest) => {
     console.error('[support/suggest] unexpected', (err as Error)?.message);
     return NextResponse.json({ error: 'Suggestion failed' }, { status: 503 });
   }
-}, { permission: 'integrations.zendesk' });
+}, { permission: 'integrations.zendesk', feature: 'support' });

@@ -5,6 +5,7 @@ import {
   searchPurchaseOrdersByTracking,
   searchPurchaseReceivesByTracking,
 } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
@@ -97,7 +98,10 @@ export async function POST(
   for (const candidate of candidates) {
     if (!zohoReachable || zohoPoIds.size > 0) break;
     try {
-      const receives = await searchPurchaseReceivesByTracking(candidate).catch((err) => {
+      // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+      const receives = await withZohoOrg(orgId, () =>
+        searchPurchaseReceivesByTracking(candidate),
+      ).catch((err) => {
         zohoReachable = false;
         lastError = err instanceof Error ? err.message : 'searchPurchaseReceivesByTracking failed';
         return [];
@@ -107,7 +111,9 @@ export async function POST(
         if (poId) zohoPoIds.add(poId);
       }
       if (zohoPoIds.size === 0 && zohoReachable) {
-        const pos = await searchPurchaseOrdersByTracking(candidate).catch((err) => {
+        const pos = await withZohoOrg(orgId, () =>
+          searchPurchaseOrdersByTracking(candidate),
+        ).catch((err) => {
           zohoReachable = false;
           lastError = err instanceof Error ? err.message : 'searchPurchaseOrdersByTracking failed';
           return [];

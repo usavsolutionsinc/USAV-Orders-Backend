@@ -63,7 +63,7 @@ export const GET = withAuth(
       return mapZendeskError(err, context);
     }
   },
-  { permission: 'integrations.zendesk' },
+  { permission: 'integrations.zendesk', feature: 'support' },
 );
 
 const UpdateBody = z
@@ -105,6 +105,7 @@ export const PATCH = withAuth(
   },
   {
     permission: 'integrations.zendesk',
+    feature: 'support',
     audit: {
       source: 'api',
       action: 'zendesk.ticket.update',
@@ -130,6 +131,7 @@ export const DELETE = withAuth(
   },
   {
     permission: 'integrations.zendesk',
+    feature: 'support',
     audit: {
       source: 'api',
       action: 'zendesk.ticket.delete',

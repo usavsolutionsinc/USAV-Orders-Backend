@@ -1,6 +1,14 @@
 # Integrations: OAuth Connection Framework + Connection-Driven Ingestion
 
-**Status:** Plan (2026-06-14). Grounded in the existing integration code — this is a *unify + complete + drive* plan, not a greenfield build.
+**Status:** ~60% SHIPPED (re-verified 2026-07-09; "Plan" was stale) — connector framework
+(`src/lib/integrations/connectors/{registry,types,orchestrator,connections}.ts` over all providers),
+connection-driven sync (`/api/cron/integrations/sync` + per-provider Sync-now + IntegrationCard
+button), vault entitlements (`maxIntegrations` at `connections.ts`), Zoho global-KV → per-tenant
+vault migration (`zoho/core.ts` reads `organization_integrations`). Residual code gaps (2026-07-09
+verification): entitlement guard on connect paths, unified token-refresh sweep,
+`connector.validate()` beyond google_drive, `reconcile()` first impls, operational columns
+(`last_synced_at`/`sync_cursor`) + writeback, Ecwid connection-driven sync, OrdersSyncPopover
+retirement. Originally: Plan (2026-06-14).
 
 ## 0. The honest reframe
 

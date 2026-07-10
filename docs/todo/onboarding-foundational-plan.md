@@ -1,6 +1,9 @@
 # Onboarding & activation — foundational plan
 
-**Status:** plan only (2026-06-27). Greenfield on the app side; every dependency it leans on already exists.
+**Status:** O0–O2 shipped (2026-07-10); O3/O4 not started.
+O1 = `GET /api/onboarding/stats` (capped org-scoped counts, `dashboard.view`) + `src/lib/onboarding/steps.ts` (read-time step catalog, plan-filtered via `entitlementsForPlan`, DB-free tests `npm run test:onboarding-steps`).
+O2 = `GettingStartedChecklist` (src/components/dashboard/) mounted beside `FirstScanOnboardingCard` in the Unshipped/Shipped sidebars; "Skip for now" persists `staff_preferences.onboardingDismissed`; self-dismisses at 100%. Deviations from this plan: no `?welcome=1` redirect / BootGate warm-up yet (deferred to O3-adjacent), and the Settings "re-open" entry (§7.5) is not built. Stats shape is `{ orders, receivingLines, staff, integrationsConnected, firstScanDone }` (v1 has no `order_labels` count; the "Print your first label" step is deferred with it).
+O0 = typed first-use `EmptyState` added to `FBAShipmentsTable` (the last dashboard table with a bare empty); orders-queue/unshipped already had `OrdersFirstRunEmptyState`; the shipped table lives in an uncommitted in-flight area and was left alone.
 **Owner surface:** first sign-in → `/dashboard` (this repo). **Inbound edge:** CycleForge marketing site (separate repo).
 **Companion plans:** [`saas-commercialization-plan.md`](saas-commercialization-plan.md) (Phase 2 = identity + onboarding), [`beta-intake-funnel-plan.md`](beta-intake-funnel-plan.md), [`identity-layer-plan.md`](identity-layer-plan.md).
 

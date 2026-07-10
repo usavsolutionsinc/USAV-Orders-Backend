@@ -1,5 +1,25 @@
 # Tier 2 — Reliability Foundation
 
+> **STATUS (2026-07-10 — all three items SHIPPED, adversarially verified):**
+> - **#8 decompose** — GET slimmed ~1,500 → 240 lines; `src/lib/receiving/lines/{query,build-sql}.ts`
+>   + a **mechanically-extracted legacy-SQL fixture**; 88/88 tests assert byte-identical `{sql,
+>   params}` across 55+ filter combos (every view/sort/search/delivery-state/facet). No new 400s;
+>   dead `search_scope=zoho_po` branch preserved + pinned.
+> - **#9 replenishment** — `orgId` REQUIRED on all 15 exported fns (unscoped-pool defaults deleted;
+>   file 1,310 → ~800 lines); 17/17 Deps-injected tests (PO-creation, need-recalc, transitions,
+>   zero/negative/garbage quantities, org threading). Bonus: reversibility 5.7 shipped —
+>   `POST /api/replenishment/tasks/[id]/release` (IN_PROGRESS→REQUESTED, 409 on wrong state,
+>   `REPLENISH_TASK_RELEASE` audit). Known residual: `pick-face.ts` siblings still take optional
+>   orgId (same treatment recommended); need-to-order internal-token routes ride the explicit
+>   transitional service-org shim (guard-ledgered).
+> - **#10 taps** — `tapWorkflow` now Deps-injected, captures `AdvanceOutcome`, and emits
+>   `workflow_tap_dropped` ops_events with 8 typed reasons on every drop path (22/22 tests);
+>   intended-tap outbox behind `WORKFLOW_TAP_OUTBOX` (default OFF, inert) + reconcile cron route;
+>   migration `2026-07-09b_workflow_tap_outbox.sql` **authored, NOT applied**; cron NOT added to
+>   vercel.json (owner). Watch: drop-event volume once live (per-scan unenrolled units emit).
+> - **Also-worth-doing residuals:** untouched this run except F11/F13/F15 raw `current_status`
+>   writes → `transition()` (state-machine 14/14; F12/F16 documented out-of-scope with rationale).
+
 De-risks the highest-churn hot path and the untested money module. Do after Tier 0 and
 alongside/after the Path-to-Sellable work.
 

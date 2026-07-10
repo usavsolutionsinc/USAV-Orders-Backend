@@ -9,6 +9,7 @@
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { AlertTriangle, Check, Flag, Layers } from '@/components/Icons';
 import { sidebarNavOverlayBandClass } from '@/components/layout/header-shell';
+import { StaffFilterButton } from '@/components/ui/StaffFilterButton';
 import { cn } from '@/utils/_cn';
 import type { TriageView } from '@/components/sidebar/receiving/TriageSidebarBody';
 
@@ -26,9 +27,9 @@ interface TriageViewToggleProps {
 
 export function TriageViewToggle({ value, onChange }: TriageViewToggleProps) {
   return (
-    <div className={cn(sidebarNavOverlayBandClass)}>
+    <div className={cn(sidebarNavOverlayBandClass, 'gap-1.5')}>
       <HorizontalButtonSlider
-        className="w-full"
+        className="min-w-0 flex-1"
         items={[...TABS]}
         value={value}
         onChange={(id) => onChange(id as TriageView)}
@@ -37,6 +38,8 @@ export function TriageViewToggle({ value, onChange }: TriageViewToggleProps) {
         overlay
         aria-label="Triage view"
       />
+      {/* Shared `?staff=` picker (P1-WORK-02) — the triage feeds already read it. */}
+      <StaffFilterButton iconOnly align="end" />
     </div>
   );
 }

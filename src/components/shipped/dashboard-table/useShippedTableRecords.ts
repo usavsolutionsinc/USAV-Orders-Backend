@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEventBridge } from '@/hooks';
 import { dashboardShippedQuery, dashboardShippedWeekQuery, SHIPPED_WEEK_PAGE_SIZE } from '@/lib/queries/dashboard-queries';
+import { fetchShippedHydration } from '@/lib/dashboard-table-data';
 import { useShippedWeekBuckets } from './useShippedWeekBuckets';
 import { getRecentWeekBuckets } from '@/lib/dashboard-week-range';
 import { toPSTDateKey } from '@/utils/date';
@@ -21,6 +22,14 @@ import {
 import { toSearchResultRecord } from '@/components/shipped/shipped-record-mappers';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import type { ShippedTableFilters } from './useShippedTableFilters';
+
+// Spine-first render (immediate paint): when enabled, the week/all-time queries
+// fetch the SPINE (cheap columns) so rows paint instantly, and the display-only
+// deferred fields (ship-by deadline, tester, photos) are hydrated in a second
+// pass and merged in. Client-readable env flag; OFF ⇒ phase 'full' + the
+// hydration query disabled ⇒ byte-identical to the pre-spine behavior.
+const SPINE_FIRST = process.env.NEXT_PUBLIC_SHIPPED_SPINE_FIRST === 'true';
+const SHIPPED_PHASE: 'spine' | 'full' = SPINE_FIRST ? 'spine' : 'full';
 
 /**
  * Fetches the shipped records (week query or search), runs the type +
@@ -76,6 +85,7 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     shippedFilter,
     enabled: !normalizedSearch && !allTimeMode,
     limit: fetchLimit,
+    phase: SHIPPED_PHASE,
   });
 
   const allTimeQuery = useQuery({
@@ -87,6 +97,7 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
       staffId: effStaffId ?? undefined,
       shippedFilter,
       limit: fetchLimit,
+      phase: SHIPPED_PHASE,
     }),
     enabled: !normalizedSearch && allTimeMode,
     placeholderData: (previousData) => previousData,
@@ -121,6 +132,7 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
             testedBy: effTestedBy,
             staffId: effStaffId ?? undefined,
             shippedFilter,
+            phase: SHIPPED_PHASE,
           }),
         );
       }
@@ -246,6 +258,38 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     [records],
   );
 
+  // Spine-first hydration: the deferred fields (ship-by deadline, tester, photos)
+  // are omitted by the spine fetch so rows paint immediately; fetch them for the
+  // visible rows and overlay them. None of these fields feed the filter/derive
+  // pipeline (carrier status + outbound derive stay in the spine), so merging
+  // last is safe. Fully inert when SPINE_FIRST is off: the query is disabled and
+  // the merge returns derivedRecords unchanged.
+  const salIds = useMemo(
+    () =>
+      SPINE_FIRST
+        ? derivedRecords
+            .map((r) => Number((r as { id?: unknown }).id))
+            .filter((id) => Number.isFinite(id))
+        : [],
+    [derivedRecords],
+  );
+  const salIdsKey = useMemo(() => salIds.slice().sort((a, b) => a - b).join(','), [salIds]);
+  const hydrationQuery = useQuery({
+    queryKey: ['shipped-hydration', salIdsKey],
+    queryFn: () => fetchShippedHydration(salIds),
+    enabled: SPINE_FIRST && salIds.length > 0,
+    staleTime: 60_000,
+    gcTime: 5 * 60 * 1000,
+  });
+  const hydratedRecords = useMemo<DerivedPackerRecord[]>(() => {
+    const map = hydrationQuery.data;
+    if (!SPINE_FIRST || !map) return derivedRecords;
+    return derivedRecords.map((r) => {
+      const h = map[Number((r as { id?: unknown }).id)];
+      return h ? ({ ...r, ...h } as DerivedPackerRecord) : r;
+    });
+  }, [derivedRecords, hydrationQuery.data]);
+
   const searchMeta = searchResult.data?.meta ?? null;
   const isResolvingSearch = searchResult.isFetching && normalizedSearch.length > 0;
 
@@ -263,5 +307,5 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     isLoadingMore: query.isFetching && pageMultiplier > 1,
   };
 
-  return { query, derivedRecords, searchMeta, isResolvingSearch, pagination };
+  return { query, derivedRecords: hydratedRecords, searchMeta, isResolvingSearch, pagination };
 }

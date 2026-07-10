@@ -84,6 +84,8 @@ export interface ReceivingLineRow {
    */
   delivery_state?:
     | 'DELIVERED_UNOPENED'
+    | 'DELIVERED_NOT_UNBOXED'
+    | 'DELIVERED_EMAIL'
     | 'ARRIVING_TODAY'
     | 'STALLED'
     | 'IN_TRANSIT'
@@ -91,9 +93,26 @@ export interface ReceivingLineRow {
     | 'PENDING_CARRIER'
     | 'CARRIER_MISMATCH'
     | 'AWAITING_TRACKING'
+    | 'WRONG_DESTINATION'
     | 'RECEIVED'
     | 'UNKNOWN'
     | null;
+  /** Carrier last event timestamp (Incoming). */
+  shipment_latest_event_at?: string | null;
+  /** Last successful carrier poll (Incoming). */
+  shipment_last_checked_at?: string | null;
+  /** Latest carrier event city (Incoming). */
+  shipment_latest_event_city?: string | null;
+  /** Latest carrier event postal (Incoming) — wrong-destination compare. */
+  shipment_latest_event_postal?: string | null;
+  /** True when delivered event postal ≠ warehouse ship-from. */
+  wrong_destination?: boolean;
+  /**
+   * Tracking provenance for Incoming chips:
+   * - `carrier_confirmed` — STN has been polled (last_checked_at or status)
+   * - `seller_reported` — tracking text present but carrier never answered
+   */
+  tracking_confidence?: 'carrier_confirmed' | 'seller_reported' | null;
   /** Zoho PO date (`zoho_po_mirror.po_date`) — when the buyer authored the PO upstream (Incoming view only). */
   po_date?: string | null;
   /** Vendor-promised delivery date from zoho_po_mirror (Incoming view only). */

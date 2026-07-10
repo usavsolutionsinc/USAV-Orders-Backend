@@ -51,6 +51,9 @@ export async function handleSerialScan(input: string, ctx: ScanHandlerContext): 
       });
 
       ctx.setSuccessMessage(`Serial ${input.toUpperCase()} added ✓ (${data.serialNumbers.length} total)`);
+      // Fire-and-forget: if the raw scan is a printed unit label, request phone
+      // photos for that unit. Gated + resolved by the host; no-op otherwise.
+      ctx.onUnitLabelScanned?.(input);
       if (data.isComplete) {
         confetti({ particleCount: 100, spread: 70 });
       }
@@ -124,6 +127,9 @@ export async function handleSerialScan(input: string, ctx: ScanHandlerContext): 
     ctx.syncActiveOrderState(nextOrder);
 
     ctx.setSuccessMessage(`Serial ${finalSerial} added ✓ (${data.serialNumbers.length} total)`);
+    // Fire-and-forget: if the raw scan is a printed unit label, request phone
+    // photos for that unit. Gated + resolved by the host; no-op otherwise.
+    ctx.onUnitLabelScanned?.(input);
 
     if (data.isComplete) {
       confetti({ particleCount: 100, spread: 70 });

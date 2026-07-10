@@ -10,6 +10,7 @@ import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/Dashbo
 import { OutboundLabelsSearchHandoffCard } from '@/components/dashboard/OutboundLabelsSearchHandoffCard';
 import { OrdersSyncPopover } from '@/components/unshipped/OrdersSyncPopover';
 import { FirstScanOnboardingCard } from '@/components/dashboard/FirstScanOnboardingCard';
+import { GettingStartedChecklist } from '@/components/dashboard/GettingStartedChecklist';
 import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
@@ -224,6 +225,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
       />
       <div className="space-y-3 border-t border-border-hairline pt-3">
         <FirstScanOnboardingCard variant="sidebar" />
+        <GettingStartedChecklist variant="sidebar" />
         <ThroughputRoiCard variant="sidebar" />
       </div>
       <motion.div variants={itemVariants} initial="hidden" animate="visible" className="space-y-4">

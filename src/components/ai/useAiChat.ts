@@ -5,6 +5,12 @@ import type { AiChatMode, AiStructuredAnswer } from '@/lib/ai/types';
 
 export type ChatRole = 'user' | 'assistant';
 
+/** One SSE `step` frame captured while the assistant worked on this message. */
+export interface AgentStep {
+  label: string;
+  at: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -15,6 +21,11 @@ export interface ChatMessage {
   mode?: AiChatMode;
   /** true while tokens are still streaming into this assistant message */
   streaming?: boolean;
+  /** SSE `step` labels accumulated during this run (drives AgentStepTimeline). */
+  steps?: AgentStep[];
+  /** when the run started / finished — for the elapsed timer + collapsed summary */
+  startedAt?: number;
+  doneAt?: number;
 }
 
 export type ChatStatus = 'idle' | 'streaming';
@@ -55,13 +66,14 @@ export function useAiChat(opts: UseAiChatOptions = {}) {
   }, []);
 
   const stop = useCallback(() => {
+    // Abort only — the run's `finally` clears abortRef/status itself so a
+    // stopped run and a retried-over run clean up the same way.
     abortRef.current?.abort();
-    abortRef.current = null;
   }, []);
 
   const run = useCallback(async (text: string, sid: string) => {
     const assistantId = nextId();
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', ts: Date.now(), streaming: true }]);
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', ts: Date.now(), streaming: true, steps: [], startedAt: Date.now() }]);
     setStatus('streaming');
     setStep(null);
 
@@ -94,9 +106,16 @@ export function useAiChat(opts: UseAiChatOptions = {}) {
           case 'meta':
             patchMessage(assistantId, { mode: payload.mode as AiChatMode });
             break;
-          case 'step':
-            setStep(typeof payload.label === 'string' ? payload.label : null);
+          case 'step': {
+            const label = typeof payload.label === 'string' ? payload.label : null;
+            setStep(label);
+            if (label) {
+              setMessages((prev) => prev.map((m) => (
+                m.id === assistantId ? { ...m, steps: [...(m.steps ?? []), { label, at: Date.now() }] } : m
+              )));
+            }
             break;
+          }
           case 'delta':
             if (typeof payload.text === 'string' && payload.text) {
               const piece = payload.text;
@@ -110,7 +129,7 @@ export function useAiChat(opts: UseAiChatOptions = {}) {
             patchMessage(assistantId, { content: String(payload.message ?? 'Something went wrong.'), error: true });
             break;
           case 'done':
-            patchMessage(assistantId, { streaming: false });
+            patchMessage(assistantId, { streaming: false, doneAt: Date.now() });
             break;
           default:
             break;
@@ -133,19 +152,23 @@ export function useAiChat(opts: UseAiChatOptions = {}) {
           if (data) handleEvent(event, data);
         }
       }
-      patchMessage(assistantId, { streaming: false });
+      patchMessage(assistantId, { streaming: false, doneAt: Date.now() });
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'AbortError') {
-        patchMessage(assistantId, { streaming: false, content: '' });
+        patchMessage(assistantId, { streaming: false, content: '', doneAt: Date.now() });
         setMessages((prev) => prev.filter((m) => !(m.id === assistantId && !m.content.trim())));
       } else {
         const msg = err instanceof Error ? err.message : 'Connection error.';
-        patchMessage(assistantId, { content: `Connection error: ${msg}`, error: true, streaming: false });
+        patchMessage(assistantId, { content: `Connection error: ${msg}`, error: true, streaming: false, doneAt: Date.now() });
       }
     } finally {
-      abortRef.current = null;
-      setStatus('idle');
-      setStep(null);
+      // Only reset shared status if this run is still the active one — a retry
+      // may have aborted us and already started a fresh run.
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setStatus('idle');
+        setStep(null);
+      }
     }
   }, [endpoint, patchMessage]);
 
@@ -157,10 +180,16 @@ export function useAiChat(opts: UseAiChatOptions = {}) {
     void run(text, sessionId);
   }, [run, sessionId, status]);
 
-  const regenerate = useCallback(() => {
-    if (status === 'streaming') return;
+  /**
+   * Re-send the last user message through the normal send path. Works on an
+   * errored answer, the last completed answer, or mid-stream (aborts the
+   * in-flight run first). The trailing assistant message is dropped and
+   * replaced by the fresh run.
+   */
+  const retry = useCallback(() => {
     const lastUser = lastUserTextRef.current;
     if (!lastUser) return;
+    abortRef.current?.abort();
     // drop the trailing assistant message before re-running
     setMessages((prev) => {
       const idx = [...prev].reverse().findIndex((m) => m.role === 'assistant');
@@ -169,7 +198,10 @@ export function useAiChat(opts: UseAiChatOptions = {}) {
       return prev.filter((_, i) => i !== realIdx);
     });
     void run(lastUser, sessionId);
-  }, [run, sessionId, status]);
+  }, [run, sessionId]);
+
+  /** Back-compat alias — regenerate the last answer. */
+  const regenerate = retry;
 
   const editMessage = useCallback((id: string, newText: string) => {
     if (status === 'streaming') return;
@@ -199,5 +231,5 @@ export function useAiChat(opts: UseAiChatOptions = {}) {
     setStep(null);
   }, [stop]);
 
-  return { sessionId, messages, status, step, send, stop, regenerate, editMessage, reset, loadSession };
+  return { sessionId, messages, status, step, send, stop, retry, regenerate, editMessage, reset, loadSession };
 }

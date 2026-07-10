@@ -37,6 +37,8 @@ export function useIncomingFilters() {
   const stateRaw = (searchParams.get('state') || '').trim().toUpperCase();
   const state: IncomingDeliveryState | null =
     stateRaw === 'DELIVERED_UNOPENED'
+      || stateRaw === 'DELIVERED_NOT_UNBOXED'
+      || stateRaw === 'DELIVERED_EMAIL'
       || stateRaw === 'ARRIVING_TODAY'
       || stateRaw === 'STALLED'
       || stateRaw === 'IN_TRANSIT'
@@ -44,6 +46,7 @@ export function useIncomingFilters() {
       || stateRaw === 'PENDING_CARRIER'
       || stateRaw === 'CARRIER_MISMATCH'
       || stateRaw === 'AWAITING_TRACKING'
+      || stateRaw === 'WRONG_DESTINATION'
       ? (stateRaw as IncomingDeliveryState)
       : null;
 

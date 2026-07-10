@@ -108,6 +108,7 @@ export const qk = {
     candidates: (skuId: number) => ['sourcing', 'candidates', skuId] as const,
     search: (q: string) => ['sourcing', 'search', q] as const,
     savedSearches: (scope: string) => ['sourcing', 'saved-searches', scope] as const,
+    analytics: (range: string) => ['sourcing', 'analytics', range] as const,
   },
   repairIssues: {
     /** Broad invalidation prefix — matches every repair-issue-templates query. */

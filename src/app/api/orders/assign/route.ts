@@ -3,10 +3,9 @@ import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { recomputeEnrichmentForOrders } from '@/lib/neon/packer-log-enrichment';
 import { withTenantTransaction } from '@/lib/tenancy/db';
-import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderAssignmentsUpdated, publishOrderChanged } from '@/lib/realtime/publish';
-import { createAuditLog } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ACTION } from '@/lib/audit-logs';
 import {
   getOrderAssignmentSnapshotsByOrderIds,
   getStaffNameMap,
@@ -172,11 +171,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const idsToUpdate: number[] = (orderId ? [orderId] : orderIds).map(Number);
     const actorIdRaw = Number(performedByStaffId ?? actorStaffId ?? staffId);
     const actorId = Number.isFinite(actorIdRaw) && actorIdRaw > 0 ? actorIdRaw : null;
-    const requestId = req.headers.get('x-request-id');
-    const userAgent = req.headers.get('user-agent');
-    const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
 
-    const orgId = ctx.organizationId ?? USAV_ORG_ID;
+    const orgId = ctx.organizationId;
     let outOfStockChanged = false;
     let outOfStockValue: string | null = null;
 
@@ -369,17 +365,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
       await Promise.all(
         idsToUpdate.map((id) =>
-          createAuditLog(client, {
-            actorStaffId: actorId,
+          recordAudit(client, ctx, req, {
             source: 'api.orders.assign',
-            action: 'ORDER_ASSIGNMENT_UPDATED',
+            action: AUDIT_ACTION.ORDER_ASSIGNMENT_UPDATED,
             entityType: 'ORDER',
             entityId: String(id),
-            requestId,
-            ipAddress,
-            userAgent,
-            afterData: changedFields,
-            metadata: {
+            after: changedFields,
+            actorStaffIdOverride: actorId,
+            extra: {
               orderId: id,
               changedFieldKeys: Object.keys(changedFields),
             },
@@ -392,17 +385,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       if (newlyTrackedIds.length > 0) {
         await Promise.all(
           newlyTrackedIds.map((id) =>
-            createAuditLog(client, {
-              actorStaffId: actorId,
+            recordAudit(client, ctx, req, {
               source: 'api.orders.assign',
-              action: 'orders.tracking.added',
+              action: AUDIT_ACTION.TRACKING_ADDED,
               entityType: 'ORDER',
               entityId: String(id),
-              requestId,
-              ipAddress,
-              userAgent,
-              afterData: { trackingNumber: trimmedTracking },
-              metadata: { orderId: id },
+              after: { trackingNumber: trimmedTracking },
+              actorStaffIdOverride: actorId,
+              extra: { orderId: id },
             }),
           ),
         );

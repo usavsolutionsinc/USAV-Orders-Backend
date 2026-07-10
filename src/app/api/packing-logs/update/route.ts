@@ -5,7 +5,7 @@ import { publishPackerLogChanged, publishOrderChanged } from '@/lib/realtime/pub
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
-import { createAuditLog } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ACTION } from '@/lib/audit-logs';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
 import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
@@ -185,14 +185,16 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         },
         createdAt: canonicalPackDate,
       });
-      await createAuditLog(client, {
-        actorStaffId: staffId,
+      // Server-trusted audit: actor/org/ip come from ctx + request headers.
+      // Entity-type literals are kept as-is — dashboards key off them.
+      await recordAudit(client, ctx, req, {
         source: 'api.packing-logs.update',
-        action: 'PACK_COMPLETED',
+        action: AUDIT_ACTION.PACK_COMPLETED,
         entityType: resolvedShipmentId ? 'SHIPMENT' : 'PACKER_LOG',
         entityId: String(resolvedShipmentId ?? packerLogId ?? shippingTrackingNumber),
         stationActivityLogId: salId,
-        metadata: {
+        method: 'scan',
+        extra: {
           tracking_type: trackingType,
           photos_count: photoUrlList.length,
           order_id: orderId ?? null,

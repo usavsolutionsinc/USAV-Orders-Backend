@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseUPSTrackingPayload } from '@/lib/shipping/providers/ups';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { resolveWebhookOrgByTracking } from '@/lib/shipping/webhook-org-resolver';
+import { checkRateLimitAsync } from '@/lib/api-guard';
 import type { OrgId } from '@/lib/tenancy/constants';
 
 // UPS authenticates callbacks via the credential we registered on the
@@ -95,6 +96,21 @@ function splitIntoPackagePayloads(payload: any): any[] {
 }
 
 export async function POST(req: NextRequest) {
+  // IP rate limit before any body/crypto work — carrier pushes are bursty but
+  // 300/min absorbs a legitimate batch while capping abuse of a public route.
+  const rl = await checkRateLimitAsync({
+    headers: req.headers,
+    routeKey: 'webhooks-ups',
+    limit: 300,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'RATE_LIMITED', retryAfterSec: rl.retryAfterSec },
+      { status: 429 },
+    );
+  }
+
   // Read the raw body once so HMAC verification hashes the exact bytes UPS sent.
   const rawBody = await req.text();
 
@@ -109,17 +125,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  // TRANSITIONAL: UPS carrier callbacks have no session. Single-tenant (USAV)
-  // today; resolve the org from the shipment / linked order when inbound
-  // shipping_tracking_numbers carries organization_id (Phase B). Thread it into
-  // every repository + publish call so they run GUC-scoped (app.current_org).
-  // shipping_tracking_numbers / shipment_tracking_events are tenant-owned-NEEDS-COL
-  // (no organization_id column, no org-bearing parent reachable here) — per the
-  // tenant-isolation pattern rule (6) these calls can only GUC-wrap for now, not
-  // add an explicit organization_id predicate/stamp; the wrap makes them RLS-ready
-  // once the columns + FORCE policy land.
-  const orgId = transitionalUsavOrgId();
-
   const packagePayloads = splitIntoPackagePayloads(payload);
   let processed = 0;
   const trackingNumbers: string[] = [];
@@ -127,6 +132,19 @@ export async function POST(req: NextRequest) {
   for (const packagePayload of packagePayloads) {
     const result = parseUPSTrackingPayload(packagePayload);
     if (!result?.trackingNumberNormalized) continue;
+
+    // Session-less callback: derive the owning org from the tracking number
+    // (registration row → linked order fallback). FAIL-CLOSED — an unresolved
+    // number skips just this event (never write under a guessed org) while the
+    // response stays 2xx so UPS doesn't hammer retries for the whole batch.
+    const orgId = await resolveWebhookOrgByTracking(result.trackingNumberNormalized);
+    if (!orgId) {
+      console.warn('[webhook-org] unresolved tracking — skipping event', {
+        carrier: 'UPS',
+        tracking: result.trackingNumberNormalized,
+      });
+      continue;
+    }
 
     const existing = await getShipmentByTracking(result.trackingNumberNormalized, orgId);
     const shipment = existing ?? await upsertShipment({

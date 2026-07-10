@@ -13,6 +13,7 @@ import { audit } from '@/lib/auth/audit';
 import { canonicalRole, ALL_ROLES, type StaffRole } from '@/lib/auth/permissions';
 import { invalidateStaffRolesCache } from '@/lib/auth/role-store';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import { wouldExceedPlanCeiling, planLimitResponseBody } from '@/lib/billing/plan-ceilings';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,12 @@ export const POST = withAuth(async (req, ctx) => {
   const canonical = canonicalRole(roleRaw);
   if (canonical === 'unknown' || !ALL_ROLES.includes(canonical)) {
     return NextResponse.json({ error: 'INVALID_ROLE', allowed: ALL_ROLES }, { status: 400 });
+  }
+
+  // Plan ceiling: a new staff row consumes a seat. Dormant until
+  // PLAN_FEATURE_ENFORCED; dogfood org exempt; fail-open (see plan-ceilings.ts).
+  if (await wouldExceedPlanCeiling(ctx.organizationId, 'maxStaff')) {
+    return NextResponse.json(planLimitResponseBody('maxStaff'), { status: 403 });
   }
 
   // Create the staff row AND its matching `staff_roles` assignment in one

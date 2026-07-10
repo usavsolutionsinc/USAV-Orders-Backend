@@ -39,6 +39,20 @@ export interface TimelineRef {
 }
 
 /**
+ * A photo attached to an event, rendered by {@link EventTimeline} as an inline
+ * thumbnail strip (unbox / testing captures on a unit timeline). The renderer
+ * shows `thumbUrl` and links out to `fullUrl`; it never fetches — the section
+ * component pre-attaches the media. Omit ⇒ no media block (existing consumers
+ * are unaffected).
+ */
+export interface TimelineMedia {
+  photoId: number;
+  thumbUrl: string;
+  fullUrl: string;
+  caption?: string;
+}
+
+/**
  * Describes the band a row belongs to in the serial-grouped view. By default
  * {@link EventTimeline} derives this from each row's own {@link TimelineRef},
  * but a caller can supply a `groupKeyOf` selector to bucket by a chosen
@@ -92,6 +106,12 @@ export interface TimelineItem {
   badges?: TimelineItemBadge[];
   /** Optional leading glyph rendered in place of the dot. */
   icon?: React.ReactNode;
+  /**
+   * Inline photo thumbnails for this event (unbox / testing captures). Rendered
+   * as a horizontal thumbnail strip under the row; omit ⇒ no media block. The
+   * adapter attaches these — {@link EventTimeline} never fetches.
+   */
+  media?: TimelineMedia[];
   /**
    * The adapter's raw source event-type string (e.g. `inventory_events.event_type`
    * — 'SHIPPED', 'RETURNED', …), when the source spine has one. Deliberately

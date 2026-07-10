@@ -140,4 +140,4 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       { status: 500 }
     );
   }
-}, { permission: 'fba.manage_fnskus' });
+}, { permission: 'fba.manage_fnskus', feature: 'fba' });

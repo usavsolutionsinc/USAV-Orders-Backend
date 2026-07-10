@@ -9,6 +9,11 @@
  * default only orders whose SKU resolves to a tracked sku_catalog entry import.
  *
  * See docs/amazon-sp-api-order-import-plan.md.
+ *
+ * TODO(plan-ceilings): high-volume ingestion path — deliberately NOT gated on
+ * `maxMonthlyOrders` (never block a sync mid-stream). If metered enforcement is
+ * ever wanted here, check wouldExceedPlanCeiling(orgId, 'maxMonthlyOrders')
+ * (src/lib/billing/plan-ceilings.ts) BEFORE starting a batch, not per-order.
  */
 import type { PoolClient } from 'pg';
 import { withTenantConnection } from '@/lib/tenancy/db';

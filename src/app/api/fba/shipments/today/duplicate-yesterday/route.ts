@@ -134,6 +134,7 @@ export const POST = withAuth(async (_req, ctx) => {
   }
 }, {
   permission: 'fba.stage_shipments',
+  feature: 'fba',
   audit: {
     source: 'fba.shipments.duplicate-yesterday',
     action: 'fba.shipment.duplicate_yesterday',

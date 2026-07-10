@@ -33,7 +33,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseUSPSTrackingPayload } from '@/lib/shipping/providers/usps';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { resolveWebhookOrgByTracking } from '@/lib/shipping/webhook-org-resolver';
+import { checkRateLimitAsync } from '@/lib/api-guard';
 import type { OrgId } from '@/lib/tenancy/constants';
 
 // USPS may echo the shared secret in a header, or sign the body. Header names
@@ -100,6 +101,21 @@ function splitIntoNotifications(payload: any): any[] {
 }
 
 export async function POST(req: NextRequest) {
+  // IP rate limit before any body/crypto work — carrier pushes are bursty but
+  // 300/min absorbs a legitimate batch while capping abuse of a public route.
+  const rl = await checkRateLimitAsync({
+    headers: req.headers,
+    routeKey: 'webhooks-usps',
+    limit: 300,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'RATE_LIMITED', retryAfterSec: rl.retryAfterSec },
+      { status: 429 },
+    );
+  }
+
   const rawBody = await req.text();
 
   let payload: any;
@@ -116,11 +132,23 @@ export async function POST(req: NextRequest) {
   const notifications = splitIntoNotifications(payload);
   let processed = 0;
   const trackingNumbers: string[] = [];
-  const orgId = transitionalUsavOrgId();
 
   for (const note of notifications) {
     const result = parseUSPSTrackingPayload(note);
     if (!result?.trackingNumberNormalized) continue;
+
+    // Session-less callback: derive the owning org from the tracking number.
+    // FAIL-CLOSED — an unresolved number skips just this event (never write
+    // under a guessed org) while the response stays 2xx so USPS doesn't
+    // hammer retries for the whole batch.
+    const orgId = await resolveWebhookOrgByTracking(result.trackingNumberNormalized);
+    if (!orgId) {
+      console.warn('[webhook-org] unresolved tracking — skipping event', {
+        carrier: 'USPS',
+        tracking: result.trackingNumberNormalized,
+      });
+      continue;
+    }
 
     const existing = await getShipmentByTracking(result.trackingNumberNormalized, orgId);
     const shipment = existing ?? await upsertShipment({

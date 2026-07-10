@@ -2,7 +2,7 @@
  * @deprecated The route name is legacy; backend is now the local Hermes gateway.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/api-guard';
+import { checkRateLimitForOrg } from '@/lib/api-guard';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
@@ -30,17 +30,18 @@ function getSystemPrompt() {
   ].join(' ');
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
 
-    const rate = checkRateLimit({
+    const rate = await checkRateLimitForOrg({
       headers: req.headers,
       routeKey: 'ai-search',
       limit: Number(process.env.AI_SEARCH_RATE_LIMIT || 40),
       windowMs: 60 * 1000,
+      organizationId: ctx.organizationId,
     });
 
     if (!rate.ok) {

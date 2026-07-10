@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { syncPoHeaderNotesToZoho } from '@/lib/receiving/zoho-po-notes-sync';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { resolveCartonZohoPoId } from '@/lib/receiving/resolve-carton-po-id';
 import pool from '@/lib/db';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
@@ -690,10 +691,13 @@ export async function PATCH(
       | Awaited<ReturnType<typeof syncPoHeaderNotesToZoho>>
       | undefined;
     if (zohoNoteEdited !== undefined && pushToZoho) {
-      zoho = await syncPoHeaderNotesToZoho({
-        zohoPoId: zohoPoIdForNotes,
-        notes: zohoNoteEdited ?? null,
-      });
+      // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+      zoho = await withZohoOrg(ctx.organizationId, () =>
+        syncPoHeaderNotesToZoho({
+          zohoPoId: zohoPoIdForNotes,
+          notes: zohoNoteEdited ?? null,
+        }),
+      );
       after(async () => {
         try { await invalidateCacheTags(['receiving-lines', 'receiving-logs']); } catch { /* best-effort */ }
       });

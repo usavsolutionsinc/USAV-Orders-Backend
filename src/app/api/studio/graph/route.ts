@@ -9,8 +9,9 @@ import {
   workflowNodes,
 } from '@/lib/drizzle/schema';
 import { getNode, hasNode, listNodeMeta } from '@/lib/workflow';
-import { runDiagnostics } from '@/lib/workflow/diagnostics';
+import { runDiagnostics, type DiagnosticsConnection } from '@/lib/workflow/diagnostics';
 import { summarizeStations } from '@/lib/studio/station-diagnostics';
+import { listConnections } from '@/lib/integrations/connectors/connections';
 import { STATIONS } from '@/components/admin/workflow/operations-catalog';
 import type { StudioGraphResponse } from '@/components/studio/studio-types';
 
@@ -132,6 +133,25 @@ export const GET = withAuth(
             )
         : [];
 
+      // Org integration connections feed the v2 integration rules
+      // (integration-disconnected / integration-sync-stale). Best-effort: a
+      // failed fetch degrades to undefined — the rules stay quiet and the
+      // graph never 500s over a diagnostics enrichment.
+      let connections: DiagnosticsConnection[] | undefined;
+      try {
+        connections = (await listConnections(ctx.organizationId)).map((c) => ({
+          provider: c.provider,
+          connected: c.connected,
+          lastSyncedAt: c.lastSyncedAt ?? undefined,
+        }));
+      } catch (err) {
+        console.warn(
+          '[GET /api/studio/graph] listConnections failed — integration diagnostics skipped:',
+          err instanceof Error ? err.message : err,
+        );
+        connections = undefined;
+      }
+
       // Lint the loaded graph (ST3): the Issues rail + Gaps lens render
       // these; ST4's publish gate will block on the error-severity ones.
       const diagnostics = runDiagnostics({
@@ -145,6 +165,7 @@ export const GET = withAuth(
         stationKeys: new Set(STATIONS.map((s) => s.key)),
         labelOf: (n) => (hasNode(n.type) ? getNode(n.type).label : n.type),
         stationsByNode: summarizeStations(stationRows),
+        connections,
       });
 
       return NextResponse.json({ ok: true, definitions, definition, nodes, edges, annotations, palette, diagnostics });

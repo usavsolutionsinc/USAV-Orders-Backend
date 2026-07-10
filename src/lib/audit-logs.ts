@@ -79,6 +79,8 @@ export const AUDIT_ENTITY = {
   PO: 'purchase_order',
   RECEIVING: 'receiving',
   RECEIVING_LINE: 'receiving_line',
+  // Incoming email worklist row (email_missing_purchase_orders to-do pile)
+  EMAIL_MISSING_PO: 'email_missing_purchase_order',
   SERIAL_UNIT: 'serial_unit',
   HANDLING_UNIT: 'handling_unit',
   LABEL_MANIFEST: 'label_manifest',
@@ -146,6 +148,8 @@ export const AUDIT_ENTITY = {
   AI_SEARCH: 'ai_search',
   OPS_PLAN: 'ops_plan',
   OPS_PLAN_TASK: 'ops_plan_task',
+  // Pick-face (bin-to-bin) replenishment task (replenishment_tasks)
+  REPLENISHMENT_TASK: 'replenishment_task',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -176,6 +180,14 @@ export const AUDIT_ACTION = {
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
   /** Real "Save for unbox" transition — stamps receiving.triage_complete. */
   RECEIVING_TRIAGE_COMPLETE: 'receiving.triage.complete',
+  /** Incoming email to-do check-off / restore — a reversible pile move on an
+   *  email_missing_purchase_orders row, never a delete. */
+  RECEIVING_TODO_CHECKED:    'receiving.todo.checked',
+  RECEIVING_TODO_UNCHECKED:  'receiving.todo.unchecked',
+  /** Receiving-scoped match of an unmatched shipping email to an existing
+   *  Zoho PO (incoming-todo Phase 4a) — records the PO# onto the
+   *  email_missing_purchase_orders row and moves it to pile='done'. */
+  RECEIVING_EMAIL_MATCHED:   'receiving.email.matched',
   /** Per-staff rail dismiss / restore (universal-feed Phase 4) — writes/removes
    *  a staff_rail_exclusions row; hides an entity from THIS staffer's rail only
    *  (reversible, never a shared delete). */
@@ -364,6 +376,7 @@ export const AUDIT_ACTION = {
   REPAIR_SERVICE_UNLINK: 'repair_service.unlink',
   // Pack / order (existing callers — keep their literals stable)
   PACK_COMPLETED: 'PACK_COMPLETED',
+  ORDER_ASSIGNMENT_UPDATED: 'ORDER_ASSIGNMENT_UPDATED',
   // Dock scan-out: the package physically left the warehouse (SHIP_CONFIRM event)
   SHIP_CONFIRM_SCAN: 'shipment.scan_out',
   // Bose Sourcing Engine — compatibility DB + alternative sourcing
@@ -415,6 +428,9 @@ export const AUDIT_ACTION = {
   VOICE_CALL_ORIGINATED:       'voice.call.originated',
   // Tenant lifecycle — self-service signup provisions a new org (Phase F).
   ORG_CREATE: 'organization.create',
+  // Pick-face replenishment task — reversibility 5.7: undo a claim
+  // (IN_PROGRESS → REQUESTED, clears assigned_staff_id).
+  REPLENISH_TASK_RELEASE: 'replenish_task.release',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];

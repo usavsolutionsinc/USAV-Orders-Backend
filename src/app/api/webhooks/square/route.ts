@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { squareFetch } from '@/lib/square/client';
 import { insertSquareTransaction } from '@/lib/neon/square-transaction-queries';
 import { publishSaleCompleted } from '@/lib/realtime/walkin-events';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { resolveWebhookOrgForSquareMerchant } from '@/lib/shipping/webhook-org-resolver';
+import { checkRateLimitAsync } from '@/lib/api-guard';
 import { isRepairSku } from '@/utils/sku';
 
 const WEBHOOK_SIGNATURE_KEY = () =>
@@ -40,6 +41,7 @@ function verifySquareSignature(
 
 interface SquareWebhookEvent {
   type: string;
+  merchant_id?: string;
   data?: {
     type?: string;
     id?: string;
@@ -62,6 +64,20 @@ interface SquareWebhookEvent {
  */
 export async function POST(req: NextRequest) {
   try {
+    // IP rate limit before any body/crypto work — caps abuse of a public route.
+    const rl = await checkRateLimitAsync({
+      headers: req.headers,
+      routeKey: 'webhooks-square',
+      limit: 120,
+      windowMs: 60_000,
+    });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'RATE_LIMITED', retryAfterSec: rl.retryAfterSec },
+        { status: 429 },
+      );
+    }
+
     const rawBody = await req.text();
     const signature = req.headers.get('x-square-hmacsha256-signature') || '';
     const notificationUrl = WEBHOOK_NOTIFICATION_URL() || req.url;
@@ -76,6 +92,22 @@ export async function POST(req: NextRequest) {
       const payment = event.data?.object?.payment;
       if (!payment?.order_id) {
         return NextResponse.json({ received: true });
+      }
+
+      // Session-less callback: map the payload's merchant_id to an org via
+      // organization_integrations (provider='square'). FAIL-CLOSED — no
+      // mapping means we ignore the event (200 so Square doesn't retry)
+      // rather than write under a guessed org.
+      const merchantId = typeof event.merchant_id === 'string' ? event.merchant_id : '';
+      const orgId = merchantId
+        ? await resolveWebhookOrgForSquareMerchant(merchantId)
+        : null;
+      if (!orgId) {
+        console.warn('[webhook-org] unresolved square merchant — ignoring event', {
+          merchantId: merchantId || null,
+          eventType: event.type,
+        });
+        return NextResponse.json({ ignored: true });
       }
 
       // Fetch the full order to get line items
@@ -95,15 +127,11 @@ export async function POST(req: NextRequest) {
       const hasRepairSku = lineItems.some((li: any) => isRepairSku(li.sku));
       const orderSource = hasRepairSku ? 'repair_payment' : 'walk_in_sale';
 
-      // TRANSITIONAL: Square webhook has no session. Single-tenant (USAV) today;
-      // resolve org from the Square account→org mapping when multi-tenant Square
-      // lands (see docs/tenancy exec plan §D1 open items). Thread it into the
-      // insert + the realtime publish so both run GUC-scoped (app.current_org).
-      // square_transactions is tenant-owned-NEEDS-COL — no organization_id column
-      // and no parent to derive from — so this only sets the GUC (RLS-ready once
-      // the column + FORCE policy land), it cannot stamp/filter a column yet.
-      const orgId = transitionalUsavOrgId();
-
+      // Thread the resolved org into the insert + the realtime publish so both
+      // run GUC-scoped (app.current_org). square_transactions is
+      // tenant-owned-NEEDS-COL — no organization_id column and no parent to
+      // derive from — so this only sets the GUC (RLS-ready once the column +
+      // FORCE policy land), it cannot stamp/filter a column yet.
       await insertSquareTransaction({
         square_order_id: payment.order_id,
         square_payment_id: payment.id || null,

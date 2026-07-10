@@ -14,11 +14,12 @@ import {
   searchItemBySku,
   updatePurchaseOrder,
 } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { upsertSerialUnit, recordOriginProvenance } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
-import { transition } from '@/lib/inventory/state-machine';
+import { transition, type SerialState } from '@/lib/inventory/state-machine';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getReceivingDefaultPutawayBin } from '@/lib/settings/accessors';
 import type { OrgId } from '@/lib/tenancy/constants';
@@ -184,7 +185,11 @@ async function applyInventoryV2Effects(input: {
     //    current_location when a destination bin is provided.
     let serialUnitId: number | null = input.serialUnitId ?? null;
     if (serialUnitId == null && input.serialNumber) {
-      const upsert = await client.query<{ id: number }>(
+      // The conflict branch deliberately does NOT touch current_status: a
+      // pre-existing unit's status change is routed through the guarded
+      // transition() below instead of being force-clobbered to RECEIVED (which
+      // could erase e.g. a SHIPPED unit that is really a return).
+      const upsert = await client.query<{ id: number; current_status: string }>(
         `INSERT INTO serial_units (
           serial_number, normalized_serial, sku, zoho_item_id,
           current_status, current_location, received_at, received_by, condition_grade,
@@ -193,14 +198,13 @@ async function applyInventoryV2Effects(input: {
         VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED'::serial_status_enum,
                 $8, $5, $6, $7::condition_grade_enum, $9::uuid)
         ON CONFLICT (organization_id, normalized_serial) DO UPDATE SET
-          current_status = 'RECEIVED'::serial_status_enum,
           current_location = COALESCE(EXCLUDED.current_location, serial_units.current_location),
           received_at = EXCLUDED.received_at,
           received_by = EXCLUDED.received_by,
           condition_grade = EXCLUDED.condition_grade,
           sku = COALESCE(serial_units.sku, EXCLUDED.sku),
           updated_at = NOW()
-        RETURNING id`,
+        RETURNING id, current_status::text AS current_status`,
         [
           input.serialNumber,
           input.sku,
@@ -214,6 +218,36 @@ async function applyInventoryV2Effects(input: {
         ],
       );
       serialUnitId = upsert.rows[0]?.id ?? null;
+      const existingStatus = (upsert.rows[0]?.current_status ?? null) as SerialState | null;
+      if (serialUnitId != null && existingStatus != null && existingStatus !== 'RECEIVED') {
+        // Pre-existing unit re-scanned at receiving: advance it back to
+        // RECEIVED through the state machine (expectedFrom pinned to the status
+        // just read under this txn). Best-effort — a guard rejection (no modeled
+        // edge back to RECEIVED, e.g. SHIPPED) leaves the status untouched and
+        // the receive succeeds exactly as before; the RECEIVED/PUTAWAY events
+        // below still record the intake.
+        const reset = await transition({
+          unitId: serialUnitId,
+          to: 'RECEIVED',
+          eventType: 'ADJUSTED',
+          actorStaffId: input.staffId > 0 ? input.staffId : null,
+          station: 'RECEIVING',
+          clientEventId: input.clientEventId ? `${input.clientEventId}:RECEIVED-RESET` : null,
+          expectedFrom: existingStatus,
+          receivingId: input.receivingId,
+          receivingLineId: input.receivingLineId,
+          binId: input.destinationBinId,
+          notes: input.notes,
+          payload: {
+            source: 'receiving.mark-received',
+            fallback_upsert: true,
+            qty_received: input.qtyReceived,
+          },
+        }, client, input.organizationId as OrgId);
+        if (!reset.ok) {
+          console.warn(`mark-received fallback upsert: RECEIVED transition skipped for unit ${serialUnitId}: ${reset.error}`);
+        }
+      }
       // Phase 4: origin provenance written app-side (columns dropped).
       if (serialUnitId != null) {
         await recordOriginProvenance(
@@ -737,7 +771,8 @@ export const POST = withAuth(async (request, ctx) => {
     // 4. Zoho purchase receive (await before responding). PO notes/serials only after receive succeeds.
     if (hasZohoReceive) {
       try {
-        const poResp = await getPurchaseOrderById(zohoPoId);
+        // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+        const poResp = await withZohoOrg(ctx.organizationId, () => getPurchaseOrderById(zohoPoId));
         assertPurchaseOrderReceivable(poResp);
         let catalogId = zohoItemId && zohoItemId.length > 0 ? zohoItemId : '';
         if (!catalogId) {
@@ -753,7 +788,7 @@ export const POST = withAuth(async (request, ctx) => {
         }
         if (!catalogId && line.sku) {
           try {
-            const hit = await searchItemBySku(String(line.sku));
+            const hit = await withZohoOrg(ctx.organizationId, () => searchItemBySku(String(line.sku)));
             catalogId = hit?.item_id ? String(hit.item_id).trim() : '';
           } catch {
             catalogId = '';
@@ -764,17 +799,19 @@ export const POST = withAuth(async (request, ctx) => {
             `Cannot resolve Zoho catalog item_id for PO line ${zohoLineItemId}.`,
           );
         }
-        await createPurchaseReceive({
-          purchaseOrderId: zohoPoId,
-          lineItems: [
-            {
-              line_item_id: zohoLineItemId,
-              quantity_received: qtyReceived,
-              item_id: catalogId,
-            },
-          ],
-          bills: poResp.purchaseorder?.bills,
-        });
+        await withZohoOrg(ctx.organizationId, () =>
+          createPurchaseReceive({
+            purchaseOrderId: zohoPoId,
+            lineItems: [
+              {
+                line_item_id: zohoLineItemId,
+                quantity_received: qtyReceived,
+                item_id: catalogId,
+              },
+            ],
+            bills: poResp.purchaseorder?.bills,
+          }),
+        );
         zohoReceiveOk = true;
         const doneUp = await tenantQuery(
           ctx.organizationId,
@@ -788,7 +825,7 @@ export const POST = withAuth(async (request, ctx) => {
         if (doneUp.rows[0]) line = doneUp.rows[0];
 
         try {
-          const existing = await getPurchaseOrderById(zohoPoId);
+          const existing = await withZohoOrg(ctx.organizationId, () => getPurchaseOrderById(zohoPoId));
           const patch: Record<string, unknown> = {};
 
           if (serialNumber) {
@@ -830,7 +867,7 @@ export const POST = withAuth(async (request, ctx) => {
           }
 
           if (Object.keys(patch).length > 0) {
-            await updatePurchaseOrder(zohoPoId, patch);
+            await withZohoOrg(ctx.organizationId, () => updatePurchaseOrder(zohoPoId, patch));
           }
         } catch (err) {
           console.warn('mark-received: updatePurchaseOrder sync failed', err);

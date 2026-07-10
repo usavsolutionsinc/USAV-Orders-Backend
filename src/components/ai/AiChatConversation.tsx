@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, Loader2, RefreshCw, Send, Sparkles } from '@/components/Icons';
+import { Copy, RefreshCw, Send, Sparkles } from '@/components/Icons';
 import AiAnswerCard from '@/components/ai/AiAnswerCard';
+import AgentStepTimeline from '@/components/ai/AgentStepTimeline';
 import MarkdownRenderer from '@/components/ai/MarkdownRenderer';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { useAiChat, type ChatMessage } from '@/components/ai/useAiChat';
@@ -85,7 +86,7 @@ export interface AiChatConversationProps {
  * ↑ (empty input) edit last message · ⌘K / Ctrl+K focus the composer.
  */
 export default function AiChatConversation({ variant = 'panel', chat }: AiChatConversationProps) {
-  const { messages, status, step, send, stop, regenerate, editMessage } = chat;
+  const { messages, status, step, send, stop, retry, editMessage } = chat;
   const [input, setInput] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -240,10 +241,31 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
               }
 
               if (msg.error) {
+                // retry() always re-sends the LATEST user turn, so only the
+                // final row may offer it — a Retry on a historical error would
+                // silently resend a different question.
+                const isLastMessage = i === messages.length - 1;
                 return (
                   <div key={msg.id} className="max-w-full rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-red-700">
                     <div className={`${sectionLabel} text-red-500`}>Error</div>
                     <p className="mt-1 whitespace-pre-wrap text-label leading-6">{msg.content}</p>
+                    {isLastMessage && (
+                      <div className="mt-1.5 -ml-1.5">
+                        <HoverTooltip label="Re-send the last question" asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => retry()}
+                            disabled={status === 'streaming'}
+                            className="text-red-700 hover:bg-red-100"
+                            ariaLabel="Retry last question"
+                            icon={<RefreshCw />}
+                          >
+                            Retry
+                          </Button>
+                        </HoverTooltip>
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -258,6 +280,15 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
                       <Sparkles className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
+                      {msg.streaming || (msg.steps?.length ?? 0) > 0 ? (
+                        <AgentStepTimeline
+                          steps={msg.steps ?? []}
+                          streaming={!!msg.streaming}
+                          startedAt={msg.startedAt ?? msg.ts}
+                          doneAt={msg.doneAt}
+                          className={msg.analysis || msg.content ? 'mb-2' : ''}
+                        />
+                      ) : null}
                       {msg.analysis ? (
                         <AiAnswerCard analysis={msg.analysis} content={msg.content} modeLabel={modeLabel(msg.mode)} timestampLabel={ts} onFollowUp={(p) => submit(p)} />
                       ) : msg.content ? (
@@ -281,12 +312,7 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
                             </div>
                           );
                         })()
-                      ) : (
-                        <div className="flex items-center gap-2 py-1 text-caption text-text-soft">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-text-faint" />
-                          <span>{step ?? 'Working'}{status === 'streaming' && elapsed > 0 ? ` · ${elapsed}s` : ''}</span>
-                        </div>
-                      )}
+                      ) : null}
 
                       {!msg.streaming && msg.content && !msg.analysis ? (() => {
                         const n = countOrderRefs(msg.content);
@@ -306,15 +332,25 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
                         );
                       })() : null}
 
-                      {!msg.streaming && msg.content && !msg.analysis ? (
+                      {!msg.streaming && (msg.content || msg.analysis) ? (
                         <div className="mt-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <CopyButton text={msg.content} />
+                          <CopyButton
+                            text={
+                              msg.analysis
+                                ? [msg.analysis.title, msg.analysis.summary, msg.content]
+                                    .map((s) => (s ?? '').trim())
+                                    .filter(Boolean)
+                                    .filter((s, i, arr) => arr.indexOf(s) === i)
+                                    .join('\n\n')
+                                : msg.content
+                            }
+                          />
                           {isLastDone ? (
                             <HoverTooltip label="Regenerate answer" asChild>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => regenerate()}
+                                onClick={() => retry()}
                                 className="text-text-faint hover:bg-surface-sunken hover:text-text-muted"
                                 ariaLabel="Regenerate answer"
                                 icon={<RefreshCw />}

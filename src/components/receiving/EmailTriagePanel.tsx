@@ -42,6 +42,9 @@ import { Button, EmptyState, IconButton } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 import { toast } from '@/lib/toast';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
+import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public model — what a consumer (or a mock) hands the panel.
@@ -176,6 +179,20 @@ function useIncomingEmailTodo(search: string, enabled: boolean): IncomingEmailTo
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<Set<string>>(new Set());
   const q = search.trim();
+
+  // Realtime (incoming-todo Phase 4b): drop/refresh rows instantly instead of
+  // waiting out the poll. `email-signal.changed` = a rescan/reconcile/match
+  // touched the email worklist (server publisher deferred — see
+  // useRealtimeInvalidation for the note); `shipment.changed` = tracking was
+  // registered, which is how a matched email usually resolves. The poll below
+  // stays as the no-realtime fallback (house pattern: degrade, don't depend).
+  const { user } = useAuth();
+  const stationChannel = safeChannelName(() => getStationChannelName(user?.organizationId ?? ''));
+  const invalidateTodo = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-todo'] });
+  }, [queryClient]);
+  useAblyChannel(stationChannel, 'email-signal.changed', invalidateTodo, !!stationChannel && enabled);
+  useAblyChannel(stationChannel, 'shipment.changed', invalidateTodo, !!stationChannel && enabled);
 
   const { data, isLoading, isError, refetch } = useQuery<TodoResponse>({
     queryKey: ['receiving-lines-incoming-todo', q],

@@ -29,7 +29,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction, tenantQuery } from '@/lib/tenancy/db';
 import { ApiError, errorResponse } from '@/lib/api';
-import { createAuditLog } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,14 +166,14 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
         [id, nextPile, orgId],
       );
       if (!upd.rowCount) return null;
-      await createAuditLog(client, {
-        actorStaffId: ctx.staffId ?? null,
-        organizationId: orgId,
+      await recordAudit(client, ctx, req, {
         source: 'receiving.incoming.todo',
-        action: body.done ? 'receiving.todo.checked' : 'receiving.todo.unchecked',
-        entityType: 'email_missing_purchase_order',
+        action: body.done
+          ? AUDIT_ACTION.RECEIVING_TODO_CHECKED
+          : AUDIT_ACTION.RECEIVING_TODO_UNCHECKED,
+        entityType: AUDIT_ENTITY.EMAIL_MISSING_PO,
         entityId: id,
-        metadata: { pile: nextPile },
+        extra: { pile: nextPile },
       });
       return upd.rows[0];
     });

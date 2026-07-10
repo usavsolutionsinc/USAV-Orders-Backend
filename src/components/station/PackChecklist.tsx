@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, AlertCircle, Info } from '../Icons';
 import { evaluateKitReadiness, type PackingEnforcement } from '@/lib/packing/kit-readiness';
+import { usePackingCheckPersist, type PackingTickKind } from '@/hooks/usePackingCheckPersist';
 
 /** A kit/accessory part the box must contain (from sku_kit_parts BOM). */
 export interface PackKitPart {
@@ -40,6 +41,13 @@ interface PackChecklistProps {
   enforcement?: PackingEnforcement;
   /** Notified when the blocked state flips, so a host can gate its complete CTA. */
   onBlockedChange?: (blocked: boolean) => void;
+  /**
+   * When set (> 0), each tick is persisted to
+   * POST /api/orders/[orderRowId]/packing-checks (tech_verifications,
+   * step_type PACKING/PACKING_PART). Optimistic: the tick applies locally
+   * first and quietly reverts on failure — persistence never blocks packing.
+   */
+  orderRowId?: number | null;
   className?: string;
 }
 
@@ -56,11 +64,12 @@ const PART_TYPE_TAG: Record<string, string> = {
  * QC verify steps, and lets the packer tick each as they confirm it. Critical
  * kit parts (`is_critical`) drive the "all required items in" signal.
  *
- * Phase 1 (P1-PCK-03): ticks are client-only — this is a visual aid, never a
- * gate. Persistence + per-org block-until-matched enforcement land in later
- * phases (see docs/packing-checklist-plan.md). Renders nothing when the SKU has
- * no BOM and no checks, which is the graceful-degradation path for tenants who
- * haven't populated their catalog.
+ * Ticks apply locally first (the visual aid is instant) and, when an
+ * `orderRowId` is supplied, persist to /api/orders/[id]/packing-checks
+ * (tech_verifications, Phase 2) with a quiet revert on failure — persistence
+ * never gates the pack flow. Renders nothing when the SKU has no BOM and no
+ * checks, which is the graceful-degradation path for tenants who haven't
+ * populated their catalog (see docs/todo/packing-checklist-plan.md).
  */
 export function PackChecklist({
   kitParts,
@@ -68,22 +77,33 @@ export function PackChecklist({
   resetKey,
   enforcement = 'advisory',
   onBlockedChange,
+  orderRowId,
   className,
 }: PackChecklistProps) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const { persistTick } = usePackingCheckPersist();
 
   // Fresh product → fresh checklist.
   useEffect(() => {
     setTicked(new Set());
   }, [resetKey]);
 
-  const toggle = (key: string) =>
+  const setKey = (key: string, on: boolean) =>
     setTicked((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      if (on) next.add(key);
+      else next.delete(key);
       return next;
     });
+
+  const toggle = (key: string, kind: PackingTickKind, stepId: number) => {
+    const nowChecked = !ticked.has(key);
+    // Optimistic apply → quiet revert on failure (Phase 2 persistence).
+    setKey(key, nowChecked);
+    void persistTick(orderRowId, kind, stepId, nowChecked).then((ok) => {
+      if (!ok) setKey(key, !nowChecked);
+    });
+  };
 
   const totalItems = kitParts.length + checks.length;
   const doneCount = ticked.size;
@@ -135,7 +155,7 @@ export function PackChecklist({
               <ChecklistRow
                 key={key}
                 checked={ticked.has(key)}
-                onToggle={() => toggle(key)}
+                onToggle={() => toggle(key, 'KIT_PART', part.id)}
                 label={part.name}
                 qty={part.qty > 1 ? part.qty : undefined}
                 tag={PART_TYPE_TAG[part.type] ?? undefined}
@@ -154,7 +174,7 @@ export function PackChecklist({
               <ChecklistRow
                 key={key}
                 checked={ticked.has(key)}
-                onToggle={() => toggle(key)}
+                onToggle={() => toggle(key, 'PACKING_CHECK', check.id)}
                 label={check.label}
               />
             );

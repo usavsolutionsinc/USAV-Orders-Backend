@@ -1,8 +1,19 @@
 # Platform / Account / Type Catalog — Org-Scoped Normalization Plan
 
-> Status: PLAN (2026-06-13). Belongs with the multi-tenancy initiative
-> (`docs/multi-tenancy-hardening-prompt.md`). Separate from the receiving/tech UI
-> refactor. Nothing here is built yet.
+> Status: ~85% SHIPPED (re-verified 2026-07-09; "nothing built yet" was stale). Phases 1–5 built
+> AND applied: catalog tables + RLS (`2026-06-13g`), resolver layer (`src/lib/catalog/org-catalog.ts`),
+> `type_id` FKs live (`2026-06-14f`, `drizzle/schema.ts:988/1120`). Residual: Phase 6 cleanup —
+> blocked on finishing the Phase-3 reader migration (~40 `source_platform`/`account_source` read
+> sites) + owner confirmation of applied-migration state before the drop migration.
+>
+> **Phase-3 reader AUDIT complete (2026-07-09):** full site-by-site classification in
+> `docs/todo/platform-catalog-reader-audit-2026-07-09.md`. Outcome: the display layer is already
+> almost fully on the catalog hooks (`usePlatformMeta`/`useReceivingTypeLabel`/`useOrderChannelLabel`);
+> one surviving inline label-map duplicate migrated (`src/app/m/(shell)/r/[id]/page.tsx` →
+> `sourcePlatformMeta`). All behavioral literal comparisons (fba routing, shipstation path, return
+> gating, priority ranks, marketplace-sync natural keys) are intentionally UNCHANGED and enumerated
+> there as the Phase-6 wave list. Drop migration still NOT authored (owner migration-state gate).
+> Belongs with the multi-tenancy initiative (`docs/multi-tenancy-hardening-prompt.md`).
 
 ## Context — why
 

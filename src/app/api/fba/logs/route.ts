@@ -113,7 +113,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       { status: 500 }
     );
   }
-}, { permission: 'fba.view' });
+}, { permission: 'fba.view', feature: 'fba' });
 
 // ── POST /api/fba/logs ────────────────────────────────────────────────────────
 // Manually insert an fba_fnsku_log entry.
@@ -232,6 +232,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'fba.stage_shipments',
+  feature: 'fba',
   audit: {
     source: 'fba.logs.create',
     action: 'fba.log.create',

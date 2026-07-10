@@ -171,6 +171,21 @@ export function ReceivingLineOrderRow({
                 />
               ) : null}
               <DeliveryStateIcon state={row.delivery_state} />
+              {isIncoming && row.tracking_confidence === 'seller_reported' ? (
+                <HoverTooltip label="Seller reported tracking — carrier has not confirmed yet">
+                  <span className="text-eyebrow font-semibold text-amber-700">Seller</span>
+                </HoverTooltip>
+              ) : null}
+              {isIncoming && row.tracking_confidence === 'carrier_confirmed' && row.shipment_latest_event_city ? (
+                <HoverTooltip
+                  label={`Last carrier event${row.shipment_latest_event_at ? ` · ${row.shipment_latest_event_at}` : ''}${row.shipment_last_checked_at ? ` · synced ${row.shipment_last_checked_at}` : ''}`}
+                >
+                  <span className="hidden text-eyebrow font-semibold text-text-faint sm:inline">
+                    {row.shipment_latest_event_city}
+                    {row.shipment_latest_event_postal ? ` ${row.shipment_latest_event_postal}` : ''}
+                  </span>
+                </HoverTooltip>
+              ) : null}
             </div>
           }
         />

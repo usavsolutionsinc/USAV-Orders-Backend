@@ -2,11 +2,11 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { recomputeEnrichmentForOrders } from '@/lib/neon/packer-log-enrichment';
-import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 import { withAuth } from '@/lib/auth/withAuth';
+import { wouldExceedPlanCeiling, planLimitResponseBody } from '@/lib/billing/plan-ceilings';
 
 /**
  * POST /api/orders/add - Add a new order to the system
@@ -43,7 +43,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const saleAmountValue = saleAmount != null ? Number(saleAmount) : null;
     const currencyValue = (typeof currency === 'string' && currency.trim()) || 'USD';
 
-    const orgId = ctx.organizationId ?? USAV_ORG_ID;
+    const orgId = ctx.organizationId;
+
+    // Soft plan ceiling: manual order creation checks maxMonthlyOrders.
+    // Dormant until PLAN_FEATURE_ENFORCED; dogfood org exempt; fail-open
+    // (see plan-ceilings.ts). High-volume webhook/cron ingestion is NOT gated.
+    if (await wouldExceedPlanCeiling(orgId, 'maxMonthlyOrders')) {
+      return NextResponse.json(planLimitResponseBody('maxMonthlyOrders'), { status: 403 });
+    }
 
     // Check if order already exists with this order_id
     const existingOrder = await tenantQuery(

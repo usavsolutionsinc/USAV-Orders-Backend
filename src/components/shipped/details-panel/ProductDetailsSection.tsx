@@ -12,6 +12,7 @@ import { getFnskuCatalogValue, isFnskuCatalogContext } from '@/utils/fnsku-catal
 import { CopyChip } from '@/components/ui/CopyChip';
 import { ShippingEditableRow, type EditableShippingFields } from '@/components/shipped/details-panel/ShippingInformationSection';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
+import { isOrderShipped } from '@/components/shipped/details-panel/shipped-details-logic';
 
 type ConditionGrade = 'BRAND_NEW' | 'LIKE_NEW' | 'REFURBISHED' | 'USED_A' | 'USED_B' | 'USED_C' | 'PARTS';
 
@@ -153,13 +154,15 @@ export function ProductDetailsSection({
   const [isSavingCondition, setIsSavingCondition] = useState(false);
   const orderAssignmentMutation = useOrderAssignment();
   const skuIdentity = useSkuIdentity(shipped.sku, shipped.account_source);
+  // Condition freezes once the order has shipped — you can't re-grade what's gone.
+  const conditionLocked = isOrderShipped(shipped);
 
   useEffect(() => {
     setConditionValue(normalizeCondition(shipped.condition));
   }, [shipped.id, shipped.condition]);
 
   const handleConditionChange = async (nextCondition: string) => {
-    if (isSavingCondition) return;
+    if (conditionLocked || isSavingCondition) return;
     const grade = normalizeCondition(nextCondition);
     setConditionValue(grade);
     setIsSavingCondition(true);
@@ -247,7 +250,7 @@ export function ProductDetailsSection({
                 <span className="text-micro font-black uppercase tracking-wide text-blue-600">Saving</span>
               </div>
             ) : null}
-            <ConditionPills value={conditionValue} onChange={handleConditionChange} />
+            <ConditionPills value={conditionValue} onChange={handleConditionChange} readOnly={conditionLocked} />
           </div>
 
           {itemNumberRow}

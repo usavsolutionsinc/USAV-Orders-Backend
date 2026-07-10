@@ -286,6 +286,60 @@ export async function claimTask(input: {
   return { ok: true };
 }
 
+export type ReleaseTaskResult =
+  | { ok: true }
+  | { ok: false; status: 404 | 409; error: string };
+
+/** Injectable collaborators so unit tests run DB-free (house `Deps` pattern). */
+export interface ReleaseTaskDeps {
+  tenantQuery: typeof tenantQuery;
+}
+
+const defaultReleaseTaskDeps: ReleaseTaskDeps = { tenantQuery };
+
+/**
+ * Reversibility 5.7 — undo a claim: IN_PROGRESS → REQUESTED, clearing
+ * assigned_staff_id + started_at so the task returns to the open queue.
+ * 404 when the task doesn't exist (or belongs to another org); 409 when it
+ * isn't IN_PROGRESS.
+ */
+export async function releaseTask(
+  input: { taskId: number },
+  orgId: OrgId,
+  deps: ReleaseTaskDeps = defaultReleaseTaskDeps,
+): Promise<ReleaseTaskResult> {
+  // Tenant-scoped: `replenishment_tasks` ownership is derived from its
+  // `to_bin_id → locations.organization_id` parent (same shape as claimTask).
+  // A task owned by another org reads as 404, never 403.
+  const { rowCount } = await deps.tenantQuery(
+    orgId,
+    `UPDATE replenishment_tasks rt
+        SET status = 'REQUESTED',
+            assigned_staff_id = NULL,
+            started_at = NULL
+      FROM locations loc
+      WHERE rt.id = $1
+        AND loc.id = rt.to_bin_id
+        AND loc.organization_id = $2
+        AND rt.status = 'IN_PROGRESS'`,
+    [input.taskId, orgId],
+  );
+  if (rowCount === 0) {
+    const checkQ = await deps.tenantQuery<{ status: ReplenishmentTaskStatus }>(
+      orgId,
+      `SELECT rt.status
+         FROM replenishment_tasks rt
+         JOIN locations loc ON loc.id = rt.to_bin_id
+                           AND loc.organization_id = $2
+        WHERE rt.id = $1`,
+      [input.taskId, orgId],
+    );
+    if (checkQ.rowCount === 0) return { ok: false, status: 404, error: 'task not found' };
+    return { ok: false, status: 409, error: `task is ${checkQ.rows[0].status}, expected IN_PROGRESS` };
+  }
+  return { ok: true };
+}
+
 export type CompleteTaskResult =
   | { ok: true; fromBinQty: number | null; toBinQty: number }
   | { ok: false; status: 404 | 409; error: string };

@@ -286,7 +286,7 @@ export async function syncOneInboundPurchase(
   if (sourceType === 'ebay') {
     marketplace = await syncEbayOrderTargeted(orgId, input, deps);
     if (marketplace.linesFetched === 0 && marketplace.ingested === 0) {
-      note = 'eBay Buy Order API is not live yet — no new lines from the marketplace. Tracking was re-polled if present; use Import eBay order to bridge manually.';
+      note = 'No new marketplace lines for this order — tracking was re-polled if present.';
     }
   } else if (sourceType === 'amazon') {
     return {

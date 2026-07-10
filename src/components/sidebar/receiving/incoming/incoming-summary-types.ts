@@ -1,6 +1,7 @@
 /** Facet bucket — mirrors the SQL CASE in /api/receiving-lines view=incoming. */
 export type IncomingDeliveryState =
   | 'DELIVERED_UNOPENED'
+  | 'DELIVERED_NOT_UNBOXED'
   | 'DELIVERED_EMAIL'
   | 'ARRIVING_TODAY'
   | 'STALLED'
@@ -8,7 +9,8 @@ export type IncomingDeliveryState =
   | 'TRACKING_UNAVAILABLE'
   | 'PENDING_CARRIER'
   | 'CARRIER_MISMATCH'
-  | 'AWAITING_TRACKING';
+  | 'AWAITING_TRACKING'
+  | 'WRONG_DESTINATION';
 
 export interface IncomingCarrierBreakdown {
   carrier: 'UPS' | 'USPS' | 'FEDEX' | 'UNKNOWN' | string;
@@ -21,6 +23,7 @@ export interface IncomingCarrierBreakdown {
 export interface IncomingSummary {
   issued: number;
   delivered_unopened: number;
+  delivered_not_unboxed: number;
   delivered_email: number;
   arriving_today: number;
   stalled: number;
@@ -30,5 +33,6 @@ export interface IncomingSummary {
   tracking_unavailable: number;
   awaiting_tracking: number;
   expected_today: number;
+  wrong_destination?: number;
   by_carrier?: IncomingCarrierBreakdown[];
 }

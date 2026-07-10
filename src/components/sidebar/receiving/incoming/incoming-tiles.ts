@@ -1,5 +1,5 @@
 import type React from 'react';
-import { Package, Truck, AlertTriangle, Clock, Mail, Unlink } from '@/components/Icons';
+import { Package, PackageOpen, Truck, AlertTriangle, Clock, Mail, Unlink } from '@/components/Icons';
 import type { IncomingDeliveryState, IncomingSummary } from './incoming-summary-types';
 
 export interface TileSpec {
@@ -19,6 +19,10 @@ export const TILES: TileSpec[] = [
     title: 'Carrier marked the box delivered AND no operator has scanned the tracking# at the receiving station yet (no receiving_scans row). Physically here, untouched — top priority.',
   },
   {
+    state: 'DELIVERED_NOT_UNBOXED', label: 'Delivered · not unboxed', key: 'delivered_not_unboxed', tone: 'rose', icon: PackageOpen,
+    title: 'Carrier marked delivered AND the carton has not been unboxed yet (qty still 0 / unboxed_at null). Includes dock-scanned boxes still waiting to be opened.',
+  },
+  {
     state: 'DELIVERED_EMAIL', label: 'Delivered (email)', key: 'delivered_email', tone: 'rose', icon: Mail,
     title: 'An "ORDER DELIVERED" email (eBay) reported this order delivered AND no operator has scanned it at the receiving station yet. The email-driven counterpart to the carrier signal — catches boxes carrier polling misses.',
   },
@@ -26,6 +30,10 @@ export const TILES: TileSpec[] = [
   {
     state: 'STALLED', label: 'Stalled', key: 'stalled', tone: 'orange', icon: AlertTriangle,
     title: 'Carrier-reported exception OR no scan in >72h while still mid-route. Catch these before vendors do.',
+  },
+  {
+    state: 'WRONG_DESTINATION', label: 'Wrong destination', key: 'wrong_destination', tone: 'red', icon: Unlink,
+    title: 'Carrier delivered event postal code does not match the warehouse ship-from ZIP — possible mis-ship by the seller.',
   },
   { state: 'IN_TRANSIT', label: 'In transit', key: 'in_transit', tone: 'blue', icon: Truck, title: 'Label created, accepted, or in transit (carrier-side).' },
   {

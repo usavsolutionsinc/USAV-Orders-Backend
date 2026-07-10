@@ -31,6 +31,7 @@ import { SHIPMENT_SCANNED_PREDICATE, CARRIER_MISMATCH_PREDICATE } from '../../de
 export const DELIVERY_STATES = [
   'RECEIVED',
   'DELIVERED_UNOPENED',
+  'DELIVERED_NOT_UNBOXED',
   'DELIVERED_EMAIL',
   'ARRIVING_TODAY',
   'STALLED',
@@ -40,6 +41,7 @@ export const DELIVERY_STATES = [
   'CARRIER_MISMATCH',
   'PENDING_CARRIER',
   'UNKNOWN',
+  'WRONG_DESTINATION',
 ] as const;
 export type DeliveryState = (typeof DELIVERY_STATES)[number];
 
@@ -49,6 +51,25 @@ export function isDeliveryState(v: unknown): v is DeliveryState {
 
 // ── Shared predicate fragments (defined once) ───────────────────────────────
 const DELIVERED_UNOPENED = `stn.is_delivered = true\n           AND NOT ${SHIPMENT_SCANNED_PREDICATE}`;
+/** Carrier delivered + dock-scanned + still not unboxed (CASE badge only). */
+const DELIVERED_NOT_UNBOXED_CASE = `stn.is_delivered = true
+           AND ${SHIPMENT_SCANNED_PREDICATE}
+           AND COALESCE(rl.quantity_received, 0) = 0
+           AND r.unboxed_at IS NULL
+           AND rl.workflow_status NOT IN (
+             'UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE','FAILED','RTV','SCRAP'
+           )`;
+/**
+ * Broader facet: carrier delivered and warehouse has not unboxed yet
+ * (includes unscanned delivered — overlaps DELIVERED_UNOPENED intentionally).
+ * Dedicated list feed uses the same predicate; CASE uses the scanned-only arm.
+ */
+const DELIVERED_NOT_UNBOXED_WHERE = `stn.is_delivered = true
+           AND COALESCE(rl.quantity_received, 0) = 0
+           AND (r.id IS NULL OR r.unboxed_at IS NULL)
+           AND rl.workflow_status NOT IN (
+             'UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE','FAILED','RTV','SCRAP'
+           )`;
 const ARRIVING_TODAY = `stn.latest_status_category = 'OUT_FOR_DELIVERY'`;
 const STALLED = `stn.id IS NOT NULL
            AND COALESCE(stn.is_terminal, false) = false
@@ -97,6 +118,8 @@ interface DeliveryStateBucket {
 export const DELIVERY_STATE_BUCKETS: ReadonlyArray<DeliveryStateBucket> = [
   { state: 'RECEIVED', caseWhen: RECEIVED, whereStandalone: null }, // incoming view filters to EXPECTED → no facet
   { state: 'DELIVERED_UNOPENED', caseWhen: DELIVERED_UNOPENED, whereStandalone: DELIVERED_UNOPENED },
+  // CASE = scanned+not-unboxed; WHERE = broader delivered+not-unboxed (asymmetry like PENDING_CARRIER).
+  { state: 'DELIVERED_NOT_UNBOXED', caseWhen: DELIVERED_NOT_UNBOXED_CASE, whereStandalone: DELIVERED_NOT_UNBOXED_WHERE },
   { state: 'DELIVERED_EMAIL', caseWhen: null, whereStandalone: DELIVERED_EMAIL_WHERE }, // facet-only
   { state: 'ARRIVING_TODAY', caseWhen: ARRIVING_TODAY, whereStandalone: ARRIVING_TODAY },
   { state: 'STALLED', caseWhen: STALLED, whereStandalone: STALLED },
@@ -105,6 +128,7 @@ export const DELIVERY_STATE_BUCKETS: ReadonlyArray<DeliveryStateBucket> = [
   { state: 'AWAITING_TRACKING', caseWhen: AWAITING_TRACKING, whereStandalone: AWAITING_TRACKING },
   { state: 'CARRIER_MISMATCH', caseWhen: CARRIER_MISMATCH_PREDICATE, whereStandalone: CARRIER_MISMATCH_PREDICATE },
   { state: 'PENDING_CARRIER', caseWhen: PENDING_CARRIER_CASE, whereStandalone: PENDING_CARRIER_WHERE },
+  { state: 'WRONG_DESTINATION', caseWhen: null, whereStandalone: null }, // facet via dedicated feed / flag
   { state: 'UNKNOWN', caseWhen: null, whereStandalone: null }, // CASE ELSE
 ];
 

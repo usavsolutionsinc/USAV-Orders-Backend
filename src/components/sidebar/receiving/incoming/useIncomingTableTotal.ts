@@ -7,6 +7,9 @@ import type { ApiResponse } from '@/components/station/receiving-lines-table-hel
 import {
   type DeliveredUnscannedResponse,
 } from '@/components/station/receiving-delivered-unscanned';
+import {
+  type DeliveredNotUnboxedResponse,
+} from '@/components/station/receiving-delivered-not-unboxed';
 import { useReceivingModeContext } from '@/components/station/useReceivingModeContext';
 
 /**
@@ -16,7 +19,12 @@ import { useReceivingModeContext } from '@/components/station/useReceivingModeCo
  * `summary.issued` (distinct POs) or from each other.
  */
 export function useIncomingTableTotal(): number | undefined {
-  const { modeContext, isIncomingMode, isDeliveredUnscannedFacet } = useReceivingModeContext();
+  const {
+    modeContext,
+    isIncomingMode,
+    isDeliveredUnscannedFacet,
+    isDeliveredNotUnboxedFacet,
+  } = useReceivingModeContext();
   const incomingMode = getReceivingModeDescriptor('incoming');
 
   const countContext = useMemo(
@@ -34,7 +42,7 @@ export function useIncomingTableTotal(): number | undefined {
       if (!res.ok) throw new Error('fetch failed');
       return res.json();
     },
-    enabled: isIncomingMode && !isDeliveredUnscannedFacet,
+    enabled: isIncomingMode && !isDeliveredUnscannedFacet && !isDeliveredNotUnboxedFacet,
     staleTime: 20_000,
     refetchOnWindowFocus: true,
   });
@@ -53,9 +61,26 @@ export function useIncomingTableTotal(): number | undefined {
     staleTime: 30_000,
   });
 
+  const { data: notUnboxedData } = useQuery<DeliveredNotUnboxedResponse>({
+    queryKey: ['incoming-delivered-not-unboxed'],
+    queryFn: async () => {
+      const res = await fetch('/api/receiving-lines/incoming/delivered-not-unboxed', {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('delivered-not-unboxed fetch failed');
+      return res.json();
+    },
+    enabled: isIncomingMode && isDeliveredNotUnboxedFacet,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
   if (!isIncomingMode) return undefined;
   if (isDeliveredUnscannedFacet) {
     return deliveredData?.items?.length;
+  }
+  if (isDeliveredNotUnboxedFacet) {
+    return notUnboxedData?.items?.length;
   }
   return listData?.total;
 }

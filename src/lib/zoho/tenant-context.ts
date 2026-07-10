@@ -17,13 +17,15 @@
  * explicit argument. Do not read `currentZohoOrgId()` below the queue.
  *
  * Adoption: a tenant-aware caller wraps its Zoho work in `withZohoOrg(orgId,
- * ...)`. Anything not yet wrapped defaults to USAV, which is correct while USAV
- * is the only live tenant. Paying down that default = wrapping each entry point
- * (crons loop connected orgs; routes use ctx.organizationId).
+ * ...)`. Every entry point must bind explicitly (crons loop connected orgs via
+ * forEachOrgWithProvider; routes use ctx.organizationId). An unbound read
+ * THROWS — the old silent USAV fallback was a cross-tenant credential leak
+ * (audit F10). Residual unfixable callers carry a targeted shim greppable as
+ * ZOHO_ORG_TRANSITIONAL; never reintroduce a module-level default here.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 const zohoOrgStore = new AsyncLocalStorage<OrgId>();
 
@@ -34,9 +36,22 @@ export function withZohoOrg<T>(orgId: OrgId, fn: () => Promise<T>): Promise<T> {
 
 /**
  * The tenant org for the current Zoho call. Read this only at the synchronous
- * client entry points (see the queue-boundary note above). Defaults to USAV
- * during the single-tenant transition.
+ * client entry points (see the queue-boundary note above). Fails closed: an
+ * unbound read throws instead of silently resolving USAV's credentials.
  */
 export function currentZohoOrgId(): OrgId {
-  return zohoOrgStore.getStore() ?? USAV_ORG_ID;
+  const orgId = zohoOrgStore.getStore();
+  if (!orgId) {
+    throw new Error('zoho org context unbound — wrap the call in withZohoOrg(orgId, …)');
+  }
+  return orgId;
+}
+
+/**
+ * Whether a tenant org is bound for the current async context. Only for the
+ * ZOHO_ORG_TRANSITIONAL shims that bridge callers which cannot bind yet —
+ * regular code should bind with `withZohoOrg` and never need to ask.
+ */
+export function hasZohoOrgBinding(): boolean {
+  return zohoOrgStore.getStore() != null;
 }

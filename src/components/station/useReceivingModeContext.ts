@@ -9,7 +9,7 @@
  */
 
 import { useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import type { IncomingDeliveryState } from '@/components/sidebar/receiving/IncomingSidebarPanel';
 import {
   getReceivingModeDescriptor,
@@ -23,6 +23,7 @@ import {
   normalizeReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 import type { ReceivingActivityAxis } from '@/components/station/receiving-lines-table-helpers';
+import { resolveLiveReceivingMode } from '@/lib/surface-isolation';
 
 export interface ReceivingModeState {
   mode: ReceivingModeDescriptor;
@@ -34,14 +35,19 @@ export interface ReceivingModeState {
   incomingPage: number;
   /** Incoming `DELIVERED_UNOPENED` sub-facet (shipment-level feed). */
   isDeliveredUnscannedFacet: boolean;
+  /** Incoming `DELIVERED_NOT_UNBOXED` sub-facet (line-level dedicated feed). */
+  isDeliveredNotUnboxedFacet: boolean;
   /** The descriptor opted this context out of the week filter. */
   skipWeekFilter: boolean;
   modeContext: ReceivingModeContext;
 }
 
 export function useReceivingModeContext(): ReceivingModeState {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const pageMode = searchParams.get('mode') ?? 'receive';
+  // Graduated surfaces (`/incoming`, `/receiving/history`, …) strip `?mode=`;
+  // path owns the mode. Legacy `/receiving?mode=` still falls through.
+  const pageMode = resolveLiveReceivingMode(pathname, searchParams);
   // The active mode descriptor owns every data-layer decision. Adding a mode =
   // adding a registry entry; the component just delegates. isIncomingMode
   // remains only for the presentational fork + the incoming-only effects.
@@ -66,6 +72,8 @@ export function useReceivingModeContext(): ReceivingModeState {
   const incomingStateRaw = (searchParams.get('state') || '').trim().toUpperCase();
   const incomingState: IncomingDeliveryState | null =
     incomingStateRaw === 'DELIVERED_UNOPENED'
+      || incomingStateRaw === 'DELIVERED_NOT_UNBOXED'
+      || incomingStateRaw === 'DELIVERED_EMAIL'
       || incomingStateRaw === 'ARRIVING_TODAY'
       || incomingStateRaw === 'STALLED'
       || incomingStateRaw === 'IN_TRANSIT'
@@ -73,6 +81,7 @@ export function useReceivingModeContext(): ReceivingModeState {
       || incomingStateRaw === 'PENDING_CARRIER'
       || incomingStateRaw === 'CARRIER_MISMATCH'
       || incomingStateRaw === 'AWAITING_TRACKING'
+      || incomingStateRaw === 'WRONG_DESTINATION'
       ? (incomingStateRaw as IncomingDeliveryState)
       : null;
   // Sort axis + PO date range — driven by IncomingPaneHeader (sort) and
@@ -99,6 +108,8 @@ export function useReceivingModeContext(): ReceivingModeState {
   // know about it. Derived early so it can flow into the mode context.
   const isDeliveredUnscannedFacet =
     isIncomingMode && incomingState === 'DELIVERED_UNOPENED';
+  const isDeliveredNotUnboxedFacet =
+    isIncomingMode && incomingState === 'DELIVERED_NOT_UNBOXED';
 
   // Single bag of parsed URL state handed to the active descriptor. Memoized so
   // the query key / params stay referentially stable across unrelated re-renders.
@@ -115,6 +126,7 @@ export function useReceivingModeContext(): ReceivingModeState {
       incomingPoTo,
       incomingPage,
       isDeliveredUnscannedFacet,
+      isDeliveredNotUnboxedFacet,
     }),
     [
       historySearch,
@@ -128,6 +140,7 @@ export function useReceivingModeContext(): ReceivingModeState {
       incomingPoTo,
       incomingPage,
       isDeliveredUnscannedFacet,
+      isDeliveredNotUnboxedFacet,
     ],
   );
 
@@ -140,6 +153,7 @@ export function useReceivingModeContext(): ReceivingModeState {
     historyAxis,
     incomingPage,
     isDeliveredUnscannedFacet,
+    isDeliveredNotUnboxedFacet,
     skipWeekFilter,
     modeContext,
   };

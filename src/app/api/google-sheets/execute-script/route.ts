@@ -17,13 +17,27 @@ import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack'
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 
-const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
+// No hardcoded default — the dogfood sheet id lives in the SPREADSHEET_ID env
+// (audit F30: never a tenant's live document id in source). Missing env → 503.
+function requiredSpreadsheetId(): string | null {
+  const v = (process.env.SPREADSHEET_ID ?? '').trim();
+  return v || null;
+}
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
         const { scriptName } = await req.json();
         const orgId = ctx.organizationId;
+
+        // Fail closed when no sheet is configured — never fall back to a
+        // hardcoded (dogfood) document id.
+        if (!requiredSpreadsheetId()) {
+            return NextResponse.json(
+                { success: false, error: 'SPREADSHEET_ID is not configured for this deployment.' },
+                { status: 503 },
+            );
+        }
 
         switch (scriptName) {
             case 'checkShippedOrders':
@@ -81,7 +95,8 @@ async function executeUpdateNonshippedOrders() {
 async function executeSyncTechSerialNumbers(orgId: OrgId) {
     const auth = getGoogleAuth();
     const sheets = googleSheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+    const spreadsheetId = requiredSpreadsheetId();
+    if (!spreadsheetId) throw new Error('SPREADSHEET_ID is not configured');
 
     const techSheets = [
         { name: 'tech_1', testedBy: 1 },
@@ -247,7 +262,8 @@ async function executeSyncTechSerialNumbers(orgId: OrgId) {
 async function executeSyncPackerLogs(orgId: OrgId) {
     const auth = getGoogleAuth();
     const sheets = googleSheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+    const spreadsheetId = requiredSpreadsheetId();
+    if (!spreadsheetId) throw new Error('SPREADSHEET_ID is not configured');
 
     const packerSheets = [
         { name: 'packer_1', packedBy: 4 },

@@ -42,6 +42,7 @@ import {
   searchVendorsByName,
   type CreatePurchaseOrderLine,
 } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 
 interface MailboxRow {
   id: string;
@@ -144,7 +145,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         { status: 422 },
       );
     }
-    const matches = await searchVendorsByName(extractedVendor, 5);
+    // Bind the authenticated tenant so the Zoho client resolves THIS org's creds.
+    const matches = await withZohoOrg(orgId, () => searchVendorsByName(extractedVendor, 5));
     if (matches.length === 0) {
       return NextResponse.json(
         {
@@ -206,13 +208,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   // ─── Create the draft ───────────────────────────────────────────────────────
   let created;
   try {
-    created = await createPurchaseOrder({
-      vendor_id: vendorId,
-      date,
-      reference_number: referenceNumber,
-      notes,
-      line_items: lineItems,
-    });
+    created = await withZohoOrg(orgId, () =>
+      createPurchaseOrder({
+        vendor_id: vendorId,
+        date,
+        reference_number: referenceNumber,
+        notes,
+        line_items: lineItems,
+      }),
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'create failed';
     console.error('[create-zoho-draft] Zoho create failed', {

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, ChevronRight, Flag, History, Loader2, Package, QrCode, Trash2 } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/design-system/primitives';
 import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
 import { SectionHeader } from '@/components/mobile/redesign/DesignSystem';
 import { BottomSheet } from '@/components/ui/BottomSheet';

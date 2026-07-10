@@ -52,6 +52,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 }, {
   permission: 'fba.manage_fnskus',
+  feature: 'fba',
   audit: {
     source: 'fba.fnskus.create',
     action: 'fba.fnsku.create',

@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import {
@@ -11,7 +12,7 @@ import {
   staggerRevealRiseItem,
   STAGGER_REVEAL_STEP,
 } from '@/design-system/primitives/StaggerReveal';
-import { Barcode, MapPin, Package, Settings } from '@/components/Icons';
+import { AlertTriangle, Barcode, MapPin, Package, Settings } from '@/components/Icons';
 import {
   PaneHeader,
   PaneHeaderIconBadge,
@@ -25,6 +26,10 @@ import { cn } from '@/utils/_cn';
 import { UpNextActionDock } from './UpNextActionDock';
 import { OrderPreviewPanel } from './OrderPreviewPanel';
 import { ActiveOrderBody } from './ActiveOrderBody';
+import { TechSubstituteSection } from './TechSubstituteSection';
+import { useSubstitutionPolicy } from '@/hooks/fulfillment/useSubstitutionPolicy';
+import { useOrderAmendments } from '@/hooks/fulfillment/useSubstitution';
+import { canShowTechSubstitution } from '@/lib/tech/substitution-eligibility';
 
 interface ActiveOrderWorkspaceProps {
   activeOrder: ActiveStationOrder;
@@ -92,6 +97,32 @@ export function ActiveOrderWorkspace({
     ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.001 } } }
     : staggerRevealRiseItem;
 
+  // Fulfillment substitution (docs/todo/tech-substitution-wiring-plan.md §5
+  // Phase 1.3): org policy + pure eligibility gate. Hidden for FBA / repair /
+  // exception sessions, not-found orders, and whenever policy.canSubstitute is
+  // false (flag off, 'test' node not allowed, or missing permission).
+  const policyQuery = useSubstitutionPolicy();
+  const substitution = useMemo(
+    () =>
+      canShowTechSubstitution({
+        policy: policyQuery.data,
+        activeOrder,
+        mode,
+        previewOrderId: previewOrder?.id ?? null,
+      }),
+    [policyQuery.data, activeOrder, mode, previewOrder?.id],
+  );
+  // Pending-amendment banner (§5 Phase 2.3): under block_until_approved the
+  // order cannot pack/ship while a substitution is PENDING — surface that at
+  // the top of the workspace body. The amendments query is shared with
+  // SubstituteUnitCard (same key), so this costs no extra fetch while shown.
+  const blockEnforced =
+    substitution.show && policyQuery.data?.enforcement === 'block_until_approved';
+  const amendments = useOrderAmendments(blockEnforced ? substitution.orderId : null);
+  const pendingCount = blockEnforced
+    ? (amendments.data ?? []).filter((r) => r.status === 'PENDING').length
+    : 0;
+
   return (
     <motion.div
       key={activeOrder.tracking || activeOrder.orderId}
@@ -145,6 +176,21 @@ export function ActiveOrderWorkspace({
             variants={revealContainer}
             className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6"
           >
+            {pendingCount > 0 ? (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                <div className="space-y-0.5">
+                  <p className="text-caption font-bold text-amber-800">
+                    Substitution pending approval
+                  </p>
+                  <p className="text-micro font-semibold text-amber-700">
+                    {pendingCount === 1 ? 'A substitution on this order is' : `${pendingCount} substitutions on this order are`}{' '}
+                    awaiting supervisor approval — the order cannot pack or ship until approved.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             {isPreview && previewOrder ? (
               <OrderPreviewPanel order={previewOrder} revealItem={revealItem} />
             ) : (
@@ -154,6 +200,14 @@ export function ActiveOrderWorkspace({
                 revealItem={revealItem}
               />
             )}
+
+            {substitution.show && substitution.orderId !== null ? (
+              <TechSubstituteSection
+                orderId={substitution.orderId}
+                orderLabel={substitution.orderLabel}
+                enforcement={policyQuery.data?.enforcement ?? 'advisory'}
+              />
+            ) : null}
           </motion.div>
         </div>
 

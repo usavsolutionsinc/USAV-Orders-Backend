@@ -21,6 +21,7 @@ import {
   listPendingInvitations,
   InvitationError,
 } from '@/lib/identity/invitations';
+import { wouldExceedPlanCeiling, planLimitResponseBody } from '@/lib/billing/plan-ceilings';
 
 const Body = z.object({
   email: z.string().trim().email(),
@@ -44,6 +45,13 @@ export const POST = withAuth(async (req, ctx) => {
       { error: 'INVALID_INPUT', detail: err instanceof Error ? err.message : 'bad request' },
       { status: 400 },
     );
+  }
+
+  // Plan ceiling: an accepted invitation becomes a staff seat, so gate at
+  // invite time. Dormant until PLAN_FEATURE_ENFORCED; dogfood org exempt;
+  // fail-open (see plan-ceilings.ts).
+  if (await wouldExceedPlanCeiling(ctx.organizationId, 'maxStaff')) {
+    return NextResponse.json(planLimitResponseBody('maxStaff'), { status: 403 });
   }
 
   const invitedByAccountId = await resolveAccountIdForStaff(ctx.staffId);

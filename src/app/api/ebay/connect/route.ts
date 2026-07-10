@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { withAuth } from '@/lib/auth/withAuth';
+import { assertCanConnectProvider } from '@/lib/integrations/connectors/connections';
 import { assertIntegrationKmsConfigured, encryptIntegrationPayload } from '@/lib/integrations/crypto';
 import { getEbayAppCreds } from '@/lib/ebay/credentials';
 import {
@@ -31,6 +32,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     if (!accountName?.trim()) {
       return NextResponse.json({ error: 'accountName is required' }, { status: 400 });
     }
+
+    // Plan ceiling: connecting a NEW provider must fit the org's maxIntegrations.
+    const refusal = await assertCanConnectProvider(ctx.organizationId, 'ebay');
+    if (refusal) return NextResponse.json(refusal, { status: 403 });
 
     // Encryption-at-rest is required to store the OAuth state (and tokens) —
     // hard-fail in production if the KMS key is missing.

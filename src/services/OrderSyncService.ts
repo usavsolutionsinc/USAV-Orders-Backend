@@ -2,6 +2,7 @@ import { customerRepository } from '@/lib/repositories/customerRepository';
 import { itemRepository } from '@/lib/repositories/itemRepository';
 import { salesOrderRepository } from '@/lib/repositories/salesOrderRepository';
 import { zohoClient } from '@/lib/zoho/ZohoInventoryClient';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import type { ZohoContact, ZohoSalesOrder } from '@/lib/zoho/types';
 
 export interface ChannelBuyer {
@@ -89,6 +90,13 @@ export class OrderSyncService {
    * (which is single-tenant until tenant-aware cron lands).
    */
   async ingestExternalOrder(orgId: string, rawOrder: ChannelOrder) {
+    // Bind the supplied tenant for every zohoClient call this ingest makes
+    // (find/create contact, create/confirm sales order) — the client resolves
+    // credentials from the ambient Zoho org binding.
+    return withZohoOrg(orgId, () => this.ingestExternalOrderBound(orgId, rawOrder));
+  }
+
+  private async ingestExternalOrderBound(orgId: string, rawOrder: ChannelOrder) {
     const referenceNumber = String(rawOrder.channelOrderId || '').trim();
     if (!referenceNumber) {
       throw new Error('channelOrderId is required');

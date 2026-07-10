@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import { recordOpsEvent } from '@/lib/ops-events';
+import { resolveSurfaceWorkflowNodeId } from '@/lib/stations/surface-workflow-node';
 
 /** Ops spine event — carton opened via a scan on the Unbox surface. */
 export const UNBOX_SCAN_OPENED_EVENT = 'UNBOX_SCAN_OPENED';
@@ -67,6 +68,9 @@ export async function recordUnboxScanOpened(
       ? `unbox-scan-opened:${organizationId}:${receivingId}:${scanId}`
       : `unbox-scan-opened:${organizationId}:${receivingId}:manual`;
   try {
+    // Phase 2 (ops-events unification): this event is by definition the Unbox
+    // surface — stamp its Studio-node binding when the org has one published.
+    const workflowNodeId = await resolveSurfaceWorkflowNodeId('unbox', organizationId);
     await recordOpsEvent({
       organizationId,
       entityType: 'receiving',
@@ -74,6 +78,7 @@ export async function recordUnboxScanOpened(
       eventType: UNBOX_SCAN_OPENED_EVENT,
       actorStaffId,
       clientEventId,
+      workflowNodeId,
       payload: trackingNumber ? { trackingNumber } : {},
     });
   } catch (err) {

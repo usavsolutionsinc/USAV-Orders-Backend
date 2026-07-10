@@ -149,4 +149,4 @@ export const POST = withAuth(async (request, ctx) => {
     console.error('[POST /api/fba/items/[id]/link-unit] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'fba.stage_shipments' });
+}, { permission: 'fba.stage_shipments', feature: 'fba' });

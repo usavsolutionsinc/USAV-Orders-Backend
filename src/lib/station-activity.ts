@@ -54,6 +54,18 @@ export function sqlInList(values: readonly string[]): string {
   return values.map((v) => `'${v}'`).join(', ');
 }
 
+/**
+ * @deprecated FROZEN for NEW writer sites — ops-events unification plan, move 1
+ * (docs/todo/ops-events-station-workflow-unification-plan.md §3.1/§3.5).
+ * `station_activity_logs` is the legacy event spine: its `station` vocabulary is
+ * a deploy-time-fixed TS union that can never name a tenant-defined Studio
+ * station. Any NEW event-emitting code path MUST use `recordOpsEvent`
+ * (src/lib/ops-events.ts), threading `workflowNodeId` when a Studio node is in
+ * scope (resolveSurfaceWorkflowNodeId). The ~40 EXISTING call sites are
+ * intentionally untouched and keep working unchanged — SAL retirement is the
+ * plan's Phase 4, explicitly unscheduled (its `packer_log_enrichments.sal_id`
+ * FK makes migration a dedicated project). Do not add new callers.
+ */
 export async function createStationActivityLog(
   db: Queryable,
   params: {

@@ -1,6 +1,15 @@
 # Tech station — fulfillment substitution wiring plan
 
-**Status:** Planned — not implemented  
+**Status:** Phases 0–2 SHIPPED 2026-07-10 — policy endpoint (`GET /api/fulfillment/substitution-policy`, tech.view) +
+`useSubstitutionPolicy`; `tech.substitute_unit` permission (registry + seed + backfill migration
+`2026-07-09c_tech_substitute_permission_backfill.sql`, UNAPPLIED) with the substitute POST accepting
+packing.substitute_unit OR tech.substitute_unit in-handler; `canShowTechSubstitution` eligibility lib + tests;
+`TechSubstituteSection` mounted in `ActiveOrderWorkspace` (active + preview) with the pending-amendment amber banner
+and tech-logs/`usav-refresh-data` post-submit reconciliation. §8 decisions taken: permission Option B, no-allocation
+Option A (clear empty state), preview substitution allowed when previewOrderId valid, supervisor approval
+pending-read-only. **Phase 3 deferred** (collision with in-flight StationTesting/controller work). **Phases 4–5
+pending.** Rollout prerequisites (§3.1–3.2, §7) still required: apply migrations, FULFILLMENT_SUBSTITUTION=true,
+org `substitutionAllowedNodes` += 'test'.  
 **Created:** 2026-07-01  
 **Target surface:** `/tech` shipping mode (`ActiveOrderWorkspace` right-pane crossfade)  
 **Audience:** Claude Code / implementers — execute phases in order; resolve open decisions in §8 before Phase 0 permission work.

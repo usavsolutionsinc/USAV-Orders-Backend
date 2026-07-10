@@ -19,7 +19,7 @@ export { transitionReceivingLine, guardReceivingLine } from '../state-machine';
 export { recordReceivingScan } from '../record-scan';
 export { receiveLineUnits } from '../receive-line';
 export { attachSerialToLine } from '../serial-attach';
-export { attachBoxToReceiving, ensureReceivingForPo } from '../attach-box';
+export { attachBoxToReceiving, ensureReceivingForPo, ensureReceivingForEbayOrder } from '../attach-box';
 export {
   recordReceivingException,
   listReceivingLineExceptions,

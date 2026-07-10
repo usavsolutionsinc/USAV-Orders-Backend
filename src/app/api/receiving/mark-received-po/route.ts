@@ -17,6 +17,7 @@ import {
   sumWarehouseReceivedByPoLineItem,
   updatePurchaseOrder,
 } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { getZohoHttpClientStatus } from '@/lib/zoho/httpClient';
 import { receiveLineUnits } from '@/lib/receiving/receive-line';
 import { transitionReceivingLine } from '@/lib/receiving/state-machine';
@@ -35,6 +36,7 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { conditionLabel } from '@/lib/conditions';
 import { mergeSerialNoteIntoLineDescription } from '@/lib/zoho';
 import { recordOpsEvent } from '@/lib/ops-events';
+import { resolveSurfaceWorkflowNodeId } from '@/lib/stations/surface-workflow-node';
 
 function normalizeSkuKey(s: string | null | undefined): string {
   return String(s ?? '').trim().toLowerCase();
@@ -370,6 +372,9 @@ export const POST = withAuth(async (request, ctx) => {
               actorStaffId: staffId,
               clientEventId: clientEventId ? `${clientEventId}:unbox` : `receiving:${receivingId}:unbox:${now}`,
               occurredAt: now,
+              // Phase 2 (ops-events unification): receive/unbox is the Unbox
+              // surface — stamp its Studio-node binding (null when unpublished).
+              workflowNodeId: await resolveSurfaceWorkflowNodeId('unbox', ctx.organizationId),
               payload: { receivingId, kind: 'unfound_no_po' },
             });
           } catch (err) {
@@ -545,6 +550,9 @@ export const POST = withAuth(async (request, ctx) => {
         actorStaffId: staffId,
         clientEventId: clientEventId ? `${clientEventId}:unbox` : `receiving:${receivingId}:unbox:${now}`,
         occurredAt: now,
+        // Phase 2 (ops-events unification): receive/unbox is the Unbox
+        // surface — stamp its Studio-node binding (null when unpublished).
+        workflowNodeId: await resolveSurfaceWorkflowNodeId('unbox', ctx.organizationId),
         payload: { receivingId },
       });
     } catch (err) {
@@ -761,7 +769,10 @@ export const POST = withAuth(async (request, ctx) => {
       Boolean(localTracking) || Boolean(zendeskTicket) ||
       Boolean(notes) || aggregatedSerials.length > 0 || Boolean(serialNumber);
 
-    after(async () => {
+    // Re-bind the tenant inside after(): the callback runs outside the
+    // request's async context, so the Zoho client would otherwise see no org
+    // binding (getPurchaseOrderById / createPurchaseReceive / updatePurchaseOrder).
+    after(async () => withZohoOrg(ctx.organizationId, async () => {
       // Mirror newly-created serial units into the operations graph
       // (fire-and-forget — tapWorkflow never throws).
       for (const tap of workflowTapQueue) {
@@ -1109,7 +1120,7 @@ export const POST = withAuth(async (request, ctx) => {
       } catch (err) {
         console.warn('mark-received-po: cache/realtime failed', err);
       }
-    });
+    }));
 
     // Audit one row per touched line. Source = mobile-scanner when the call
     // came from the phone station, else receiving-station. Action =

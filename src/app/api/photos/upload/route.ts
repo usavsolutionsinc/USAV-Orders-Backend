@@ -8,11 +8,13 @@ import { PHOTO_ENTITY_TYPES, PHOTO_LINK_ROLES } from '@/lib/photos/types';
 import {
   publishReceivingPhotoChanged,
   publishPackerPhotoChanged,
+  publishUnitPhotoChanged,
 } from '@/lib/realtime/publish';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
 import { countPackerPhotos } from '@/lib/photos/queries/packer-list';
 import { countReceivingPhotos } from '@/lib/photos/queries/receiving-list';
+import { countUnitPhotos } from '@/lib/photos/queries/unit-list';
 import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
@@ -102,6 +104,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         orderId: poRef,
         photoId: result.id,
         totalPhotoCount: await countPackerPhotos(ctx.organizationId, entityId),
+        source: 'photos.upload',
+      });
+    } else if (entityType === 'SERIAL_UNIT') {
+      await publishUnitPhotoChanged({
+        organizationId: ctx.organizationId as OrgId,
+        action: 'insert',
+        serialUnitId: entityId,
+        photoId: result.id,
+        totalPhotoCount: await countUnitPhotos(ctx.organizationId, entityId),
         source: 'photos.upload',
       });
     }
