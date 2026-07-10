@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Packer KPI — Corrected</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f2ee;
+      --surface: #ffffff;
+      --ink: #1c1917;
+      --muted: #78716c;
+      --line: #e7e5e4;
+      --small: #0f766e;
+      --small-bg: #f0fdfa;
+      --medium: #b45309;
+      --medium-bg: #fffbeb;
+      --large: #7c3aed;
+      --large-bg: #f5f3ff;
+      --unknown: #57534e;
+      --unknown-bg: #f5f5f4;
+      --accent: #1d4ed8;
+      --accent-soft: #eff6ff;
+      --shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 10px 28px rgba(28, 25, 23, 0.07);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1100px 480px at 8% -8%, #dbeafe 0%, transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, #ccfbf1 0%, transparent 48%),
+        var(--bg);
+      line-height: 1.45;
+      padding: 36px 20px 72px;
+    }
+
+    .page { max-width: 1080px; margin: 0 auto; }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      margin: 0 0 8px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 34px;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 28px 0 22px;
+      padding: 6px;
+      width: fit-content;
+      background: rgba(255,255,255,0.75);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+    }
+
+    .tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 18px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .tab:hover { color: var(--ink); background: #f5f5f4; }
+    .tab.active {
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat .label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat .value {
+      margin-top: 6px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .stat .hint {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .stat.small .value { color: var(--small); }
+    .stat.medium .value { color: var(--medium); }
+    .stat.large .value { color: var(--large); }
+    .stat.unknown .value { color: var(--unknown); }
+
+    .formula-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: #44403c;
+      box-shadow: var(--shadow);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.s { background: var(--small); }
+    .dot.m { background: var(--medium); }
+    .dot.l { background: var(--large); }
+    .dot.u { background: var(--unknown); }
+
+    .staff {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .staff-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #fafaf9 0%, #fff 100%);
+    }
+
+    .staff-name {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .staff-meta {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+
+    .pill.small { background: var(--small-bg); color: var(--small); border-color: #99f6e4; }
+    .pill.medium { background: var(--medium-bg); color: var(--medium); border-color: #fde68a; }
+    .pill.large { background: var(--large-bg); color: var(--large); border-color: #ddd6fe; }
+    .pill.unknown { background: var(--unknown-bg); color: var(--unknown); border-color: #d6d3d1; }
+    .pill.boxes { background: var(--accent-soft); color: var(--accent); border-color: #bfdbfe; }
+    .pill.minutes { background: #fdf2f8; color: #be185d; border-color: #fbcfe8; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      font-weight: 700;
+      padding: 12px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fafaf9;
+      white-space: nowrap;
+    }
+
+    thead th.num,
+    tbody td.num,
+    tfoot td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    tbody td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #fafafa; }
+
+    .day { font-weight: 600; }
+    .day-sub {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 1px;
+    }
+
+    .cell-small { color: var(--small); font-weight: 600; }
+    .cell-medium { color: var(--medium); font-weight: 600; }
+    .cell-large { color: var(--large); font-weight: 600; }
+    .cell-unknown { color: var(--unknown); font-weight: 600; }
+
+    .pct-bar {
+      height: 7px;
+      background: #f5f5f4;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+      min-width: 88px;
+    }
+
+    .pct-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #60a5fa, #2563eb);
+    }
+
+    .pct-fill.over {
+      background: linear-gradient(90deg, #fb7185, #e11d48);
+    }
+
+    .pct-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    tfoot td {
+      padding: 14px 12px;
+      border-top: 1px solid var(--line);
+      background: #fafaf9;
+      font-weight: 700;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 18px 12px;
+    }
+
+    .chart-card h3 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .chart-card p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 240px;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .compare-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .compare-card h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .meter {
+      margin-bottom: 14px;
+    }
+
+    .meter-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .meter-top strong { font-variant-numeric: tabular-nums; }
+
+    .meter-track {
+      height: 10px;
+      background: #f5f5f4;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #34d399, #059669);
+    }
+
+    .meter-fill.warn {
+      background: linear-gradient(90deg, #fbbf24, #d97706);
+    }
+
+    .meter-fill.hot {
+      background: linear-gradient(90deg, #fb7185, #e11d48);
+    }
+
+    .capacity {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+
+    .capacity h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .capacity .lead {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .cap-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 14px;
+    }
+
+    .cap-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: #fafaf9;
+    }
+
+    .cap-box h4 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+
+    .cap-box ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .cap-box li { margin: 4px 0; }
+
+    .notes {
+      margin-top: 8px;
+      padding: 20px 22px;
+      border: 1px dashed #d6d3d1;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.7);
+    }
+
+    .notes h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    .notes p {
+      margin: 0 0 8px;
+      color: #44403c;
+      font-size: 13px;
+    }
+
+    .notes p:last-child { margin-bottom: 0; }
+
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .summary { grid-template-columns: 1fr 1fr; }
+      .charts-grid, .compare-grid, .cap-grid { grid-template-columns: 1fr; }
+      .staff-head { flex-direction: column; align-items: flex-start; }
+      .pill-row { justify-content: flex-start; }
+      h1 { font-size: 28px; }
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .tabs { display: none; }
+      .panel { display: block !important; }
+      .staff, .stat, .chart-card, .compare-card, .capacity { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <p class="eyebrow">Cycle Forge · Packing</p>
+      <h1>Packer KPI</h1>
+      <p class="subtitle">Corrected tier counts · weighted minutes · day capacity · Mon, Jun 29 – Thu, Jul 9</p>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Report views">
+      <button class="tab active" data-tab="overview" type="button">Overview</button>
+      <button class="tab" data-tab="charts" type="button">Charts &amp; capacity</button>
+    </nav>
+
+    <div class="formula-bar" aria-label="Weighted minute formula">
+      <span class="chip"><span class="dot s"></span> Small = 5 min</span>
+      <span class="chip"><span class="dot m"></span> Medium = 14 min <span style="color:var(--muted)">(12–15)</span></span>
+      <span class="chip"><span class="dot l"></span> Large = 45 min <span style="color:var(--muted)">(40–50)</span></span>
+      <span class="chip"><span class="dot u"></span> Unknown ≈ 14 min <span style="color:var(--muted)">(est. as medium)</span></span>
+      <span class="chip">Shift = 7h 30m / packer <span style="color:var(--muted)">(450 min)</span></span>
+    </div>
+
+    <!-- OVERVIEW -->
+    <section class="panel active" id="panel-overview">
+      <div class="summary" aria-label="Team totals">
+        <div class="stat">
+          <div class="label">Total boxes</div>
+          <div class="value" id="team-boxes">—</div>
+          <div class="hint">All completed packs</div>
+        </div>
+        <div class="stat small">
+          <div class="label">Small</div>
+          <div class="value" id="team-small">—</div>
+          <div class="hint">5 min each</div>
+        </div>
+        <div class="stat medium">
+          <div class="label">Medium</div>
+          <div class="value" id="team-medium">—</div>
+          <div class="hint">14 min each</div>
+        </div>
+        <div class="stat large">
+          <div class="label">Large</div>
+          <div class="value" id="team-large">—</div>
+          <div class="hint">45 min each</div>
+        </div>
+        <div class="stat unknown">
+          <div class="label">Unknown</div>
+          <div class="value" id="team-unknown">—</div>
+          <div class="hint">Est. 14 min each</div>
+        </div>
+      </div>
+
+      <div class="summary" style="grid-template-columns: repeat(3, 1fr); margin-top: -8px;">
+        <div class="stat">
+          <div class="label">Weighted time</div>
+          <div class="value" id="team-wmin" style="font-size:24px;">—</div>
+          <div class="hint" id="team-wmin-sub">S×5 + M×14 + L×45 + U×14</div>
+        </div>
+        <div class="stat">
+          <div class="label">Packer-day capacity</div>
+          <div class="value" id="team-cap" style="font-size:24px;">—</div>
+          <div class="hint">Filled packer-days × 7h 30m</div>
+        </div>
+        <div class="stat">
+          <div class="label">% of available shift</div>
+          <div class="value" id="team-pct">—</div>
+          <div class="hint">Weighted time ÷ capacity</div>
+        </div>
+      </div>
+
+      <!-- Thuy -->
+      <section class="staff" data-staff="Thuy">
+        <div class="staff-head">
+          <div>
+            <h2 class="staff-name">Thuy</h2>
+            <p class="staff-meta">6 pack days</p>
+          </div>
+          <div class="pill-row" data-pills></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th class="num">Small</th>
+              <th class="num">Medium</th>
+              <th class="num">Large</th>
+              <th class="num">Unknown</th>
+              <th class="num">Boxes</th>
+              <th class="num">Weighted time</th>
+              <th class="num">% of day</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-row data-s="40" data-m="7" data-l="1" data-u="4">
+              <td><span class="day">Mon, Jun 29</span><span class="day-sub">29/6</span></td>
+              <td class="num cell-small">40</td><td class="num cell-medium">7</td><td class="num cell-large">1</td><td class="num cell-unknown">4</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="16" data-m="7" data-l="1" data-u="7">
+              <td><span class="day">Tue, Jun 30</span><span class="day-sub">30/6</span></td>
+              <td class="num cell-small">16</td><td class="num cell-medium">7</td><td class="num cell-large">1</td><td class="num cell-unknown">7</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="12" data-m="7" data-l="1" data-u="5">
+              <td><span class="day">Wed, Jul 1</span><span class="day-sub">1/7</span></td>
+              <td class="num cell-small">12</td><td class="num cell-medium">7</td><td class="num cell-large">1</td><td class="num cell-unknown">5</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="40" data-m="11" data-l="0" data-u="4">
+              <td><span class="day">Mon, Jul 6</span><span class="day-sub">6/7</span></td>
+              <td class="num cell-small">40</td><td class="num cell-medium">11</td><td class="num cell-large">0</td><td class="num cell-unknown">4</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="15" data-m="14" data-l="1" data-u="5">
+              <td><span class="day">Tue, Jul 7</span><span class="day-sub">7/7</span></td>
+              <td class="num cell-small">15</td><td class="num cell-medium">14</td><td class="num cell-large">1</td><td class="num cell-unknown">5</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="13" data-m="11" data-l="0" data-u="8">
+              <td><span class="day">Wed, Jul 8</span><span class="day-sub">8/7</span></td>
+              <td class="num cell-small">13</td><td class="num cell-medium">11</td><td class="num cell-large">0</td><td class="num cell-unknown">8</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td class="num" data-total-s></td>
+              <td class="num" data-total-m></td>
+              <td class="num" data-total-l></td>
+              <td class="num" data-total-u></td>
+              <td class="num" data-total-boxes></td>
+              <td class="num" data-total-wmin></td>
+              <td class="num" data-total-pct></td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+
+      <!-- Tuan -->
+      <section class="staff" data-staff="Tuan">
+        <div class="staff-head">
+          <div>
+            <h2 class="staff-name">Tuan</h2>
+            <p class="staff-meta">6 pack days</p>
+          </div>
+          <div class="pill-row" data-pills></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th class="num">Small</th>
+              <th class="num">Medium</th>
+              <th class="num">Large</th>
+              <th class="num">Unknown</th>
+              <th class="num">Boxes</th>
+              <th class="num">Weighted time</th>
+              <th class="num">% of day</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-row data-s="7" data-m="8" data-l="0" data-u="3">
+              <td><span class="day">Wed, Jul 1</span><span class="day-sub">1/7</span></td>
+              <td class="num cell-small">7</td><td class="num cell-medium">8</td><td class="num cell-large">0</td><td class="num cell-unknown">3</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="9" data-m="14" data-l="1" data-u="2">
+              <td><span class="day">Thu, Jul 2</span><span class="day-sub">2/7</span></td>
+              <td class="num cell-small">9</td><td class="num cell-medium">14</td><td class="num cell-large">1</td><td class="num cell-unknown">2</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="5" data-m="11" data-l="1" data-u="0">
+              <td><span class="day">Mon, Jul 6</span><span class="day-sub">6/7</span></td>
+              <td class="num cell-small">5</td><td class="num cell-medium">11</td><td class="num cell-large">1</td><td class="num cell-unknown">0</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="6" data-m="14" data-l="0" data-u="0">
+              <td><span class="day">Tue, Jul 7</span><span class="day-sub">7/7</span></td>
+              <td class="num cell-small">6</td><td class="num cell-medium">14</td><td class="num cell-large">0</td><td class="num cell-unknown">0</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="0" data-m="6" data-l="1" data-u="3">
+              <td><span class="day">Wed, Jul 8</span><span class="day-sub">8/7</span></td>
+              <td class="num cell-small">0</td><td class="num cell-medium">6</td><td class="num cell-large">1</td><td class="num cell-unknown">3</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+            <tr data-row data-s="7" data-m="4" data-l="2" data-u="5">
+              <td><span class="day">Thu, Jul 9</span><span class="day-sub">9/7</span></td>
+              <td class="num cell-small">7</td><td class="num cell-medium">4</td><td class="num cell-large">2</td><td class="num cell-unknown">5</td>
+              <td class="num" data-boxes></td><td class="num" data-wmin></td><td class="num" data-pct></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td class="num" data-total-s></td>
+              <td class="num" data-total-m></td>
+              <td class="num" data-total-l></td>
+              <td class="num" data-total-u></td>
+              <td class="num" data-total-boxes></td>
+              <td class="num" data-total-wmin></td>
+              <td class="num" data-total-pct></td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+
+      <section class="notes">
+        <h2>How to read this</h2>
+        <p><strong>Weighted time</strong> = (Small × 5) + (Medium × 14) + (Large × 45) + (Unknown × 14), shown as hours &amp; minutes.</p>
+        <p><strong>% of day</strong> = weighted time ÷ 7h 30m (450 min packer shift). Over 100% means packing load exceeded a full shift.</p>
+        <p><strong>Small</strong> pack &amp; label · <strong>Medium</strong> needs prep · <strong>Large</strong> full HT systems · <strong>Unknown</strong> not yet classified (estimated as medium time).</p>
+      </section>
+    </section>
+
+    <!-- CHARTS -->
+    <section class="panel" id="panel-charts">
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Team mix</h3>
+          <p>Share of boxes by tier</p>
+          <div class="chart-wrap"><canvas id="chart-team"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Thuy</h3>
+          <p>Tier mix across her pack days</p>
+          <div class="chart-wrap"><canvas id="chart-thuy"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Tuan</h3>
+          <p>Tier mix across his pack days</p>
+          <div class="chart-wrap"><canvas id="chart-tuan"></canvas></div>
+        </div>
+      </div>
+
+      <div class="compare-grid">
+        <div class="compare-card">
+          <h3>Shift load vs 7h 30m day</h3>
+          <div class="meter" id="meter-thuy"></div>
+          <div class="meter" id="meter-tuan"></div>
+          <div class="meter" id="meter-team"></div>
+          <p style="margin:8px 0 0;font-size:13px;color:var(--muted);">
+            Average % of day = total weighted time ÷ (pack days × 7h 30m).
+          </p>
+        </div>
+        <div class="compare-card">
+          <h3>Minutes by tier (team)</h3>
+          <div class="chart-wrap" style="height:220px;"><canvas id="chart-minutes"></canvas></div>
+        </div>
+      </div>
+
+      <section class="capacity">
+        <h2>Executive capacity guide</h2>
+        <p class="lead">With 2 packers + 3 technicians — realistic daily shipping capacity (refurb / AV workflows).</p>
+        <div class="cap-grid">
+          <div class="cap-box">
+            <h4>Daily targets</h4>
+            <ul>
+              <li><strong>55–65</strong> medium items / day</li>
+              <li><strong>14–18</strong> large HT systems / day</li>
+              <li>Mixed days are optimal</li>
+            </ul>
+          </div>
+          <div class="cap-box">
+            <h4>Packer output</h4>
+            <ul>
+              <li>1 packer → <strong>30–35</strong> boxes/day</li>
+              <li>2 packers → <strong>60–70</strong> boxes/day</li>
+              <li>Realistic medium range: <strong>55–65</strong></li>
+            </ul>
+          </div>
+          <div class="cap-box">
+            <h4>Time per unit</h4>
+            <ul>
+              <li>Small: <strong>5 min</strong></li>
+              <li>Medium: <strong>12–15 min</strong></li>
+              <li>Large: <strong>40–50 min</strong></li>
+            </ul>
+          </div>
+        </div>
+        <p class="lead" style="margin-top:16px;margin-bottom:0;">
+          Assumptions: 7h 30m packer day · techs finish testing before pack · packers focus on packing &amp; labeling · no extreme bottlenecks.
+        </p>
+      </section>
+    </section>
+
+    <footer>Corrected packer KPI · Small 5 · Medium 14 · Large 45 · Unknown ≈ 14 · Shift 7h 30m</footer>
+  </div>
+
+  <script>
+    const MIN = { s: 5, m: 14, l: 45, u: 14 };
+    const SHIFT = 450; // 7 hours 30 minutes
+    const COLORS = {
+      s: '#0f766e',
+      m: '#b45309',
+      l: '#7c3aed',
+      u: '#78716c',
+    };
+
+    function weighted(s, m, l, u) {
+      return s * MIN.s + m * MIN.m + l * MIN.l + u * MIN.u;
+    }
+
+    function pctOfDay(wmin) {
+      return (wmin / SHIFT) * 100;
+    }
+
+    function fmtPct(p) {
+      return p.toFixed(0) + '%';
+    }
+
+    /** e.g. 399 → "6h 39m" · also shows raw minutes underneath when withSub=true */
+    function fmtDuration(totalMin, options = {}) {
+      const mins = Math.round(Number(totalMin) || 0);
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      let main;
+      if (h === 0) main = `${m}m`;
+      else if (m === 0) main = `${h}h`;
+      else main = `${h}h ${m}m`;
+      if (options.withSub) {
+        return `<div>${main}</div><div class="day-sub">${mins.toLocaleString()} min</div>`;
+      }
+      return main;
+    }
+
+    function meterHtml(label, avgPct, detail) {
+      const cls = avgPct >= 100 ? 'hot' : avgPct >= 85 ? 'warn' : '';
+      const width = Math.min(avgPct, 100);
+      return `
+        <div class="meter-top">
+          <span>${label}</span>
+          <strong>${fmtPct(avgPct)} <span style="color:var(--muted);font-weight:500">${detail}</span></strong>
+        </div>
+        <div class="meter-track"><div class="meter-fill ${cls}" style="width:${width}%"></div></div>
+      `;
+    }
+
+    const team = { s: 0, m: 0, l: 0, u: 0, boxes: 0, wmin: 0, days: 0 };
+    const byStaff = {};
+
+    document.querySelectorAll('.staff').forEach((section) => {
+      const name = section.getAttribute('data-staff');
+      let s = 0, m = 0, l = 0, u = 0, boxes = 0, wmin = 0, days = 0;
+
+      section.querySelectorAll('[data-row]').forEach((row) => {
+        const rs = Number(row.dataset.s);
+        const rm = Number(row.dataset.m);
+        const rl = Number(row.dataset.l);
+        const ru = Number(row.dataset.u);
+        const rb = rs + rm + rl + ru;
+        const rw = weighted(rs, rm, rl, ru);
+        const rp = pctOfDay(rw);
+
+        row.querySelector('[data-boxes]').textContent = rb;
+        row.querySelector('[data-wmin]').innerHTML = fmtDuration(rw, { withSub: true });
+
+        const pctCell = row.querySelector('[data-pct]');
+        pctCell.innerHTML = `
+          <div class="pct-label">${fmtPct(rp)}</div>
+          <div class="pct-bar"><div class="pct-fill ${rp > 100 ? 'over' : ''}" style="width:${Math.min(rp, 100)}%"></div></div>
+        `;
+
+        s += rs; m += rm; l += rl; u += ru; boxes += rb; wmin += rw; days += 1;
+      });
+
+      const periodPct = (wmin / (days * SHIFT)) * 100;
+
+      section.querySelector('[data-total-s]').textContent = s;
+      section.querySelector('[data-total-m]').textContent = m;
+      section.querySelector('[data-total-l]').textContent = l;
+      section.querySelector('[data-total-u]').textContent = u;
+      section.querySelector('[data-total-boxes]').textContent = boxes;
+      section.querySelector('[data-total-wmin]').innerHTML = fmtDuration(wmin, { withSub: true });
+      section.querySelector('[data-total-pct]').textContent = fmtPct(periodPct) + ' avg';
+
+      section.querySelector('[data-pills]').innerHTML = [
+        `<span class="pill boxes">${boxes} boxes</span>`,
+        `<span class="pill minutes">${fmtDuration(wmin)}</span>`,
+        `<span class="pill small">${s} small</span>`,
+        `<span class="pill medium">${m} medium</span>`,
+        `<span class="pill large">${l} large</span>`,
+        `<span class="pill unknown">${u} unknown</span>`,
+      ].join('');
+
+      byStaff[name] = { s, m, l, u, boxes, wmin, days, avgPct: periodPct };
+      team.s += s; team.m += m; team.l += l; team.u += u;
+      team.boxes += boxes; team.wmin += wmin; team.days += days;
+    });
+
+    const teamCap = team.days * SHIFT;
+    const teamPct = (team.wmin / teamCap) * 100;
+
+    document.getElementById('team-boxes').textContent = team.boxes;
+    document.getElementById('team-small').textContent = team.s;
+    document.getElementById('team-medium').textContent = team.m;
+    document.getElementById('team-large').textContent = team.l;
+    document.getElementById('team-unknown').textContent = team.u;
+    document.getElementById('team-wmin').textContent = fmtDuration(team.wmin);
+    document.getElementById('team-wmin-sub').textContent = `${team.wmin.toLocaleString()} min total`;
+    document.getElementById('team-cap').textContent = fmtDuration(teamCap);
+    document.getElementById('team-cap').nextElementSibling.textContent =
+      `${team.days} packer-days · ${teamCap.toLocaleString()} min`;
+    document.getElementById('team-pct').textContent = fmtPct(teamPct);
+
+    document.getElementById('meter-thuy').innerHTML = meterHtml(
+      'Thuy',
+      byStaff.Thuy.avgPct,
+      `${fmtDuration(byStaff.Thuy.wmin)} / ${fmtDuration(byStaff.Thuy.days * SHIFT)}`
+    );
+    document.getElementById('meter-tuan').innerHTML = meterHtml(
+      'Tuan',
+      byStaff.Tuan.avgPct,
+      `${fmtDuration(byStaff.Tuan.wmin)} / ${fmtDuration(byStaff.Tuan.days * SHIFT)}`
+    );
+    document.getElementById('meter-team').innerHTML = meterHtml(
+      'Team (both)',
+      teamPct,
+      `${fmtDuration(team.wmin)} / ${fmtDuration(teamCap)}`
+    );
+
+    // Tabs
+    const tabs = document.querySelectorAll('.tab');
+    const panels = {
+      overview: document.getElementById('panel-overview'),
+      charts: document.getElementById('panel-charts'),
+    };
+    let chartsReady = false;
+
+    function pieConfig(labels, values) {
+      return {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: [COLORS.s, COLORS.m, COLORS.l, COLORS.u],
+            borderWidth: 2,
+            borderColor: '#fff',
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { boxWidth: 12, padding: 14, font: { size: 12 } },
+            },
+          },
+        },
+      };
+    }
+
+    function buildCharts() {
+      if (chartsReady) return;
+      chartsReady = true;
+
+      const labels = ['Small', 'Medium', 'Large', 'Unknown'];
+
+      new Chart(document.getElementById('chart-team'), pieConfig(labels, [team.s, team.m, team.l, team.u]));
+      new Chart(document.getElementById('chart-thuy'), pieConfig(labels, [byStaff.Thuy.s, byStaff.Thuy.m, byStaff.Thuy.l, byStaff.Thuy.u]));
+      new Chart(document.getElementById('chart-tuan'), pieConfig(labels, [byStaff.Tuan.s, byStaff.Tuan.m, byStaff.Tuan.l, byStaff.Tuan.u]));
+
+      const minByTier = [
+        team.s * MIN.s,
+        team.m * MIN.m,
+        team.l * MIN.l,
+        team.u * MIN.u,
+      ];
+
+      new Chart(document.getElementById('chart-minutes'), {
+        type: 'doughnut',
+        data: {
+          labels: [
+            `Small (${fmtDuration(minByTier[0])})`,
+            `Medium (${fmtDuration(minByTier[1])})`,
+            `Large (${fmtDuration(minByTier[2])})`,
+            `Unknown (${fmtDuration(minByTier[3])})`,
+          ],
+          datasets: [{
+            data: minByTier,
+            backgroundColor: [COLORS.s, COLORS.m, COLORS.l, COLORS.u],
+            borderWidth: 2,
+            borderColor: '#fff',
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '58%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { boxWidth: 12, padding: 12, font: { size: 11 } },
+            },
+          },
+        },
+      });
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        Object.values(panels).forEach((p) => p.classList.remove('active'));
+        panels[tab.dataset.tab].classList.add('active');
+        if (tab.dataset.tab === 'charts') buildCharts();
+      });
+    });
+  </script>
+</body>
+</html>

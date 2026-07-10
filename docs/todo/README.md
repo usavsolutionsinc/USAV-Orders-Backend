@@ -1,5 +1,10 @@
 # TODO — plan-doc status index
 
+**Cross-feature SoT:**
+- **Staff / 1-on-1 upgrades:** [`docs/master-connections-and-refactor/staff/INDEX.md`](../master-connections-and-refactor/staff/INDEX.md) — now-vs-change plans per person
+- **Technical:** [`docs/master-connections-and-refactor/master-index-plan.md`](../master-connections-and-refactor/master-index-plan.md) — polymorphic hubs, Item Journey, adapters, DS reuse  
+Hub: [`docs/master-connections-and-refactor/README.md`](../master-connections-and-refactor/README.md). Every new feature plan must update technical §7 **and** the matching staff plan when operator-visible.
+
 Re-audited **2026-07-06** (24 parallel audit agents), then **re-verified and largely executed
 2026-07-09→10** by the backlog run recorded in `TODO-BACKLOG-RUN-REPORT.md` (8 scout agents +
 6 build waves, ~12M agent tokens, every wave adversarially verified). Per-doc status headers inside

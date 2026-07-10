@@ -1,0 +1,1951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Connections &amp; Refactor — Architecture Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --now: #c2410c;
+    --now-bg: #fff7ed;
+    --go: #047857;
+    --go-bg: #ecfdf5;
+    --tech: #1d4ed8;
+    --tech-bg: #eff6ff;
+    --tech-line: #bfdbfe;
+    --nav: #0f172a;
+    --panel: #f8fafc;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(15,23,42,.04), 0 6px 18px rgba(15,23,42,.05);
+    --font: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --detail-w: 280px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.45;
+    font-size: 14.5px;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  code {
+    font-family: var(--mono);
+    font-size: .78em;
+    background: #f1f5f9;
+    padding: .08em .28em;
+    border-radius: 3px;
+    word-break: break-word;
+  }
+
+  .top {
+    position: sticky; top: 0; z-index: 60;
+    background: rgba(255,255,255,.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .top-inner { max-width: 1120px; margin: 0 auto; padding: 0 14px; }
+  .brand-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 2px 0; gap: 12px;
+  }
+  .brand { font-weight: 700; font-size: .85rem; letter-spacing: -.01em; }
+  .save-hint { font-size: .7rem; color: var(--muted); font-weight: 500; }
+
+  .tabs {
+    display: flex; gap: 0; overflow-x: auto;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    font-family: inherit; font-size: .78rem; font-weight: 600; color: var(--muted);
+    padding: 11px 9px 9px; border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--nav); border-bottom-color: var(--nav); }
+
+  .hero {
+    background: var(--nav); color: #fff;
+    padding: 16px 14px 14px;
+  }
+  .hero-inner { max-width: 1120px; margin: 0 auto; }
+  .hero h1 {
+    margin: 0 0 4px;
+    font-size: clamp(1.15rem, 2.2vw, 1.45rem);
+    letter-spacing: -.03em; line-height: 1.2; font-weight: 700;
+  }
+  .hero p { margin: 0; color: #94a3b8; max-width: 46em; font-size: .85rem; }
+  .keys { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+  .key {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: .68rem; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dot.now { background: #fb923c; }
+  .dot.go { background: #34d399; }
+  .dot.done { background: #a78bfa; }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 12px 14px 40px; }
+  .panel[hidden] { display: none !important; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--detail-w);
+    gap: 12px;
+    align-items: start;
+  }
+  @media (max-width: 920px) {
+    .layout { grid-template-columns: 1fr; }
+    .detail-panel {
+      position: sticky; bottom: 0; top: auto;
+      max-height: 38vh; order: 2;
+      border-radius: 12px 12px 0 0;
+      box-shadow: 0 -8px 24px rgba(15,23,42,.08);
+    }
+  }
+
+  .content { min-width: 0; }
+  .block-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px; margin-bottom: 3px;
+  }
+  .block-head h2 {
+    margin: 0; font-size: 1.2rem; letter-spacing: -.025em; font-weight: 700;
+  }
+  .lede { margin: 0 0 10px; color: var(--muted); font-size: .86rem; }
+  .pill {
+    font-size: .6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; padding: 3px 7px; border-radius: 999px; border: 1px solid;
+  }
+  .pill.living { color: #0e7490; background: #ecfeff; border-color: #a5f3fc; }
+  .pill.planned { color: #a16207; background: #fef9c3; border-color: #fde047; }
+  .pill.sot { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
+
+  /* Shared plan list — one topic per row */
+  .plan {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-bottom: 10px;
+  }
+  .plan-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 0;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: border-color .15s, background .15s;
+  }
+  .plan-item:has(.mark input:checked) {
+    background: #f8fafc;
+    border-color: #bbf7d0;
+  }
+  .plan-item:has(.mark input:checked) .plan-title {
+    color: #065f46;
+  }
+  .plan-item:has(.mark input:checked) .plan-body {
+    opacity: .72;
+  }
+  .plan-main { min-width: 0; padding: 9px 11px 10px; }
+  .plan-title {
+    margin: 0 0 7px;
+    font-size: .8rem; font-weight: 700; letter-spacing: -.01em;
+  }
+  .plan-pair {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 6px 8px;
+    align-items: start;
+  }
+  .plan-pair + .plan-pair { margin-top: 5px; }
+  .tag {
+    font-size: .58rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; padding: 2px 0; line-height: 1.4;
+  }
+  .tag.now { color: var(--now); }
+  .tag.go { color: var(--go); }
+  .plan-text {
+    margin: 0; font-size: .8rem; color: #334155; line-height: 1.4;
+  }
+  .plan-text.now { color: #9a3412; }
+  .plan-text.go { color: #065f46; }
+  .mark {
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 10px 0 0;
+    border-left: 1px solid var(--line);
+    background: #fafafa;
+    cursor: pointer;
+  }
+  .plan-item:has(.mark input:checked) .mark {
+    background: var(--go-bg);
+    border-left-color: #bbf7d0;
+  }
+  .mark input {
+    width: 18px; height: 18px;
+    accent-color: var(--go);
+    cursor: pointer;
+    margin: 0;
+  }
+  @media (max-width: 560px) {
+    .plan-pair { grid-template-columns: 1fr; gap: 1px; }
+    .tag { margin-top: 2px; }
+  }
+
+  .truth {
+    border: 1px solid var(--tech-line);
+    background: var(--tech-bg);
+    border-radius: var(--radius);
+    padding: 9px 11px;
+    margin-bottom: 10px;
+  }
+  .truth h3 {
+    margin: 0 0 5px; font-size: .62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--tech);
+  }
+  .truth ul { margin: 0; padding-left: 1.05rem; }
+  .truth li { margin: 0 0 4px; font-size: .76rem; color: #1e3a8a; }
+  .truth li:last-child { margin-bottom: 0; }
+
+  .practice {
+    border: 1px dashed #cbd5e1; border-radius: var(--radius);
+    padding: 9px 11px; background: #f8fafc; margin-bottom: 10px;
+  }
+  .practice h3 {
+    margin: 0 0 5px; font-size: .62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  }
+  .practice ol { margin: 0; padding-left: 1.15rem; }
+  .practice li { margin: 0 0 3px; font-size: .8rem; }
+
+  .toc-card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 3px; margin-bottom: 10px;
+  }
+  .toc-link {
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%; appearance: none; border: 0; background: transparent;
+    cursor: pointer; font-family: inherit; font-weight: 600; text-align: left;
+    padding: 8px 11px; border-radius: 7px; color: var(--ink); font-size: .84rem;
+  }
+  .toc-link:hover { background: #f1f5f9; }
+  .toc-link span { color: var(--muted); font-size: .7rem; font-weight: 600; }
+
+  .phases {
+    display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;
+  }
+  .phase {
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr) auto;
+    gap: 8px; align-items: center;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 9px; padding: 8px 11px;
+    border-left: 3px solid var(--nav);
+  }
+  .phase .n {
+    font-size: .6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--tech);
+  }
+  .phase h3 { margin: 0; font-size: .84rem; font-weight: 650; }
+  .phase p { margin: 1px 0 0; font-size: .72rem; color: var(--muted); }
+  .phase .tag-status {
+    font-size: .62rem; font-weight: 700; color: var(--muted); white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .phase { grid-template-columns: 1fr; gap: 2px; }
+  }
+
+  .decisions {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 10px 12px; margin-bottom: 10px;
+  }
+  .decisions h3 {
+    margin: 0 0 5px; font-size: .62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  }
+  .decisions ul { margin: 0; padding-left: 1.1rem; }
+  .decisions li { margin: 0 0 3px; font-size: .8rem; }
+
+  .detail-panel {
+    position: sticky;
+    top: 84px;
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 11px;
+  }
+  .detail-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 8px; margin-bottom: 8px;
+  }
+  .detail-kicker {
+    margin: 0 0 2px; font-size: .6rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .07em; color: var(--tech);
+  }
+  .detail-head h3 {
+    margin: 0; font-size: .86rem; font-weight: 700; letter-spacing: -.015em;
+  }
+  .detail-sub { margin: 2px 0 0; font-size: .7rem; color: var(--muted); }
+  .progress {
+    font-family: var(--mono); font-size: .68rem; font-weight: 600; color: var(--tech);
+    background: var(--tech-bg); border: 1px solid var(--tech-line);
+    border-radius: 999px; padding: 3px 7px; white-space: nowrap;
+  }
+  .detail-actions {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;
+  }
+  .btn {
+    appearance: none; border: 1px solid var(--tech-line); background: var(--tech-bg);
+    color: var(--tech); font-family: inherit; font-size: .7rem; font-weight: 650;
+    padding: 6px 7px; border-radius: 7px; cursor: pointer;
+  }
+  .btn:hover { background: #dbeafe; }
+  .btn.ghost {
+    background: #fff; border-color: var(--line); color: var(--muted);
+  }
+  .btn.ghost:hover { color: var(--ink); background: #f8fafc; }
+  .check-note { margin: 0; font-size: .66rem; color: var(--muted); line-height: 1.35; }
+
+
+  /* Staff / Technical mode */
+  .mode-switch {
+    display: inline-flex; align-items: center; gap: 0;
+    background: #f1f5f9; border: 1px solid var(--line);
+    border-radius: 999px; padding: 2px;
+  }
+  .mode-btn {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    font-family: inherit; font-size: .7rem; font-weight: 650;
+    color: var(--muted); padding: 5px 11px; border-radius: 999px;
+  }
+  .mode-btn:hover { color: var(--ink); }
+  .mode-btn.active {
+    background: #fff; color: var(--nav);
+    box-shadow: 0 1px 2px rgba(15,23,42,.08);
+  }
+  .brand-row-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  body.mode-staff .view-tech { display: none !important; }
+  body.mode-tech .view-staff { display: none !important; }
+  body.mode-staff .truth { display: none !important; }
+  body.mode-staff .lede-tech { display: none !important; }
+  body.mode-tech .lede-staff { display: none !important; }
+  body.mode-staff .practice-tech { display: none !important; }
+  body.mode-tech .practice-staff { display: none !important; }
+  .view-staff, .view-tech { display: block; }
+
+  footer {
+    max-width: 1120px; margin: 0 auto; padding: 0 14px 32px;
+    color: var(--muted); font-size: .72rem;
+  }
+</style>
+</head>
+<body class="mode-staff">
+
+<div class="top">
+  <div class="top-inner">
+    <div class="brand-row">
+      <div class="brand-row-left">
+        <div class="brand">Connections plan</div>
+        <div class="mode-switch" role="tablist" aria-label="Display mode">
+          <button type="button" class="mode-btn active" data-mode="staff" role="tab" aria-selected="true">Staff</button>
+          <button type="button" class="mode-btn" data-mode="tech" role="tab" aria-selected="false">Technical</button>
+        </div>
+      </div>
+      <div class="save-hint">Staff or Technical · check when done</div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Architecture topics">
+      <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="start">Start</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="big">Big picture</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="locations">Locations</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="tickets">Tickets</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="journey">Journey</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="zoho">Zoho</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="pickup">Pickup</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="pages">Pages</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="roadmap">Roadmap</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="tech">Technical</button>
+    </div>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="hero-inner">
+    <h1>Connect what we already have</h1>
+    <p>Use <strong style="color:#fff;font-weight:650">Staff</strong> for plain language, or <strong style="color:#fff;font-weight:650">Technical</strong> for code paths. Same lines and checkboxes in both modes.</p>
+    <div class="keys">
+      <span class="key"><span class="dot now"></span> Now</span>
+      <span class="key"><span class="dot go"></span> Change</span>
+      <span class="key"><span class="dot done"></span> Done</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- START -->
+<div class="panel" id="panel-start" role="tabpanel">
+  <div class="layout">
+    <div class="content">
+      <h2 style="margin:0 0 3px;font-size:1.2rem;letter-spacing:-.025em;font-weight:700">Start here</h2>
+      <p class="lede lede-staff">Pick a topic. Each line is plain Now → Change. Switch to Technical anytime for code detail.</p>
+      <p class="lede lede-tech">Pick a topic tab. Every plan line shows Now + Change in one row — check off as it ships.</p>
+
+      <div class="toc-card">
+        <button type="button" class="toc-link" data-goto="big">01 · Big picture <span>Spine</span></button>
+        <button type="button" class="toc-link" data-goto="locations">02 · Locations <span>Room / bin</span></button>
+        <button type="button" class="toc-link" data-goto="tickets">03 · Tickets <span>FAIL link</span></button>
+        <button type="button" class="toc-link" data-goto="journey">04 · Journey <span>5 spines</span></button>
+        <button type="button" class="toc-link" data-goto="zoho">05 · Zoho <span>Adapter</span></button>
+        <button type="button" class="toc-link" data-goto="pickup">06 · Pickup <span>Dual model</span></button>
+        <button type="button" class="toc-link" data-goto="pages">07 · Pages <span>Archetypes</span></button>
+        <button type="button" class="toc-link" data-goto="roadmap">08 · Roadmap <span>Phases</span></button>
+        <button type="button" class="toc-link" data-goto="tech">Technical <span>Gates</span></button>
+      </div>
+
+      <div class="plan" data-plan="start">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Stories</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">A unit’s story is split across History, inventory, tickets, and photos — people piece it together by hand</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One shared plan with topic tabs; each line shows Now + Change; check when done</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Unit history split across Ops History, inventory, tickets, photos — staff assemble manually</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One topic tab · Now + Change on each line · check when done</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-stories" aria-label="Mark Stories done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Language</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">“Drift” and “where has this unit been?” get mixed up in conversation</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Say Item Journey for the unit timeline; keep Drift for stock-count alerts only</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><strong>Drift</strong> = stock ledger mismatch (<code>v_sku_stock_drift</code>); easy to confuse with journey</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Lock: Item Journey = provenance thread; Drift = ledger alert only</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-language" aria-label="Mark Language done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Progress tracking</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Progress lives in chats and scattered docs</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">This page is the shared checklist — same boxes for staff and engineering</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Tracked informally across chats and docs</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">This HTML is the shared plan — line checkboxes + dual staff/tech index</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-progress" aria-label="Mark Progress tracking done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Unit façade</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">The “one write path” for unit updates exists but day-to-day stations still write in different ways</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Test, putaway, and receive all go through the same unit update path</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>recordUnitEvent()</code> exists — production hot paths still use parallel writers</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Wire test / putaway / receive through the façade</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-unit-facade" aria-label="Mark Unit façade done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Location dual SoT</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Current place is often a text label, while move history already knows the real bin</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Current place links straight to the bin page, same as the history</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>serial_units.current_location</code> TEXT vs <code>inventory_events.bin_id</code> FK</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Prefer bin FK + journey deep-links</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-loc-dual" aria-label="Mark Location dual SoT done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Journey ↔ tickets</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Operations History shows several timelines, but tickets and fail reasons are not in that same story</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One Item Journey merges moves, tests, tickets, and photos</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Ops journey has 5 spines — tickets / signals / photos not merged</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go"><code>getItemJourney</code> merges all hubs</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-journey-tickets" aria-label="Mark Journey tickets done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">FAIL ↔ ticket</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">A fail records why and opens a claim screen — the ticket is still filed by hand</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Fail can auto-link a ticket to that serial (rolled out with a flag)</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">FAIL opens claim modal — does not auto-write <code>ticket_links</code></p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Flag-gated auto-link on serial</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-fail-ticket" aria-label="Mark FAIL ticket done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Pickup dual model</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Two pickup tools/paths for the same dock work</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One pickup path with the same receive quality as a normal PO</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>local_pickup_orders</code> + legacy <code>local_pickup_items</code></p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Single pickup orders path + receiving parity</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-pickup-dual" aria-label="Mark Pickup dual model done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Zoho sync path</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho connection can validate, but sync is scattered across special jobs and buttons</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One Sync action and background job path for the inventory provider</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Connector has <code>validate</code> only — sync lives in ad-hoc crons/routes</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Orchestrator <code>sync</code> + <code>IInventoryProvider</code></p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="start-zoho-sync" aria-label="Mark Zoho sync path done" /></span>
+        </label>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="start" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Start</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="start">0/9</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="start">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="start">Reset</button>
+      </div>
+      <p class="check-note">Each plan line has its own checkbox. Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- BIG PICTURE -->
+<div class="panel" id="panel-big" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>01 · Big picture</h2><span class="pill living">Living</span></div>
+      <p class="lede lede-staff">Connect what we already have — don’t rebuild parallel tools.</p>
+      <p class="lede lede-tech">Connect existing spines — don’t rebuild parallel systems.</p>
+
+      <div class="plan" data-plan="big">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Mental model</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Receiving, testing, packing, inventory, and support each work — but feel like separate apps</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One serial is the spine of the story; every screen is a view into that story</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Receiving, testing, packing, inventory, support each work — feel like separate apps</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One serial = cross-surface spine (Item Journey); many views into it</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="big-mental" aria-label="Mark Mental model done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Serial history</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">History is split across Ops History, inventory, tickets, and photos — no shared panel</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same journey panel and chips on serial, inventory, testing, and support</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Split across Ops History, inventory, tickets, photos — no shared panel</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Shared journey panel + entity chips on serial / inventory / testing / support</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="big-history" aria-label="Mark Serial history done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Tickets</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Tickets usually hang on the carton or shipment — the serial is easy to miss</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Tickets also hang on the unit; a fail can link the ticket automatically</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Mostly carton / shipment via <code>ticket_links</code> waterfall — serial weak</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Also unit-linked; FAIL → <code>ticket_links</code> (flag-gated)</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="big-tickets" aria-label="Mark Tickets done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Locations</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Rooms and bins scan fine; rack is mostly in the barcode; current place is often just text</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Clear Room → Rack → Bin story, and every move shows from → to on the journey</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Rooms &amp; bins scannable; rack in barcode; current place often TEXT</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Room → rack(label) → bin + from→to hops always on journey</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="big-locations" aria-label="Mark Locations done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">External ERP</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">People still treat Zoho as “the inventory system” for floor questions</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Zoho (or any ERP) is a plug-in catalog; the floor owns bins, tests, and pack</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho woven into day-to-day thinking; feels like “the inventory system”</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Swappable catalog adapter; floor ops remain SoT</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="big-erp" aria-label="Mark External ERP done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">New work</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Easy to invent another timeline, ticket queue, or list layout</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">New work must say how it connects — no parallel spines</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Easy to invent parallel timelines / ticket queues / list chrome</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Must declare connection matrix updates — no parallel spines</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="big-new-work" aria-label="Mark New work done" /></span>
+        </label>
+      </div>
+
+      <div class="truth">
+        <h3>Already strong (reuse)</h3>
+        <ul>
+          <li><code>transition()</code> · <code>writeLedgerDelta()</code> · polymorphic hubs · <code>IntegrationConnector</code> validate · inbound mirror</li>
+        </ul>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="big" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Big picture</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="big">0/6</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="big">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="big">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- LOCATIONS -->
+<div class="panel" id="panel-locations" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>02 · Locations</h2><span class="pill planned">Planned</span></div>
+      <p class="lede lede-staff">Know exactly where a unit sits — and see every move later.</p>
+      <p class="lede lede-tech">Physical placement and movement history — one table, dual writers today.</p>
+
+      <div class="plan" data-plan="locations">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Hierarchy</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Rooms and bins already live in one place, with roles like pick face, reserve, and staging</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same physical model — clearer labels: Room → Rack → Bin with roles</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Single <code>locations</code> table: room parent + bin children; <code>bin_role</code> (PICK_FACE, RESERVE, STAGING…)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same model — clearer UI: Room → Rack(label) → Bin with roles</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-hierarchy" aria-label="Mark Hierarchy done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Rack</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Rack is not its own screen object — it’s baked into the barcode label</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep the barcode encoding; show rack as a clear label people can read</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Not a table — encoded in barcode segments (<code>barcode-routing.ts</code>: <code>A-01-01-1</code>, flat, GS1)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep encoding; surface rack as a clear label in the product story</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-rack" aria-label="Mark Rack done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Current place</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Current place is often a text label — hard to click through to the bin page</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Current place always opens the same bin detail</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>serial_units.current_location</code> is <strong>TEXT</strong> — hard to deep-link to bin detail</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Prefer <code>current_bin_id</code> FK (or resolve TEXT) so journey chips deep-link to <code>/inventory/location/[barcode]</code></p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-current" aria-label="Mark Current place done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Event place / history</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Move history already knows the real from/to bins (stronger than the text label)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Every meaningful move shows on the Item Journey with from → to bins</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>inventory_events.bin_id</code> / <code>prev_bin_id</code> are FKs → <code>locations.id</code> (stronger SoT for history)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Every move emits MOVED/PUTAWAY with <code>bin_id</code> / <code>prev_bin_id</code> — always on Item Journey</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-events" aria-label="Mark Event place done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Transfers</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Older transfer logs use place names as text — weaker than real move events</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">New moves always use the event history; stop writing text-only transfer logs</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Legacy <code>location_transfers</code> uses text from/to names — weaker than MOVED events</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">No new text-only <code>location_transfers</code> writes; events win</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-transfers" aria-label="Mark Transfers done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Putaway / after test &amp; pack</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Putaway works after receive; after test and after pack, placement rules feel scattered</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">After test and after pack, putaway/staging is an obvious step on the journey</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>POST …/putaway</code> → <code>transition()</code> + PUTAWAY events; post-test/pack placement still policy-scattered</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Explicit putaway / staging hops — first-class journey chapters</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-putaway" aria-label="Mark Putaway done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">SKU qty</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Bin quantities update through the stock ledger when stock moves</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep one quantity writer; bin moves and quantity stay one coherent story</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>bin_contents</code> + <code>writeLedgerDelta()</code> on location moves</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep ledger as sole qty writer; co-locate with bin moves in the same story</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-sku-qty" aria-label="Mark SKU qty done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Warehouse</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Multi-warehouse is prepared in data but not fully lived day to day</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Stamp warehouse consistently as we grow to more sites</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Multi-warehouse columns exist; writers not fully stamped</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Stamp <code>warehouse_id</code> consistently as multi-site grows</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="loc-warehouse" aria-label="Mark Warehouse done" /></span>
+        </label>
+      </div>
+
+      <div class="practice practice-staff">
+        <h3>Practice together</h3>
+        <ol>
+          <li>Put away a unit — journey shows the putaway with the bin</li>
+          <li>Move bin-to-bin — journey shows from → to</li>
+          <li>Open the bin from the journey chip — same bin, same contents</li>
+        </ol>
+      </div>
+      <div class="practice practice-tech">
+        <h3>Review walkthrough</h3>
+        <ol>
+          <li>Putaway emits PUTAWAY with <code>bin_id</code></li>
+          <li>Bin transfer emits MOVED from→to</li>
+          <li>Journey chip opens bin detail — same contents</li>
+        </ol>
+      </div>
+
+      <div class="truth">
+        <h3>Key paths</h3>
+        <ul>
+          <li><code>src/lib/neon/location-queries.ts</code> · putaway route · <code>placement.ts</code> · <code>barcode-routing.ts</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="locations" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Locations</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="locations">0/8</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="locations">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="locations">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- TICKETS -->
+<div class="panel" id="panel-tickets" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>03 · Testing &amp; tickets</h2><span class="pill planned">Planned</span></div>
+      <p class="lede lede-staff">When a unit fails, support and the floor should share one thread — not only the carton.</p>
+      <p class="lede lede-tech">Support linkage is part of the unit architecture — not carton-only.</p>
+
+      <div class="plan" data-plan="tickets">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Registry</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">One ticket registry already exists (Zendesk today) with links to cartons and lines</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep that single registry — never invent a second ticket queue</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>support_tickets</code> + <code>ticket_links</code> (provider-agnostic; Zendesk today)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep single registry — never a parallel queue</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tix-registry" aria-label="Mark Registry done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Resolver</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Finding the ticket starts from the receiving carton/line, then shipment, then photos</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Finding the ticket also works from the serial itself</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>getPrimarySupportTicketForReceiving</code>: RECEIVING / LINE → SHIPMENT → photo ZENDESK_TICKET</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Entity-generic <code>getPrimarySupportTicket(EntityRef)</code> including SERIAL_UNIT</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tix-resolver" aria-label="Mark Resolver done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">API</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Ticket lookup is built around receiving line / carton IDs</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same lookup works for serial and order the same way</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>GET /api/support/tickets/by-entity?lineId=&amp;receivingId=</code> — receiving-centric</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Accept serial / order refs the same way</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tix-api" aria-label="Mark API done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Testing UI</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Testing can reply on a ticket only when the carton/line already has one</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">When a unit is linked, testing always shows that ticket in context</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>TestingTicketReplyCard</code> only when carton/line already has a ticket</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Always resolve ticket for this unit when linked</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tix-ui" aria-label="Mark Testing UI done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">On FAIL</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Fail records why and opens a claim screen — linking the ticket is still manual</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Fail auto-links (and can optionally create) a ticket — rolled out with a flag</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Events + <code>entity_signals</code> (<code>test_fail_reason</code>); opens claim modal — no auto <code>ticket_links</code></p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Auto-link (optional auto-create) — feature-flagged</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tix-fail" aria-label="Mark On FAIL done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Serial link</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">The system can store a serial link, but the main “find ticket” path doesn’t use it yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Serial is a first-class place tickets hang</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Schema allows entity types; primary resolver does not walk SERIAL_UNIT yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go"><code>SERIAL_UNIT</code> on <code>ticket_links</code> as primary resolution target</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tix-serial" aria-label="Mark Serial link done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Nav</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Jumping Support → unit → bin → test is incomplete</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Jump both ways: ticket ↔ unit ↔ location ↔ test</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Support → unit → location → test is incomplete</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Bidirectional: ticket ↔ unit ↔ location ↔ test</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tix-nav" aria-label="Mark Nav done" /></span>
+        </label>
+      </div>
+
+      <div class="practice practice-staff">
+        <h3>Practice together</h3>
+        <ol>
+          <li>Mark a unit FAIL with a reason</li>
+          <li>Confirm the ticket shows on that unit</li>
+          <li>Open Support → same ticket → jump to the unit journey</li>
+        </ol>
+      </div>
+      <div class="practice practice-tech">
+        <h3>Review walkthrough</h3>
+        <ol>
+          <li>FAIL writes <code>ticket_links</code> on serial (flag on)</li>
+          <li>Support opens unit journey</li>
+          <li>Testing resolves same ticket via by-entity</li>
+        </ol>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="tickets" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Tickets</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="tickets">0/7</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="tickets">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="tickets">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- JOURNEY -->
+<div class="panel" id="panel-journey" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>04 · Item Journey</h2><span class="pill planned">Planned</span></div>
+      <p class="lede lede-staff">Answer “Where has this serial been?” in one place. (Drift means stock alerts — not this.)</p>
+      <p class="lede lede-tech">Queryable provenance thread. Not “drift.”</p>
+
+      <div class="plan" data-plan="journey">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">API</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Operations History can open a journey by order, serial, or tracking</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One shared journey path becomes the place every screen reads from</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>GET /api/operations/journey</code> — entity + browse (<code>dim=order|serial|tracking</code>)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Evolve toward connections façade as the single merge path</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="jny-api" aria-label="Mark API done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">5 spines</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">History already merges several activity streams (ops, inventory, audit, carrier, warranty)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Also fold in tickets, fail reasons, and photos into that same thread</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>sal</code> · <code>inventory</code> · <code>audit</code> · <code>carrier</code> · <code>warranty</code></p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Also merge tickets, signals, photos into the same thread</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="jny-spines" aria-label="Mark 5 spines done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">UI home</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">The journey lives mainly under Operations ▸ History — not on inventory, testing, or support</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same journey panel and chips on those everyday screens</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Operations ▸ History — not mounted on inventory / testing / support</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Shared <code>EntityJourneyPanel</code> + chips on those surfaces</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="jny-ui" aria-label="Mark UI home done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Façade</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">There is no single “get this unit’s full story” helper yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One helper merges moves, tickets, origin, photos, and signals</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>src/lib/connections/</code> does not exist yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go"><code>getItemJourney</code> merges events + tickets + provenance + photos + signals</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="jny-facade" aria-label="Mark Façade done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Provenance table</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Origin edges exist in the database, but screens don’t fully read them yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Journey treats origin as a reliable first chapter of the story</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>serial_unit_provenance</code> exists — readers not fully cut over</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Journey reads provenance table as SoT for origin edges</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="jny-prov" aria-label="Mark Provenance done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Completeness</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Ship, ticket, and bin hops are easy to miss on the timeline</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Full life: receive → test → putaway → pick → pack → ship + related tickets</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Gaps on ship / ticket / bin hops</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Full lifecycle: receive → test → putaway → alloc → pick → pack → ship + tickets</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="jny-complete" aria-label="Mark Completeness done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Naming</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Stock “drift” alerts are easy to confuse with this timeline</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Training and UI say Item Journey; drift stays inventory health only</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Drift cron = stock alerts; easy to overload for this timeline</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">UI + training say <strong>Item Journey</strong>; drift stays inventory health only</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="jny-naming" aria-label="Mark Naming done" /></span>
+        </label>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="journey" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Journey</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="journey">0/7</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="journey">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="journey">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- ZOHO -->
+<div class="panel" id="panel-zoho" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>05 · Zoho / ERP</h2><span class="pill planned">Planned</span></div>
+      <p class="lede lede-staff">Zoho (or any ERP) is a plug-in catalog — not the warehouse brain.</p>
+      <p class="lede lede-tech">External inventory is a swappable adapter — never the WMS core.</p>
+
+      <div class="plan" data-plan="zoho">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Mental model</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">People still say “check Zoho” for questions the floor already answered</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Zoho is the connected catalog/ERP; the floor owns bins, tests, pack, and pickup</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho woven into day-to-day; staff still say “check Zoho” for floor questions</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Zoho ≈ connected catalog/ERP — floor owns bins, tests, pack, pickup</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="zoho-mental" aria-label="Mark Mental model done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Connector</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Settings can validate the Zoho connection; sync is not on that same path yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Sync runs through the same connection path as Settings</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>IntegrationConnector</code>; Zoho has <code>capabilities: ['inventory']</code> + <code>validate</code> only</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Wire <code>sync</code> on connector → orchestrator</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="zoho-connector" aria-label="Mark Connector done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Provider interface</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">“Inventory provider” is planned on paper — not a real plug-in yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">A clear provider contract: pull catalog/stock, push updates, reconcile</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>IInventoryProvider</code> — docs only; <code>connectors/inventory/</code> does not exist</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">pullSkuMaster / pullStockLevels / pushInventory / reconcile</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="zoho-provider" aria-label="Mark Provider interface done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Mirrors</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Incoming still leans on the Zoho-shaped PO mirror alongside a newer shared mirror</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Incoming reads the shared mirror only — provider-agnostic</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Dual-write <code>zoho_po_mirror</code> + <code>inbound_purchase_order_mirror</code>; Incoming still reads Zoho mirror</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Cut readers over to provider-agnostic mirror only</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="zoho-mirrors" aria-label="Mark Mirrors done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Core schema</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho-shaped fields still show up on core receiving paths</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">No new Zoho-shaped fields on floor tables — mirrors hold provider facts</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>zoho_*</code> columns still on receiving paths</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">No new <code>zoho_*</code> on ops tables; mirrors + typed facts</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="zoho-schema" aria-label="Mark Core schema done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Sync UX</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho tools and background jobs feel scattered</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One “Sync now” in Settings plus the same job in the background</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Scattered Zoho tools and crons</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Settings “Sync now” + cron share <code>orchestrator.syncConnection</code></p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="zoho-sync-ux" aria-label="Mark Sync UX done" /></span>
+        </label>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="zoho" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Zoho</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="zoho">0/6</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="zoho">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="zoho">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- PICKUP -->
+<div class="panel" id="panel-pickup" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>06 · Local pickup</h2><span class="pill planned">Planned</span></div>
+      <p class="lede lede-staff">Seller drop-offs should feel like normal receiving — one path, optional ERP push.</p>
+      <p class="lede lede-tech">Intake kind with receiving parity — ERP writeback optional. Two models today.</p>
+
+      <div class="plan" data-plan="pickup">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Data model</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Two pickup models/tools for the same dock intake work</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One pickup orders model operators learn once</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>local_pickup_orders</code> (API) + <code>local_pickup_items</code> (receiving-attached) coexist</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go"><code>local_pickup_orders</code> only + intake kind <code>PICKUP</code></p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pk-model" aria-label="Mark Data model done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">LCPU detection</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">LCPU / local-pickup POs are detected and can sync into pickup orders</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep detection; pushing a PO to Zoho is optional — not required to record the drop-off</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>isLocalPickupPo()</code> matches LCPU / LOCALPICKUP; Zoho sync can upsert pickup orders</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep detection; optional provider push — not required for floor intake</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pk-lcpu" aria-label="Mark LCPU done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Receiving parity</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Synced pickup POs don’t always get the same line-level receive story as carrier POs</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same receive quality as a normal PO</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho-synced LCPU path can skip full <code>receiving_lines</code> quality</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same line-level receive quality as carrier POs</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pk-parity" aria-label="Mark Receiving parity done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Surface</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Pickup has its own page and review panel</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One checklist; Incoming shows pickup without a secret second tool</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>/pickup</code> · <code>SurfaceGate surfaceKey="pickup"</code> · <code>LocalPickupReviewPanel</code></p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One operator checklist; Incoming shows pickup without a second tool</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pk-surface" aria-label="Mark Surface done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Journey</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Easy to miss that a serial came from pickup</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Journey clearly shows origin = pickup</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Easy to miss pickup origin on the serial story</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Provenance shows pickup clearly on Item Journey</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pk-journey" aria-label="Mark Journey done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Sales vs intake</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Walk-in sales can feel adjacent to pickup intake</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Clear split in nav and training: sales ≠ pickup intake</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Walk-in sales (Square) feels adjacent but isn’t pickup intake</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Explicit product split in nav/training</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pk-sales" aria-label="Mark Sales vs intake done" /></span>
+        </label>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="pickup" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Pickup</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="pickup">0/6</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="pickup">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="pickup">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- PAGES -->
+<div class="panel" id="panel-pages" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>07 · Pages &amp; design</h2><span class="pill planned">Planned</span></div>
+      <p class="lede lede-staff">Screens should feel like one product. Same layout language everywhere.</p>
+      <p class="lede lede-tech">Display archetypes are house law. Two key systems still coexist.</p>
+
+      <div class="plan" data-plan="pages">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Surfaces</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Core operator jobs are registered (unbox, triage, incoming, pickup, history, pack, test, outbound)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Every new operator surface registers the same way</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>SURFACE_REGISTRY</code>: unbox, triage, incoming, pickup, history, pack, test, outbound</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep registry; every new operator surface registers here</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pg-surfaces" aria-label="Mark Surfaces done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Archetypes</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Stations feel more consistent than admin and reports</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Every screen declares its job: Station, Workbench, Monitor, or Canvas — never mix in one region</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>pickArchetype()</code> — stations stronger than admin/reports</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Every region declares Station / Workbench / Monitor / Canvas — never blend</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pg-archetypes" aria-label="Mark Archetypes done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Nav keys</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Sidebar labels and operator surface keys don’t always match one-to-one</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One clear mapping so nav and surfaces stay in sync</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>SurfaceKey</code> ≠ <code>SidebarRouteKey</code>; 5 surfaces bucket to <code>receiving</code></p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Unify SurfaceKey ↔ SidebarRouteKey mapping</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pg-nav" aria-label="Mark Nav keys done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Inventory</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Inventory has many modes, but no shared journey strip</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One inventory workbench with shared journey and chips</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>InventoryShell</code> modes — no journey panel embedded</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Modes of one workbench + shared journey / chips</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pg-inventory" aria-label="Mark Inventory done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Rails</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Some pages reinvent their own lists and timelines</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Reuse the shared sidebar and recent-activity rails everywhere</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Some pages reinvent lists / timelines</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Compose <code>SidebarRailShell</code> / <code>RecentActivityRailBase</code> only</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pg-rails" aria-label="Mark Rails done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Admin</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Admin feels standalone; “Connections” there means integrations, not unit links</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Lift admin into the same shell language — or label it clearly as a monitor tool</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Standalone <code>/admin/**</code>; “Connections” = integrations (naming trap)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Lift to monitor shell — or label clearly; don’t confuse with entity links</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="pg-admin" aria-label="Mark Admin done" /></span>
+        </label>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="pages" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Pages</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="pages">0/6</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="pages">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="pages">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- ROADMAP -->
+<div class="panel" id="panel-roadmap" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>08 · Roadmap</h2><span class="pill living">Living</span></div>
+      <p class="lede lede-staff">Delivery board — check each line as it ships for your team.</p>
+      <p class="lede lede-tech">Phase gates — check each line as it lands.</p>
+
+      <div class="phases">
+        <div class="phase"><div class="n">Phase 0</div><div><h3>Foundations</h3><p>Dual docs + index rules</p></div><div class="tag-status">Partial</div></div>
+        <div class="phase"><div class="n">Phase 1</div><div><h3>Backend wiring</h3><p>FAIL→ticket, ship, bins, pickup, Zoho sync</p></div><div class="tag-status">Open</div></div>
+        <div class="phase"><div class="n">Phase 2</div><div><h3>Shared UI</h3><p>EntityJourneyPanel + chips</p></div><div class="tag-status">Open</div></div>
+        <div class="phase"><div class="n">Phase 3</div><div><h3>Page lift</h3><p>Inventory / support / admin feel</p></div><div class="tag-status">Open</div></div>
+        <div class="phase"><div class="n">Phase 4</div><div><h3>Providers</h3><p>IInventoryProvider + second stub</p></div><div class="tag-status">Open</div></div>
+      </div>
+
+      <div class="plan" data-plan="roadmap">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 0 — Dual docs</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Technical index, staff hub, and this HTML are published</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep dual-layer update rules alive in 1-on-1s</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Technical master index + staff hub + this HTML published</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Keep dual-layer update rules adopted in 1-on-1s</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p0-docs" aria-label="Mark Phase 0 docs done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 0 — Governance</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Editing rules are written down</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Leads walk the dual-layer rules; plan statuses stay current</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Rules written in README / master index</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Leads walk dual-layer editing in 1-on-1; INDEX statuses kept current</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p0-governance" aria-label="Mark Phase 0 governance done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 1 — FAIL → ticket</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Fail opens a claim screen only</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Fail links a ticket to the serial (safe rollout with a flag)</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Claim modal only</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go"><code>ticket_links</code> on serial (flag-gated)</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p1-fail" aria-label="Mark Phase 1 FAIL done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 1 — Pack / ship</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Pack/ship is incomplete on the unit journey</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Pack and ship show as clear hops on the journey</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Incomplete SHIPPED coverage on journey</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Via <code>transition()</code> + journey events</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p1-ship" aria-label="Mark Phase 1 ship done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 1 — Bin moves</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Moves can record bins, but not always honestly</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Every move shows from-bin → to-bin</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Events can carry <code>bin_id</code>; not always honest</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">All moves carry from/to <code>bin_id</code></p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p1-bins" aria-label="Mark Phase 1 bins done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 1 — Pickup</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Two pickup paths</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One operator path</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Dual models</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Consolidated to one path</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p1-pickup" aria-label="Mark Phase 1 pickup done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 1 — Zoho sync</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho sync is ad-hoc</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Sync lives on the shared integrations path</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Ad-hoc sync</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">On connector orchestrator</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p1-sync" aria-label="Mark Phase 1 sync done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 2 — Journey panel</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Journey widgets are fragmented / History-heavy</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One shared journey panel on the main screens</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">History-only / fragmented widgets</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Shared <code>EntityJourneyPanel</code> shipped</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p2-journey" aria-label="Mark Phase 2 journey done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 2 — Chips</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Order / serial / bin / ticket chips look different per page</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Same chips everywhere</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Per-page chips / links</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Shared <code>EntityLinkChips</code></p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p2-chips" aria-label="Mark Phase 2 chips done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 3 — Inventory workbench</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Inventory feels like many thin pages</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One workbench with shared panels</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Thin subpages</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">One workbench + shared panels</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p3-inv" aria-label="Mark Phase 3 inventory done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 3 — Support nav</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Support ↔ unit jumps are incomplete</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Confirmed bidirectional nav in a 1-on-1</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Incomplete bidirectional jumps</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Ticket ↔ unit navigation complete</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p3-support" aria-label="Mark Phase 3 support done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Phase 4 — IInventoryProvider</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Multi-provider inventory is docs-only</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Zoho as one adapter, plus a second stub provider</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Docs only</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Zoho as adapter + second provider stub</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="rm-p4-provider" aria-label="Mark Phase 4 provider done" /></span>
+        </label>
+      </div>
+
+      <div class="decisions view-staff">
+        <h3>Open decisions</h3>
+        <ul>
+          <li>On fail: auto-create a ticket, or only link an existing one? (flag-gated)</li>
+          <li>Show rack as its own label in the UI, or keep it barcode-only?</li>
+          <li>When do we stop reading the old Zoho-shaped PO mirror?</li>
+        </ul>
+      </div>
+      <div class="decisions view-tech">
+        <h3>Open decisions</h3>
+        <ul>
+          <li>FAIL: auto-create vs link-only → flag-gated</li>
+          <li>Rack as first-class UI label vs barcode-only</li>
+          <li>When to cut readers fully off <code>zoho_po_mirror</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="roadmap" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Roadmap</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="roadmap">0/12</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="roadmap">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="roadmap">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- TECHNICAL -->
+<div class="panel" id="panel-tech" role="tabpanel" hidden>
+  <div class="layout">
+    <div class="content">
+      <div class="block-head"><h2>Technical</h2><span class="pill sot">SoT</span></div>
+      <p class="lede lede-staff">Engineering gates — switch to Technical for full detail (this tab is always engineering-focused).</p>
+      <p class="lede lede-tech">Engineering gates — same row pattern.</p>
+
+      <div class="plan" data-plan="tech">
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Unit status</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Most status changes go through the state machine; some raw updates remain</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Every status change goes through the state machine only</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>transition()</code> used widely; raw status UPDATEs still admitted</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Only <code>transition()</code> / <code>applyTransition()</code></p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tech-transition" aria-label="Mark Unit status done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Qty ledger</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Quantity changes should go through the ledger; bypass risk remains</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Never change stock totals outside the ledger</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>writeLedgerDelta()</code> is canonical; bypass risk remains</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Never touch <code>sku_stock</code> directly</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tech-ledger" aria-label="Mark Qty ledger done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Unit façade</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">The combined unit-write helper exists but isn’t on hot paths yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Prefer that helper for test, putaway, and receive</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>recordUnitEvent()</code> — tests only; parallel event writers</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Prefer façade on hot paths (test, putaway, receive)</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tech-unit-facade" aria-label="Mark Unit façade done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Polymorphic hubs</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Typed link tables already exist (photos, tickets, parts, signals, …)</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">No single “connections” dump table; new links follow the same contract</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">photo / ticket / shipment / provenance / parts / signals / ops_events — real</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">No Connection god-table; new hubs match contract; façade queries across</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tech-poly" aria-label="Mark Polymorphic hubs done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Connections module</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">The shared read/link module is not built yet</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">A thin read/link layer; domains keep owning writes</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now"><code>src/lib/connections/</code> missing</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Reads/links only; domains keep writes</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tech-connections" aria-label="Mark Connections module done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">External inventory</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho validates; sync and provider adapter are incomplete</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Full inventory provider adapter with Zoho as one implementation</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">Zoho validate only; dual mirrors; no <code>IInventoryProvider</code></p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Adapter + Zoho implementation</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tech-ext-inv" aria-label="Mark External inventory done" /></span>
+        </label>
+        <label class="plan-item">
+          <div class="plan-main">
+            <h3 class="plan-title">Index governance</h3>
+            <div class="view-staff">
+            <div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">The technical connection matrix lives in the master index</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Update the matrix and staff Now/Change whenever behavior ships</p></div>
+            </div>
+            <div class="view-tech">
+<div class="plan-pair"><span class="tag now">Now</span><p class="plan-text now">§7 matrix / link catalog in master index</p></div>
+            <div class="plan-pair"><span class="tag go">Change</span><p class="plan-text go">Update §7 + staff Now/Change on every ship</p></div>
+            </div>
+          </div>
+          <span class="mark"><input type="checkbox" data-check-id="tech-index" aria-label="Mark Index governance done" /></span>
+        </label>
+      </div>
+
+      <div class="truth">
+        <h3>Forbidden → required</h3>
+        <ul>
+          <li>Raw status UPDATE → <code>transition()</code> · Direct <code>sku_stock</code> → <code>writeLedgerDelta()</code></li>
+          <li>New <code>owner_*</code> → <code>entity_type</code>/<code>entity_id</code> · Journey called “drift” → correct term</li>
+        </ul>
+      </div>
+    </div>
+
+    <aside class="detail-panel" data-checklist="tech" aria-label="Topic progress">
+      <div class="detail-head">
+        <div>
+          <p class="detail-kicker">Line progress</p>
+          <h3>Technical</h3>
+          <p class="detail-sub">Check lines as done</p>
+        </div>
+        <span class="progress" data-progress-for="tech">0/7</span>
+      </div>
+      <div class="detail-actions">
+        <button type="button" class="btn" data-ack="tech">Mark all done</button>
+        <button type="button" class="btn ghost" data-clear="tech">Reset</button>
+      </div>
+      <p class="check-note">Saved in this browser.</p>
+    </aside>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <p>Source: <code>docs/master-connections-and-refactor/</code>. Staff / Technical switcher · one row per topic · state in <code>localStorage</code>.</p>
+</footer>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'cf-connections-plan-lines-v4';
+  const MODE_KEY = 'cf-connections-plan-mode-v1';
+  const DEFAULTS = { 'rm-p0-docs': true };
+
+  const tabs = [...document.querySelectorAll('.tab')];
+  const panels = [...document.querySelectorAll('.panel')];
+  const modeBtns = [...document.querySelectorAll('.mode-btn')];
+
+  function loadMode() {
+    try {
+      const m = localStorage.getItem(MODE_KEY);
+      return m === 'tech' ? 'tech' : 'staff';
+    } catch { return 'staff'; }
+  }
+  function setMode(mode) {
+    const next = mode === 'tech' ? 'tech' : 'staff';
+    document.body.classList.remove('mode-staff', 'mode-tech');
+    document.body.classList.add('mode-' + next);
+    modeBtns.forEach((b) => {
+      const on = b.dataset.mode === next;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    try { localStorage.setItem(MODE_KEY, next); } catch {}
+  }
+  modeBtns.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  setMode(loadMode());
+
+  function load() {
+    try { return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')) }; }
+    catch { return { ...DEFAULTS }; }
+  }
+  function save(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  let state = load();
+
+  function updateProgress() {
+    document.querySelectorAll('[data-checklist]').forEach((box) => {
+      const id = box.dataset.checklist;
+      const plan = document.querySelector('[data-plan="' + id + '"]');
+      if (!plan) return;
+      const inputs = [...plan.querySelectorAll('input[data-check-id]')];
+      const done = inputs.filter((i) => i.checked).length;
+      const el = box.querySelector('[data-progress-for]');
+      if (el) el.textContent = done + '/' + inputs.length;
+    });
+  }
+
+  function applyChecks() {
+    document.querySelectorAll('input[data-check-id]').forEach((input) => {
+      input.checked = !!state[input.dataset.checkId];
+    });
+    updateProgress();
+  }
+
+  function persistFromDom() {
+    const next = {};
+    document.querySelectorAll('input[data-check-id]').forEach((input) => {
+      if (input.checked) next[input.dataset.checkId] = true;
+    });
+    state = next;
+    save(state);
+    updateProgress();
+  }
+
+  function showTab(id) {
+    panels.forEach((p) => { p.hidden = p.id !== 'panel-' + id; });
+    tabs.forEach((t) => {
+      const on = t.dataset.tab === id;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    history.replaceState(null, '', '#' + id);
+    window.scrollTo({ top: 0 });
+  }
+
+  tabs.forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
+  document.querySelectorAll('[data-goto]').forEach((btn) => {
+    btn.addEventListener('click', () => showTab(btn.dataset.goto));
+  });
+
+  document.querySelectorAll('input[data-check-id]').forEach((input) => {
+    input.addEventListener('change', persistFromDom);
+  });
+
+  document.querySelectorAll('[data-clear]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const plan = document.querySelector('[data-plan="' + btn.dataset.clear + '"]');
+      if (!plan) return;
+      plan.querySelectorAll('input[data-check-id]').forEach((input) => { input.checked = false; });
+      persistFromDom();
+    });
+  });
+
+  document.querySelectorAll('[data-ack]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const plan = document.querySelector('[data-plan="' + btn.dataset.ack + '"]');
+      if (!plan) return;
+      plan.querySelectorAll('input[data-check-id]').forEach((input) => { input.checked = true; });
+      persistFromDom();
+    });
+  });
+
+  const hash = (location.hash || '#start').slice(1);
+  showTab(tabs.some((t) => t.dataset.tab === hash) ? hash : 'start');
+  applyChecks();
+})();
+</script>
+</body>
+</html>

@@ -7,6 +7,8 @@ Comprehensive documentation for the USAV Orders Backend codebase. Use these for 
 | File | Purpose |
 |------|---------|
 | [OVERALL-CONTEXT.md](./OVERALL-CONTEXT.md) | **Master orientation** — the single map of the whole repo + outside-the-repo (SaaS/CycleForge) context. Read this first, then dive into the files below. |
+| [Staff Connections Hub](../docs/master-connections-and-refactor/staff/INDEX.md) | **1-on-1 upgrades / human-readable** — now vs change plans per staff; links to technical detail. |
+| [Master Connections & Refactor Index](../docs/master-connections-and-refactor/master-index-plan.md) | **Technical cross-feature SoT** — Item Journey, polymorphic hubs, inventory adapters, shared reuse, page-lift roadmap. |
 
 ## Architecture & Reference
 
