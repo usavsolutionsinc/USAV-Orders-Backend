@@ -30,6 +30,10 @@ import { RIGHT_RAIL_PRIORITY } from '@/lib/right-rail/store';
 import { AssistantDockBody } from './AssistantDock';
 import { DetailStackHistoryTracker } from './DetailStackHistoryTracker';
 import { requestComposerFocus } from '@/lib/assistant/composer-focus-store';
+import { requestComposerSeed } from '@/lib/assistant/composer-seed-store';
+import { looksLikeIdentifier } from '@/lib/search/search-hit';
+import { looksLikeRetrievalQuestion } from '@/lib/ai/retrieval-question';
+import { looksLikeTicketScan } from '@/lib/support/ticket-scan';
 
 const OPEN_KEY = 'assistant:dock-open';
 
@@ -58,6 +62,12 @@ interface AssistantDockControls {
   setOpen: (next: boolean) => void;
   /** Focus the chat composer (caret at end). Safe before the dock has mounted. */
   focusComposer: () => void;
+  /**
+   * Seed the composer with text from another surface (header search Sparkles).
+   * When `autoSend` is true (or omitted and the text looks like an identifier /
+   * retrieval question / ticket scan), the dock submits immediately.
+   */
+  seedComposer: (text: string, opts?: { autoSend?: boolean }) => void;
 }
 
 const AssistantDockControlsContext = createContext<AssistantDockControls>({
@@ -65,6 +75,7 @@ const AssistantDockControlsContext = createContext<AssistantDockControls>({
   enabled: false,
   setOpen: () => {},
   focusComposer: () => {},
+  seedComposer: () => {},
 });
 
 export function useAssistantDockControls(): AssistantDockControls {
@@ -97,6 +108,24 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     requestComposerFocus();
   }, []);
 
+  const seedComposer = useCallback(
+    (text: string, opts?: { autoSend?: boolean }) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        focusComposer();
+        return;
+      }
+      const autoSend =
+        opts?.autoSend ??
+        (looksLikeIdentifier(trimmed) ||
+          looksLikeTicketScan(trimmed) ||
+          looksLikeRetrievalQuestion(trimmed));
+      requestComposerSeed({ text: trimmed, autoSend });
+      focusComposer();
+    },
+    [focusComposer],
+  );
+
   useEffect(() => {
     if (!enabled) return undefined;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -113,8 +142,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const closeDock = useCallback(() => setAndPersist(false), [setAndPersist]);
 
   const controls = useMemo<AssistantDockControls>(
-    () => ({ open, enabled, setOpen: setAndPersist, focusComposer }),
-    [open, enabled, setAndPersist, focusComposer],
+    () => ({ open, enabled, setOpen: setAndPersist, focusComposer, seedComposer }),
+    [open, enabled, setAndPersist, focusComposer, seedComposer],
   );
 
   return (

@@ -17,14 +17,13 @@
  * emit their full text as a single delta followed by the analysis + done.
  */
 import { NextRequest } from 'next/server';
-import { buildContextBlock } from '@/lib/ai/context-fetchers';
-import { detectIntents, extractParams } from '@/lib/ai/intent-router';
-import { formatAnalysisForPrompt, resolveLocalAiAnswer } from '@/lib/ai/ops-assistant';
+import { detectIntents } from '@/lib/ai/intent-router';
 import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
 import { checkRateLimit } from '@/lib/api-guard';
 import { persistChatMessage } from '@/lib/ai/chat-persistence';
 import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
 import type { AiStructuredAnswer } from '@/lib/ai/types';
+import { enrichAssistantTurn } from '@/lib/assistant/enrich-turn';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
@@ -115,11 +114,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }, 15_000);
 
       try {
-        // 1. Deterministic local-ops resolution (instant, no model)
+        // 1. Shared pre-loop: local_ops short-circuit OR live DB enrichment
         send('step', { label: 'Checking local ops data' });
-        const localResolution = await resolveLocalAiAnswer(trimmedMessage);
+        const prepared = await enrichAssistantTurn(organizationId, trimmedMessage);
 
-        if (localResolution?.mode === 'local_ops') {
+        if (prepared.kind === 'local_ops') {
+          const localResolution = prepared.resolution;
           send('meta', { mode: 'local_ops', sessionId });
           send('delta', { text: localResolution.reply });
           send('analysis', localResolution.analysis);
@@ -128,10 +128,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           return;
         }
 
-        const intents = detectIntents(trimmedMessage);
-        const params = extractParams(trimmedMessage, intents);
+        const intents = prepared.intents.length > 0 ? prepared.intents : detectIntents(trimmedMessage);
 
-        // 2. Bose manual RAG intercept
+        // 2. Bose manual RAG intercept (Hermes path only)
         if (intents.includes('bose_manual')) {
           send('step', { label: 'Searching Bose service manuals' });
           try {
@@ -168,24 +167,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           }
         }
 
-        // 3. Enrich with live DB context, then stream from the Hermes gateway
-        let enrichedMessage = trimmedMessage;
-        if (localResolution?.analysis) {
-          enrichedMessage = `[Structured USAV ops data]\n${formatAnalysisForPrompt(localResolution.analysis)}\n\nUser question: ${trimmedMessage}`;
-        }
-        if (intents.length > 0) {
-          try {
-            send('step', { label: 'Pulling live warehouse data' });
-            const contextBlock = await buildContextBlock(intents, params, organizationId);
-            if (contextBlock) {
-              enrichedMessage =
-                `[Live USAV data - ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PST]\n` +
-                contextBlock + `\n\nUser question: ${trimmedMessage}`;
-            }
-          } catch { /* non-fatal */ }
-        }
+        // 3. Stream Hermes with the already-enriched user turn
+        send('step', { label: 'Pulling live warehouse data' });
+        const enrichedMessage = prepared.userMessage;
 
-        send('meta', { mode: localResolution?.analysis ? 'hybrid' : 'assistant', sessionId });
+        send('meta', { mode: prepared.intents.length > 0 ? 'hybrid' : 'assistant', sessionId });
         send('step', { label: 'Asking the assistant' });
 
         const hermesRes = await fetch(`${getHermesApiUrl()}/chat/completions`, {

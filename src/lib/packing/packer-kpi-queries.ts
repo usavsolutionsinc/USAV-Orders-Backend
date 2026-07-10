@@ -27,6 +27,7 @@ export type PackingKpiSummary = {
     small_count: number;
     medium_count: number;
     large_count: number;
+    total_boxes_packed: number;
     weighted_minutes: number;
     remaining_minutes: number;
   };
@@ -39,8 +40,42 @@ export type PackingKpiSummary = {
   };
 };
 
+export type PackingKpiPeriodSummary = {
+  start_day: string;
+  end_day: string;
+  /** Calendar span when using fixed window; equals filled_day_count for filled-day mode. */
+  day_count: number;
+  /** Days that actually had pack scans (no zero-volume placeholders). */
+  filled_day_count: number;
+  capacity: PackingCapacity;
+  daily: PackingKpiSummary[];
+  totals: PackingKpiSummary['totals'];
+  by_packer: PackerKpiRow[];
+};
+
+export function totalBoxesPacked(counts: {
+  small_count: number;
+  medium_count: number;
+  large_count: number;
+}): number {
+  return safeInt(counts.small_count) + safeInt(counts.medium_count) + safeInt(counts.large_count);
+}
+
+export function addDaysToPstDateKey(day: string, delta: number): string {
+  const [year, month, dayNum] = day.split('-').map(Number);
+  const date = new Date(year, month - 1, dayNum);
+  date.setDate(date.getDate() + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+export function lastNPstDateKeys(endDay: string, count: number): string[] {
+  const n = Math.max(1, Math.floor(count));
+  return Array.from({ length: n }, (_, i) => addDaysToPstDateKey(endDay, -(n - 1 - i)));
+}
+
 export type PackerDailyCsvRow = {
   packer: string;
+  boxes: number;
   small: number;
   medium: number;
   large: number;
@@ -50,6 +85,7 @@ export type PackerDailyCsvRow = {
 
 export const PACKER_DAILY_CSV_COLUMNS: Array<{ key: keyof PackerDailyCsvRow; label: string }> = [
   { key: 'packer', label: 'Packer' },
+  { key: 'boxes', label: 'Boxes' },
   { key: 'small', label: 'Small' },
   { key: 'medium', label: 'Medium' },
   { key: 'large', label: 'Large' },
@@ -64,6 +100,7 @@ export function packerKpiSummaryToCsvRows(summary: PackingKpiSummary): PackerDai
     const pct = ((weighted / workdayMinutes) * 100).toFixed(1);
     return {
       packer: row.staff_name?.trim() || `Staff #${row.staff_id}`,
+      boxes: safeInt(row.small_count) + safeInt(row.medium_count) + safeInt(row.large_count),
       small: safeInt(row.small_count),
       medium: safeInt(row.medium_count),
       large: safeInt(row.large_count),
@@ -74,7 +111,25 @@ export function packerKpiSummaryToCsvRows(summary: PackingKpiSummary): PackerDai
 }
 
 export function packerKpiSummaryToCsv(summary: PackingKpiSummary): string {
-  return toCsv(packerKpiSummaryToCsvRows(summary), PACKER_DAILY_CSV_COLUMNS);
+  const table = toCsv(packerKpiSummaryToCsvRows(summary), PACKER_DAILY_CSV_COLUMNS);
+  const footer = packingReportFooterLines(summary).join('\r\n');
+  return `${table}\r\n\r\n${footer}`;
+}
+
+/** Micro-copy appended below the per-packer table in downloadable reports. */
+export function packingReportFooterLines(summary: PackingKpiSummary): string[] {
+  const { SMALL, MEDIUM, LARGE } = DEFAULT_TIER_MINUTES;
+  const workday = summary.capacity.workday_minutes;
+  return [
+    'Notes',
+    `Report date (PST): ${summary.day}`,
+    '',
+    `Weighted min — Sum of estimated pack time for each completed pack scan that day. Per scan: use the SKU pack profile minutes when one is linked; otherwise use the tier default (Small ${SMALL} min, Medium ${MEDIUM} min, Large ${LARGE} min).`,
+    '',
+    'Small / Medium / Large — Each packed item is bucketed by pack tier. Small = pack-and-label parts; Medium = semi-complete systems needing prep; Large = full heavy home theater stacks. Tiers come from operator SKU profiles, CLEAN scans, or product-title rules (not a blanket Medium default).',
+    '',
+    `% of day — That packer's weighted minutes divided by a ${workday}-minute workday (${workday / 60} hours). Example: 65% ≈ ${Math.round(workday * 0.65)} minutes of pack work. Does not include breaks or non-pack tasks.`,
+  ];
 }
 
 function safeInt(n: unknown, fallback = 0): number {
@@ -125,10 +180,10 @@ export async function getPackingKpisForDay(orgId: OrgId, dayPst: string): Promis
       WITH pack_rows AS (
         SELECT
           sal.staff_id,
-          COALESCE(enr.pack_tier, 'MEDIUM') AS pack_tier,
+          COALESCE(enr.pack_tier, 'SMALL') AS pack_tier,
           COALESCE(
             enr.estimated_pack_minutes,
-            CASE COALESCE(enr.pack_tier, 'MEDIUM')
+            CASE COALESCE(enr.pack_tier, 'SMALL')
               WHEN 'SMALL' THEN ${tierMinutes('SMALL')}
               WHEN 'LARGE' THEN ${tierMinutes('LARGE')}
               ELSE ${tierMinutes('MEDIUM')}
@@ -167,6 +222,7 @@ export async function getPackingKpisForDay(orgId: OrgId, dayPst: string): Promis
     },
     { small_count: 0, medium_count: 0, large_count: 0, weighted_minutes: 0 },
   );
+  const total_boxes_packed = totalBoxesPacked(totals);
 
   const remaining_minutes = Math.max(0, capacity.daily_capacity_minutes - totals.weighted_minutes);
 
@@ -230,9 +286,141 @@ export async function getPackingKpisForDay(orgId: OrgId, dayPst: string): Promis
   return {
     day: dayPst,
     capacity,
-    totals: { ...totals, remaining_minutes },
+    totals: { ...totals, total_boxes_packed, remaining_minutes },
     by_packer: rows.rows,
     fba: { pending_units, pending_weighted_minutes, avg_minutes_per_unit, fillable_units },
+  };
+}
+
+function mergePackerRows(rows: PackerKpiRow[]): PackerKpiRow[] {
+  const byId = new Map<number, PackerKpiRow>();
+  for (const row of rows) {
+    const existing = byId.get(row.staff_id);
+    if (!existing) {
+      byId.set(row.staff_id, { ...row });
+      continue;
+    }
+    existing.small_count += safeInt(row.small_count);
+    existing.medium_count += safeInt(row.medium_count);
+    existing.large_count += safeInt(row.large_count);
+    existing.weighted_minutes += safeInt(row.weighted_minutes);
+    if (!existing.staff_name && row.staff_name) existing.staff_name = row.staff_name;
+  }
+  return [...byId.values()].sort(
+    (a, b) => safeInt(b.weighted_minutes) - safeInt(a.weighted_minutes) || a.staff_id - b.staff_id,
+  );
+}
+
+export async function listRecentFilledPackDays(
+  orgId: OrgId,
+  limit: number,
+  asOfDayPst?: string,
+): Promise<string[]> {
+  const cap = Math.max(1, Math.floor(limit));
+  const params: unknown[] = [orgId];
+  let asOfClause = '';
+  if (asOfDayPst) {
+    params.push(asOfDayPst);
+    asOfClause = `AND (timezone('America/Los_Angeles', sal.created_at))::date <= $${params.length}::date`;
+  }
+  params.push(cap);
+
+  const result = await tenantQuery<{ pack_day: string }>(
+    orgId,
+    `SELECT DISTINCT (timezone('America/Los_Angeles', sal.created_at))::date::text AS pack_day
+       FROM station_activity_logs sal
+      WHERE sal.station = 'PACK'
+        AND sal.activity_type = 'PACK_COMPLETED'
+        AND sal.organization_id = $1
+        ${asOfClause}
+      ORDER BY pack_day DESC
+      LIMIT $${params.length}`,
+    params,
+  );
+
+  return result.rows.map((r) => r.pack_day).reverse();
+}
+
+function buildPeriodSummaryFromDaily(
+  daily: PackingKpiSummary[],
+  capacity: PackingCapacity,
+): PackingKpiPeriodSummary {
+  const filled = daily.filter((d) => d.totals.total_boxes_packed > 0);
+  const totals = filled.reduce(
+    (acc, summary) => {
+      acc.small_count += summary.totals.small_count;
+      acc.medium_count += summary.totals.medium_count;
+      acc.large_count += summary.totals.large_count;
+      acc.weighted_minutes += summary.totals.weighted_minutes;
+      return acc;
+    },
+    { small_count: 0, medium_count: 0, large_count: 0, weighted_minutes: 0 },
+  );
+  const total_boxes_packed = totalBoxesPacked(totals);
+  const periodCapacityMinutes = capacity.daily_capacity_minutes * filled.length;
+
+  return {
+    start_day: filled[0]?.day ?? daily[0]?.day ?? '',
+    end_day: filled[filled.length - 1]?.day ?? daily[daily.length - 1]?.day ?? '',
+    day_count: filled.length,
+    filled_day_count: filled.length,
+    capacity,
+    daily: filled,
+    totals: {
+      ...totals,
+      total_boxes_packed,
+      remaining_minutes: Math.max(0, periodCapacityMinutes - totals.weighted_minutes),
+    },
+    by_packer: mergePackerRows(filled.flatMap((summary) => summary.by_packer)),
+  };
+}
+
+/** Last N PST days that had at least one completed pack scan (no empty calendar gaps). */
+export async function getPackingKpisForLastFilledDays(
+  orgId: OrgId,
+  filledDayCount: number,
+  asOfDayPst?: string,
+): Promise<PackingKpiPeriodSummary> {
+  const days = await listRecentFilledPackDays(orgId, filledDayCount, asOfDayPst);
+  if (days.length === 0) {
+    const capacity = await getOrgPackCapacity(orgId);
+    return {
+      start_day: asOfDayPst ?? '',
+      end_day: asOfDayPst ?? '',
+      day_count: 0,
+      filled_day_count: 0,
+      capacity,
+      daily: [],
+      totals: {
+        small_count: 0,
+        medium_count: 0,
+        large_count: 0,
+        total_boxes_packed: 0,
+        weighted_minutes: 0,
+        remaining_minutes: 0,
+      },
+      by_packer: [],
+    };
+  }
+
+  const daily = await Promise.all(days.map((day) => getPackingKpisForDay(orgId, day)));
+  const capacity = daily[daily.length - 1]?.capacity ?? (await getOrgPackCapacity(orgId));
+  return buildPeriodSummaryFromDaily(daily, capacity);
+}
+
+export async function getPackingKpisForPeriod(
+  orgId: OrgId,
+  endDayPst: string,
+  dayCount: number,
+): Promise<PackingKpiPeriodSummary> {
+  const days = lastNPstDateKeys(endDayPst, dayCount);
+  const daily = await Promise.all(days.map((day) => getPackingKpisForDay(orgId, day)));
+  const capacity = daily[daily.length - 1]?.capacity ?? (await getOrgPackCapacity(orgId));
+  const summary = buildPeriodSummaryFromDaily(daily, capacity);
+  return {
+    ...summary,
+    day_count: days.length,
+    filled_day_count: summary.daily.length,
   };
 }
 

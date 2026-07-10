@@ -46,10 +46,10 @@ export async function buildPackingReportRows(
       s.name AS packer_name,
       COALESCE(enr.resolved_sku, o.sku) AS sku,
       COALESCE(o.product_title, enr.external_product_title) AS product_title,
-      COALESCE(enr.pack_tier, 'MEDIUM') AS pack_tier,
+      COALESCE(enr.pack_tier, 'SMALL') AS pack_tier,
       COALESCE(
         enr.estimated_pack_minutes,
-        CASE COALESCE(enr.pack_tier, 'MEDIUM')
+        CASE COALESCE(enr.pack_tier, 'SMALL')
           WHEN 'SMALL' THEN ${DEFAULT_TIER_MINUTES.SMALL}
           WHEN 'LARGE' THEN ${DEFAULT_TIER_MINUTES.LARGE}
           ELSE ${DEFAULT_TIER_MINUTES.MEDIUM}

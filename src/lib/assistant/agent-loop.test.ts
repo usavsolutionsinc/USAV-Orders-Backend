@@ -14,7 +14,7 @@ const ORG = '11111111-2222-3333-4444-555555555555';
 const CTX: AssistantToolCtx = {
   organizationId: ORG,
   staffId: 7,
-  permissions: new Set(['dashboard.view', 'studio.view']),
+  permissions: new Set(['dashboard.view', 'studio.view', 'assistant.chat']),
 };
 
 type ScriptedTurn = {
@@ -208,10 +208,19 @@ test('prompt-cache discipline: stable core has cache_control; volatile context a
   assert.match(system[1].text, /operations/);
   assert.match(system[1].text, /KPI vocab/);
   assert.equal(messages.length, 3); // history + new user msg
-  // permission-filtered registry (full ctx) + UI namespace
+  // permission-filtered registry (full ctx) + UI namespace + search narrow waist
   assert.ok(toolNames.includes('get_graph'));
+  assert.ok(toolNames.includes('hybrid_entity_search'));
+  assert.ok(toolNames.includes('resolve_support_ticket'));
+  assert.ok(toolNames.includes('get_order_lookup'));
+  assert.ok(toolNames.includes('lookup_serial'));
   assert.ok(toolNames.includes('navigate'));
   assert.ok(toolNames.includes('focus_node'));
+  // operations.view / warranty.view tools stay gated out of this ctx
+  assert.ok(!toolNames.includes('get_operations_journey'));
+  assert.ok(!toolNames.includes('lookup_warranty_coverage'));
+  assert.match(system[0].text, /hybrid_entity_search/);
+  assert.match(system[0].text, /get_operations_journey/);
 });
 
 test('streamTurn throw → emitted error + ok:false (route maps to SSE error, not a 500 crash)', async () => {

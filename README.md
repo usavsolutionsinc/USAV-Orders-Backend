@@ -72,16 +72,18 @@ The app has many route handlers under `src/app/api`. Core groups include:
 
 ## Packing capacity report (CLI)
 
-Download a per-packer CSV for today (PST) — same data as `GET /api/packing/kpi`:
+Download a per-packer report for today (PST) — same data as `GET /api/packing/kpi`:
 
 ```bash
 npm run report:packing-today -- --orgId=<organization-uuid>
 npm run report:packing-today -- --orgId=<uuid> --date=2026-07-08
 npm run report:packing-today -- --orgId=<uuid> --out=reports/packing.csv
+npm run report:packing-today -- --orgId=<uuid> --out=reports/packing.rtf   # Word / TextEdit
+npm run report:packing-today -- --orgId=<uuid> --format=txt --out=report.txt
 npm run report:packing-today -- --orgId=<uuid> --backfill   # recompute enrichment first
 ```
 
-CSV columns: `Packer`, `Small`, `Medium`, `Large`, `Weighted min`, `% of day`.
+CSV columns: `Packer`, `Small`, `Medium`, `Large`, `Weighted min`, `% of day`. RTF/TXT put the table on top with friendly “How to read this report” notes below.
 
 - **Weighted min** — sum of per-scan minutes (SKU pack profile when linked, else tier defaults: Small=5, Medium=13, Large=45).
 - **% of day** — weighted minutes ÷ `org_pack_capacity.workday_minutes` (default 480) per packer.
